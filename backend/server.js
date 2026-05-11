@@ -241,6 +241,25 @@ async function initDb() {
     value INTEGER DEFAULT 0
   )`);
   db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )`);
+  // Seed default settings if not yet present
+  const defaults = {
+    company_name: '', company_street: '', company_postal_code: '', company_city: '',
+    company_country: 'Schweiz', company_phone: '', company_email: '', company_website: '',
+    company_uid: '', bank_name: '', bank_iban: '', bank_bic: '',
+    default_tax_rate: '8.1', default_payment_terms: '30 Tage netto',
+    default_currency: 'CHF', quote_validity_days: '30',
+    invoice_footer: 'Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen. Vielen Dank!',
+    quote_footer: 'Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.'
+  };
+  Object.entries(defaults).forEach(([k, v]) => {
+    db.run('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)', [k, v]);
+  });
+
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
 }
@@ -828,6 +847,28 @@ app.get('/api/projects/:id/items-for-bom', (req, res) => {
   const items = all("SELECT * FROM items WHERE project_id=? AND item_type IN ('ASM','PRT')", [req.params.id]);
   items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
   res.json(items);
+});
+
+// ==============================================================
+// SETTINGS
+// ==============================================================
+app.get('/api/settings', (req, res) => {
+  const rows = all('SELECT key, value FROM settings');
+  const obj = {};
+  rows.forEach(r => { obj[r.key] = r.value; });
+  res.json(obj);
+});
+
+app.put('/api/settings', (req, res) => {
+  const entries = Object.entries(req.body);
+  entries.forEach(([k, v]) => {
+    db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, String(v??'')]);
+  });
+  saveDb();
+  const rows = all('SELECT key, value FROM settings');
+  const obj = {};
+  rows.forEach(r => { obj[r.key] = r.value; });
+  res.json(obj);
 });
 
 // -- SHUTDOWN --------------------------------------------------

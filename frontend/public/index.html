@@ -306,6 +306,14 @@ a{color:inherit;text-decoration:none}
       <span class="badge" id="badge-orders">—</span>
     </button>
   </div>
+  <div style="flex:1"></div>
+  <div class="nav-sep"></div>
+  <div class="nav-section">
+    <button class="nav-item" id="ni-settings" onclick="gotoView('settings')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Einstellungen
+    </button>
+  </div>
 </nav>
 
 <!-- WORKSPACE -->
@@ -694,10 +702,11 @@ a{color:inherit;text-decoration:none}
 <!-- ═══════════════════ SCRIPT ═══════════════════ -->
 <script>
 const API = '';
-let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], searchResults: null };
+let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], searchResults: null, settings: {} };
 
 // ── INIT ──────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  state.settings = await api('/api/settings').catch(() => ({}));
   gotoView('projects');
   loadStats();
   setupUploadDrag();
@@ -723,6 +732,7 @@ async function gotoView(v) {
   else if (v === 'quotes') await renderQuotes();
   else if (v === 'orders') await renderOrders();
   else if (v === 'changelog') await renderChangelog();
+  else if (v === 'settings') await renderSettings();
   else if (v === 'search') renderSearchView();
 }
 
@@ -1035,6 +1045,20 @@ function renderRevDetail(rev, item) {
     </div>`;
 }
 
+function fileLabel(originalName, dsType) {
+  if (!originalName || !originalName.includes('.')) return dsType;
+  const ext = originalName.split('.').pop().toUpperCase();
+  // Extensions that stay as their category label
+  if (dsType === 'PDF') return 'PDF';
+  // CAD formats: show extension for well-known ones, else 'CAD'
+  if (dsType === 'CAD') {
+    const specific = ['STL','OBJ','3MF','STEP','STP','IGES','IGS','F3D','JT','X_T','X_B'];
+    return specific.includes(ext) ? ext : 'CAD';
+  }
+  // For everything else: show actual extension
+  return ext;
+}
+
 function renderDatasets(datasets, revId, locked) {
   if (!datasets.length) return `<div style="color:var(--t3);font-size:12px">Noch keine Dateien angehängt.</div>`;
   const groups = {};
@@ -1043,7 +1067,7 @@ function renderDatasets(datasets, revId, locked) {
     `<div style="margin-bottom:4px">
       ${files.map(f => `
         <div class="ds-row">
-          <span class="ds-type dt-${type}">${type}</span>
+          <span class="ds-type dt-${type}">${fileLabel(f.original_name, type)}</span>
           <div class="ds-info">
             <div class="ds-name">${esc(f.original_name)}</div>
             <div class="ds-meta">v${f.version} · ${fmtSize(f.file_size)} · ${fmtDate(f.uploaded_at)}${f.notes?' · '+esc(f.notes):''}</div>
@@ -1149,6 +1173,81 @@ async function renderChangelog() {
     </div>`).join('');
 
   setLeftBody(`<div style="padding-bottom:20px">${html}</div>`);
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────
+async function renderSettings() {
+  setLeftHeader('Einstellungen', `<button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Speichern</button>`);
+  closeDetail();
+  const s = state.settings;
+  const fi = (id, label, val, ph='', type='text') =>
+    `<div class="fg"><label class="fl">${label}</label><input class="fi" id="st-${id}" type="${type}" value="${esc(val||'')}" placeholder="${ph}"></div>`;
+  const ft = (id, label, val, ph='') =>
+    `<div class="fg"><label class="fl">${label}</label><textarea class="ft" id="st-${id}" rows="2" placeholder="${ph}">${esc(val||'')}</textarea></div>`;
+
+  setLeftBody(`
+    <div style="max-width:720px">
+
+      <div class="sep-label" style="margin-top:4px">Firma / Briefkopf</div>
+      <div class="form-row cols2">
+        ${fi('company_name','Firmenname *',s.company_name,'Muster GmbH')}
+        ${fi('company_uid','UID / MwSt-Nr.',s.company_uid,'CHE-123.456.789 MWST')}
+      </div>
+      <div class="form-row">
+        ${fi('company_street','Straße + Hausnummer',s.company_street,'Industriestraße 42')}
+      </div>
+      <div class="form-row cols3">
+        ${fi('company_postal_code','PLZ',s.company_postal_code,'8000')}
+        ${fi('company_city','Ort',s.company_city,'Zürich')}
+        ${fi('company_country','Land',s.company_country,'Schweiz')}
+      </div>
+      <div class="form-row cols3">
+        ${fi('company_phone','Telefon',s.company_phone,'+41 44 000 00 00')}
+        ${fi('company_email','E-Mail',s.company_email,'info@firma.ch','email')}
+        ${fi('company_website','Website',s.company_website,'www.firma.ch')}
+      </div>
+
+      <div class="sep-label">Bankangaben</div>
+      <div class="form-row cols3">
+        ${fi('bank_name','Bank',s.bank_name,'Zürcher Kantonalbank')}
+        ${fi('bank_iban','IBAN',s.bank_iban,'CH00 0000 0000 0000 0000 0')}
+        ${fi('bank_bic','BIC / SWIFT',s.bank_bic,'ZKBKCHZZ80A')}
+      </div>
+
+      <div class="sep-label">Standardwerte</div>
+      <div class="form-row cols3">
+        ${fi('default_tax_rate','Standard MwSt. (%)',s.default_tax_rate,'8.1','number')}
+        ${fi('quote_validity_days','Angebot gültig (Tage)',s.quote_validity_days,'30','number')}
+        ${fi('default_payment_terms','Zahlungsbedingungen',s.default_payment_terms,'30 Tage netto')}
+      </div>
+
+      <div class="sep-label">Dokument-Fussnoten</div>
+      <div class="form-row">
+        ${ft('invoice_footer','Fusszeile Rechnung',s.invoice_footer,'Zahlungshinweis, Bankverbindung …')}
+      </div>
+      <div class="form-row">
+        ${ft('quote_footer','Fusszeile Angebot',s.quote_footer,'Hinweis Gültigkeit, Lieferbedingungen …')}
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="saveSettings()">💾 Einstellungen speichern</button>
+      </div>
+    </div>`);
+}
+
+async function saveSettings() {
+  const keys = ['company_name','company_uid','company_street','company_postal_code','company_city',
+    'company_country','company_phone','company_email','company_website',
+    'bank_name','bank_iban','bank_bic',
+    'default_tax_rate','quote_validity_days','default_payment_terms',
+    'invoice_footer','quote_footer'];
+  const body = {};
+  keys.forEach(k => {
+    const el = document.getElementById('st-' + k);
+    if (el) body[k] = el.value;
+  });
+  state.settings = await api('/api/settings','PUT',body);
+  toast('Einstellungen gespeichert','ok');
 }
 
 // ── CUSTOMERS ─────────────────────────────────────────────────
@@ -1574,7 +1673,9 @@ async function openOrderModal(id) {
   } else {
     ['om-title-f','om-date','om-delivery','om-notes','om-terms'].forEach(f=>set(f,''));
     document.getElementById('om-status').value='DRAFT';
-    set('om-tax',8.1); set('om-disc',0);
+    set('om-tax', state.settings.default_tax_rate || 8.1);
+    set('om-disc',0);
+    set('om-terms', state.settings.default_payment_terms || '');
     document.getElementById('om-title').textContent='Neuer Auftrag';
   }
   set('om-id',id||''); openModal('orderModal');
@@ -1677,7 +1778,13 @@ async function openQuoteModal(id) {
   } else {
     ['qm-title-f','qm-date','qm-valid','qm-notes','qm-terms'].forEach(f=>set(f,''));
     document.getElementById('qm-status').value='DRAFT';
-    set('qm-tax',8.1); set('qm-disc',0);
+    set('qm-tax', state.settings.default_tax_rate || 8.1);
+    set('qm-disc', 0);
+    set('qm-terms', state.settings.default_payment_terms || '');
+    // Default valid_until = today + validity days
+    const validDays = parseInt(state.settings.quote_validity_days) || 30;
+    const validDate = new Date(); validDate.setDate(validDate.getDate() + validDays);
+    set('qm-valid', validDate.toISOString().split('T')[0]);
     document.getElementById('qm-title').textContent='Neues Angebot';
   }
   set('qm-id',id||''); openModal('quoteModal');
@@ -1960,12 +2067,31 @@ function escHtml(s) {
 async function generateDoc(id, type) {
   const endpoint = type === 'quote' ? `/api/quotes/${id}/quote-data` : `/api/orders/${id}/invoice-data`;
   const d = await api(endpoint);
+  const s = state.settings;
   const today = new Date().toLocaleDateString('de-CH');
   const isQuote = type === 'quote';
   const docLabel = isQuote ? 'Angebot' : 'Rechnung';
   const color = '#1d4ed8';
 
-  const addrLines = [
+  // Company address block from settings
+  const companyLines = [
+    s.company_street,
+    [s.company_postal_code, s.company_city].filter(Boolean).join(' '),
+    s.company_country && s.company_country !== 'Schweiz' ? s.company_country : ''
+  ].filter(Boolean);
+
+  const bankInfo = [
+    s.bank_name,
+    s.bank_iban ? 'IBAN: ' + s.bank_iban : '',
+    s.bank_bic  ? 'BIC: '  + s.bank_bic  : ''
+  ].filter(Boolean).join(' · ');
+
+  const footer = isQuote
+    ? (s.quote_footer   || 'Dieses Angebot ist freibleibend.')
+    : (s.invoice_footer || 'Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen.');
+
+  // Customer address
+  const custAddrLines = [
     d.customer_street,
     d.customer_postal_code && d.customer_city ? d.customer_postal_code + ' ' + d.customer_city : (d.customer_city||''),
     d.customer_country && d.customer_country !== 'Schweiz' ? d.customer_country : ''
@@ -1988,10 +2114,11 @@ async function generateDoc(id, type) {
 <head><meta charset="UTF-8"><title>${docLabel} ${d.number}</title>
 <style>
   body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:40px}
-  .header{display:flex;justify-content:space-between;margin-bottom:40px}
-  .company{font-size:20px;font-weight:700;color:${color};letter-spacing:-0.5px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px}
+  .company-name{font-size:22px;font-weight:700;color:${color};letter-spacing:-0.5px}
+  .company-detail{font-size:11px;color:#6b7280;margin-top:2px;line-height:1.6}
   .doc-label{font-size:28px;font-weight:700;color:#111827;margin-bottom:4px}
-  .meta{color:#6b7280;font-size:12px}
+  .meta{color:#6b7280;font-size:12px;line-height:1.7}
   .addr-block{margin:30px 0;display:flex;gap:60px}
   .addr-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:4px}
   table{width:100%;border-collapse:collapse;margin:20px 0}
@@ -2000,7 +2127,7 @@ async function generateDoc(id, type) {
   .totals{margin-left:auto;width:300px;margin-top:10px}
   .total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #f3f4f6}
   .total-gross{display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:700;border-top:2px solid ${color};margin-top:4px;color:${color}}
-  .footer{margin-top:60px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center}
+  .footer{margin-top:50px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af}
   .badge{display:inline-block;background:#dbeafe;color:${color};font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600}
   @media print{body{padding:20px}}
 </style>
@@ -2008,30 +2135,37 @@ async function generateDoc(id, type) {
 <body>
 <div class="header">
   <div>
-    <div class="company">3D&#183;PLM</div>
-    <div style="font-size:11px;color:#6b7280;margin-top:4px">3D-Druck Fertigung</div>
+    <div class="company-name">${escHtml(s.company_name || '3D·PLM')}</div>
+    <div class="company-detail">
+      ${companyLines.map(l => escHtml(l)).join('<br>')}
+      ${s.company_phone ? '<br>'+escHtml(s.company_phone) : ''}
+      ${s.company_email ? ' · '+escHtml(s.company_email) : ''}
+      ${s.company_uid   ? '<br>'+escHtml(s.company_uid)  : ''}
+    </div>
   </div>
   <div style="text-align:right">
     <div class="doc-label">${docLabel}</div>
     <div style="font-family:monospace;font-size:14px;color:${color}">${d.number}</div>
-    <div class="meta">Datum: ${today}</div>
-    ${isQuote && d.valid_until ? '<div class="meta">Gültig bis: '+d.valid_until+'</div>' : ''}
-    ${!isQuote && d.order_date ? '<div class="meta">Auftragsdatum: '+d.order_date+'</div>' : ''}
-    ${!isQuote && d.delivery_date ? '<div class="meta">Lieferdatum: '+d.delivery_date+'</div>' : ''}
-    ${d.payment_terms ? '<div class="meta">Zahlung: '+escHtml(d.payment_terms)+'</div>' : ''}
+    <div class="meta">
+      Datum: ${today}<br>
+      ${isQuote && d.valid_until ? 'Gültig bis: '+d.valid_until+'<br>' : ''}
+      ${!isQuote && d.order_date ? 'Auftragsdatum: '+d.order_date+'<br>' : ''}
+      ${!isQuote && d.delivery_date ? 'Lieferdatum: '+d.delivery_date+'<br>' : ''}
+      ${d.payment_terms ? 'Zahlung: '+escHtml(d.payment_terms) : ''}
+    </div>
   </div>
 </div>
 
 <div class="addr-block">
   ${d.customer_name ? `<div>
-    <div class="addr-label">${isQuote ? 'Angebotempfänger' : 'Rechnungsempfänger'}</div>
-    <div style="font-weight:600">${escHtml(d.customer_name)}</div>
+    <div class="addr-label">${isQuote ? 'Angebotsempfänger' : 'Rechnungsempfänger'}</div>
+    <div style="font-weight:600;font-size:14px">${escHtml(d.customer_name)}</div>
     ${d.customer_number ? '<div style="font-size:11px;color:#6b7280">'+d.customer_number+'</div>' : ''}
-    ${addrLines.map(l=>'<div style="color:#374151">'+escHtml(l)+'</div>').join('')}
+    <div style="margin-top:4px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
     ${d.customer_email ? '<div style="margin-top:4px;color:#6b7280">'+escHtml(d.customer_email)+'</div>' : ''}
-  </div>` : `<div><div class="addr-label">${isQuote ? 'Angebotempfänger' : 'Rechnungsempfänger'}</div><div style="color:#9ca3af">Kein Kunde zugewiesen</div></div>`}
+  </div>` : `<div><div class="addr-label">${isQuote ? 'Angebotsempfänger' : 'Rechnungsempfänger'}</div><div style="color:#9ca3af">Kein Kunde zugewiesen</div></div>`}
   <div>
-    <div class="addr-label">${isQuote ? 'Angebot' : 'Auftrag'}</div>
+    <div class="addr-label">${isQuote ? 'Betreff' : 'Auftrag'}</div>
     <div style="font-weight:600">${escHtml(d.title)}</div>
     <div style="margin-top:4px"><span class="badge">${d.status}</span></div>
     ${d.notes ? '<div style="margin-top:6px;font-size:12px;color:#6b7280">'+escHtml(d.notes)+'</div>' : ''}
@@ -2058,8 +2192,9 @@ async function generateDoc(id, type) {
 </div>
 
 <div class="footer">
-  Generiert mit 3D-PLM &middot; ${today}
-  ${!isQuote ? '&middot; Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen.' : '&middot; Dieses Angebot ist freibleibend.'}
+  <div style="margin-bottom:4px">${escHtml(footer)}</div>
+  ${bankInfo ? '<div>'+escHtml(bankInfo)+'</div>' : ''}
+  <div style="margin-top:6px;color:#d1d5db">Generiert mit 3D-PLM · ${today}</div>
 </div>
 <script>window.onload = () => window.print();<\/script>
 </body></html>`;
