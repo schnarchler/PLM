@@ -94,9 +94,11 @@ async function initDb() {
     item_number TEXT NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
+    source_url TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(item_number)
   )`);
+  try { db.run('ALTER TABLE items ADD COLUMN source_url TEXT'); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS revisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -187,12 +189,14 @@ async function initDb() {
     tax_rate REAL DEFAULT 19,
     discount_pct REAL DEFAULT 0,
     payment_terms TEXT,
+    include_tax INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
   try { db.run('ALTER TABLE orders ADD COLUMN tax_rate REAL DEFAULT 19'); } catch(e) {}
   try { db.run('ALTER TABLE orders ADD COLUMN discount_pct REAL DEFAULT 0'); } catch(e) {}
   try { db.run('ALTER TABLE orders ADD COLUMN payment_terms TEXT'); } catch(e) {}
+  try { db.run('ALTER TABLE orders ADD COLUMN include_tax INTEGER DEFAULT 0'); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS order_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,9 +224,11 @@ async function initDb() {
     tax_rate REAL DEFAULT 19,
     discount_pct REAL DEFAULT 0,
     payment_terms TEXT,
+    include_tax INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
+  try { db.run('ALTER TABLE quotes ADD COLUMN include_tax INTEGER DEFAULT 0'); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS quote_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -430,7 +436,7 @@ app.get('/api/items/:id', (req, res) => {
 });
 
 app.post('/api/projects/:projectId/items', (req, res) => {
-  const { name, description, item_type, parent_id } = req.body;
+  const { name, description, item_type, parent_id, source_url } = req.body;
   if (!name || !item_type) return res.status(400).json({ error: 'name and item_type required' });
   const project = get('SELECT * FROM projects WHERE id=?', [req.params.projectId]);
   if (!project) return res.status(404).json({ error: 'Project not found' });
@@ -451,16 +457,16 @@ app.post('/api/projects/:projectId/items', (req, res) => {
     }
   }
 
-  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description) VALUES (?,?,?,?,?,?)',
-    [project.id, parent_id || null, item_type, item_number, name, description || '']);
+  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url) VALUES (?,?,?,?,?,?,?)',
+    [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null]);
   run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, 'A', 'DFT', 'Initial revision']);
   log('item', itemId, 'Created', item_type + ' ' + item_number + ' Rev A');
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
 });
 
 app.put('/api/items/:id', (req, res) => {
-  const { name, description } = req.body;
-  run('UPDATE items SET name=?,description=? WHERE id=?', [name, description, req.params.id]);
+  const { name, description, source_url } = req.body;
+  run('UPDATE items SET name=?,description=?,source_url=? WHERE id=?', [name, description, source_url||null, req.params.id]);
   log('item', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
 });
@@ -653,11 +659,11 @@ app.get('/api/orders', (req, res) => {
 });
 
 app.post('/api/orders', (req, res) => {
-  const { customer_id, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms } = req.body;
+  const { customer_id, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextOrderNumber();
-  const id = runGetId('INSERT INTO orders (number,customer_id,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms) VALUES (?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'']);
+  const id = runGetId('INSERT INTO orders (number,customer_id,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0]);
   res.json(get('SELECT * FROM orders WHERE id=?', [id]));
 });
 
@@ -672,11 +678,11 @@ app.get('/api/orders/:id', (req, res) => {
 });
 
 app.put('/api/orders/:id', (req, res) => {
-  const { customer_id, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms } = req.body;
+  const { customer_id, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
   run(`UPDATE orders SET customer_id=?,title=?,status=?,notes=?,order_date=?,delivery_date=?,
-    tax_rate=?,discount_pct=?,payment_terms=?,updated_at=datetime('now') WHERE id=?`,
+    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,updated_at=datetime('now') WHERE id=?`,
     [customer_id, title, status, notes, order_date, delivery_date,
-     tax_rate??19, discount_pct??0, payment_terms||'', req.params.id]);
+     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, req.params.id]);
   res.json(get('SELECT * FROM orders WHERE id=?', [req.params.id]));
 });
 
@@ -715,11 +721,11 @@ app.get('/api/quotes', (req, res) => {
 });
 
 app.post('/api/quotes', (req, res) => {
-  const { customer_id, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms } = req.body;
+  const { customer_id, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextQuoteNumber();
-  const id = runGetId('INSERT INTO quotes (number,customer_id,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms) VALUES (?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto']);
+  const id = runGetId('INSERT INTO quotes (number,customer_id,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0]);
   res.json(get('SELECT * FROM quotes WHERE id=?', [id]));
 });
 
@@ -734,11 +740,11 @@ app.get('/api/quotes/:id', (req, res) => {
 });
 
 app.put('/api/quotes/:id', (req, res) => {
-  const { customer_id, title, status, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms } = req.body;
+  const { customer_id, title, status, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
   run(`UPDATE quotes SET customer_id=?,title=?,status=?,notes=?,quote_date=?,valid_until=?,
-    tax_rate=?,discount_pct=?,payment_terms=?,updated_at=datetime('now') WHERE id=?`,
+    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,updated_at=datetime('now') WHERE id=?`,
     [customer_id, title, status, notes, quote_date, valid_until,
-     tax_rate??19, discount_pct??0, payment_terms||'', req.params.id]);
+     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, req.params.id]);
   res.json(get('SELECT * FROM quotes WHERE id=?', [req.params.id]));
 });
 
@@ -771,9 +777,9 @@ app.post('/api/quotes/:id/convert', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id=?', [req.params.id]);
   if (!q) return res.status(404).json({ error: 'Not found' });
   const number = nextOrderNumber();
-  const orderId = runGetId(`INSERT INTO orders (number,customer_id,title,notes,order_date,tax_rate,discount_pct,payment_terms)
-    VALUES (?,?,?,?,date('now'),?,?,?)`,
-    [number, q.customer_id, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'']);
+  const orderId = runGetId(`INSERT INTO orders (number,customer_id,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax)
+    VALUES (?,?,?,?,date('now'),?,?,?,?)`,
+    [number, q.customer_id, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'', q.include_tax||0]);
   const qItems = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]);
   qItems.forEach(qi => {
     run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes) VALUES (?,?,?,?,?,?,?,?)',
@@ -891,7 +897,7 @@ app.get('/api/orders/:id/invoice-data', (req, res) => {
   o.subtotal = o.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
   o.discount_amount = o.subtotal * (o.discount_pct||0) / 100;
   o.net = o.subtotal - o.discount_amount;
-  o.tax_amount = o.net * (o.tax_rate||19) / 100;
+  o.tax_amount = o.include_tax ? o.net * (o.tax_rate||19) / 100 : 0;
   o.total = o.net + o.tax_amount;
   res.json(o);
 });
@@ -907,7 +913,7 @@ app.get('/api/quotes/:id/quote-data', (req, res) => {
   q.subtotal = q.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
   q.discount_amount = q.subtotal * (q.discount_pct||0) / 100;
   q.net = q.subtotal - q.discount_amount;
-  q.tax_amount = q.net * (q.tax_rate||19) / 100;
+  q.tax_amount = q.include_tax ? q.net * (q.tax_rate||19) / 100 : 0;
   q.total = q.net + q.tax_amount;
   res.json(q);
 });

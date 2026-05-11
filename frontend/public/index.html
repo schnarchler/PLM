@@ -379,6 +379,9 @@ a{color:inherit;text-decoration:none}
       <div class="form-row">
         <div class="fg"><label class="fl">Beschreibung</label><textarea class="ft" id="im-desc" placeholder="Funktion, Einbauort …"></textarea></div>
       </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="im-url" type="url" placeholder="https://…"></div>
+      </div>
       <input type="hidden" id="im-project-id">
       <input type="hidden" id="im-parent-id">
     </div>
@@ -519,10 +522,16 @@ a{color:inherit;text-decoration:none}
         <div class="fg"><label class="fl">Auftragsdatum</label><input class="fi" id="om-date" type="date"></div>
         <div class="fg"><label class="fl">Lieferdatum</label><input class="fi" id="om-delivery" type="date"></div>
       </div>
-      <div class="form-row cols3">
-        <div class="fg"><label class="fl">MwSt. (%)</label><input class="fi" id="om-tax" type="number" step="0.1" value="8.1"></div>
+      <div class="form-row cols2">
         <div class="fg"><label class="fl">Gesamtrabatt (%)</label><input class="fi" id="om-disc" type="number" step="0.1" value="0" min="0" max="100"></div>
         <div class="fg"><label class="fl">Zahlungsbedingungen</label><input class="fi" id="om-terms" placeholder="30 Tage netto"></div>
+      </div>
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">MwSt. (%)</label><input class="fi" id="om-tax" type="number" step="0.1" value="8.1"></div>
+        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:20px">
+          <input type="checkbox" id="om-include-tax" style="width:16px;height:16px;cursor:pointer">
+          <label for="om-include-tax" class="fl" style="cursor:pointer;margin:0">MwSt. ausweisen</label>
+        </div>
       </div>
       <div class="form-row">
         <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="om-notes"></textarea></div>
@@ -559,10 +568,16 @@ a{color:inherit;text-decoration:none}
         <div class="fg"><label class="fl">Angebotsdatum</label><input class="fi" id="qm-date" type="date"></div>
         <div class="fg"><label class="fl">Gültig bis</label><input class="fi" id="qm-valid" type="date"></div>
       </div>
-      <div class="form-row cols3">
-        <div class="fg"><label class="fl">MwSt. (%)</label><input class="fi" id="qm-tax" type="number" step="0.1" value="8.1"></div>
+      <div class="form-row cols2">
         <div class="fg"><label class="fl">Gesamtrabatt (%)</label><input class="fi" id="qm-disc" type="number" step="0.1" value="0" min="0" max="100"></div>
         <div class="fg"><label class="fl">Zahlungsbedingungen</label><input class="fi" id="qm-terms" placeholder="30 Tage netto"></div>
+      </div>
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">MwSt. (%)</label><input class="fi" id="qm-tax" type="number" step="0.1" value="8.1"></div>
+        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:20px">
+          <input type="checkbox" id="qm-include-tax" style="width:16px;height:16px;cursor:pointer">
+          <label for="qm-include-tax" class="fl" style="cursor:pointer;margin:0">MwSt. ausweisen</label>
+        </div>
       </div>
       <div class="form-row">
         <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="qm-notes" rows="2"></textarea></div>
@@ -632,6 +647,9 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="form-row">
         <div class="fg"><label class="fl">Beschreibung</label><textarea class="ft" id="eim-desc"></textarea></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="eim-url" type="url" placeholder="https://…"></div>
       </div>
       <input type="hidden" id="eim-id">
     </div>
@@ -922,6 +940,7 @@ function renderItemDetail(item, activeRevId) {
 
   document.getElementById('dp-body').innerHTML = `
     <div id="it-revs">
+      ${item.source_url ? `<div style="margin-bottom:10px;font-size:12px;color:var(--t3)">Quelle: <a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a></div>` : ''}
       <!-- Rev strip -->
       <div class="sep-label">Revisionen</div>
       <div class="rev-strip">
@@ -1302,7 +1321,7 @@ async function openOrderDetail(id) {
     <button class="tab" onclick="switchTab(this,'od-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="od-pos">
-      ${renderLineItems(o.items||[], 'order', id, o.tax_rate||19, o.discount_pct||0)}
+      ${renderLineItems(o.items||[], 'order', id, o.tax_rate||8.1, o.discount_pct||0, !!o.include_tax)}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal('order',${id})">+ Position</button>
     </div>
     <div id="od-info" style="display:none">
@@ -1312,8 +1331,8 @@ async function openOrderDetail(id) {
         <div><div class="ps-label">Kunde</div>${o.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${o.order_date||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div>${o.delivery_date||'—'}</div>
-        <div><div class="ps-label">MwSt.</div>${o.tax_rate||19} %</div>
-        <div><div class="ps-label">Gesamtrabatt</div>${o.discount_pct||0} %</div>
+        <div><div class="ps-label">MwSt.</div>${o.tax_rate||8.1} % ${o.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
+        ${(o.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${o.discount_pct} %</div>`:''}
         ${o.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(o.payment_terms)}</div>`:''}
         ${o.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(o.notes)}</span></div>`:''}
       </div>
@@ -1394,6 +1413,7 @@ async function openEditItemModal(id) {
   set('eim-id', id);
   set('eim-name', item.name);
   set('eim-desc', item.description || '');
+  set('eim-url', item.source_url || '');
   document.getElementById('eim-title').textContent = 'Umbenennen: ' + item.item_number;
   openModal('editItemModal');
 }
@@ -1402,7 +1422,7 @@ async function saveEditItem() {
   const id = V('eim-id');
   const name = V('eim-name');
   if (!name) return toast('Name fehlt', 'err');
-  await api('/api/items/' + id, 'PUT', { name, description: V('eim-desc') });
+  await api('/api/items/' + id, 'PUT', { name, description: V('eim-desc'), source_url: V('eim-url')||null });
   toast('Name gespeichert', 'ok');
   closeModal('editItemModal');
   const item = await api('/api/items/' + id);
@@ -1412,7 +1432,7 @@ async function saveEditItem() {
 }
 
 function openItemModal(projectId, parentId, type) {
-  set('im-name',''); set('im-desc','');
+  set('im-name',''); set('im-desc',''); set('im-url','');
   set('im-project-id', projectId);
   set('im-parent-id', parentId||'');
   document.getElementById('im-type').value = type||'PRT';
@@ -1424,7 +1444,7 @@ async function saveItem() {
   const name = V('im-name'); if (!name) return toast('Name fehlt','err');
   const projectId = V('im-project-id');
   const parentId = V('im-parent-id');
-  const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null };
+  const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null, source_url: V('im-url')||null };
   await api(`/api/projects/${projectId}/items`,'POST',body);
   toast('Item angelegt','ok'); closeModal('itemModal');
   openProject(projectId); loadStats();
@@ -1669,6 +1689,7 @@ async function openOrderModal(id) {
     set('om-title-f',o.title); sel.value=o.customer_id||''; document.getElementById('om-status').value=o.status;
     set('om-date',o.order_date||''); set('om-delivery',o.delivery_date||''); set('om-notes',o.notes||'');
     set('om-tax',o.tax_rate??8.1); set('om-disc',o.discount_pct??0); set('om-terms',o.payment_terms||'');
+    document.getElementById('om-include-tax').checked = !!o.include_tax;
     document.getElementById('om-title').textContent='Auftrag bearbeiten';
   } else {
     ['om-title-f','om-date','om-delivery','om-notes','om-terms'].forEach(f=>set(f,''));
@@ -1676,6 +1697,7 @@ async function openOrderModal(id) {
     set('om-tax', state.settings.default_tax_rate || 8.1);
     set('om-disc',0);
     set('om-terms', state.settings.default_payment_terms || '');
+    document.getElementById('om-include-tax').checked = false;
     document.getElementById('om-title').textContent='Neuer Auftrag';
   }
   set('om-id',id||''); openModal('orderModal');
@@ -1686,7 +1708,7 @@ async function saveOrder() {
   const body={title,customer_id:V('om-customer')||null,status:document.getElementById('om-status').value,
     notes:V('om-notes'),order_date:V('om-date')||null,delivery_date:V('om-delivery')||null,
     tax_rate:parseFloat(V('om-tax'))||8.1, discount_pct:parseFloat(V('om-disc'))||0,
-    payment_terms:V('om-terms')};
+    payment_terms:V('om-terms'), include_tax:document.getElementById('om-include-tax').checked?1:0};
   if (editingOrderId) {
     await api(`/api/orders/${editingOrderId}`,'PUT',body);
     toast('Gespeichert','ok'); closeModal('orderModal');
@@ -1738,7 +1760,7 @@ async function openQuoteDetail(id) {
     <button class="tab" onclick="switchTab(this,'qd-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="qd-pos">
-      ${renderLineItems(q.items||[], 'quote', id, q.tax_rate||8.1, q.discount_pct||0)}
+      ${renderLineItems(q.items||[], 'quote', id, q.tax_rate||8.1, q.discount_pct||0, !!q.include_tax)}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal('quote',${id})">+ Position</button>
     </div>
     <div id="qd-info" style="display:none">
@@ -1748,8 +1770,8 @@ async function openQuoteDetail(id) {
         <div><div class="ps-label">Kunde</div>${q.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${q.quote_date||'—'}</div>
         <div><div class="ps-label">Gültig bis</div>${q.valid_until||'—'}</div>
-        <div><div class="ps-label">MwSt.</div>${q.tax_rate||8.1} %</div>
-        <div><div class="ps-label">Gesamtrabatt</div>${q.discount_pct||0} %</div>
+        <div><div class="ps-label">MwSt.</div>${q.tax_rate||8.1} % ${q.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
+        ${(q.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${q.discount_pct} %</div>`:''}
         ${q.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(q.payment_terms)}</div>`:''}
         ${q.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(q.notes)}</span></div>`:''}
       </div>
@@ -1774,6 +1796,7 @@ async function openQuoteModal(id) {
     set('qm-title-f',q.title); sel.value=q.customer_id||''; document.getElementById('qm-status').value=q.status;
     set('qm-date',q.quote_date||''); set('qm-valid',q.valid_until||''); set('qm-notes',q.notes||'');
     set('qm-tax',q.tax_rate??8.1); set('qm-disc',q.discount_pct??0); set('qm-terms',q.payment_terms||'');
+    document.getElementById('qm-include-tax').checked = !!q.include_tax;
     document.getElementById('qm-title').textContent='Angebot bearbeiten';
   } else {
     ['qm-title-f','qm-date','qm-valid','qm-notes','qm-terms'].forEach(f=>set(f,''));
@@ -1781,6 +1804,7 @@ async function openQuoteModal(id) {
     set('qm-tax', state.settings.default_tax_rate || 8.1);
     set('qm-disc', 0);
     set('qm-terms', state.settings.default_payment_terms || '');
+    document.getElementById('qm-include-tax').checked = false;
     // Default valid_until = today + validity days
     const validDays = parseInt(state.settings.quote_validity_days) || 30;
     const validDate = new Date(); validDate.setDate(validDate.getDate() + validDays);
@@ -1795,7 +1819,7 @@ async function saveQuote() {
   const body={title,customer_id:V('qm-customer')||null,status:document.getElementById('qm-status').value,
     notes:V('qm-notes'),quote_date:V('qm-date')||null,valid_until:V('qm-valid')||null,
     tax_rate:parseFloat(V('qm-tax'))||8.1, discount_pct:parseFloat(V('qm-disc'))||0,
-    payment_terms:V('qm-terms')};
+    payment_terms:V('qm-terms'), include_tax:document.getElementById('qm-include-tax').checked?1:0};
   if (editingQuoteId) {
     await api(`/api/quotes/${editingQuoteId}`,'PUT',body);
     toast('Gespeichert','ok'); closeModal('quoteModal');
@@ -1822,13 +1846,14 @@ async function convertQuoteToOrder(quoteId) {
 }
 
 // ── LINE ITEMS (shared for orders + quotes) ────────────────────
-function renderLineItems(items, parentType, parentId, taxRate, discountPct) {
-  const subtotalBefore = items.reduce((s,i)=>s+(i.quantity*i.unit_price),0);
+function renderLineItems(items, parentType, parentId, taxRate, discountPct, includeTax) {
   const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
   const discAmt = subtotal * discountPct / 100;
   const net = subtotal - discAmt;
-  const tax = net * taxRate / 100;
+  const tax = includeTax ? net * taxRate / 100 : 0;
   const total = net + tax;
+  const hasLineDiscount = items.some(i=>(i.discount_pct||0)>0);
+  const showDiscount = hasLineDiscount || discountPct > 0;
   if (!items.length) return `<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Positionen</div>`;
   return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
     <table style="width:100%">
@@ -1836,7 +1861,7 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct) {
         <th style="text-align:left;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line)">Beschreibung</th>
         <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Menge</th>
         <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Preis</th>
-        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Rab.</th>
+        ${showDiscount?`<th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Rab.</th>`:''}
         <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Total</th>
         <th style="border-bottom:1px solid var(--line)"></th>
       </tr></thead>
@@ -1850,7 +1875,7 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct) {
             </td>
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${i.quantity} ${i.unit}</td>
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtChf(i.unit_price)}</td>
-            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--amber)">${i.discount_pct||0}%</td>
+            ${showDiscount?`<td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--amber)">${i.discount_pct||0}%</td>`:''}
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px">${fmtChf(lineTotal)}</td>
             <td style="padding:7px 8px"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delLineItem('${parentType}',${i.id},${parentId})">✕</button></td>
           </tr>`;
@@ -1863,7 +1888,7 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct) {
           ${discountPct>0?`<div style="color:var(--t3)">Zwischentotal: <span style="font-family:var(--mono)">${fmtChf(subtotal)}</span></div>
           <div style="color:var(--amber)">Rabatt ${discountPct}%: <span style="font-family:var(--mono)">-${fmtChf(discAmt)}</span></div>`:''}
           <div style="color:var(--t2)">Netto: <span style="font-family:var(--mono)">${fmtChf(net)}</span></div>
-          <div style="color:var(--t3)">MwSt. ${taxRate}%: <span style="font-family:var(--mono)">${fmtChf(tax)}</span></div>
+          ${includeTax?`<div style="color:var(--t3)">MwSt. ${taxRate}%: <span style="font-family:var(--mono)">${fmtChf(tax)}</span></div>`:''}
           <div style="font-size:14px;font-weight:600;margin-top:4px;color:var(--green)">Total: <span style="font-family:var(--mono)">${fmtChf(total)}</span></div>
         </div>
       </div>
@@ -2097,6 +2122,7 @@ async function generateDoc(id, type) {
     d.customer_country && d.customer_country !== 'Schweiz' ? d.customer_country : ''
   ].filter(Boolean);
 
+  const hasDiscount = (d.discount_pct||0) > 0 || (d.positions||[]).some(p=>(p.discount_pct||0)>0);
   const rows = (d.positions||[]).map(p => {
     const lineTotal = p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100);
     return '<tr style="border-bottom:1px solid #e5e7eb">'
@@ -2104,7 +2130,7 @@ async function generateDoc(id, type) {
       +(p.notes?'<br><span style="font-size:10px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+p.unit+'</td>'
       +'<td style="padding:8px 6px;text-align:right">CHF '+parseFloat(p.unit_price).toFixed(2)+'</td>'
-      +(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>')
+      +(hasDiscount?(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>'):'')
       +'<td style="padding:8px 6px;text-align:right;font-weight:600">CHF '+lineTotal.toFixed(2)+'</td>'
       +'</tr>';
   }).join('');
@@ -2135,7 +2161,7 @@ async function generateDoc(id, type) {
 <body>
 <div class="header">
   <div>
-    <div class="company-name">${escHtml(s.company_name || '3D·PLM')}</div>
+    <div class="company-name">${escHtml(s.company_name || '')}</div>
     <div class="company-detail">
       ${companyLines.map(l => escHtml(l)).join('<br>')}
       ${s.company_phone ? '<br>'+escHtml(s.company_phone) : ''}
@@ -2177,24 +2203,24 @@ async function generateDoc(id, type) {
     <th>Beschreibung</th>
     <th style="text-align:right">Menge</th>
     <th style="text-align:right">Einzelpreis</th>
-    <th style="text-align:right">Rabatt</th>
+    ${hasDiscount ? '<th style="text-align:right">Rabatt</th>' : ''}
     <th style="text-align:right">Total</th>
   </tr></thead>
-  <tbody>${rows || '<tr><td colspan="5" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>'}</tbody>
+  <tbody>${rows || `<tr><td colspan="${hasDiscount?5:4}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}</tbody>
 </table>
 
 <div class="totals">
-  ${d.discount_pct>0 ? '<div class="total-row"><span>Zwischentotal</span><span>CHF '+d.subtotal.toFixed(2)+'</span></div>'
+  ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>CHF '+d.subtotal.toFixed(2)+'</span></div>'
     +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-CHF '+d.discount_amount.toFixed(2)+'</span></div>' : ''}
   <div class="total-row"><span>Nettobetrag</span><span>CHF ${d.net.toFixed(2)}</span></div>
-  <div class="total-row"><span>MwSt. ${d.tax_rate||8.1}%</span><span>CHF ${d.tax_amount.toFixed(2)}</span></div>
+  ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate||8.1)+'%</span><span>CHF '+d.tax_amount.toFixed(2)+'</span></div>' : ''}
   <div class="total-gross"><span>Gesamtbetrag</span><span>CHF ${d.total.toFixed(2)}</span></div>
 </div>
 
 <div class="footer">
   <div style="margin-bottom:4px">${escHtml(footer)}</div>
   ${bankInfo ? '<div>'+escHtml(bankInfo)+'</div>' : ''}
-  <div style="margin-top:6px;color:#d1d5db">Generiert mit 3D-PLM · ${today}</div>
+  <div style="margin-top:6px;color:#d1d5db">${today}</div>
 </div>
 <script>window.onload = () => window.print();<\/script>
 </body></html>`;
