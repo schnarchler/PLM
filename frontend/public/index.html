@@ -379,8 +379,9 @@ a{color:inherit;text-decoration:none}
       <div class="form-row">
         <div class="fg"><label class="fl">Beschreibung</label><textarea class="ft" id="im-desc" placeholder="Funktion, Einbauort …"></textarea></div>
       </div>
-      <div class="form-row">
+      <div class="form-row cols2">
         <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="im-url" type="url" placeholder="https://…"></div>
+        <div class="fg"><label class="fl">Listenpreis (CHF)</label><input class="fi" id="im-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
       </div>
       <input type="hidden" id="im-project-id">
       <input type="hidden" id="im-parent-id">
@@ -637,6 +638,27 @@ a{color:inherit;text-decoration:none}
   </div>
 </div>
 
+<!-- Dataset Edit Modal -->
+<div class="overlay" id="datasetEditModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title">Datei-Info bearbeiten</div><button class="btn btn-icon btn-ghost" onclick="closeModal('datasetEditModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Anzeigename</label><input class="fi" id="dsed-name" placeholder="z.B. Grosse Variante 80mm"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="dsed-notes" rows="3" placeholder="z.B. grosse Variante, optimiert für PLA…"></textarea></div>
+      </div>
+      <input type="hidden" id="dsed-id">
+      <input type="hidden" id="dsed-revid">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('datasetEditModal')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveDatasetEdit()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit Item Modal -->
 <div class="overlay" id="editItemModal">
   <div class="modal" style="max-width:440px">
@@ -648,8 +670,9 @@ a{color:inherit;text-decoration:none}
       <div class="form-row">
         <div class="fg"><label class="fl">Beschreibung</label><textarea class="ft" id="eim-desc"></textarea></div>
       </div>
-      <div class="form-row">
+      <div class="form-row cols2">
         <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="eim-url" type="url" placeholder="https://…"></div>
+        <div class="fg"><label class="fl">Listenpreis (CHF)</label><input class="fi" id="eim-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
       </div>
       <input type="hidden" id="eim-id">
     </div>
@@ -940,7 +963,10 @@ function renderItemDetail(item, activeRevId) {
 
   document.getElementById('dp-body').innerHTML = `
     <div id="it-revs">
-      ${item.source_url ? `<div style="margin-bottom:10px;font-size:12px;color:var(--t3)">Quelle: <a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a></div>` : ''}
+      ${(item.source_url || item.default_price != null) ? `<div style="margin-bottom:10px;font-size:12px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
+        ${item.source_url ? `<span>Quelle: <a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a></span>` : ''}
+        ${item.default_price != null ? `<span>Listenpreis: <strong style="color:var(--t1)">${fmtChf(item.default_price)}</strong></span>` : ''}
+      </div>` : ''}
       <!-- Rev strip -->
       <div class="sep-label">Revisionen</div>
       <div class="rev-strip">
@@ -1092,6 +1118,7 @@ function renderDatasets(datasets, revId, locked) {
             <div class="ds-meta">v${f.version} · ${fmtSize(f.file_size)} · ${fmtDate(f.uploaded_at)}${f.notes?' · '+esc(f.notes):''}</div>
           </div>
           <a href="${API}/api/datasets/${f.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
+          <button class="btn btn-icon btn-ghost btn-sm" onclick="openEditDatasetModal(${f.id},'${esc(f.original_name)}','${esc(f.notes||'')}')" title="Info bearbeiten">✏️</button>
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delDataset(${f.id},${revId})" title="Loeschen">&#x2715;</button>`}
         </div>`).join('')}
     </div>`
@@ -1251,6 +1278,12 @@ async function renderSettings() {
       <div style="margin-top:16px;display:flex;gap:8px">
         <button class="btn btn-primary" onclick="saveSettings()">💾 Einstellungen speichern</button>
       </div>
+
+      <div class="sep-label" style="margin-top:24px">Datensicherung</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
+      <div style="display:flex;gap:8px">
+        <a class="btn btn-ghost" href="/api/export" download>&#x1F4E6; Gesamtexport herunterladen</a>
+      </div>
     </div>`);
 }
 
@@ -1288,27 +1321,52 @@ async function renderCustomers() {
 }
 
 // ── ORDERS ────────────────────────────────────────────────────
+let _orderFilter = { text:'', status:'' };
 async function renderOrders() {
   setLeftHeader('Aufträge', `<button class="btn btn-primary btn-sm" onclick="openOrderModal()">+ Auftrag</button>`);
   const orders = await api('/api/orders');
   state.orders = orders;
+  _orderFilter = { text:'', status:'' };
+  if (!orders.length) { setLeftBody(`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Noch keine Aufträge</div></div>`); return; }
+  setLeftBody(`
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input class="fi" style="flex:1;min-width:160px" placeholder="Suchen…" oninput="_orderFilter.text=this.value;_renderOrderRows()" >
+      <select class="fs" style="width:140px" onchange="_orderFilter.status=this.value;_renderOrderRows()">
+        <option value="">Alle Status</option>
+        <option value="DRAFT">Entwurf</option><option value="CONFIRMED">Bestätigt</option>
+        <option value="DELIVERED">Geliefert</option><option value="INVOICED">Fakturiert</option>
+        <option value="CANCELLED">Storniert</option>
+      </select>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Datum</th><th style="text-align:right">Total</th><th></th></tr></thead>
+      <tbody id="order-tbody"></tbody>
+    </table></div>`);
+  _renderOrderRows();
+}
+function _renderOrderRows() {
   const stMap = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
   const stLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
-  if (!orders.length) { setLeftBody(`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Noch keine Aufträge</div></div>`); return; }
-  setLeftBody(`<div class="tbl-wrap"><table>
-    <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Datum</th><th></th></tr></thead>
-    <tbody>${orders.map(o=>`<tr onclick="openOrderDetail(${o.id})">
-      <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${o.number}</td>
-      <td style="font-weight:500">${esc(o.title)}</td>
-      <td style="color:var(--t2)">${o.customer_name||'—'}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(o.items||[]).length}</td>
-      <td><span class="status ${stMap[o.status]||''}">${stLabel[o.status]||o.status}</span></td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${o.order_date||'—'}</td>
-      <td style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${o.id},'invoice')" title="Rechnung PDF">&#128196;</button>
-        <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delOrder(${o.id})">&#x2715;</button>
-      </td>
-    </tr>`).join('')}</tbody></table></div>`);
+  const t = _orderFilter.text.toLowerCase(); const s = _orderFilter.status;
+  const rows = (state.orders||[]).filter(o =>
+    (!t || o.title.toLowerCase().includes(t) || (o.customer_name||'').toLowerCase().includes(t) || o.number.includes(t)) &&
+    (!s || o.status === s)
+  );
+  const el = document.getElementById('order-tbody');
+  if (!el) return;
+  el.innerHTML = rows.map(o=>`<tr onclick="openOrderDetail(${o.id})">
+    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${o.number}</td>
+    <td style="font-weight:500">${esc(o.title)}</td>
+    <td style="color:var(--t2)">${o.customer_name||'—'}</td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(o.items||[]).length}</td>
+    <td><span class="status ${stMap[o.status]||''}">${stLabel[o.status]||o.status}</span></td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${o.order_date||'—'}</td>
+    <td style="font-family:var(--mono);font-size:11px;text-align:right;color:var(--green)">${o.computed_total != null ? fmtChf(o.computed_total) : '—'}</td>
+    <td style="display:flex;gap:4px">
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${o.id},'invoice')" title="Rechnung PDF">&#128196;</button>
+      <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delOrder(${o.id})">&#x2715;</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
 
 async function openOrderDetail(id) {
@@ -1414,6 +1472,7 @@ async function openEditItemModal(id) {
   set('eim-name', item.name);
   set('eim-desc', item.description || '');
   set('eim-url', item.source_url || '');
+  set('eim-price', item.default_price != null ? item.default_price : '');
   document.getElementById('eim-title').textContent = 'Umbenennen: ' + item.item_number;
   openModal('editItemModal');
 }
@@ -1422,7 +1481,7 @@ async function saveEditItem() {
   const id = V('eim-id');
   const name = V('eim-name');
   if (!name) return toast('Name fehlt', 'err');
-  await api('/api/items/' + id, 'PUT', { name, description: V('eim-desc'), source_url: V('eim-url')||null });
+  await api('/api/items/' + id, 'PUT', { name, description: V('eim-desc'), source_url: V('eim-url')||null, default_price: V('eim-price') ? parseFloat(V('eim-price')) : null });
   toast('Name gespeichert', 'ok');
   closeModal('editItemModal');
   const item = await api('/api/items/' + id);
@@ -1432,7 +1491,7 @@ async function saveEditItem() {
 }
 
 function openItemModal(projectId, parentId, type) {
-  set('im-name',''); set('im-desc',''); set('im-url','');
+  set('im-name',''); set('im-desc',''); set('im-url',''); set('im-price','');
   set('im-project-id', projectId);
   set('im-parent-id', parentId||'');
   document.getElementById('im-type').value = type||'PRT';
@@ -1444,7 +1503,7 @@ async function saveItem() {
   const name = V('im-name'); if (!name) return toast('Name fehlt','err');
   const projectId = V('im-project-id');
   const parentId = V('im-parent-id');
-  const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null, source_url: V('im-url')||null };
+  const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null, source_url: V('im-url')||null, default_price: V('im-price') ? parseFloat(V('im-price')) : null };
   await api(`/api/projects/${projectId}/items`,'POST',body);
   toast('Item angelegt','ok'); closeModal('itemModal');
   openProject(projectId); loadStats();
@@ -1559,6 +1618,17 @@ async function doUpload() {
   toast(upFiles.length+' Datei(en) hochgeladen','ok');
   closeModal('uploadModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
+}
+
+function openEditDatasetModal(id, name, notes) {
+  set('dsed-id', id); set('dsed-name', name); set('dsed-notes', notes);
+  openModal('datasetEditModal');
+}
+async function saveDatasetEdit() {
+  const id = V('dsed-id');
+  await api(`/api/datasets/${id}`, 'PUT', { original_name: V('dsed-name'), notes: V('dsed-notes') });
+  toast('Gespeichert', 'ok'); closeModal('datasetEditModal');
+  if (state.item) { const item = await api(`/api/items/${state.item.id}`); state.item = item; renderItemDetail(item, state.activeRevId); }
 }
 
 async function delDataset(dsId, revId) {
@@ -1727,27 +1797,50 @@ async function delOrder(id) {
 }
 
 // ── QUOTES ────────────────────────────────────────────────────
+let _quoteFilter = { text:'', status:'' };
 async function renderQuotes() {
   setLeftHeader('Angebote', `<button class="btn btn-primary btn-sm" onclick="openQuoteModal()">+ Angebot</button>`);
   const quotes = await api('/api/quotes');
   state.quotes = quotes;
+  _quoteFilter = { text:'', status:'' };
+  if (!quotes.length) { setLeftBody(`<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Noch keine Angebote</div></div>`); return; }
+  setLeftBody(`
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input class="fi" style="flex:1;min-width:160px" placeholder="Suchen…" oninput="_quoteFilter.text=this.value;_renderQuoteRows()">
+      <select class="fs" style="width:140px" onchange="_quoteFilter.status=this.value;_renderQuoteRows()">
+        <option value="">Alle Status</option>
+        <option value="DRAFT">Entwurf</option><option value="SENT">Versendet</option>
+        <option value="ACCEPTED">Akzeptiert</option><option value="DECLINED">Abgelehnt</option>
+      </select>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Gültig bis</th><th></th></tr></thead>
+      <tbody id="quote-tbody"></tbody>
+    </table></div>`);
+  _renderQuoteRows();
+}
+function _renderQuoteRows() {
   const stMap = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
   const stLabel = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
-  if (!quotes.length) { setLeftBody(`<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Noch keine Angebote</div></div>`); return; }
-  setLeftBody(`<div class="tbl-wrap"><table>
-    <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Gültig bis</th><th></th></tr></thead>
-    <tbody>${quotes.map(q=>`<tr onclick="openQuoteDetail(${q.id})">
-      <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${q.number}</td>
-      <td style="font-weight:500">${esc(q.title)}</td>
-      <td style="color:var(--t2)">${q.customer_name||'—'}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(q.items||[]).length}</td>
-      <td><span class="status ${stMap[q.status]||''}">${stLabel[q.status]||q.status}</span></td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${q.valid_until||'—'}</td>
-      <td style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${q.id},'quote')" title="Angebot PDF">&#128196;</button>
-        <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delQuote(${q.id})">&#x2715;</button>
-      </td>
-    </tr>`).join('')}</tbody></table></div>`);
+  const t = _quoteFilter.text.toLowerCase(); const s = _quoteFilter.status;
+  const rows = (state.quotes||[]).filter(q =>
+    (!t || q.title.toLowerCase().includes(t) || (q.customer_name||'').toLowerCase().includes(t) || q.number.includes(t)) &&
+    (!s || q.status === s)
+  );
+  const el = document.getElementById('quote-tbody');
+  if (!el) return;
+  el.innerHTML = rows.map(q=>`<tr onclick="openQuoteDetail(${q.id})">
+    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${q.number}</td>
+    <td style="font-weight:500">${esc(q.title)}</td>
+    <td style="color:var(--t2)">${q.customer_name||'—'}</td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(q.items||[]).length}</td>
+    <td><span class="status ${stMap[q.status]||''}">${stLabel[q.status]||q.status}</span></td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${q.valid_until||'—'}</td>
+    <td style="display:flex;gap:4px">
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${q.id},'quote')" title="Angebot PDF">&#128196;</button>
+      <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delQuote(${q.id})">&#x2715;</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
 
 async function openQuoteDetail(id) {
@@ -1932,6 +2025,8 @@ function selectLinkedItem(item) {
   sel.style.display = 'flex';
   // Pre-fill description if empty
   if (!V('li-desc')) set('li-desc', item.item_number + ' – ' + item.name);
+  // Pre-fill price from item's default_price if price not yet set
+  if (item.default_price != null && !(parseFloat(V('li-price')) > 0)) set('li-price', item.default_price);
 }
 
 function clearLinkedItem() {
@@ -2123,9 +2218,10 @@ async function generateDoc(id, type) {
   ].filter(Boolean);
 
   const hasDiscount = (d.discount_pct||0) > 0 || (d.positions||[]).some(p=>(p.discount_pct||0)>0);
+  const cols = hasDiscount ? 5 : 4;
   const rows = (d.positions||[]).map(p => {
     const lineTotal = p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100);
-    return '<tr style="border-bottom:1px solid #e5e7eb">'
+    let html = '<tr style="border-bottom:1px solid #e5e7eb">'
       +'<td style="padding:8px 6px">'+escHtml(p.description)+(p.item_number?' <span style="font-size:10px;color:#6b7280">['+p.item_number+']</span>':'')
       +(p.notes?'<br><span style="font-size:10px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+p.unit+'</td>'
@@ -2133,6 +2229,18 @@ async function generateDoc(id, type) {
       +(hasDiscount?(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>'):'')
       +'<td style="padding:8px 6px;text-align:right;font-weight:600">CHF '+lineTotal.toFixed(2)+'</td>'
       +'</tr>';
+    if (p.sub_items && p.sub_items.length) {
+      html += p.sub_items.map(s =>
+        '<tr style="background:#f9fafb">'
+        +'<td style="padding:4px 6px 4px 22px;color:#6b7280;font-size:11px">↳ '+(s.item_type==='ASM'?'📦':'🔩')+' '+escHtml(s.item_number)+' – '+escHtml(s.name)+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;font-size:11px;color:#6b7280">'+s.quantity+' '+s.unit+'</td>'
+        +'<td style="padding:4px 6px"></td>'
+        +(hasDiscount?'<td style="padding:4px 6px"></td>':'')
+        +'<td style="padding:4px 6px"></td>'
+        +'</tr>'
+      ).join('');
+    }
+    return html;
   }).join('');
 
   const html = `<!DOCTYPE html>
@@ -2206,7 +2314,7 @@ async function generateDoc(id, type) {
     ${hasDiscount ? '<th style="text-align:right">Rabatt</th>' : ''}
     <th style="text-align:right">Total</th>
   </tr></thead>
-  <tbody>${rows || `<tr><td colspan="${hasDiscount?5:4}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}</tbody>
+  <tbody>${rows || `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}</tbody>
 </table>
 
 <div class="totals">

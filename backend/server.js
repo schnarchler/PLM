@@ -95,10 +95,12 @@ async function initDb() {
     name TEXT NOT NULL,
     description TEXT,
     source_url TEXT,
+    default_price REAL,
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(item_number)
   )`);
   try { db.run('ALTER TABLE items ADD COLUMN source_url TEXT'); } catch(e) {}
+  try { db.run('ALTER TABLE items ADD COLUMN default_price REAL'); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS revisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -436,7 +438,7 @@ app.get('/api/items/:id', (req, res) => {
 });
 
 app.post('/api/projects/:projectId/items', (req, res) => {
-  const { name, description, item_type, parent_id, source_url } = req.body;
+  const { name, description, item_type, parent_id, source_url, default_price } = req.body;
   if (!name || !item_type) return res.status(400).json({ error: 'name and item_type required' });
   const project = get('SELECT * FROM projects WHERE id=?', [req.params.projectId]);
   if (!project) return res.status(404).json({ error: 'Project not found' });
@@ -457,16 +459,17 @@ app.post('/api/projects/:projectId/items', (req, res) => {
     }
   }
 
-  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url) VALUES (?,?,?,?,?,?,?)',
-    [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null]);
+  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price) VALUES (?,?,?,?,?,?,?,?)',
+    [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null]);
   run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, 'A', 'DFT', 'Initial revision']);
   log('item', itemId, 'Created', item_type + ' ' + item_number + ' Rev A');
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
 });
 
 app.put('/api/items/:id', (req, res) => {
-  const { name, description, source_url } = req.body;
-  run('UPDATE items SET name=?,description=?,source_url=? WHERE id=?', [name, description, source_url||null, req.params.id]);
+  const { name, description, source_url, default_price } = req.body;
+  run('UPDATE items SET name=?,description=?,source_url=?,default_price=? WHERE id=?',
+    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, req.params.id]);
   log('item', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
 });
@@ -614,6 +617,14 @@ app.get('/api/datasets/:id/download', (req, res) => {
   res.download(fp, ds.original_name);
 });
 
+app.put('/api/datasets/:id', (req, res) => {
+  const { notes, original_name } = req.body;
+  const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
+  if (!ds) return res.status(404).json({ error: 'Not found' });
+  run('UPDATE datasets SET notes=?,original_name=? WHERE id=?', [notes||'', original_name||ds.original_name, req.params.id]);
+  res.json(get('SELECT * FROM datasets WHERE id=?', [req.params.id]));
+});
+
 app.delete('/api/datasets/:id', (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
   if (!ds) return res.status(404).json({ error: 'Not found' });
@@ -654,7 +665,13 @@ app.delete('/api/customers/:id', (req, res) => {
 // ==============================================================
 app.get('/api/orders', (req, res) => {
   const orders = all('SELECT o.*,c.name as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id=c.id ORDER BY o.number DESC');
-  orders.forEach(o => { o.items = all('SELECT * FROM order_items WHERE order_id=?', [o.id]); });
+  orders.forEach(o => {
+    o.items = all('SELECT * FROM order_items WHERE order_id=?', [o.id]);
+    const sub = o.items.reduce((s,i) => s + i.quantity*i.unit_price*(1-(i.discount_pct||0)/100), 0);
+    const disc = sub * (o.discount_pct||0) / 100;
+    const net = sub - disc;
+    o.computed_total = net + (o.include_tax ? net*(o.tax_rate||8.1)/100 : 0);
+  });
   res.json(orders);
 });
 
@@ -840,7 +857,7 @@ app.get('/api/changelog', (req, res) => {
 
 app.get('/api/items-all', (req, res) => {
   const q = req.query.q ? '%' + req.query.q + '%' : '%';
-  const items = all(`SELECT i.id, i.item_number, i.name, i.item_type,
+  const items = all(`SELECT i.id, i.item_number, i.name, i.item_type, i.default_price,
     p.name as project_name, p.number as project_number
     FROM items i JOIN projects p ON i.project_id=p.id
     WHERE i.item_number LIKE ? OR i.name LIKE ?
@@ -893,7 +910,13 @@ app.get('/api/orders/:id/invoice-data', (req, res) => {
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
   if (!o) return res.status(404).json({ error: 'Not found' });
-  o.positions = all('SELECT oi.*,i.item_number FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=?', [o.id]);
+  o.positions = all('SELECT oi.*,i.item_number,i.item_type FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=?', [o.id]);
+  o.positions.forEach(p => {
+    if (p.item_id && p.item_type === 'ASM') {
+      const rev = getActiveRevision(p.item_id);
+      if (rev) p.sub_items = all('SELECT b.quantity,b.unit,i.item_number,i.name,i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
+    }
+  });
   o.subtotal = o.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
   o.discount_amount = o.subtotal * (o.discount_pct||0) / 100;
   o.net = o.subtotal - o.discount_amount;
@@ -909,13 +932,69 @@ app.get('/api/quotes/:id/quote-data', (req, res) => {
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
   if (!q) return res.status(404).json({ error: 'Not found' });
-  q.positions = all('SELECT qi.*,i.item_number FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
+  q.positions = all('SELECT qi.*,i.item_number,i.item_type FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
+  q.positions.forEach(p => {
+    if (p.item_id && p.item_type === 'ASM') {
+      const rev = getActiveRevision(p.item_id);
+      if (rev) p.sub_items = all('SELECT b.quantity,b.unit,i.item_number,i.name,i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
+    }
+  });
   q.subtotal = q.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
   q.discount_amount = q.subtotal * (q.discount_pct||0) / 100;
   q.net = q.subtotal - q.discount_amount;
   q.tax_amount = q.include_tax ? q.net * (q.tax_rate||19) / 100 : 0;
   q.total = q.net + q.tax_amount;
   res.json(q);
+});
+
+// -- EXPORT (ZIP) ----------------------------------------------
+const CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) { let c = i; for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[i] = c; }
+  return t;
+})();
+function crc32buf(buf) {
+  let c = 0xFFFFFFFF;
+  for (const b of buf) c = (c >>> 8) ^ CRC32_TABLE[(c ^ b) & 0xFF];
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function buildZip(entries) {
+  const parts = []; const cds = []; let off = 0;
+  for (const { name, data } of entries) {
+    const nb = Buffer.from(name); const crc = crc32buf(data);
+    const lh = Buffer.alloc(30 + nb.length);
+    lh.writeUInt32LE(0x04034b50,0); lh.writeUInt16LE(20,4); lh.writeUInt16LE(0,6);
+    lh.writeUInt16LE(0,8); lh.writeUInt32LE(0,10); lh.writeUInt32LE(crc,14);
+    lh.writeUInt32LE(data.length,18); lh.writeUInt32LE(data.length,22);
+    lh.writeUInt16LE(nb.length,26); lh.writeUInt16LE(0,28); nb.copy(lh,30);
+    const cd = Buffer.alloc(46 + nb.length);
+    cd.writeUInt32LE(0x02014b50,0); cd.writeUInt16LE(20,4); cd.writeUInt16LE(20,6);
+    cd.writeUInt16LE(0,8); cd.writeUInt16LE(0,10); cd.writeUInt32LE(0,12); cd.writeUInt32LE(crc,16);
+    cd.writeUInt32LE(data.length,20); cd.writeUInt32LE(data.length,24);
+    cd.writeUInt16LE(nb.length,28); cd.writeUInt16LE(0,30); cd.writeUInt16LE(0,32);
+    cd.writeUInt16LE(0,34); cd.writeUInt16LE(0,36); cd.writeUInt32LE(0,38); cd.writeUInt32LE(off,42);
+    nb.copy(cd,46);
+    parts.push(lh, data); cds.push(cd); off += lh.length + data.length;
+  }
+  const cdBuf = Buffer.concat(cds); const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50,0); eocd.writeUInt32LE(0,4);
+  eocd.writeUInt16LE(entries.length,8); eocd.writeUInt16LE(entries.length,10);
+  eocd.writeUInt32LE(cdBuf.length,12); eocd.writeUInt32LE(off,16); eocd.writeUInt16LE(0,20);
+  return Buffer.concat([...parts, cdBuf, eocd]);
+}
+
+app.get('/api/export', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const entries = [{ name: 'plm.db', data: Buffer.from(db.export()) }];
+  if (fs.existsSync(FILES_DIR)) {
+    for (const f of fs.readdirSync(FILES_DIR)) {
+      try { entries.push({ name: 'files/' + f, data: fs.readFileSync(path.join(FILES_DIR, f)) }); } catch {}
+    }
+  }
+  const zip = buildZip(entries);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="plm-backup-${today}.zip"`);
+  res.send(zip);
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
