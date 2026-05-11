@@ -57,6 +57,14 @@ function all(sql, params = []) {
   return rows;
 }
 
+function count(sql, params = []) {
+  return (get(sql, params) || {c: 0}).c;
+}
+
+function migrate(sql) {
+  try { db.run(sql); } catch(e) {}
+}
+
 function runGetId(sql, params = []) {
   db.run(sql, params);
   saveDb();
@@ -99,8 +107,8 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(item_number)
   )`);
-  try { db.run('ALTER TABLE items ADD COLUMN source_url TEXT'); } catch(e) {}
-  try { db.run('ALTER TABLE items ADD COLUMN default_price REAL'); } catch(e) {}
+  migrate('ALTER TABLE items ADD COLUMN source_url TEXT');
+  migrate('ALTER TABLE items ADD COLUMN default_price REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS revisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,12 +158,11 @@ async function initDb() {
     part_weight REAL,
     print_duration REAL
   )`);
-  // Migrate: add cost columns if they don't exist yet
-  try { db.run('ALTER TABLE print_settings ADD COLUMN printer_cost_hr REAL'); } catch(e) {}
-  try { db.run('ALTER TABLE print_settings ADD COLUMN filament_price_kg REAL'); } catch(e) {}
-  try { db.run('ALTER TABLE print_settings ADD COLUMN filament_weight_total REAL'); } catch(e) {}
-  try { db.run('ALTER TABLE print_settings ADD COLUMN part_weight REAL'); } catch(e) {}
-  try { db.run('ALTER TABLE print_settings ADD COLUMN print_duration REAL'); } catch(e) {}
+  migrate('ALTER TABLE print_settings ADD COLUMN printer_cost_hr REAL');
+  migrate('ALTER TABLE print_settings ADD COLUMN filament_price_kg REAL');
+  migrate('ALTER TABLE print_settings ADD COLUMN filament_weight_total REAL');
+  migrate('ALTER TABLE print_settings ADD COLUMN part_weight REAL');
+  migrate('ALTER TABLE print_settings ADD COLUMN print_duration REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS changelog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,10 +181,10 @@ async function initDb() {
     street TEXT, postal_code TEXT, city TEXT, country TEXT DEFAULT 'Deutschland',
     created_at TEXT DEFAULT (datetime('now'))
   )`);
-  try { db.run('ALTER TABLE customers ADD COLUMN street TEXT'); } catch(e) {}
-  try { db.run('ALTER TABLE customers ADD COLUMN postal_code TEXT'); } catch(e) {}
-  try { db.run('ALTER TABLE customers ADD COLUMN city TEXT'); } catch(e) {}
-  try { db.run("ALTER TABLE customers ADD COLUMN country TEXT DEFAULT 'Deutschland'"); } catch(e) {}
+  migrate('ALTER TABLE customers ADD COLUMN street TEXT');
+  migrate('ALTER TABLE customers ADD COLUMN postal_code TEXT');
+  migrate('ALTER TABLE customers ADD COLUMN city TEXT');
+  migrate("ALTER TABLE customers ADD COLUMN country TEXT DEFAULT 'Deutschland'");
 
   db.run(`CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -195,10 +202,10 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
-  try { db.run('ALTER TABLE orders ADD COLUMN tax_rate REAL DEFAULT 19'); } catch(e) {}
-  try { db.run('ALTER TABLE orders ADD COLUMN discount_pct REAL DEFAULT 0'); } catch(e) {}
-  try { db.run('ALTER TABLE orders ADD COLUMN payment_terms TEXT'); } catch(e) {}
-  try { db.run('ALTER TABLE orders ADD COLUMN include_tax INTEGER DEFAULT 0'); } catch(e) {}
+  migrate('ALTER TABLE orders ADD COLUMN tax_rate REAL DEFAULT 19');
+  migrate('ALTER TABLE orders ADD COLUMN discount_pct REAL DEFAULT 0');
+  migrate('ALTER TABLE orders ADD COLUMN payment_terms TEXT');
+  migrate('ALTER TABLE orders ADD COLUMN include_tax INTEGER DEFAULT 0');
 
   db.run(`CREATE TABLE IF NOT EXISTS order_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,8 +218,8 @@ async function initDb() {
     discount_pct REAL DEFAULT 0,
     notes TEXT
   )`);
-  try { db.run('ALTER TABLE order_items ADD COLUMN discount_pct REAL DEFAULT 0'); } catch(e) {}
-  try { db.run('ALTER TABLE order_items ADD COLUMN notes TEXT'); } catch(e) {}
+  migrate('ALTER TABLE order_items ADD COLUMN discount_pct REAL DEFAULT 0');
+  migrate('ALTER TABLE order_items ADD COLUMN notes TEXT');
 
   db.run(`CREATE TABLE IF NOT EXISTS quotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,7 +237,7 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
-  try { db.run('ALTER TABLE quotes ADD COLUMN include_tax INTEGER DEFAULT 0'); } catch(e) {}
+  migrate('ALTER TABLE quotes ADD COLUMN include_tax INTEGER DEFAULT 0');
 
   db.run(`CREATE TABLE IF NOT EXISTS quote_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -318,9 +325,10 @@ function log(type, id, action, details) {
   saveDb();
 }
 
-function nextAsmNumber(projectId) {
-  const rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='ASM'", [projectId]);
-  const nums = rows.map(r => { const m = r.item_number.match(/-ASM-(\d+)$/); return m ? parseInt(m[1]) : 0; });
+function nextItemSeq(projectId, type) {
+  const rows = all('SELECT item_number FROM items WHERE project_id=? AND item_type=?', [projectId, type]);
+  const re = new RegExp('-' + type + '-(\\d+)$');
+  const nums = rows.map(r => { const m = r.item_number.match(re); return m ? parseInt(m[1]) : 0; });
   return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
 }
 function nextPrtNumber(projectId, asmNum) {
@@ -333,6 +341,7 @@ function nextPrtNumber(projectId, asmNum) {
   const nums = rows.map(r => { const m = r.item_number.match(/-PRT-(\d+)$/); return m ? parseInt(m[1]) : 0; });
   return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
 }
+
 
 function mimeType(filename) {
   const ext = path.extname(filename).toLowerCase().slice(1);
@@ -388,10 +397,11 @@ app.use(express.static(FRONTEND_DIR));
 app.get('/api/projects', (req, res) => {
   const projects = all('SELECT * FROM projects ORDER BY number DESC');
   projects.forEach(p => {
-    p.item_count = (get('SELECT COUNT(*) as c FROM items WHERE project_id=?', [p.id]) || {c:0}).c;
-    p.asm_count  = (get("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='ASM'", [p.id]) || {c:0}).c;
-    p.prt_count  = (get("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='PRT'", [p.id]) || {c:0}).c;
-    p.file_count = (get('SELECT COUNT(*) as c FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id WHERE i.project_id=?', [p.id]) || {c:0}).c;
+    p.item_count = count('SELECT COUNT(*) as c FROM items WHERE project_id=?', [p.id]);
+    p.asm_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='ASM'", [p.id]);
+    p.prt_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='PRT'", [p.id]);
+    p.doc_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='DOC'", [p.id]);
+    p.file_count = count('SELECT COUNT(*) as c FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id WHERE i.project_id=?', [p.id]);
   });
   res.json(projects);
 });
@@ -481,7 +491,9 @@ app.post('/api/projects/:projectId/items', (req, res) => {
 
   let item_number;
   if (item_type === 'ASM') {
-    item_number = project.number + '-ASM-' + nextAsmNumber(project.id);
+    item_number = project.number + '-ASM-' + nextItemSeq(project.id, 'ASM');
+  } else if (item_type === 'DOC') {
+    item_number = project.number + '-DOC-' + nextItemSeq(project.id, 'DOC');
   } else {
     if (parent_id) {
       const parent = get('SELECT * FROM items WHERE id=?', [parent_id]);
@@ -859,13 +871,14 @@ app.get('/api/stats', (req, res) => {
   const recentItems = all('SELECT i.*,p.name as project_name FROM items i JOIN projects p ON i.project_id=p.id ORDER BY i.id DESC LIMIT 8');
   recentItems.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
   res.json({
-    projects:   (get('SELECT COUNT(*) as c FROM projects') || {c:0}).c,
-    items:      (get('SELECT COUNT(*) as c FROM items') || {c:0}).c,
-    assemblies: (get("SELECT COUNT(*) as c FROM items WHERE item_type='ASM'") || {c:0}).c,
-    parts:      (get("SELECT COUNT(*) as c FROM items WHERE item_type='PRT'") || {c:0}).c,
-    datasets:   (get('SELECT COUNT(*) as c FROM datasets') || {c:0}).c,
-    customers:  (get('SELECT COUNT(*) as c FROM customers') || {c:0}).c,
-    orders:     (get('SELECT COUNT(*) as c FROM orders') || {c:0}).c,
+    projects:   count('SELECT COUNT(*) as c FROM projects'),
+    items:      count('SELECT COUNT(*) as c FROM items'),
+    assemblies: count("SELECT COUNT(*) as c FROM items WHERE item_type='ASM'"),
+    parts:      count("SELECT COUNT(*) as c FROM items WHERE item_type='PRT'"),
+    datasets:   count('SELECT COUNT(*) as c FROM datasets'),
+    customers:  count('SELECT COUNT(*) as c FROM customers'),
+    orders:     count('SELECT COUNT(*) as c FROM orders'),
+    quotes:     count('SELECT COUNT(*) as c FROM quotes'),
     by_status:  all("SELECT status, COUNT(*) as count FROM revisions GROUP BY status"),
     recent_items: recentItems,
     recent_projects: all('SELECT * FROM projects ORDER BY updated_at DESC LIMIT 5'),
@@ -973,22 +986,15 @@ app.get('/api/projects/:id/items-for-bom', (req, res) => {
 // SETTINGS
 // ==============================================================
 app.get('/api/settings', (req, res) => {
-  const rows = all('SELECT key, value FROM settings');
-  const obj = {};
-  rows.forEach(r => { obj[r.key] = r.value; });
-  res.json(obj);
+  res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
 });
 
 app.put('/api/settings', (req, res) => {
-  const entries = Object.entries(req.body);
-  entries.forEach(([k, v]) => {
+  Object.entries(req.body).forEach(([k, v]) => {
     db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, String(v??'')]);
   });
   saveDb();
-  const rows = all('SELECT key, value FROM settings');
-  const obj = {};
-  rows.forEach(r => { obj[r.key] = r.value; });
-  res.json(obj);
+  res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
 });
 
 // -- SHUTDOWN --------------------------------------------------
@@ -1000,6 +1006,24 @@ app.post('/api/shutdown', (req, res) => {
   }, 500);
 });
 
+// -- SHARED HELPERS --------------------------------------------
+function attachSubItems(positions) {
+  positions.forEach(p => {
+    if (p.item_id && p.item_type === 'ASM') {
+      const rev = getActiveRevision(p.item_id);
+      if (rev) p.sub_items = all('SELECT b.quantity,b.unit,i.item_number,i.name,i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
+    }
+  });
+}
+
+function computeTotals(doc) {
+  doc.subtotal = doc.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
+  doc.discount_amount = doc.subtotal * (doc.discount_pct||0) / 100;
+  doc.net = doc.subtotal - doc.discount_amount;
+  doc.tax_amount = doc.include_tax ? doc.net * (doc.tax_rate||19) / 100 : 0;
+  doc.total = doc.net + doc.tax_amount;
+}
+
 // -- INVOICE DATA ----------------------------------------------
 app.get('/api/orders/:id/invoice-data', (req, res) => {
   const o = get(`SELECT o.*,c.name as customer_name,c.email as customer_email,
@@ -1008,17 +1032,8 @@ app.get('/api/orders/:id/invoice-data', (req, res) => {
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
   if (!o) return res.status(404).json({ error: 'Not found' });
   o.positions = all('SELECT oi.*,i.item_number,i.item_type FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=?', [o.id]);
-  o.positions.forEach(p => {
-    if (p.item_id && p.item_type === 'ASM') {
-      const rev = getActiveRevision(p.item_id);
-      if (rev) p.sub_items = all('SELECT b.quantity,b.unit,i.item_number,i.name,i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
-    }
-  });
-  o.subtotal = o.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
-  o.discount_amount = o.subtotal * (o.discount_pct||0) / 100;
-  o.net = o.subtotal - o.discount_amount;
-  o.tax_amount = o.include_tax ? o.net * (o.tax_rate||19) / 100 : 0;
-  o.total = o.net + o.tax_amount;
+  attachSubItems(o.positions);
+  computeTotals(o);
   res.json(o);
 });
 
@@ -1030,17 +1045,8 @@ app.get('/api/quotes/:id/quote-data', (req, res) => {
     FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
   if (!q) return res.status(404).json({ error: 'Not found' });
   q.positions = all('SELECT qi.*,i.item_number,i.item_type FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
-  q.positions.forEach(p => {
-    if (p.item_id && p.item_type === 'ASM') {
-      const rev = getActiveRevision(p.item_id);
-      if (rev) p.sub_items = all('SELECT b.quantity,b.unit,i.item_number,i.name,i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
-    }
-  });
-  q.subtotal = q.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
-  q.discount_amount = q.subtotal * (q.discount_pct||0) / 100;
-  q.net = q.subtotal - q.discount_amount;
-  q.tax_amount = q.include_tax ? q.net * (q.tax_rate||19) / 100 : 0;
-  q.total = q.net + q.tax_amount;
+  attachSubItems(q.positions);
+  computeTotals(q);
   res.json(q);
 });
 
@@ -1100,7 +1106,7 @@ app.get('*', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
 initDb().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log('');
-    console.log('  3D-PLM v2 laeuft auf http://localhost:' + PORT);
+    console.log('  PLM & ERP laeuft auf http://localhost:' + PORT);
     console.log('  Datenpfad: ' + DATA_DIR);
     console.log('');
   });
