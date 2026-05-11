@@ -244,6 +244,18 @@ async function initDb() {
     notes TEXT
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    file_size INTEGER,
+    doc_type TEXT DEFAULT 'OTHER',
+    notes TEXT,
+    uploaded_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS counters (
     key TEXT PRIMARY KEY,
     value INTEGER DEFAULT 0
@@ -383,6 +395,7 @@ app.get('/api/projects/:id', (req, res) => {
     }
   });
   p.changelog = all("SELECT * FROM changelog WHERE entity_type='project' AND entity_id=? ORDER BY created_at DESC LIMIT 20", [p.id]);
+  p.documents = all('SELECT * FROM documents WHERE project_id=? ORDER BY uploaded_at DESC', [p.id]);
   res.json(p);
 });
 
@@ -864,6 +877,47 @@ app.get('/api/items-all', (req, res) => {
     ORDER BY i.item_number LIMIT 40`, [q, q]);
   items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
   res.json(items);
+});
+
+// ==============================================================
+// DOCUMENTS (project-level)
+// ==============================================================
+app.post('/api/projects/:id/documents', upload.single('file'), (req, res) => {
+  const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const { name, notes } = req.body;
+  const docType = guessType(req.file.originalname);
+  const displayName = name || req.file.originalname;
+  const id = runGetId('INSERT INTO documents (project_id,name,filename,original_name,file_size,doc_type,notes) VALUES (?,?,?,?,?,?,?)',
+    [p.id, displayName, req.file.filename, req.file.originalname, req.file.size, docType, notes||'']);
+  log('project', p.id, 'Dokument hochgeladen', displayName + ' (' + docType + ')');
+  res.json(get('SELECT * FROM documents WHERE id=?', [id]));
+});
+
+app.get('/api/documents/:id/download', (req, res) => {
+  const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  const fp = path.join(FILES_DIR, doc.filename);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  res.download(fp, doc.original_name);
+});
+
+app.put('/api/documents/:id', (req, res) => {
+  const { name, notes } = req.body;
+  const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  run('UPDATE documents SET name=?,notes=? WHERE id=?', [name||doc.name, notes??doc.notes, req.params.id]);
+  res.json(get('SELECT * FROM documents WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/documents/:id', (req, res) => {
+  const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  try { fs.unlinkSync(path.join(FILES_DIR, doc.filename)); } catch {}
+  run('DELETE FROM documents WHERE id=?', [req.params.id]);
+  log('project', doc.project_id, 'Dokument gelöscht', doc.name);
+  res.json({ success: true });
 });
 
 app.get('/api/projects/:id/items-for-bom', (req, res) => {

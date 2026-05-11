@@ -638,6 +638,27 @@ a{color:inherit;text-decoration:none}
   </div>
 </div>
 
+<!-- Document Edit Modal -->
+<div class="overlay" id="docEditModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title">Dokument bearbeiten</div><button class="btn btn-icon btn-ghost" onclick="closeModal('docEditModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Bezeichnung</label><input class="fi" id="doced-name" placeholder="z.B. Lastenheft v2"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="doced-notes" rows="2"></textarea></div>
+      </div>
+      <input type="hidden" id="doced-id">
+      <input type="hidden" id="doced-projid">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('docEditModal')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveDocEdit()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- Dataset Edit Modal -->
 <div class="overlay" id="datasetEditModal">
   <div class="modal" style="max-width:420px">
@@ -867,6 +888,7 @@ function openProjectDetail(p) {
   document.getElementById('dp-title').innerHTML = `<strong>${p.number}</strong>&nbsp;${esc(p.name)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'pt-files')">Dateien / BOM</button>
+    <button class="tab" onclick="switchTab(this,'pt-docs')">Dokumente ${(p.documents||[]).length?`<span style="background:var(--blue);color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;margin-left:3px">${p.documents.length}</span>`:''}</button>
     <button class="tab" onclick="switchTab(this,'pt-info')">Info</button>
     <button class="tab" onclick="switchTab(this,'pt-log')">Changelog</button>`;
 
@@ -907,6 +929,9 @@ function openProjectDetail(p) {
       <div style="font-size:11px;color:var(--t3);margin-bottom:8px">Klick auf Item öffnet Detail-Ansicht · ↓ lädt Datei</div>
       ${filesHtml}
     </div>
+    <div id="pt-docs" style="display:none">
+      ${renderProjectDocs(p)}
+    </div>
     <div id="pt-info" style="display:none">
       <div class="sep-label">Stammdaten</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -926,6 +951,75 @@ function openProjectDetail(p) {
         <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:12px">Leer</div>'}
     </div>`;
   showDetail();
+}
+
+// ── PROJECT DOCUMENTS ─────────────────────────────────────────
+function renderProjectDocs(p) {
+  const docs = p.documents || [];
+  const typeLabel = { PDF:'PDF', DOC:'Word', SPREADSHEET:'Excel', IMAGE:'Bild', CAD:'CAD', GCODE:'GCode', OTHER:'Datei' };
+  const rows = docs.map(d => `
+    <div class="ds-row">
+      <span class="ds-type dt-${d.doc_type}">${typeLabel[d.doc_type]||d.doc_type}</span>
+      <div class="ds-info" style="flex:1">
+        <div class="ds-name">${esc(d.name)}</div>
+        <div class="ds-meta">${fmtSize(d.file_size)} · ${fmtDate(d.uploaded_at)}${d.notes?' · <em>'+esc(d.notes)+'</em>':''}</div>
+      </div>
+      <a href="/api/documents/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="openDocEditModal(${d.id},'${esc(d.name)}','${esc(d.notes||'')}',${p.id})" title="Bearbeiten">✏️</button>
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="delDoc(${d.id},${p.id})" title="Löschen">✕</button>
+    </div>`).join('');
+
+  return `
+    <div style="margin-bottom:12px">
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        &#x1F4CE; Dokument hochladen
+        <input type="file" multiple style="display:none" onchange="uploadDocs(this,${p.id})">
+      </label>
+    </div>
+    ${rows || '<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Dokumente</div>'}`;
+}
+
+async function uploadDocs(input, projectId) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append('file', file);
+    await fetch(`/api/projects/${projectId}/documents`, { method: 'POST', body: fd });
+  }
+  toast(files.length === 1 ? 'Dokument hochgeladen' : files.length + ' Dokumente hochgeladen', 'ok');
+  input.value = '';
+  const p = await api(`/api/projects/${projectId}`);
+  state.project = p;
+  const tab = document.getElementById('pt-docs');
+  if (tab) tab.innerHTML = renderProjectDocs(p);
+}
+
+function openDocEditModal(id, name, notes, projId) {
+  set('doced-id', id); set('doced-name', name); set('doced-notes', notes); set('doced-projid', projId);
+  openModal('docEditModal');
+}
+
+async function saveDocEdit() {
+  const id = V('doced-id'); const projId = V('doced-projid');
+  await api(`/api/documents/${id}`, 'PUT', { name: V('doced-name'), notes: V('doced-notes') });
+  toast('Gespeichert', 'ok'); closeModal('docEditModal');
+  const p = await api(`/api/projects/${projId}`);
+  state.project = p;
+  const tab = document.getElementById('pt-docs');
+  if (tab) tab.innerHTML = renderProjectDocs(p);
+}
+
+async function delDoc(id, projectId) {
+  if (!confirm('Dokument löschen?')) return;
+  await api(`/api/documents/${id}`, 'DELETE');
+  toast('Dokument gelöscht', 'ok');
+  const p = await api(`/api/projects/${projectId}`);
+  state.project = p;
+  const tab = document.getElementById('pt-docs');
+  if (tab) tab.innerHTML = renderProjectDocs(p);
+  // Update tab badge
+  openProjectDetail(p);
 }
 
 // ── ITEM DETAIL ───────────────────────────────────────────────
