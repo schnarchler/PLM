@@ -282,6 +282,10 @@ a{color:inherit;text-decoration:none}
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
       Dashboard
     </button>
+    <button class="nav-item" id="ni-changelog" onclick="gotoView('changelog')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Changelog
+    </button>
   </div>
   <div class="nav-sep"></div>
   <div class="nav-section">
@@ -566,11 +570,26 @@ a{color:inherit;text-decoration:none}
 
 <!-- Line Item Modal (shared for orders + quotes) -->
 <div class="overlay" id="lineItemModal">
-  <div class="modal" style="max-width:500px">
+  <div class="modal" style="max-width:520px">
     <div class="modal-head"><div class="modal-title" id="li-title">Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('lineItemModal')">✕</button></div>
     <div class="modal-body">
+      <!-- PLM Item search -->
+      <div class="form-row" style="margin-bottom:6px">
+        <div class="fg">
+          <label class="fl">PLM Item verknüpfen <span style="color:var(--t3)">(optional)</span></label>
+          <div id="li-plm-selected" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 10px;margin-bottom:6px;display:none;align-items:center;gap:8px">
+            <span id="li-plm-badge" style="font-family:var(--mono);font-size:10px;color:var(--blue)"></span>
+            <span id="li-plm-name" style="font-size:12px;flex:1"></span>
+            <button class="btn btn-icon btn-ghost btn-sm" onclick="clearLinkedItem()" title="Verknüpfung aufheben">✕</button>
+          </div>
+          <div style="position:relative">
+            <input class="fi" id="li-plm-search" placeholder="Teilenummer oder Name suchen…" oninput="searchItemsForLine(this.value)" autocomplete="off">
+            <div id="li-plm-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto"></div>
+          </div>
+        </div>
+      </div>
       <div class="form-row">
-        <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="li-desc" placeholder="Leistungsbeschreibung"></div>
+        <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="li-desc" placeholder="Leistungsbeschreibung oder Bezeichnung"></div>
       </div>
       <div class="form-row cols3">
         <div class="fg"><label class="fl">Menge</label><input class="fi" id="li-qty" type="number" value="1" min="0.001" step="0.001"></div>
@@ -586,6 +605,7 @@ a{color:inherit;text-decoration:none}
       <input type="hidden" id="li-parent-type">
       <input type="hidden" id="li-parent-id">
       <input type="hidden" id="li-item-id">
+      <input type="hidden" id="li-linked-plm-id">
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('lineItemModal')">Abbrechen</button>
@@ -681,6 +701,12 @@ window.addEventListener('DOMContentLoaded', () => {
   gotoView('projects');
   loadStats();
   setupUploadDrag();
+  document.addEventListener('click', e => {
+    const res = document.getElementById('li-plm-results');
+    if (res && !e.target.closest('#li-plm-results') && e.target.id !== 'li-plm-search') {
+      res.style.display = 'none';
+    }
+  });
 });
 
 // ── VIEWS ─────────────────────────────────────────────────────
@@ -696,6 +722,7 @@ async function gotoView(v) {
   else if (v === 'customers') await renderCustomers();
   else if (v === 'quotes') await renderQuotes();
   else if (v === 'orders') await renderOrders();
+  else if (v === 'changelog') await renderChangelog();
   else if (v === 'search') renderSearchView();
 }
 
@@ -1072,6 +1099,56 @@ async function renderDashboard() {
           </div>`).join('')}
       </div>
     </div>`);
+}
+
+// ── CHANGELOG ─────────────────────────────────────────────────
+async function renderChangelog() {
+  setLeftHeader('Changelog', `<button class="btn btn-ghost btn-sm" onclick="renderChangelog()">↺ Aktualisieren</button>`);
+  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
+  const rows = await api('/api/changelog?limit=200');
+  if (!rows.length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Noch keine Einträge</div></div>`);
+    return;
+  }
+  const actionIcon = a => {
+    if (a.includes('Added') || a.includes('angelegt') || a.includes('Created')) return '✚';
+    if (a.includes('Deleted') || a.includes('gelöscht') || a.includes('Entfernt')) return '✕';
+    if (a.includes('Status')) return '⇄';
+    if (a.includes('ECO')) return '⚡';
+    if (a.includes('BOM')) return '📋';
+    if (a.includes('Druckparameter')) return '🖨';
+    if (a.includes('Updated') || a.includes('gespeichert')) return '✏';
+    return '·';
+  };
+  const typeColor = t => ({item:'var(--blue)',revision:'var(--teal)',project:'var(--amber)'}[t]||'var(--t3)');
+  const itemTypeIcon = t => t === 'ASM' ? '📦' : t === 'PRT' ? '🔩' : '';
+
+  // Group by date
+  const byDate = {};
+  rows.forEach(r => {
+    const d = r.created_at ? r.created_at.split('T')[0].split(' ')[0] : '?';
+    (byDate[d] = byDate[d]||[]).push(r);
+  });
+
+  const html = Object.entries(byDate).map(([date, entries]) => `
+    <div style="margin-bottom:18px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--line);margin-bottom:6px">${date}</div>
+      ${entries.map(r => `
+        <div style="display:flex;gap:10px;padding:7px 6px;border-radius:var(--r);transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          <div style="width:18px;text-align:center;flex-shrink:0;font-size:13px;margin-top:1px">${actionIcon(r.action)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:500">${esc(r.action)}</span>
+              ${r.ref ? `<span style="font-family:var(--mono);font-size:10px;color:var(--blue);cursor:pointer" onclick="${r.project_id?'openProject('+r.project_id+')':''}">${itemTypeIcon(r.item_type)} ${esc(r.ref)}</span>` : ''}
+            </div>
+            ${r.details ? `<div style="font-size:11px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${esc(r.details)}</div>` : ''}
+            ${r.label ? `<div style="font-size:11px;color:var(--t2);margin-top:1px">${esc(r.label)}</div>` : ''}
+          </div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--t3);flex-shrink:0;white-space:nowrap;margin-top:2px">${r.created_at ? new Date(r.created_at).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
+        </div>`).join('')}
+    </div>`).join('');
+
+  setLeftBody(`<div style="padding-bottom:20px">${html}</div>`);
 }
 
 // ── CUSTOMERS ─────────────────────────────────────────────────
@@ -1687,14 +1764,61 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct) {
   </div>`;
 }
 
+let _liSearchTimer;
+async function searchItemsForLine(q) {
+  clearTimeout(_liSearchTimer);
+  const res = document.getElementById('li-plm-results');
+  if (!q || q.length < 1) { res.style.display='none'; return; }
+  _liSearchTimer = setTimeout(async () => {
+    const items = await api('/api/items-all?q='+encodeURIComponent(q));
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    res.innerHTML = items.map(i => {
+      const rev = i.latest_revision;
+      const icon = i.item_type==='ASM'?'📦':'🔩';
+      return `<div onclick="selectLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
+        style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <span>${icon}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</span>
+        <span style="flex:1;font-size:12px">${esc(i.name)}</span>
+        <span style="font-size:10px;color:var(--t3)">${i.project_name}</span>
+        ${rev?`<span class="status st-${rev.status}" style="margin-left:4px">Rev ${rev.rev}</span>`:''}
+      </div>`;
+    }).join('');
+    res.style.display = 'block';
+  }, 200);
+}
+
+function selectLinkedItem(item) {
+  set('li-linked-plm-id', item.id);
+  document.getElementById('li-plm-search').value = '';
+  document.getElementById('li-plm-results').style.display = 'none';
+  // Show badge
+  const sel = document.getElementById('li-plm-selected');
+  document.getElementById('li-plm-badge').textContent = (item.item_type==='ASM'?'📦 ':'🔩 ') + item.item_number;
+  document.getElementById('li-plm-name').textContent = item.name + ' · ' + item.project_name;
+  sel.style.display = 'flex';
+  // Pre-fill description if empty
+  if (!V('li-desc')) set('li-desc', item.item_number + ' – ' + item.name);
+}
+
+function clearLinkedItem() {
+  set('li-linked-plm-id', '');
+  document.getElementById('li-plm-selected').style.display = 'none';
+  document.getElementById('li-plm-search').value = '';
+}
+
 function openLineItemModal(parentType, parentId, itemId) {
   set('li-parent-type', parentType);
   set('li-parent-id', parentId);
   set('li-item-id', itemId||'');
+  set('li-linked-plm-id', '');
   document.getElementById('li-title').textContent = itemId ? 'Position bearbeiten' : 'Position hinzufügen';
   document.getElementById('li-save').textContent = itemId ? 'Speichern' : 'Hinzufügen';
+  document.getElementById('li-plm-results').style.display = 'none';
+  document.getElementById('li-plm-search').value = '';
+
   if (itemId) {
-    // find item in state
     const src = parentType === 'order' ? state.orders : (state.quotes||[]);
     const parent = src.find(x=>x.id===parentId);
     const li = (parent?.items||[]).find(x=>x.id===itemId);
@@ -1702,11 +1826,22 @@ function openLineItemModal(parentType, parentId, itemId) {
       set('li-desc',li.description); set('li-qty',li.quantity); set('li-price',li.unit_price);
       set('li-disc',li.discount_pct||0); set('li-notes',li.notes||'');
       document.getElementById('li-unit').value = li.unit||'Stk';
+      // Show linked PLM item if any
+      if (li.item_id && li.item_number) {
+        set('li-linked-plm-id', li.item_id);
+        const icon = li.item_type==='ASM'?'📦':'🔩';
+        document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
+        document.getElementById('li-plm-name').textContent = li.description;
+        document.getElementById('li-plm-selected').style.display = 'flex';
+      } else {
+        document.getElementById('li-plm-selected').style.display = 'none';
+      }
     }
   } else {
     ['li-desc','li-notes'].forEach(f=>set(f,''));
     set('li-qty',1); set('li-price',0); set('li-disc',0);
     document.getElementById('li-unit').value = 'Stk';
+    document.getElementById('li-plm-selected').style.display = 'none';
   }
   openModal('lineItemModal');
 }
@@ -1716,11 +1851,13 @@ async function saveLineItem() {
   const parentId = parseInt(V('li-parent-id'));
   const itemId = V('li-item-id');
   const desc = V('li-desc'); if(!desc) return toast('Beschreibung fehlt','err');
+  const linkedPlmId = V('li-linked-plm-id') ? parseInt(V('li-linked-plm-id')) : null;
   const body = { description:desc, quantity:parseFloat(V('li-qty'))||1,
     unit:document.getElementById('li-unit').value,
     unit_price:parseFloat(V('li-price'))||0,
     discount_pct:parseFloat(V('li-disc'))||0,
-    notes:V('li-notes') };
+    notes:V('li-notes'),
+    item_id: linkedPlmId };
   if (itemId) {
     await api(`/api/${parentType === 'order' ? 'order' : 'quote'}-items/${itemId}`,'PUT',body);
     toast('Gespeichert','ok');

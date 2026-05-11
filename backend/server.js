@@ -449,6 +449,7 @@ app.put('/api/items/:id', (req, res) => {
 app.delete('/api/items/:id', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found' });
+  log('project', item.project_id, 'Item gelöscht', item.item_type + ' ' + item.item_number + ' – ' + item.name);
   const revs = all('SELECT id FROM revisions WHERE item_id=?', [item.id]);
   revs.forEach(rev => {
     all('SELECT filename FROM datasets WHERE revision_id=?', [rev.id]).forEach(f => {
@@ -460,6 +461,7 @@ app.delete('/api/items/:id', (req, res) => {
   });
   run('DELETE FROM revisions WHERE item_id=?', [item.id]);
   run('DELETE FROM bom WHERE child_item_id=?', [item.id]);
+  run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['item', item.id]);
   run('DELETE FROM items WHERE id=?', [item.id]);
   res.json({ success: true });
 });
@@ -540,6 +542,7 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
     print_duration=excluded.print_duration`,
     [rev.id, material, color, layer_height, infill, supports, nozzle, print_temp, bed_temp, printer, notes,
      printer_cost_hr||null, filament_price_kg||null, filament_weight_total||null, part_weight||null, print_duration||null]);
+  log('revision', rev.id, 'Druckparameter gespeichert', [material, printer].filter(Boolean).join(', '));
   res.json(get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]));
 });
 
@@ -557,6 +560,8 @@ app.post('/api/revisions/:revId/bom', (req, res) => {
 });
 
 app.delete('/api/bom/:id', (req, res) => {
+  const bom = get('SELECT b.*, i.item_number FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.id=?', [req.params.id]);
+  if (bom) log('revision', bom.parent_rev_id, 'BOM Entfernt', bom.item_number + ' x' + bom.quantity);
   run('DELETE FROM bom WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
@@ -785,6 +790,38 @@ app.get('/api/search', (req, res) => {
   items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
   const projects = all('SELECT * FROM projects WHERE number LIKE ? OR name LIKE ? OR description LIKE ? LIMIT 10', [q,q,q]);
   res.json({ items, projects });
+});
+
+app.get('/api/changelog', (req, res) => {
+  const limit = parseInt(req.query.limit) || 150;
+  const rows = all('SELECT * FROM changelog ORDER BY created_at DESC LIMIT ?', [limit]);
+  rows.forEach(r => {
+    if (r.entity_type === 'item') {
+      const item = get('SELECT item_number, name, project_id, item_type FROM items WHERE id=?', [r.entity_id]);
+      if (item) { r.ref = item.item_number; r.label = item.name; r.project_id = item.project_id; r.item_id = r.entity_id; r.item_type = item.item_type; }
+    } else if (r.entity_type === 'revision') {
+      const rev = get('SELECT item_id FROM revisions WHERE id=?', [r.entity_id]);
+      if (rev) {
+        const item = get('SELECT item_number, name, project_id, item_type FROM items WHERE id=?', [rev.item_id]);
+        if (item) { r.ref = item.item_number; r.label = item.name; r.project_id = item.project_id; r.item_id = rev.item_id; r.item_type = item.item_type; }
+      }
+    } else if (r.entity_type === 'project') {
+      const proj = get('SELECT number, name FROM projects WHERE id=?', [r.entity_id]);
+      if (proj) { r.ref = proj.number; r.label = proj.name; r.project_id = r.entity_id; }
+    }
+  });
+  res.json(rows);
+});
+
+app.get('/api/items-all', (req, res) => {
+  const q = req.query.q ? '%' + req.query.q + '%' : '%';
+  const items = all(`SELECT i.id, i.item_number, i.name, i.item_type,
+    p.name as project_name, p.number as project_number
+    FROM items i JOIN projects p ON i.project_id=p.id
+    WHERE i.item_number LIKE ? OR i.name LIKE ?
+    ORDER BY i.item_number LIMIT 40`, [q, q]);
+  items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
+  res.json(items);
 });
 
 app.get('/api/projects/:id/items-for-bom', (req, res) => {
