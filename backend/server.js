@@ -334,6 +334,29 @@ function nextPrtNumber(projectId, asmNum) {
   return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
 }
 
+function mimeType(filename) {
+  const ext = path.extname(filename).toLowerCase().slice(1);
+  const map = {
+    pdf: 'application/pdf',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+    txt: 'text/plain', md: 'text/plain', csv: 'text/csv',
+    gcode: 'text/plain', nc: 'text/plain', bgcode: 'text/plain',
+    json: 'application/json',
+    stl: 'model/stl', obj: 'model/obj', '3mf': 'model/3mf',
+    step: 'application/step', stp: 'application/step',
+    iges: 'application/iges', igs: 'application/iges',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    doc: 'application/msword',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    xls: 'application/vnd.ms-excel',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ppt: 'application/vnd.ms-powerpoint',
+    zip: 'application/zip', '7z': 'application/x-7z-compressed',
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
 function guessType(filename) {
   const ext = path.extname(filename).toLowerCase().slice(1);
   if (['stl','obj','3mf','step','stp','iges','igs','f3d','blend','fcstd','ipt','iam','sldprt','sldasm','par','asm','prt','catpart','catproduct','jt','x_t','x_b'].includes(ext)) return 'CAD';
@@ -630,6 +653,16 @@ app.get('/api/datasets/:id/download', (req, res) => {
   res.download(fp, ds.original_name);
 });
 
+app.get('/api/datasets/:id/view', (req, res) => {
+  const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
+  if (!ds) return res.status(404).json({ error: 'Not found' });
+  const fp = path.join(FILES_DIR, ds.filename);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  res.setHeader('Content-Type', mimeType(ds.original_name));
+  res.setHeader('Content-Disposition', 'inline; filename="' + ds.original_name.replace(/"/g, '') + '"');
+  res.sendFile(fp);
+});
+
 app.put('/api/datasets/:id', (req, res) => {
   const { notes, original_name } = req.body;
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
@@ -901,6 +934,16 @@ app.get('/api/documents/:id/download', (req, res) => {
   const fp = path.join(FILES_DIR, doc.filename);
   if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
   res.download(fp, doc.original_name);
+});
+
+app.get('/api/documents/:id/view', (req, res) => {
+  const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  const fp = path.join(FILES_DIR, doc.filename);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  res.setHeader('Content-Type', mimeType(doc.original_name));
+  res.setHeader('Content-Disposition', 'inline; filename="' + doc.original_name.replace(/"/g, '') + '"');
+  res.sendFile(fp);
 });
 
 app.put('/api/documents/:id', (req, res) => {
