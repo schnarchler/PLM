@@ -1,0 +1,17 @@
+# Node
+backend/node_modules/
+
+# Datenbank und hochgeladene Dateien (lokale Daten, nicht ins Repo)
+backend/data/
+
+# Temporäre/fehlerhafte Verzeichnisse
+{backend,frontend
+PLM/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
