@@ -305,6 +305,11 @@ a{color:inherit;text-decoration:none}
       Aufträge
       <span class="badge" id="badge-orders">—</span>
     </button>
+    <button class="nav-item" id="ni-deliveries" onclick="gotoView('deliveries')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      Lieferscheine
+      <span class="badge" id="badge-deliveries">—</span>
+    </button>
   </div>
   <div style="flex:1"></div>
   <div class="nav-sep"></div>
@@ -763,6 +768,97 @@ a{color:inherit;text-decoration:none}
   </div>
 </div>
 
+<!-- Delivery Modal -->
+<div class="overlay" id="deliveryModal">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="dm-title">Neuer Lieferschein</div><button class="btn btn-icon btn-ghost" onclick="closeModal('deliveryModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Bezeichnung *</label><input class="fi" id="dm-title-f" placeholder="z.B. Roboterarm – 2 Stück"></div>
+      </div>
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">Kunde</label>
+          <select class="fs" id="dm-customer"><option value="">— keiner —</option></select>
+        </div>
+        <div class="fg"><label class="fl">Verknüpfter Auftrag</label>
+          <select class="fs" id="dm-order"><option value="">— keiner —</option></select>
+        </div>
+      </div>
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">Lieferdatum</label><input class="fi" id="dm-date" type="date"></div>
+        <div class="fg"><label class="fl">Status</label>
+          <select class="fs" id="dm-status">
+            <option value="DRAFT">Entwurf</option>
+            <option value="READY">Bereit</option>
+            <option value="DELIVERED">Geliefert</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="dm-notes" rows="2"></textarea></div>
+      </div>
+      <input type="hidden" id="dm-id">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('deliveryModal')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveDelivery()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delivery Item Modal -->
+<div class="overlay" id="deliveryItemModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-head"><div class="modal-title" id="dim-title">Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('deliveryItemModal')">✕</button></div>
+    <div class="modal-body">
+      <!-- PLM Item link -->
+      <div class="form-row" style="margin-bottom:6px">
+        <div class="fg">
+          <label class="fl">PLM Item verknüpfen <span style="color:var(--t3)">(optional)</span></label>
+          <div id="dim-plm-selected" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 10px;margin-bottom:6px;align-items:center;gap:8px">
+            <span id="dim-plm-badge" style="font-family:var(--mono);font-size:10px;color:var(--blue)"></span>
+            <span id="dim-plm-name" style="font-size:12px;flex:1"></span>
+            <button class="btn btn-icon btn-ghost btn-sm" onclick="clearDimLinkedItem()">✕</button>
+          </div>
+          <div style="position:relative">
+            <input class="fi" id="dim-plm-search" placeholder="Teilenummer oder Name suchen…" oninput="searchItemsForDim(this.value)" autocomplete="off">
+            <div id="dim-plm-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:180px;overflow-y:auto"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="dim-desc" placeholder="Bezeichnung des Bauteils"></div>
+      </div>
+      <div class="form-row cols3">
+        <div class="fg"><label class="fl">Menge</label><input class="fi" id="dim-qty" type="number" value="1" min="0.001" step="0.001"></div>
+        <div class="fg"><label class="fl">Einheit</label>
+          <select class="fs" id="dim-unit"><option>Stk</option><option>Set</option><option>m</option><option>g</option><option>kg</option></select>
+        </div>
+        <div class="fg"><label class="fl">Notizen</label><input class="fi" id="dim-notes" placeholder="optional"></div>
+      </div>
+      <!-- 3MF Upload -->
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+        <div class="fl" style="margin-bottom:8px">3MF Druckeinstellungen <span style="color:var(--t3);font-weight:400;text-transform:none">(optional – Datei wird nicht gespeichert)</span></div>
+        <label class="upload-zone" style="padding:14px" for="dim-3mf-input">
+          <div style="font-size:20px;margin-bottom:4px">📐</div>
+          <div style="font-size:12px;color:var(--t2)">3MF-Datei hier ablegen oder klicken</div>
+          <input type="file" id="dim-3mf-input" accept=".3mf" style="display:none" onchange="handle3mfUpload(this.files[0])">
+        </label>
+        <div id="dim-3mf-status" style="margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--t3);min-height:16px"></div>
+        <div id="dim-3mf-preview" style="display:none;margin-top:10px"></div>
+      </div>
+      <input type="hidden" id="dim-delivery-id">
+      <input type="hidden" id="dim-item-id">
+      <input type="hidden" id="dim-linked-plm-id">
+      <input type="hidden" id="dim-settings-json">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('deliveryItemModal')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveDeliveryItem()" id="dim-save">Hinzufügen</button>
+    </div>
+  </div>
+</div>
+
 <div id="toasts"></div>
 
 <!-- ═══════════════════ SCRIPT ═══════════════════ -->
@@ -772,7 +868,7 @@ const ORDER_ST_MAP   = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INV
 const ORDER_ST_LABEL = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
 const QUOTE_ST_MAP   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
 const QUOTE_ST_LABEL = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
-let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], searchResults: null, settings: {} };
+let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {} };
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -782,9 +878,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   setupUploadDrag();
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
-    if (res && !e.target.closest('#li-plm-results') && e.target.id !== 'li-plm-search') {
-      res.style.display = 'none';
-    }
+    if (res && !e.target.closest('#li-plm-results') && e.target.id !== 'li-plm-search') res.style.display = 'none';
+    const res2 = document.getElementById('dim-plm-results');
+    if (res2 && !e.target.closest('#dim-plm-results') && e.target.id !== 'dim-plm-search') res2.style.display = 'none';
   });
 });
 
@@ -801,6 +897,7 @@ async function gotoView(v) {
   else if (v === 'customers') await renderCustomers();
   else if (v === 'quotes') await renderQuotes();
   else if (v === 'orders') await renderOrders();
+  else if (v === 'deliveries') await renderDeliveries();
   else if (v === 'changelog') await renderChangelog();
   else if (v === 'settings') await renderSettings();
   else if (v === 'search') renderSearchView();
@@ -2225,6 +2322,8 @@ async function loadStats() {
   document.getElementById('badge-orders').textContent = s.orders||0;
   const el = document.getElementById('badge-quotes');
   if (el) el.textContent = s.quotes||0;
+  const el2 = document.getElementById('badge-deliveries');
+  if (el2) el2.textContent = s.deliveries||0;
 }
 
 // ── API ───────────────────────────────────────────────────────
@@ -2265,6 +2364,367 @@ async function shutdownServer() {
     + '<div style="font-size:18px;color:#4a9eff">PLM & ERP wurde beendet</div>'
     + '<div style="font-size:13px;color:#4a5470">Das CMD-Fenster kann jetzt geschlossen werden.</div>'
     + '</div>';
+}
+
+// ── DELIVERIES ────────────────────────────────────────────────
+const DELIVERY_ST_MAP   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
+const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+
+let _deliveryFilter = { text:'', status:'' };
+async function renderDeliveries() {
+  setLeftHeader('Lieferscheine', `<button class="btn btn-primary btn-sm" onclick="openDeliveryModal()">+ Lieferschein</button>`);
+  const rows = await api('/api/deliveries');
+  state.deliveries = rows;
+  _deliveryFilter = { text:'', status:'' };
+  if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🚚</div><div class="empty-text">Noch keine Lieferscheine</div></div>`); return; }
+  setLeftBody(`
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input class="fi" style="flex:1;min-width:160px" placeholder="Suchen…" oninput="_deliveryFilter.text=this.value;_renderDeliveryRows()">
+      <select class="fs" style="width:140px" onchange="_deliveryFilter.status=this.value;_renderDeliveryRows()">
+        <option value="">Alle Status</option>
+        <option value="DRAFT">Entwurf</option><option value="READY">Bereit</option><option value="DELIVERED">Geliefert</option>
+      </select>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Datum</th><th></th></tr></thead>
+      <tbody id="delivery-tbody"></tbody>
+    </table></div>`);
+  _renderDeliveryRows();
+}
+
+function _renderDeliveryRows() {
+  const t = _deliveryFilter.text.toLowerCase(); const s = _deliveryFilter.status;
+  const rows = (state.deliveries||[]).filter(d =>
+    (!t || d.title.toLowerCase().includes(t) || (d.customer_name||'').toLowerCase().includes(t) || d.number.includes(t)) &&
+    (!s || d.status === s)
+  );
+  const el = document.getElementById('delivery-tbody');
+  if (!el) return;
+  el.innerHTML = rows.map(d => `<tr onclick="openDeliveryDetail(${d.id})">
+    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${d.number}</td>
+    <td style="font-weight:500">${esc(d.title)}</td>
+    <td style="color:var(--t2)">${d.customer_name||'—'}</td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.item_count||0}</td>
+    <td><span class="status ${DELIVERY_ST_MAP[d.status]||''}">${DELIVERY_ST_LABEL[d.status]||d.status}</span></td>
+    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.delivery_date||'—'}</td>
+    <td style="display:flex;gap:4px">
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Druckansicht">&#128196;</button>
+      <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
+}
+
+async function openDeliveryDetail(id) {
+  const d = await api(`/api/deliveries/${id}`);
+  document.getElementById('dp-title').innerHTML = `<strong>${d.number}</strong>&nbsp;${esc(d.title)}`;
+  document.getElementById('dp-tabs').innerHTML = `
+    <button class="tab active" onclick="switchTab(this,'dd-pos')">Positionen</button>
+    <button class="tab" onclick="switchTab(this,'dd-info')">Details</button>`;
+  document.getElementById('dp-body').innerHTML = `
+    <div id="dd-pos">
+      ${renderDeliveryItems(d.items||[], id)}
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${id})">+ Position</button>
+    </div>
+    <div id="dd-info" style="display:none">
+      <div class="sep-label">Lieferscheindaten</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+        <div><div class="ps-label">Status</div><span class="status ${DELIVERY_ST_MAP[d.status]||''}">${DELIVERY_ST_LABEL[d.status]||d.status}</span></div>
+        <div><div class="ps-label">Kunde</div>${d.customer_name||'—'}</div>
+        <div><div class="ps-label">Lieferdatum</div>${d.delivery_date||'—'}</div>
+        ${d.order_number?`<div><div class="ps-label">Auftrag</div>${d.order_number} ${d.order_title?'– '+esc(d.order_title):''}</div>`:''}
+        ${d.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(d.notes)}</span></div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="openDeliveryModal(${id})">✏️ Bearbeiten</button>
+        <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${id})">&#128196; Druckansicht</button>
+        <button class="btn btn-red btn-sm" onclick="delDelivery(${id})">🗑 Löschen</button>
+      </div>
+    </div>`;
+  showDetail();
+}
+
+function renderDeliveryItems(items, deliveryId) {
+  if (!items.length) return `<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Positionen</div>`;
+  return items.map(item => `
+    <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:${item.print_settings?'1px solid var(--line)':'none'}">
+        ${item.item_number?`<span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${item.item_number}</span>`:''}
+        <span style="font-size:12px;font-weight:500;flex:1">${esc(item.description)}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--t2)">${item.quantity} ${item.unit}</span>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="openDeliveryItemModal(${deliveryId},${item.id})" title="Bearbeiten">✏</button>
+        <button class="btn btn-red btn-icon btn-sm" onclick="delDeliveryItem(${item.id},${deliveryId})">✕</button>
+      </div>
+      ${item.print_settings ? `<div style="padding:8px 10px">${renderSettingsPreview(item.print_settings)}</div>` : ''}
+    </div>`).join('');
+}
+
+// ── 3MF SETTINGS RENDERING ────────────────────────────────────
+const SETTINGS_GROUPS = [
+  { label: 'Profil', color: 'var(--blue)', keys: [
+    ['print_settings_id','Druckprofil'], ['printer_settings_id','Drucker'], ['filament_settings_id','Filamentprofil']
+  ]},
+  { label: 'Schichten & Wände', color: 'var(--teal)', keys: [
+    ['layer_height','Schichthöhe (mm)'], ['first_layer_height','1. Schicht (mm)'],
+    ['perimeters','Perimeter'], ['top_solid_layers','Oben (Lagen)'], ['bottom_solid_layers','Unten (Lagen)'],
+    ['spiral_vase','Vase-Modus']
+  ]},
+  { label: 'Infill', color: 'var(--amber)', keys: [
+    ['fill_density','Infill (%)'], ['fill_pattern','Muster'],
+    ['top_fill_pattern','Oben-Muster'], ['bottom_fill_pattern','Unten-Muster']
+  ]},
+  { label: 'Support', color: 'var(--purple)', keys: [
+    ['support_material','Aktiv'], ['support_material_auto','Auto-Support'],
+    ['support_material_threshold','Überhangwinkel (°)'], ['support_material_pattern','Muster'],
+    ['support_material_style','Stil'], ['raft_layers','Raft-Lagen']
+  ]},
+  { label: 'Temperatur', color: 'var(--red)', keys: [
+    ['temperature','Düse (°C)'], ['first_layer_temperature','Düse 1. Schicht (°C)'],
+    ['bed_temperature','Bett (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht (°C)']
+  ]},
+  { label: 'Geschwindigkeit', color: 'var(--green)', keys: [
+    ['perimeter_speed','Perimeter (mm/s)'], ['infill_speed','Infill (mm/s)'],
+    ['travel_speed','Travel (mm/s)'], ['first_layer_speed','1. Schicht (mm/s)'],
+    ['bridge_speed','Brücken (mm/s)']
+  ]},
+  { label: 'Kühlung', color: 'var(--teal)', keys: [
+    ['fan_always_on','Lüfter immer an'], ['min_fan_speed','Min-Lüfter (%)'],
+    ['max_fan_speed','Max-Lüfter (%)'], ['bridge_fan_speed','Brücken-Lüfter (%)'],
+    ['disable_fan_first_layers','Lüfter aus (erste Lagen)']
+  ]},
+  { label: 'Filament', color: 'var(--amber)', keys: [
+    ['filament_type','Typ'], ['filament_diameter','Durchmesser (mm)'],
+    ['filament_density','Dichte (g/cm³)'], ['filament_cost','Preis (CHF/kg)']
+  ]},
+  { label: 'Diverses', color: 'var(--t2)', keys: [
+    ['seam_position','Nahtposition'], ['brim_width','Brim (mm)'],
+    ['skirts','Skirt-Linien'], ['wipe_tower','Wipe-Tower'],
+    ['avoid_crossing_perimeters','Kreuzungen vermeiden'], ['ironing','Bügeln'],
+    ['ironing_type','Bügeltyp'], ['nozzle_diameter','Düsendurchmesser (mm)'],
+    ['estimated_printing_time_normal_mode','Druckzeit (geschätzt)']
+  ]}
+];
+
+function getFirstVal(v) {
+  if (!v) return null;
+  const first = v.split(';')[0].trim();
+  if (first === '0') return 'Nein';
+  if (first === '1') return 'Ja';
+  return first || null;
+}
+
+function renderSettingsPreview(s) {
+  const groups = SETTINGS_GROUPS.map(g => {
+    const cells = g.keys.map(([k, label]) => {
+      const v = getFirstVal(s[k]);
+      if (!v) return '';
+      return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:5px 7px">
+        <div style="font-family:var(--mono);font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${label}</div>
+        <div style="font-size:11px;font-weight:500;color:var(--t1)">${esc(v)}</div>
+      </div>`;
+    }).filter(Boolean).join('');
+    if (!cells) return '';
+    return `<div style="margin-bottom:8px">
+      <div style="font-family:var(--mono);font-size:9px;color:${g.color};letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">${g.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${cells}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+  return groups || '<div style="font-size:11px;color:var(--t3)">Keine Settings geladen</div>';
+}
+
+// ── 3MF UPLOAD HANDLING ───────────────────────────────────────
+async function handle3mfUpload(file) {
+  if (!file) return;
+  const status = document.getElementById('dim-3mf-status');
+  const preview = document.getElementById('dim-3mf-preview');
+  status.textContent = '⏳ Wird analysiert…';
+  status.style.color = 'var(--amber)';
+  preview.style.display = 'none';
+  set('dim-settings-json', '');
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/api/parse-3mf', { method: 'POST', body: fd });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      status.textContent = '✕ ' + (e.error || 'Fehler beim Parsen');
+      status.style.color = 'var(--red)';
+      return;
+    }
+    const { settings } = await r.json();
+    set('dim-settings-json', JSON.stringify(settings));
+    const keyCount = Object.keys(settings).length;
+    status.textContent = `✓ ${keyCount} Parameter geladen · ${file.name}`;
+    status.style.color = 'var(--green)';
+    preview.style.display = 'block';
+    preview.innerHTML = renderSettingsPreview(settings);
+  } catch(e) {
+    status.textContent = '✕ Verbindungsfehler';
+    status.style.color = 'var(--red)';
+  }
+}
+
+// ── DELIVERY ITEM SEARCH (reuses items-all endpoint) ──────────
+let _dimSearchTimer;
+async function searchItemsForDim(q) {
+  clearTimeout(_dimSearchTimer);
+  const res = document.getElementById('dim-plm-results');
+  if (!q || q.length < 1) { res.style.display='none'; return; }
+  _dimSearchTimer = setTimeout(async () => {
+    const items = await api('/api/items-all?q='+encodeURIComponent(q));
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    res.innerHTML = items.map(i => {
+      const icon = i.item_type==='ASM'?'📦':i.item_type==='DOC'?'📄':'🔩';
+      return `<div onclick="selectDimLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
+        style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <span>${icon}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</span>
+        <span style="flex:1;font-size:12px">${esc(i.name)}</span>
+        <span style="font-size:10px;color:var(--t3)">${i.project_name}</span>
+      </div>`;
+    }).join('');
+    res.style.display = 'block';
+  }, 200);
+}
+
+function selectDimLinkedItem(item) {
+  set('dim-linked-plm-id', item.id);
+  document.getElementById('dim-plm-search').value = '';
+  document.getElementById('dim-plm-results').style.display = 'none';
+  const icon = item.item_type==='ASM'?'📦':item.item_type==='DOC'?'📄':'🔩';
+  document.getElementById('dim-plm-badge').textContent = icon + ' ' + item.item_number;
+  document.getElementById('dim-plm-name').textContent = item.name + ' · ' + item.project_name;
+  document.getElementById('dim-plm-selected').style.display = 'flex';
+  if (!V('dim-desc')) set('dim-desc', item.item_number + ' – ' + item.name);
+}
+
+function clearDimLinkedItem() {
+  set('dim-linked-plm-id', '');
+  document.getElementById('dim-plm-selected').style.display = 'none';
+  document.getElementById('dim-plm-search').value = '';
+}
+
+// ── DELIVERY CRUD ─────────────────────────────────────────────
+let editingDeliveryId = null;
+async function openDeliveryModal(id) {
+  editingDeliveryId = id||null;
+  const customers = await api('/api/customers');
+  const orders = await api('/api/orders');
+  const cSel = document.getElementById('dm-customer');
+  const oSel = document.getElementById('dm-order');
+  cSel.innerHTML = '<option value="">— keiner —</option>' + customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
+  oSel.innerHTML = '<option value="">— keiner —</option>' + orders.map(o=>`<option value="${o.id}">${o.number} – ${esc(o.title)}</option>`).join('');
+  if (id) {
+    const d = await api(`/api/deliveries/${id}`);
+    set('dm-title-f', d.title); cSel.value = d.customer_id||''; oSel.value = d.order_id||'';
+    document.getElementById('dm-status').value = d.status||'DRAFT';
+    set('dm-date', d.delivery_date||''); set('dm-notes', d.notes||'');
+    document.getElementById('dm-title').textContent = 'Lieferschein bearbeiten';
+  } else {
+    ['dm-title-f','dm-date','dm-notes'].forEach(f=>set(f,''));
+    document.getElementById('dm-status').value = 'DRAFT';
+    cSel.value = ''; oSel.value = '';
+    document.getElementById('dm-title').textContent = 'Neuer Lieferschein';
+  }
+  set('dm-id', id||''); openModal('deliveryModal');
+}
+
+async function saveDelivery() {
+  const title = V('dm-title-f'); if (!title) return toast('Bezeichnung fehlt','err');
+  const body = { title, customer_id: V('dm-customer')||null, order_id: V('dm-order')||null,
+    status: document.getElementById('dm-status').value, delivery_date: V('dm-date')||null, notes: V('dm-notes') };
+  if (editingDeliveryId) {
+    await api(`/api/deliveries/${editingDeliveryId}`,'PUT',body);
+    toast('Gespeichert','ok'); closeModal('deliveryModal');
+    openDeliveryDetail(editingDeliveryId);
+  } else {
+    const d = await api('/api/deliveries','POST',body);
+    toast('Lieferschein angelegt','ok'); closeModal('deliveryModal');
+    await renderDeliveries(); openDeliveryDetail(d.id);
+  }
+  loadStats();
+}
+
+async function delDelivery(id) {
+  if (!confirm('Lieferschein löschen?')) return;
+  await api(`/api/deliveries/${id}`,'DELETE'); toast('Gelöscht','ok'); closeDetail(); renderDeliveries(); loadStats();
+}
+
+async function openDeliveryItemModal(deliveryId, itemId) {
+  set('dim-delivery-id', deliveryId);
+  set('dim-item-id', itemId||'');
+  set('dim-linked-plm-id', '');
+  set('dim-settings-json', '');
+  document.getElementById('dim-title').textContent = itemId ? 'Position bearbeiten' : 'Position hinzufügen';
+  document.getElementById('dim-save').textContent = itemId ? 'Speichern' : 'Hinzufügen';
+  document.getElementById('dim-plm-results').style.display = 'none';
+  document.getElementById('dim-plm-search').value = '';
+  document.getElementById('dim-plm-selected').style.display = 'none';
+  document.getElementById('dim-3mf-status').textContent = '';
+  document.getElementById('dim-3mf-preview').style.display = 'none';
+  document.getElementById('dim-3mf-preview').innerHTML = '';
+  document.getElementById('dim-3mf-input').value = '';
+
+  if (itemId) {
+    const d = state.deliveries.find(x=>x.id===deliveryId);
+    // Need fresh data with items
+    const fresh = await api(`/api/deliveries/${deliveryId}`);
+    const it = (fresh.items||[]).find(x=>x.id===itemId);
+    if (it) {
+      set('dim-desc', it.description); set('dim-qty', it.quantity); set('dim-notes', it.notes||'');
+      document.getElementById('dim-unit').value = it.unit||'Stk';
+      if (it.item_id && it.item_number) {
+        set('dim-linked-plm-id', it.item_id);
+        const icon = it.item_type==='ASM'?'📦':it.item_type==='DOC'?'📄':'🔩';
+        document.getElementById('dim-plm-badge').textContent = icon + ' ' + it.item_number;
+        document.getElementById('dim-plm-name').textContent = it.description;
+        document.getElementById('dim-plm-selected').style.display = 'flex';
+      }
+      if (it.print_settings_json) {
+        set('dim-settings-json', it.print_settings_json);
+        const settings = JSON.parse(it.print_settings_json);
+        const keyCount = Object.keys(settings).length;
+        const st = document.getElementById('dim-3mf-status');
+        st.textContent = `✓ ${keyCount} Parameter gespeichert`;
+        st.style.color = 'var(--green)';
+        document.getElementById('dim-3mf-preview').style.display = 'block';
+        document.getElementById('dim-3mf-preview').innerHTML = renderSettingsPreview(settings);
+      }
+    }
+  } else {
+    ['dim-desc','dim-notes'].forEach(f=>set(f,''));
+    set('dim-qty', 1); document.getElementById('dim-unit').value = 'Stk';
+  }
+  openModal('deliveryItemModal');
+}
+
+async function saveDeliveryItem() {
+  const deliveryId = parseInt(V('dim-delivery-id'));
+  const itemId = V('dim-item-id');
+  const desc = V('dim-desc'); if (!desc) return toast('Beschreibung fehlt','err');
+  const body = {
+    description: desc, quantity: parseFloat(V('dim-qty'))||1,
+    unit: document.getElementById('dim-unit').value,
+    item_id: V('dim-linked-plm-id') ? parseInt(V('dim-linked-plm-id')) : null,
+    print_settings_json: V('dim-settings-json') || null,
+    notes: V('dim-notes')
+  };
+  if (itemId) {
+    await api(`/api/delivery-items/${itemId}`,'PUT',body);
+    toast('Gespeichert','ok');
+  } else {
+    await api(`/api/deliveries/${deliveryId}/items`,'POST',body);
+    toast('Position hinzugefügt','ok');
+  }
+  closeModal('deliveryItemModal');
+  await renderDeliveries(); openDeliveryDetail(deliveryId);
+}
+
+async function delDeliveryItem(itemId, deliveryId) {
+  await api(`/api/delivery-items/${itemId}`,'DELETE');
+  toast('Position entfernt','ok');
+  await renderDeliveries(); openDeliveryDetail(deliveryId);
 }
 
 // -- PDF GENERATION (Rechnung + Angebot) -----------------------
@@ -2426,6 +2886,174 @@ async function generateDoc(id, type) {
   w.document.close();
 }
 
+
+// ── DELIVERY DOC (Lieferschein / Produktionsblatt) ─────────────
+const SETTINGS_GROUPS_PDF = [
+  { label: 'Profil', keys: [
+    ['print_settings_id','Druckprofil'], ['printer_settings_id','Drucker'], ['filament_settings_id','Filamentprofil']
+  ]},
+  { label: 'Schichten & Wände', keys: [
+    ['layer_height','Schichthöhe (mm)'], ['first_layer_height','1. Schicht (mm)'],
+    ['perimeters','Perimeter'], ['top_solid_layers','Oben'], ['bottom_solid_layers','Unten'],
+    ['spiral_vase','Vase-Modus']
+  ]},
+  { label: 'Infill', keys: [
+    ['fill_density','Infill (%)'], ['fill_pattern','Muster'],
+    ['top_fill_pattern','Oben'], ['bottom_fill_pattern','Unten']
+  ]},
+  { label: 'Support', keys: [
+    ['support_material','Aktiv'], ['support_material_auto','Auto'],
+    ['support_material_threshold','Überhang (°)'], ['support_material_pattern','Muster'],
+    ['support_material_style','Stil'], ['raft_layers','Raft']
+  ]},
+  { label: 'Temperatur', keys: [
+    ['temperature','Düse (°C)'], ['first_layer_temperature','Düse 1. Schicht'],
+    ['bed_temperature','Bett (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht']
+  ]},
+  { label: 'Geschwindigkeit (mm/s)', keys: [
+    ['perimeter_speed','Perimeter'], ['infill_speed','Infill'],
+    ['travel_speed','Travel'], ['first_layer_speed','1. Schicht'], ['bridge_speed','Brücken']
+  ]},
+  { label: 'Kühlung', keys: [
+    ['fan_always_on','Immer an'], ['min_fan_speed','Min (%)'], ['max_fan_speed','Max (%)'],
+    ['bridge_fan_speed','Brücken (%)'], ['disable_fan_first_layers','Aus (erste Lagen)']
+  ]},
+  { label: 'Filament', keys: [
+    ['filament_type','Typ'], ['filament_diameter','Ø (mm)'],
+    ['filament_density','Dichte (g/cm³)'], ['nozzle_diameter','Düse (mm)']
+  ]},
+  { label: 'Diverses', keys: [
+    ['seam_position','Naht'], ['brim_width','Brim (mm)'],
+    ['skirts','Skirt-Linien'], ['wipe_tower','Wipe-Tower'],
+    ['ironing','Bügeln'], ['avoid_crossing_perimeters','Kreuzungen vermeiden'],
+    ['estimated_printing_time_normal_mode','Druckzeit (geschätzt)']
+  ]}
+];
+
+function renderSettingsTablePdf(s) {
+  if (!s) return '<p style="color:#9ca3af;font-size:12px">Keine Druckeinstellungen hinterlegt.</p>';
+  return SETTINGS_GROUPS_PDF.map(g => {
+    const rows = g.keys.map(([k, label]) => {
+      const raw = s[k];
+      if (!raw) return '';
+      const v = raw.split(';')[0].trim();
+      if (!v) return '';
+      const disp = v === '0' ? 'Nein' : v === '1' ? 'Ja' : v;
+      return `<tr><td style="padding:4px 8px;color:#6b7280;width:48%;border-bottom:1px solid #f3f4f6">${label}</td>
+              <td style="padding:4px 8px;font-weight:600;border-bottom:1px solid #f3f4f6">${escHtml(disp)}</td></tr>`;
+    }).filter(Boolean).join('');
+    if (!rows) return '';
+    return `<div style="margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1d4ed8;margin-bottom:4px">${g.label}</div>
+      <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:4px">${rows}</table>
+    </div>`;
+  }).filter(Boolean).join('');
+}
+
+async function generateDeliveryDoc(id) {
+  const d = await api(`/api/deliveries/${id}/delivery-data`);
+  const s = state.settings;
+  const today = new Date().toLocaleDateString('de-CH');
+  const color = '#1d4ed8';
+
+  const companyLines = [
+    s.company_street,
+    [s.company_postal_code, s.company_city].filter(Boolean).join(' ')
+  ].filter(Boolean);
+
+  const custAddrLines = [
+    d.customer_street,
+    d.customer_postal_code && d.customer_city ? d.customer_postal_code + ' ' + d.customer_city : (d.customer_city||'')
+  ].filter(Boolean);
+
+  const itemsHtml = (d.items||[]).map((item, idx) => {
+    const hasSettings = !!item.print_settings;
+    return `<div style="page-break-inside:avoid;margin-bottom:24px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+      <div style="background:#1e40af;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px">
+        <span style="background:rgba(255,255,255,.2);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${idx+1}</span>
+        ${item.item_number?`<span style="font-family:monospace;font-size:11px;opacity:.8">${escHtml(item.item_number)}</span>`:''}
+        <span style="font-weight:600;font-size:14px;flex:1">${escHtml(item.description)}</span>
+        <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:12px">${item.quantity} ${item.unit}</span>
+      </div>
+      ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:12px;color:#374151;border-bottom:1px solid #dbeafe">Notiz: ${escHtml(item.notes)}</div>`:''}
+      <div style="padding:12px 14px">
+        ${hasSettings ? renderSettingsTablePdf(item.print_settings) : '<p style="color:#9ca3af;font-size:12px;margin:0">Keine 3MF-Druckeinstellungen hinterlegt.</p>'}
+      </div>
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="de-CH">
+<head><meta charset="UTF-8"><title>Lieferschein ${escHtml(d.number)}</title>
+<style>
+  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:32px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #1d4ed8}
+  .company-name{font-size:20px;font-weight:700;color:#1d4ed8}
+  .doc-label{font-size:26px;font-weight:700;color:#111827;margin-bottom:4px}
+  .meta{color:#6b7280;font-size:12px;line-height:1.7}
+  .addr-block{display:flex;gap:48px;margin:20px 0 24px}
+  .addr-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:3px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+  .sign-row{display:flex;gap:40px;margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb}
+  .sign-box{flex:1;border-bottom:1px solid #9ca3af;padding-bottom:2px;font-size:11px;color:#6b7280;height:40px;display:flex;align-items:flex-end}
+  @media print{body{padding:16px}.header{margin-bottom:20px}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="company-name">${escHtml(s.company_name||'')}</div>
+    <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.6">
+      ${companyLines.map(l=>escHtml(l)).join('<br>')}
+      ${s.company_phone?' · '+escHtml(s.company_phone):''}
+      ${s.company_email?' · '+escHtml(s.company_email):''}
+    </div>
+  </div>
+  <div style="text-align:right">
+    <div class="doc-label">Lieferschein</div>
+    <div style="font-family:monospace;font-size:13px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
+    <div class="meta">
+      Erstellt: ${today}<br>
+      ${d.delivery_date?'Lieferdatum: '+d.delivery_date+'<br>':''}
+      ${d.order_number?'Auftrag: '+escHtml(d.order_number):''}
+    </div>
+    <span class="badge" style="background:#dbeafe;color:#1d4ed8;margin-top:4px">${DELIVERY_ST_LABEL[d.status]||d.status}</span>
+  </div>
+</div>
+
+<div class="addr-block">
+  ${d.customer_name?`<div>
+    <div class="addr-label">Empfänger</div>
+    <div style="font-weight:600;font-size:14px">${escHtml(d.customer_name)}</div>
+    ${d.customer_number?'<div style="font-size:11px;color:#6b7280">'+escHtml(d.customer_number)+'</div>':''}
+    <div style="margin-top:3px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
+    ${d.customer_email?'<div style="margin-top:3px;color:#6b7280">'+escHtml(d.customer_email)+'</div>':''}
+  </div>`:`<div><div class="addr-label">Empfänger</div><div style="color:#9ca3af">—</div></div>`}
+  <div>
+    <div class="addr-label">Auftrag / Betreff</div>
+    <div style="font-weight:600">${escHtml(d.title)}</div>
+    ${d.notes?`<div style="margin-top:4px;font-size:12px;color:#6b7280">${escHtml(d.notes)}</div>`:''}
+  </div>
+</div>
+
+<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:12px">${(d.items||[]).length} Position(en)</div>
+
+${itemsHtml || '<p style="color:#9ca3af">Keine Positionen</p>'}
+
+<div class="sign-row">
+  <div style="flex:1"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">Übergabe durch</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">Empfang bestätigt</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">Datum</div><div class="sign-box"></div></div>
+</div>
+
+<div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:10px;color:#d1d5db;text-align:right">${today}</div>
+<script>window.onload = () => window.print();<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=950,height=750');
+  w.document.write(html);
+  w.document.close();
+}
 
 </script>
 </body>

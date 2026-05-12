@@ -1,5 +1,9 @@
 @echo off
-title 3D-PLM
+title PLM & ERP
+
+:: Sicherheitssperre entfernen (Zone.Identifier / SmartScreen)
+:: Diese Zeile entfernt die "Herausgeber nicht verifiziert"-Markierung ein fuer allemal.
+powershell -NoProfile -Command "Unblock-File -LiteralPath '%~f0'" >nul 2>&1
 
 :: Konfiguration
 set "PLM_PORT=3000"
@@ -33,7 +37,7 @@ if not exist "%PLM_DATA_DIR%\files" mkdir "%PLM_DATA_DIR%\files"
 :: Info
 echo.
 echo  =========================================
-echo   3D-PLM startet auf Port %PLM_PORT%
+echo   PLM ^& ERP startet auf Port %PLM_PORT%
 echo   Daten: %PLM_DATA_DIR%
 echo  =========================================
 echo.

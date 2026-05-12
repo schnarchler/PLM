@@ -1,4 +1,5 @@
 const express  = require('express');
+const AdmZip   = require('adm-zip');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
@@ -263,11 +264,36 @@ async function initDb() {
     uploaded_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS deliveries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    number TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    order_id INTEGER,
+    customer_id INTEGER,
+    status TEXT DEFAULT 'DRAFT',
+    delivery_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS delivery_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    delivery_id INTEGER NOT NULL,
+    item_id INTEGER,
+    description TEXT NOT NULL,
+    quantity REAL DEFAULT 1,
+    unit TEXT DEFAULT 'Stk',
+    print_settings_json TEXT,
+    notes TEXT,
+    position INTEGER DEFAULT 999
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS counters (
     key TEXT PRIMARY KEY,
     value INTEGER DEFAULT 0
   )`);
-  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0)`);
+  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0),('delivery',0)`);
 
   db.run(`CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -311,6 +337,29 @@ function nextProjectNumber() { return String(nextCounter('project')).padStart(4,
 function nextCustomerNumber() { return 'KD-' + String(nextCounter('customer')).padStart(4, '0'); }
 function nextOrderNumber() { return 'AUF-' + new Date().getFullYear() + '-' + String(nextCounter('order')).padStart(4, '0'); }
 function nextQuoteNumber() { return 'ANG-' + new Date().getFullYear() + '-' + String(nextCounter('quote')).padStart(4, '0'); }
+function nextDeliveryNumber() { return 'LS-' + new Date().getFullYear() + '-' + String(nextCounter('delivery')).padStart(4, '0'); }
+
+function parse3mfSettings(buffer) {
+  try {
+    const zip = new AdmZip(buffer);
+    const candidates = ['Metadata/Slic3r_PE.config','Metadata/PrusaSlicer.config','Metadata/slic3r.config'];
+    let content = null;
+    for (const p of candidates) {
+      const e = zip.getEntry(p);
+      if (e) { content = e.getData().toString('utf8'); break; }
+    }
+    if (!content) return null;
+    const s = {};
+    for (const line of content.split('\n')) {
+      const t = line.trim();
+      if (!t || t.startsWith(';')) continue;
+      const eq = t.indexOf('=');
+      if (eq < 0) continue;
+      s[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+    }
+    return Object.keys(s).length ? s : null;
+  } catch(e) { return null; }
+}
 
 function getLatestRevision(itemId) {
   return get('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid DESC LIMIT 1', [itemId]);
@@ -879,6 +928,7 @@ app.get('/api/stats', (req, res) => {
     customers:  count('SELECT COUNT(*) as c FROM customers'),
     orders:     count('SELECT COUNT(*) as c FROM orders'),
     quotes:     count('SELECT COUNT(*) as c FROM quotes'),
+    deliveries: count('SELECT COUNT(*) as c FROM deliveries'),
     by_status:  all("SELECT status, COUNT(*) as count FROM revisions GROUP BY status"),
     recent_items: recentItems,
     recent_projects: all('SELECT * FROM projects ORDER BY updated_at DESC LIMIT 5'),
@@ -1004,6 +1054,120 @@ app.post('/api/shutdown', (req, res) => {
     console.log('Server wird per Browser-Befehl beendet.');
     process.exit(0);
   }, 500);
+});
+
+// ==============================================================
+// 3MF PARSE
+// ==============================================================
+const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+
+app.post('/api/parse-3mf', uploadMem.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const settings = parse3mfSettings(req.file.buffer);
+  if (!settings) return res.status(422).json({ error: 'Keine PrusaSlicer-Konfiguration in der 3MF gefunden' });
+  res.json({ settings });
+});
+
+// ==============================================================
+// DELIVERIES (LIEFERSCHEINE / PRODUKTIONSBLÄTTER)
+// ==============================================================
+app.get('/api/deliveries', (req, res) => {
+  const rows = all(`SELECT d.*,c.name as customer_name,o.number as order_number
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id=c.id
+    LEFT JOIN orders o ON d.order_id=o.id
+    ORDER BY d.number DESC`);
+  rows.forEach(d => {
+    d.item_count = count('SELECT COUNT(*) as c FROM delivery_items WHERE delivery_id=?', [d.id]);
+  });
+  res.json(rows);
+});
+
+app.post('/api/deliveries', (req, res) => {
+  const { title, order_id, customer_id, status, delivery_date, notes } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title required' });
+  const number = nextDeliveryNumber();
+  const id = runGetId(`INSERT INTO deliveries (number,title,order_id,customer_id,status,delivery_date,notes)
+    VALUES (?,?,?,?,?,?,?)`,
+    [number, title, order_id||null, customer_id||null, status||'DRAFT', delivery_date||null, notes||'']);
+  res.json(get('SELECT * FROM deliveries WHERE id=?', [id]));
+});
+
+app.get('/api/deliveries/:id', (req, res) => {
+  const d = get(`SELECT d.*,c.name as customer_name,c.email as customer_email,
+    c.street as customer_street,c.postal_code as customer_postal_code,
+    c.city as customer_city,c.country as customer_country,c.number as customer_number,
+    o.number as order_number,o.title as order_title
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id=c.id
+    LEFT JOIN orders o ON d.order_id=o.id
+    WHERE d.id=?`, [req.params.id]);
+  if (!d) return res.status(404).json({ error: 'Not found' });
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name
+    FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
+    WHERE di.delivery_id=? ORDER BY di.position,di.id`, [d.id]);
+  d.items.forEach(item => {
+    if (item.print_settings_json) {
+      try { item.print_settings = JSON.parse(item.print_settings_json); } catch(e) {}
+    }
+  });
+  res.json(d);
+});
+
+app.put('/api/deliveries/:id', (req, res) => {
+  const { title, order_id, customer_id, status, delivery_date, notes } = req.body;
+  run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,status=?,delivery_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+    [title, order_id||null, customer_id||null, status||'DRAFT', delivery_date||null, notes||'', req.params.id]);
+  res.json(get('SELECT * FROM deliveries WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/deliveries/:id', (req, res) => {
+  run('DELETE FROM delivery_items WHERE delivery_id=?', [req.params.id]);
+  run('DELETE FROM deliveries WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+app.post('/api/deliveries/:id/items', (req, res) => {
+  const { item_id, description, quantity, unit, print_settings_json, notes, position } = req.body;
+  if (!description) return res.status(400).json({ error: 'Description required' });
+  const id = runGetId(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,print_settings_json,notes,position)
+    VALUES (?,?,?,?,?,?,?,?)`,
+    [req.params.id, item_id||null, description, quantity||1, unit||'Stk',
+     print_settings_json||null, notes||'', position||999]);
+  res.json(get('SELECT * FROM delivery_items WHERE id=?', [id]));
+});
+
+app.put('/api/delivery-items/:id', (req, res) => {
+  const { description, quantity, unit, print_settings_json, notes, position } = req.body;
+  run(`UPDATE delivery_items SET description=?,quantity=?,unit=?,print_settings_json=?,notes=?,position=? WHERE id=?`,
+    [description, quantity||1, unit||'Stk', print_settings_json??null, notes||'', position||999, req.params.id]);
+  res.json(get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/delivery-items/:id', (req, res) => {
+  run('DELETE FROM delivery_items WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+app.get('/api/deliveries/:id/delivery-data', (req, res) => {
+  const d = get(`SELECT d.*,c.name as customer_name,c.email as customer_email,
+    c.street as customer_street,c.postal_code as customer_postal_code,
+    c.city as customer_city,c.country as customer_country,c.number as customer_number,
+    o.number as order_number,o.title as order_title
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id=c.id
+    LEFT JOIN orders o ON d.order_id=o.id
+    WHERE d.id=?`, [req.params.id]);
+  if (!d) return res.status(404).json({ error: 'Not found' });
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name
+    FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
+    WHERE di.delivery_id=? ORDER BY di.position,di.id`, [d.id]);
+  d.items.forEach(item => {
+    if (item.print_settings_json) {
+      try { item.print_settings = JSON.parse(item.print_settings_json); } catch(e) {}
+    }
+  });
+  res.json(d);
 });
 
 // -- SHARED HELPERS --------------------------------------------
