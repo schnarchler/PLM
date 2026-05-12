@@ -339,26 +339,62 @@ function nextOrderNumber() { return 'AUF-' + new Date().getFullYear() + '-' + St
 function nextQuoteNumber() { return 'ANG-' + new Date().getFullYear() + '-' + String(nextCounter('quote')).padStart(4, '0'); }
 function nextDeliveryNumber() { return 'LS-' + new Date().getFullYear() + '-' + String(nextCounter('delivery')).padStart(4, '0'); }
 
+function parseIni(content) {
+  const s = {};
+  for (const line of content.split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith(';') || t.startsWith('#') || t.startsWith('[')) continue;
+    const eq = t.indexOf('=');
+    if (eq < 0) continue;
+    s[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+  }
+  return Object.keys(s).length ? s : null;
+}
+
 function parse3mfSettings(buffer) {
   try {
     const zip = new AdmZip(buffer);
-    const candidates = ['Metadata/Slic3r_PE.config','Metadata/PrusaSlicer.config','Metadata/slic3r.config'];
-    let content = null;
+    const entries = zip.getEntries().map(e => e.entryName);
+
+    // Priority order: known slicer config paths
+    const candidates = [
+      'Metadata/Slic3r_PE.config',
+      'Metadata/PrusaSlicer.config',
+      'Metadata/SuperSlicer.config',
+      'Metadata/slic3r.config',
+      'Metadata/OrcaSlicer.config',
+      'Metadata/bambu_slicer.config',
+    ];
+    // Also try case-insensitive match and backslash variants
     for (const p of candidates) {
-      const e = zip.getEntry(p);
-      if (e) { content = e.getData().toString('utf8'); break; }
+      const variants = [p, p.replace('/', '\\'), p.toLowerCase()];
+      for (const v of variants) {
+        const e = zip.getEntry(v) || zip.getEntries().find(x => x.entryName.toLowerCase() === v.toLowerCase());
+        if (e) {
+          const parsed = parseIni(e.getData().toString('utf8'));
+          if (parsed) return { settings: parsed, source: e.entryName };
+        }
+      }
     }
-    if (!content) return null;
-    const s = {};
-    for (const line of content.split('\n')) {
-      const t = line.trim();
-      if (!t || t.startsWith(';')) continue;
-      const eq = t.indexOf('=');
-      if (eq < 0) continue;
-      s[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+
+    // Fallback: any .config file in Metadata/ that looks like INI
+    const metaConfig = zip.getEntries().find(e =>
+      e.entryName.toLowerCase().includes('metadata') && e.entryName.toLowerCase().endsWith('.config')
+    );
+    if (metaConfig) {
+      const parsed = parseIni(metaConfig.getData().toString('utf8'));
+      if (parsed) return { settings: parsed, source: metaConfig.entryName };
     }
-    return Object.keys(s).length ? s : null;
-  } catch(e) { return null; }
+
+    // Last resort: any .config file anywhere
+    const anyConfig = zip.getEntries().find(e => e.entryName.toLowerCase().endsWith('.config'));
+    if (anyConfig) {
+      const parsed = parseIni(anyConfig.getData().toString('utf8'));
+      if (parsed) return { settings: parsed, source: anyConfig.entryName };
+    }
+
+    return { settings: null, entries };
+  } catch(e) { return { settings: null, error: String(e) }; }
 }
 
 function getLatestRevision(itemId) {
@@ -1063,9 +1099,15 @@ const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 
 app.post('/api/parse-3mf', uploadMem.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
-  const settings = parse3mfSettings(req.file.buffer);
-  if (!settings) return res.status(422).json({ error: 'Keine PrusaSlicer-Konfiguration in der 3MF gefunden' });
-  res.json({ settings });
+  const result = parse3mfSettings(req.file.buffer);
+  if (!result.settings) {
+    const msg = result.entries
+      ? 'Keine Konfiguration gefunden. ZIP-Inhalt: ' + result.entries.join(', ')
+      : (result.error || 'Parse-Fehler');
+    return res.status(422).json({ error: msg });
+  }
+  console.log('3MF parsed from:', result.source, '–', Object.keys(result.settings).length, 'keys');
+  res.json({ settings: result.settings, source: result.source });
 });
 
 // ==============================================================
