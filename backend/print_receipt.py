@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""PLM & ERP – Pipsta AP1400 Belegdruck (ESC/POS)
-pip install pywin32
-"""
+# PLM & ERP - Pipsta AP1400 Belegdruck (ESC/POS)
+# pip install pywin32
 import sys, json, argparse, ctypes, ctypes.wintypes as wt, winreg
 from datetime import datetime
 
@@ -66,7 +65,7 @@ def build_receipt(data):
 GUID_USBPRINT = '{28d78fad-5a12-11d1-ae5b-0000f803a8c2}'
 
 def _reg_usb_enum_paths():
-    """Konstruiert Gerätepfade aus HKLM\\...\\Enum\\USBPRINT."""
+    # Konstruiert Geraetepfade aus HKLM Enum USBPRINT
     paths = []
     base = r'SYSTEM\CurrentControlSet\Enum\USBPRINT'
     try:
@@ -90,9 +89,7 @@ def _reg_usb_enum_paths():
     return paths
 
 def _reg_devclass_paths():
-    """Konstruiert Gerätepfade aus DeviceClasses-Registry-Schlüsselnamen.
-    Schlüsselname ##?#USB#VID...#{GUID} → Pfad \\?\USB#VID...#{GUID}
-    """
+    # ##?#USB#VID...#{GUID} in Registry -> \\?\USB#VID...#{GUID} als Geraetepfad
     paths = []
     base = f'SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{GUID_USBPRINT}'
     try: root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base)
@@ -107,7 +104,7 @@ def _reg_devclass_paths():
     return paths
 
 def _setupapi_paths():
-    """SetupDiGetClassDevs – zuverlässigste Methode."""
+    # SetupDiGetClassDevs - zuverlaessigste Methode
     try:
         setupapi = ctypes.windll.SetupAPI
     except Exception:
