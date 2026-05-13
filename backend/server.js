@@ -1502,6 +1502,28 @@ function buildZip(entries) {
   return Buffer.concat([...parts, cdBuf, eocd]);
 }
 
+app.get('/api/file-index', (req, res) => {
+  const datasets = all(`
+    SELECT d.id, d.filename, d.original_name, d.ds_type, d.file_size, d.uploaded_at,
+      r.revision,
+      i.item_number, i.name as item_name,
+      p.number as project_number, p.name as project_name
+    FROM datasets d
+    JOIN revisions r ON d.revision_id = r.id
+    JOIN items i ON r.item_id = i.id
+    JOIN projects p ON i.project_id = p.id
+    ORDER BY p.number, i.item_number, r.revision, d.original_name`);
+
+  const documents = all(`
+    SELECT d.id, d.filename, d.original_name, d.doc_type as ds_type, d.file_size, d.uploaded_at,
+      p.number as project_number, p.name as project_name
+    FROM documents d
+    JOIN projects p ON d.project_id = p.id
+    ORDER BY p.number, d.name`);
+
+  res.json({ datasets, documents });
+});
+
 app.get('/api/export', (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const entries = [{ name: 'plm.db', data: Buffer.from(db.export()) }];
