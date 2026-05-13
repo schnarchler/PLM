@@ -290,6 +290,9 @@ async function initDb() {
     position INTEGER DEFAULT 999
   )`);
   migrate('ALTER TABLE delivery_items ADD COLUMN unit_price REAL');
+  migrate('ALTER TABLE orders ADD COLUMN customer_name_free TEXT');
+  migrate('ALTER TABLE quotes ADD COLUMN customer_name_free TEXT');
+  migrate('ALTER TABLE deliveries ADD COLUMN customer_name_free TEXT');
 
   db.run(`CREATE TABLE IF NOT EXISTS counters (
     key TEXT PRIMARY KEY,
@@ -817,7 +820,7 @@ app.delete('/api/customers/:id', (req, res) => {
 // ORDERS
 // ==============================================================
 app.get('/api/orders', (req, res) => {
-  const orders = all('SELECT o.*,c.name as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id=c.id ORDER BY o.number DESC');
+  const orders = all('SELECT o.*,COALESCE(c.name,o.customer_name_free) as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id=c.id ORDER BY o.number DESC');
   orders.forEach(o => {
     o.items = all('SELECT * FROM order_items WHERE order_id=?', [o.id]);
     const sub = o.items.reduce((s,i) => s + i.quantity*i.unit_price*(1-(i.discount_pct||0)/100), 0);
@@ -829,11 +832,11 @@ app.get('/api/orders', (req, res) => {
 });
 
 app.post('/api/orders', (req, res) => {
-  const { customer_id, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextOrderNumber();
-  const id = runGetId('INSERT INTO orders (number,customer_id,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0]);
+  const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0]);
   res.json(get('SELECT * FROM orders WHERE id=?', [id]));
 });
 
@@ -848,10 +851,10 @@ app.get('/api/orders/:id', (req, res) => {
 });
 
 app.put('/api/orders/:id', (req, res) => {
-  const { customer_id, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
-  run(`UPDATE orders SET customer_id=?,title=?,status=?,notes=?,order_date=?,delivery_date=?,
+  const { customer_id, customer_name_free, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  run(`UPDATE orders SET customer_id=?,customer_name_free=?,title=?,status=?,notes=?,order_date=?,delivery_date=?,
     tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,updated_at=datetime('now') WHERE id=?`,
-    [customer_id, title, status, notes, order_date, delivery_date,
+    [customer_id||null, customer_name_free||null, title, status, notes, order_date, delivery_date,
      tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, req.params.id]);
   res.json(get('SELECT * FROM orders WHERE id=?', [req.params.id]));
 });
@@ -885,17 +888,17 @@ app.delete('/api/order-items/:id', (req, res) => {
 // QUOTES (ANGEBOTE)
 // ==============================================================
 app.get('/api/quotes', (req, res) => {
-  const quotes = all('SELECT q.*,c.name as customer_name FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id ORDER BY q.number DESC');
+  const quotes = all('SELECT q.*,COALESCE(c.name,q.customer_name_free) as customer_name FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id ORDER BY q.number DESC');
   quotes.forEach(q => { q.items = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]); });
   res.json(quotes);
 });
 
 app.post('/api/quotes', (req, res) => {
-  const { customer_id, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  const { customer_id, customer_name_free, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextQuoteNumber();
-  const id = runGetId('INSERT INTO quotes (number,customer_id,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0]);
+  const id = runGetId('INSERT INTO quotes (number,customer_id,customer_name_free,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, customer_name_free||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0]);
   res.json(get('SELECT * FROM quotes WHERE id=?', [id]));
 });
 
@@ -910,10 +913,10 @@ app.get('/api/quotes/:id', (req, res) => {
 });
 
 app.put('/api/quotes/:id', (req, res) => {
-  const { customer_id, title, status, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
-  run(`UPDATE quotes SET customer_id=?,title=?,status=?,notes=?,quote_date=?,valid_until=?,
+  const { customer_id, customer_name_free, title, status, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  run(`UPDATE quotes SET customer_id=?,customer_name_free=?,title=?,status=?,notes=?,quote_date=?,valid_until=?,
     tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,updated_at=datetime('now') WHERE id=?`,
-    [customer_id, title, status, notes, quote_date, valid_until,
+    [customer_id||null, customer_name_free||null, title, status, notes, quote_date, valid_until,
      tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, req.params.id]);
   res.json(get('SELECT * FROM quotes WHERE id=?', [req.params.id]));
 });
@@ -947,9 +950,9 @@ app.post('/api/quotes/:id/convert', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id=?', [req.params.id]);
   if (!q) return res.status(404).json({ error: 'Not found' });
   const number = nextOrderNumber();
-  const orderId = runGetId(`INSERT INTO orders (number,customer_id,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax)
-    VALUES (?,?,?,?,date('now'),?,?,?,?)`,
-    [number, q.customer_id, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'', q.include_tax||0]);
+  const orderId = runGetId(`INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax)
+    VALUES (?,?,?,?,?,date('now'),?,?,?,?)`,
+    [number, q.customer_id, q.customer_name_free||null, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'', q.include_tax||0]);
   const qItems = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]);
   qItems.forEach(qi => {
     run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes) VALUES (?,?,?,?,?,?,?,?)',
@@ -1124,7 +1127,7 @@ app.post('/api/parse-3mf', uploadMem.single('file'), (req, res) => {
 // DELIVERIES (LIEFERSCHEINE / PRODUKTIONSBLÄTTER)
 // ==============================================================
 app.get('/api/deliveries', (req, res) => {
-  const rows = all(`SELECT d.*,c.name as customer_name,o.number as order_number
+  const rows = all(`SELECT d.*,COALESCE(c.name,d.customer_name_free) as customer_name,o.number as order_number
     FROM deliveries d
     LEFT JOIN customers c ON d.customer_id=c.id
     LEFT JOIN orders o ON d.order_id=o.id
@@ -1136,12 +1139,12 @@ app.get('/api/deliveries', (req, res) => {
 });
 
 app.post('/api/deliveries', (req, res) => {
-  const { title, order_id, customer_id, status, delivery_date, notes } = req.body;
+  const { title, order_id, customer_id, customer_name_free, status, delivery_date, notes } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextDeliveryNumber();
-  const id = runGetId(`INSERT INTO deliveries (number,title,order_id,customer_id,status,delivery_date,notes)
-    VALUES (?,?,?,?,?,?,?)`,
-    [number, title, order_id||null, customer_id||null, status||'DRAFT', delivery_date||null, notes||'']);
+  const id = runGetId(`INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,notes)
+    VALUES (?,?,?,?,?,?,?,?)`,
+    [number, title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, notes||'']);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [id]));
 });
 
@@ -1167,9 +1170,9 @@ app.get('/api/deliveries/:id', (req, res) => {
 });
 
 app.put('/api/deliveries/:id', (req, res) => {
-  const { title, order_id, customer_id, status, delivery_date, notes } = req.body;
-  run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,status=?,delivery_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
-    [title, order_id||null, customer_id||null, status||'DRAFT', delivery_date||null, notes||'', req.params.id]);
+  const { title, order_id, customer_id, customer_name_free, status, delivery_date, notes } = req.body;
+  run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+    [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, notes||'', req.params.id]);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [req.params.id]));
 });
 

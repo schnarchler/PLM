@@ -518,7 +518,8 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Kunde</label>
-          <select class="fs" id="om-customer"><option value="">— keiner —</option></select>
+          <select class="fs" id="om-customer" onchange="onCustChange('om')"><option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option></select>
+          <input class="fi" id="om-customer-free" placeholder="Kundenname (Freitext)" style="display:none;margin-top:4px">
         </div>
         <div class="fg"><label class="fl">Status</label>
           <select class="fs" id="om-status">
@@ -565,7 +566,8 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Kunde</label>
-          <select class="fs" id="qm-customer"><option value="">— keiner —</option></select>
+          <select class="fs" id="qm-customer" onchange="onCustChange('qm')"><option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option></select>
+          <input class="fi" id="qm-customer-free" placeholder="Kundenname (Freitext)" style="display:none;margin-top:4px">
         </div>
         <div class="fg"><label class="fl">Status</label>
           <select class="fs" id="qm-status">
@@ -778,7 +780,8 @@ a{color:inherit;text-decoration:none}
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Kunde</label>
-          <select class="fs" id="dm-customer"><option value="">— keiner —</option></select>
+          <select class="fs" id="dm-customer" onchange="onCustChange('dm')"><option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option></select>
+          <input class="fi" id="dm-customer-free" placeholder="Kundenname (Freitext)" style="display:none;margin-top:4px">
         </div>
         <div class="fg"><label class="fl">Verknüpfter Auftrag</label>
           <select class="fs" id="dm-order"><option value="">— keiner —</option></select>
@@ -1945,14 +1948,38 @@ async function delCustomer(id) {
 
 // ── ORDERS CRUD ───────────────────────────────────────────────
 let editingOrderId = null;
+function onCustChange(pfx) {
+  const sel = document.getElementById(pfx+'-customer');
+  const inp = document.getElementById(pfx+'-customer-free');
+  if (inp) inp.style.display = sel.value === '__free__' ? '' : 'none';
+}
+function setCustFields(pfx, customer_id, customer_name_free) {
+  const sel = document.getElementById(pfx+'-customer');
+  const inp = document.getElementById(pfx+'-customer-free');
+  if (customer_name_free && !customer_id) {
+    sel.value = '__free__';
+    if (inp) { inp.style.display = ''; inp.value = customer_name_free; }
+  } else {
+    sel.value = customer_id || '';
+    if (inp) { inp.style.display = 'none'; inp.value = ''; }
+  }
+}
+function getCustBody(pfx) {
+  const sel = document.getElementById(pfx+'-customer');
+  if (sel.value === '__free__') {
+    return { customer_id: null, customer_name_free: document.getElementById(pfx+'-customer-free').value.trim() || null };
+  }
+  return { customer_id: sel.value || null, customer_name_free: null };
+}
+
 async function openOrderModal(id) {
   editingOrderId=id||null;
   const customers=await api('/api/customers'); state.customers=customers;
   const sel=document.getElementById('om-customer');
-  sel.innerHTML='<option value="">— keiner —</option>'+customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
+  sel.innerHTML='<option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option>'+customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
   if (id) {
     const o=await api(`/api/orders/${id}`);
-    set('om-title-f',o.title); sel.value=o.customer_id||''; document.getElementById('om-status').value=o.status;
+    set('om-title-f',o.title); setCustFields('om',o.customer_id,o.customer_name_free); document.getElementById('om-status').value=o.status;
     set('om-date',o.order_date||''); set('om-delivery',o.delivery_date||''); set('om-notes',o.notes||'');
     set('om-tax',o.tax_rate??8.1); set('om-disc',o.discount_pct??0); set('om-terms',o.payment_terms||'');
     document.getElementById('om-include-tax').checked = !!o.include_tax;
@@ -1971,7 +1998,7 @@ async function openOrderModal(id) {
 
 async function saveOrder() {
   const title=V('om-title-f'); if(!title) return toast('Bezeichnung fehlt','err');
-  const body={title,customer_id:V('om-customer')||null,status:document.getElementById('om-status').value,
+  const body={title,...getCustBody('om'),status:document.getElementById('om-status').value,
     notes:V('om-notes'),order_date:V('om-date')||null,delivery_date:V('om-delivery')||null,
     tax_rate:parseFloat(V('om-tax'))||8.1, discount_pct:parseFloat(V('om-disc'))||0,
     payment_terms:V('om-terms'), include_tax:document.getElementById('om-include-tax').checked?1:0};
@@ -2075,10 +2102,10 @@ async function openQuoteModal(id) {
   editingQuoteId=id||null;
   const customers=await api('/api/customers'); state.customers=customers;
   const sel=document.getElementById('qm-customer');
-  sel.innerHTML='<option value="">— keiner —</option>'+customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
+  sel.innerHTML='<option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option>'+customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
   if (id) {
     const q=await api(`/api/quotes/${id}`);
-    set('qm-title-f',q.title); sel.value=q.customer_id||''; document.getElementById('qm-status').value=q.status;
+    set('qm-title-f',q.title); setCustFields('qm',q.customer_id,q.customer_name_free); document.getElementById('qm-status').value=q.status;
     set('qm-date',q.quote_date||''); set('qm-valid',q.valid_until||''); set('qm-notes',q.notes||'');
     set('qm-tax',q.tax_rate??8.1); set('qm-disc',q.discount_pct??0); set('qm-terms',q.payment_terms||'');
     document.getElementById('qm-include-tax').checked = !!q.include_tax;
@@ -2101,7 +2128,7 @@ async function openQuoteModal(id) {
 
 async function saveQuote() {
   const title=V('qm-title-f'); if(!title) return toast('Bezeichnung fehlt','err');
-  const body={title,customer_id:V('qm-customer')||null,status:document.getElementById('qm-status').value,
+  const body={title,...getCustBody('qm'),status:document.getElementById('qm-status').value,
     notes:V('qm-notes'),quote_date:V('qm-date')||null,valid_until:V('qm-valid')||null,
     tax_rate:parseFloat(V('qm-tax'))||8.1, discount_pct:parseFloat(V('qm-disc'))||0,
     payment_terms:V('qm-terms'), include_tax:document.getElementById('qm-include-tax').checked?1:0};
@@ -2619,11 +2646,11 @@ async function openDeliveryModal(id) {
   const orders = await api('/api/orders');
   const cSel = document.getElementById('dm-customer');
   const oSel = document.getElementById('dm-order');
-  cSel.innerHTML = '<option value="">— keiner —</option>' + customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
+  cSel.innerHTML = '<option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option>' + customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
   oSel.innerHTML = '<option value="">— keiner —</option>' + orders.map(o=>`<option value="${o.id}">${o.number} – ${esc(o.title)}</option>`).join('');
   if (id) {
     const d = await api(`/api/deliveries/${id}`);
-    set('dm-title-f', d.title); cSel.value = d.customer_id||''; oSel.value = d.order_id||'';
+    set('dm-title-f', d.title); setCustFields('dm',d.customer_id,d.customer_name_free); oSel.value = d.order_id||'';
     document.getElementById('dm-status').value = d.status||'DRAFT';
     set('dm-date', d.delivery_date||''); set('dm-notes', d.notes||'');
     document.getElementById('dm-title').textContent = 'Lieferschein bearbeiten';
@@ -2638,7 +2665,7 @@ async function openDeliveryModal(id) {
 
 async function saveDelivery() {
   const title = V('dm-title-f'); if (!title) return toast('Bezeichnung fehlt','err');
-  const body = { title, customer_id: V('dm-customer')||null, order_id: V('dm-order')||null,
+  const body = { title, ...getCustBody('dm'), order_id: V('dm-order')||null,
     status: document.getElementById('dm-status').value, delivery_date: V('dm-date')||null, notes: V('dm-notes') };
   if (editingDeliveryId) {
     await api(`/api/deliveries/${editingDeliveryId}`,'PUT',body);

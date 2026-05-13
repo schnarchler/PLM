@@ -16,7 +16,7 @@ NL=b'\x0a'; CUT=GS+b'\x56\x42\x40'
 LINE_W=32
 
 def e(t): return str(t).encode('cp437', errors='replace')
-def sep(): return e('-'*LINE_W)+NL
+def sep(): return ALIGN_L+e('-'*LINE_W)+NL
 
 def row(text='', align=ALIGN_L, bold=False, small=False, tall=False):
     o=align
@@ -31,7 +31,7 @@ def row(text='', align=ALIGN_L, bold=False, small=False, tall=False):
 
 def lr(label, value, width=LINE_W):
     lbl=str(label)[:width-10]; val=str(value)
-    return e(lbl+' '*max(1,width-len(lbl)-len(val))+val)+NL
+    return ALIGN_L+e(lbl+' '*max(1,width-len(lbl)-len(val))+val)+NL
 
 def build_receipt(data):
     name=data.get('name') or '-'; number=data.get('number') or ''
@@ -52,7 +52,7 @@ def build_receipt(data):
             if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16])
         o+=sep()
     if price is not None:
-        o+=row(f'CHF {float(price):.2f}',align=ALIGN_C,bold=True,tall=True); o+=sep()
+        o+=row(f'Total CHF {float(price):.2f}',align=ALIGN_C,bold=True,tall=True); o+=sep()
     o+=NL*3+CUT
     return o
 
