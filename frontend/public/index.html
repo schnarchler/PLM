@@ -2590,7 +2590,7 @@ async function openMoveItemModal(itemId) {
 
   const opts = others.map(p => `<option value="${p.id}">${p.number} – ${esc(p.name)}</option>`).join('');
   const overlay = document.createElement('div');
-  overlay.className = 'overlay';
+  overlay.className = 'overlay open';
   overlay.id = 'moveItemOverlay';
   overlay.innerHTML = `<div class="modal" style="max-width:400px">
     <div class="modal-header">
@@ -4156,6 +4156,24 @@ async function generateDoc(id, type) {
 
 
 // ── THERMAL PRINT ─────────────────────────────────────────────
+function showPrinterError(msg) {
+  const existing = document.getElementById('printer-err-banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'printer-err-banner';
+  banner.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:500;background:var(--bg2);border:1px solid var(--red);border-radius:var(--r);padding:12px 16px;max-width:520px;width:calc(100vw - 32px);box-shadow:var(--sh-2)';
+  banner.innerHTML = `<div style="display:flex;align-items:flex-start;gap:10px">
+    <span style="color:var(--red);font-size:16px;flex-shrink:0">🖶</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;color:var(--red);margin-bottom:4px;font-size:12px">Drucker nicht erreichbar</div>
+      <div style="font-size:11px;color:var(--t2);font-family:var(--mono);white-space:pre-wrap;word-break:break-word">${esc(String(msg))}</div>
+    </div>
+    <button onclick="document.getElementById('printer-err-banner').remove()" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0;flex-shrink:0;line-height:1">✕</button>
+  </div>`;
+  document.body.appendChild(banner);
+  setTimeout(() => banner?.remove(), 12000);
+}
+
 async function printReceiptAll(deliveryId, mode) {
   const btn = event.target;
   const orig = btn.textContent;
@@ -4165,7 +4183,7 @@ async function printReceiptAll(deliveryId, mode) {
     await api('/api/print-receipt-delivery', 'POST', { delivery_id: deliveryId, mode });
     toast('Gesamtbeleg gedruckt ✓', 'ok');
   } catch(e) {
-    alert('Druckfehler:\n\n' + (e.message || 'Unbekannter Fehler'));
+    showPrinterError(e);
   } finally {
     btn.textContent = orig;
     btn.disabled = false;
@@ -4181,7 +4199,7 @@ async function printReceipt(deliveryItemId, mode) {
     await api('/api/print-receipt', 'POST', { delivery_item_id: deliveryItemId, mode });
     toast('Beleg gedruckt ✓', 'ok');
   } catch(e) {
-    alert('Druckfehler:\n\n' + (e.message || 'Unbekannter Fehler'));
+    showPrinterError(e);
   } finally {
     btn.textContent = orig;
     btn.disabled = false;
