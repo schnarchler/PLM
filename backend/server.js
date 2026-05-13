@@ -1505,14 +1505,14 @@ function buildZip(entries) {
 app.get('/api/file-index', (req, res) => {
   const datasets = all(`
     SELECT d.id, d.filename, d.original_name, d.ds_type, d.file_size, d.uploaded_at,
-      r.revision,
+      r.rev,
       i.item_number, i.name as item_name,
       p.number as project_number, p.name as project_name
     FROM datasets d
     JOIN revisions r ON d.revision_id = r.id
     JOIN items i ON r.item_id = i.id
     JOIN projects p ON i.project_id = p.id
-    ORDER BY p.number, i.item_number, r.revision, d.original_name`);
+    ORDER BY p.number, i.item_number, r.rev, d.original_name`);
 
   const documents = all(`
     SELECT d.id, d.filename, d.original_name, d.doc_type as ds_type, d.file_size, d.uploaded_at,
