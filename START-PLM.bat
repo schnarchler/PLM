@@ -45,8 +45,8 @@ echo  Browser wird in 4 Sekunden geoeffnet...
 echo  Fenster NICHT schliessen - Strg+C zum Beenden
 echo.
 
-:: Browser nach Verzoegerung oeffnen (eigenes Fenster)
-start "" cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:%PLM_PORT%"
+:: Browser nach Verzoegerung oeffnen (via Launcher fuer window.close() Support)
+start "" cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:%PLM_PORT%/launcher"
 
 :: Server starten - Umgebungsvariable direkt mitgeben
 cd /d "%PLM_DIR%"
