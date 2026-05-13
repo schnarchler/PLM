@@ -1073,6 +1073,89 @@ app.post('/api/quotes/:id/convert', (req, res) => {
 });
 
 // ==============================================================
+// DASHBOARD
+// ==============================================================
+app.get('/api/dashboard', (req, res) => {
+  const thisMonth = new Date().toISOString().slice(0, 7);
+
+  // Open orders (DRAFT + CONFIRMED)
+  const openOrders = all(`
+    SELECT o.*, COALESCE(c.name, o.customer_name_free) as customer_name,
+      COUNT(oi.id) as item_count,
+      SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total
+    FROM orders o
+    LEFT JOIN customers c ON o.customer_id = c.id
+    LEFT JOIN order_items oi ON oi.order_id = o.id
+    WHERE o.status IN ('DRAFT','CONFIRMED')
+    GROUP BY o.id ORDER BY o.id DESC`);
+
+  // Open quotes (DRAFT + SENT)
+  const openQuotes = all(`
+    SELECT q.*, COALESCE(c.name, q.customer_name_free) as customer_name,
+      COUNT(qi.id) as item_count,
+      SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount_pct,0)/100.0)) as total
+    FROM quotes q
+    LEFT JOIN customers c ON q.customer_id = c.id
+    LEFT JOIN quote_items qi ON qi.quote_id = q.id
+    WHERE q.status IN ('DRAFT','SENT')
+    GROUP BY q.id ORDER BY q.id DESC`);
+
+  // PLM items currently in REV (awaiting approval)
+  const inReview = all(`
+    SELECT i.id, i.item_number, i.item_type, i.name, i.project_id,
+      r.id as rev_id, r.rev, r.status, r.updated_at,
+      p.number as project_number, p.name as project_name
+    FROM revisions r
+    JOIN items i ON r.item_id = i.id
+    JOIN projects p ON i.project_id = p.id
+    WHERE r.status = 'REV'
+    ORDER BY r.updated_at DESC`);
+
+  // Recent deliveries with order + customer link
+  const recentDeliveries = all(`
+    SELECT d.*, COALESCE(c.name, d.customer_name_free) as customer_name,
+      o.number as order_number, o.title as order_title,
+      COUNT(di.id) as item_count,
+      SUM(di.quantity * COALESCE(di.unit_price,0)) as total
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id = c.id
+    LEFT JOIN orders o ON d.order_id = o.id
+    LEFT JOIN delivery_items di ON di.delivery_id = d.id
+    GROUP BY d.id ORDER BY d.id DESC LIMIT 8`);
+
+  // Revenue this month (CONFIRMED + INVOICED + DELIVERED orders)
+  const revMonth = get(`
+    SELECT COALESCE(SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)), 0) as total
+    FROM order_items oi JOIN orders o ON oi.order_id = o.id
+    WHERE o.status IN ('CONFIRMED','INVOICED','DELIVERED')
+    AND o.created_at LIKE ?`, [thisMonth + '%']);
+
+  // Revenue total (all confirmed+)
+  const revTotal = get(`
+    SELECT COALESCE(SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)), 0) as total
+    FROM order_items oi JOIN orders o ON oi.order_id = o.id
+    WHERE o.status IN ('CONFIRMED','INVOICED','DELIVERED')`);
+
+  // Active production: delivery_items linked to PLM items, delivery not yet DELIVERED
+  const inProduction = all(`
+    SELECT di.id, di.description, di.quantity, di.unit, di.unit_price,
+      d.id as delivery_id, d.number as delivery_number, d.status as delivery_status,
+      COALESCE(c.name, d.customer_name_free) as customer_name,
+      i.item_number, i.name as item_name, i.item_type, i.project_id,
+      p.number as project_number
+    FROM delivery_items di
+    JOIN deliveries d ON di.delivery_id = d.id
+    LEFT JOIN customers c ON d.customer_id = c.id
+    LEFT JOIN items i ON di.item_id = i.id
+    LEFT JOIN projects p ON i.project_id = p.id
+    WHERE d.status != 'DELIVERED' AND di.item_id IS NOT NULL
+    ORDER BY d.id DESC LIMIT 20`);
+
+  res.json({ openOrders, openQuotes, inReview, recentDeliveries, inProduction,
+    revenueMonth: revMonth?.total || 0, revenueTotal: revTotal?.total || 0 });
+});
+
+// ==============================================================
 // STATS / SEARCH
 // ==============================================================
 app.get('/api/stats', (req, res) => {
