@@ -2480,7 +2480,10 @@ async function openDeliveryDetail(id) {
 
 function renderDeliveryItems(items, deliveryId) {
   if (!items.length) return `<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Positionen</div>`;
-  const allBtn = items.length > 1 ? `<button class="btn btn-teal btn-sm" style="margin-bottom:8px" onclick="printReceiptAll(${deliveryId})">🖶 Alle drucken</button>` : '';
+  const allBtn = items.length > 1 ? `<div style="display:flex;gap:6px;margin-bottom:8px">
+    <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">🖶 Alle kurz</button>
+    <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'full')">🖶 Alle mit Parametern</button>
+  </div>` : '';
   return allBtn + items.map(item => `
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:${item.print_settings?'1px solid var(--line)':'none'}">
@@ -2488,7 +2491,8 @@ function renderDeliveryItems(items, deliveryId) {
         <span style="font-size:12px;font-weight:500;flex:1">${esc(item.description)}</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--t2)">${item.quantity} ${item.unit}</span>
         ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:11px;color:var(--green)">CHF ${parseFloat(item.unit_price).toFixed(2)}</span>`:''}
-        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id})" title="Beleg drucken">🖶</button>
+        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="Kurzbeleg">🖶</button>
+        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'full')" title="Vollbeleg mit Parametern">🖶≡</button>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="openDeliveryItemModal(${deliveryId},${item.id})" title="Bearbeiten">✏</button>
         <button class="btn btn-red btn-icon btn-sm" onclick="delDeliveryItem(${item.id},${deliveryId})">✕</button>
       </div>
@@ -2961,13 +2965,13 @@ async function generateDoc(id, type) {
 
 
 // ── THERMAL PRINT ─────────────────────────────────────────────
-async function printReceiptAll(deliveryId) {
+async function printReceiptAll(deliveryId, mode) {
   const btn = event.target;
   const orig = btn.textContent;
   btn.textContent = '⏳';
   btn.disabled = true;
   try {
-    await api('/api/print-receipt-delivery', 'POST', { delivery_id: deliveryId });
+    await api('/api/print-receipt-delivery', 'POST', { delivery_id: deliveryId, mode });
     toast('Gesamtbeleg gedruckt ✓', 'ok');
   } catch(e) {
     alert('Druckfehler:\n\n' + (e.message || 'Unbekannter Fehler'));
@@ -2977,13 +2981,13 @@ async function printReceiptAll(deliveryId) {
   }
 }
 
-async function printReceipt(deliveryItemId) {
+async function printReceipt(deliveryItemId, mode) {
   const btn = event.target;
   const orig = btn.textContent;
   btn.textContent = '⏳';
   btn.disabled = true;
   try {
-    await api('/api/print-receipt', 'POST', { delivery_item_id: deliveryItemId });
+    await api('/api/print-receipt', 'POST', { delivery_item_id: deliveryItemId, mode });
     toast('Beleg gedruckt ✓', 'ok');
   } catch(e) {
     alert('Druckfehler:\n\n' + (e.message || 'Unbekannter Fehler'));

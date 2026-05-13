@@ -1297,8 +1297,9 @@ const { execFile } = require('child_process');
 const PYTHON_CMD = process.platform === 'win32' ? 'py' : 'python3';
 
 app.post('/api/print-receipt', (req, res) => {
-  const { delivery_item_id } = req.body;
+  const { delivery_item_id, mode } = req.body;
   if (!delivery_item_id) return res.status(400).json({ error: 'delivery_item_id required' });
+  const short = mode === 'short';
 
   const item = get(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price,
     COALESCE(c.name, d.customer_name_free) as customer_name
@@ -1356,7 +1357,7 @@ app.post('/api/print-receipt', (req, res) => {
     customer: item.customer_name || '',
     notes:    item.notes || '',
     footer:   receiptFooter,
-    params
+    params:   short ? {} : params
   };
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
@@ -1375,8 +1376,9 @@ app.post('/api/print-receipt', (req, res) => {
 });
 
 app.post('/api/print-receipt-delivery', (req, res) => {
-  const { delivery_id } = req.body;
+  const { delivery_id, mode } = req.body;
   if (!delivery_id) return res.status(400).json({ error: 'delivery_id required' });
+  const short = mode === 'short';
 
   const delivery = get(`SELECT d.*, COALESCE(c.name, d.customer_name_free) as customer_name
     FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id WHERE d.id=?`, [delivery_id]);
