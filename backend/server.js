@@ -284,10 +284,12 @@ async function initDb() {
     description TEXT NOT NULL,
     quantity REAL DEFAULT 1,
     unit TEXT DEFAULT 'Stk',
+    unit_price REAL,
     print_settings_json TEXT,
     notes TEXT,
     position INTEGER DEFAULT 999
   )`);
+  migrate('ALTER TABLE delivery_items ADD COLUMN unit_price REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS counters (
     key TEXT PRIMARY KEY,
@@ -341,60 +343,68 @@ function nextDeliveryNumber() { return 'LS-' + new Date().getFullYear() + '-' + 
 
 function parseIni(content) {
   const s = {};
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     const t = line.trim();
     if (!t || t.startsWith(';') || t.startsWith('#') || t.startsWith('[')) continue;
     const eq = t.indexOf('=');
     if (eq < 0) continue;
-    s[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+    const k = t.slice(0, eq).trim();
+    const v = t.slice(eq + 1).trim();
+    if (k) s[k] = v;
   }
   return Object.keys(s).length ? s : null;
+}
+
+function readZipEntry(entry) {
+  // adm-zip: getData() can return null for some entries; use getDataAsync fallback
+  try {
+    const buf = entry.getData();
+    if (buf && buf.length > 0) return buf.toString('utf8');
+  } catch(e) {}
+  return null;
 }
 
 function parse3mfSettings(buffer) {
   try {
     const zip = new AdmZip(buffer);
-    const entries = zip.getEntries().map(e => e.entryName);
+    const allEntries = zip.getEntries();
+    const entryNames = allEntries.map(e => e.entryName);
 
-    // Priority order: known slicer config paths
-    const candidates = [
-      'Metadata/Slic3r_PE.config',
-      'Metadata/PrusaSlicer.config',
-      'Metadata/SuperSlicer.config',
-      'Metadata/slic3r.config',
-      'Metadata/OrcaSlicer.config',
-      'Metadata/bambu_slicer.config',
-    ];
-    // Also try case-insensitive match and backslash variants
-    for (const p of candidates) {
-      const variants = [p, p.replace('/', '\\'), p.toLowerCase()];
-      for (const v of variants) {
-        const e = zip.getEntry(v) || zip.getEntries().find(x => x.entryName.toLowerCase() === v.toLowerCase());
-        if (e) {
-          const parsed = parseIni(e.getData().toString('utf8'));
-          if (parsed) return { settings: parsed, source: e.entryName };
-        }
+    // Find config entries: prefer known slicer names, then any .config
+    const CONFIG_NAMES = ['slic3r_pe', 'prusaslicer', 'superslicer', 'slic3r', 'orcaslicer', 'bambu'];
+    const configEntries = allEntries.filter(e => {
+      const n = e.entryName.toLowerCase().replace(/\\/g, '/');
+      return n.endsWith('.config') && !e.isDirectory;
+    }).sort((a, b) => {
+      const na = a.entryName.toLowerCase();
+      const nb = b.entryName.toLowerCase();
+      const pa = CONFIG_NAMES.findIndex(c => na.includes(c));
+      const pb = CONFIG_NAMES.findIndex(c => nb.includes(c));
+      const ra = pa === -1 ? 99 : pa;
+      const rb = pb === -1 ? 99 : pb;
+      return ra - rb;
+    });
+
+    for (const entry of configEntries) {
+      const content = readZipEntry(entry);
+      if (!content) {
+        console.log('3MF: entry', entry.entryName, 'getData returned empty');
+        continue;
       }
+      console.log('3MF: trying', entry.entryName, '– first 120 chars:', content.slice(0, 120).replace(/\n/g, '↵'));
+      const parsed = parseIni(content);
+      if (parsed) {
+        console.log('3MF: parsed', Object.keys(parsed).length, 'keys from', entry.entryName);
+        return { settings: parsed, source: entry.entryName };
+      }
+      console.log('3MF: parseIni returned null for', entry.entryName);
     }
 
-    // Fallback: any .config file in Metadata/ that looks like INI
-    const metaConfig = zip.getEntries().find(e =>
-      e.entryName.toLowerCase().includes('metadata') && e.entryName.toLowerCase().endsWith('.config')
-    );
-    if (metaConfig) {
-      const parsed = parseIni(metaConfig.getData().toString('utf8'));
-      if (parsed) return { settings: parsed, source: metaConfig.entryName };
-    }
-
-    // Last resort: any .config file anywhere
-    const anyConfig = zip.getEntries().find(e => e.entryName.toLowerCase().endsWith('.config'));
-    if (anyConfig) {
-      const parsed = parseIni(anyConfig.getData().toString('utf8'));
-      if (parsed) return { settings: parsed, source: anyConfig.entryName };
-    }
-
-    return { settings: null, entries };
-  } catch(e) { return { settings: null, error: String(e) }; }
+    return { settings: null, entries: entryNames };
+  } catch(e) {
+    console.error('3MF parse error:', e);
+    return { settings: null, error: String(e) };
+  }
 }
 
 function getLatestRevision(itemId) {
@@ -1170,19 +1180,22 @@ app.delete('/api/deliveries/:id', (req, res) => {
 });
 
 app.post('/api/deliveries/:id/items', (req, res) => {
-  const { item_id, description, quantity, unit, print_settings_json, notes, position } = req.body;
+  const { item_id, description, quantity, unit, unit_price, print_settings_json, notes, position } = req.body;
   if (!description) return res.status(400).json({ error: 'Description required' });
-  const id = runGetId(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,print_settings_json,notes,position)
-    VALUES (?,?,?,?,?,?,?,?)`,
+  const id = runGetId(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,print_settings_json,notes,position)
+    VALUES (?,?,?,?,?,?,?,?,?)`,
     [req.params.id, item_id||null, description, quantity||1, unit||'Stk',
+     unit_price!=null ? parseFloat(unit_price) : null,
      print_settings_json||null, notes||'', position||999]);
   res.json(get('SELECT * FROM delivery_items WHERE id=?', [id]));
 });
 
 app.put('/api/delivery-items/:id', (req, res) => {
-  const { description, quantity, unit, print_settings_json, notes, position } = req.body;
-  run(`UPDATE delivery_items SET description=?,quantity=?,unit=?,print_settings_json=?,notes=?,position=? WHERE id=?`,
-    [description, quantity||1, unit||'Stk', print_settings_json??null, notes||'', position||999, req.params.id]);
+  const { description, quantity, unit, unit_price, print_settings_json, notes, position } = req.body;
+  run(`UPDATE delivery_items SET description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=? WHERE id=?`,
+    [description, quantity||1, unit||'Stk',
+     unit_price!=null ? parseFloat(unit_price) : null,
+     print_settings_json??null, notes||'', position||999, req.params.id]);
   res.json(get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]));
 });
 
@@ -1210,6 +1223,77 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
     }
   });
   res.json(d);
+});
+
+// ==============================================================
+// THERMAL PRINT (Pipsta Classic)
+// ==============================================================
+const { execFile } = require('child_process');
+const PYTHON_CMD = process.platform === 'win32' ? 'py' : 'python3';
+
+app.post('/api/print-receipt', (req, res) => {
+  const { delivery_item_id } = req.body;
+  if (!delivery_item_id) return res.status(400).json({ error: 'delivery_item_id required' });
+
+  const item = get(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price
+    FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
+    WHERE di.id=?`, [delivery_item_id]);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+
+  // Extract key print params from stored 3MF settings
+  const params = {};
+  if (item.print_settings_json) {
+    try {
+      const s = JSON.parse(item.print_settings_json);
+      const g1 = k => s[k] ? s[k].split(';')[0].trim() : null;
+      const bool1 = k => { const v = g1(k); return v === '1' ? 'Ja' : v === '0' ? 'Nein' : v; };
+      const add = (label, k, transform) => {
+        const v = g1(k);
+        if (v !== null && v !== '') params[label] = transform ? transform(v) : v;
+      };
+      add('Profil',      'print_settings_id');
+      add('Drucker',     'printer_settings_id');
+      add('Filament',    'filament_settings_id');
+      add('Material',    'filament_type');
+      add('Schicht mm',  'layer_height');
+      add('Perimeter',   'perimeters');
+      add('Infill',      'fill_density');
+      add('Muster',      'fill_pattern');
+      const sup = g1('support_material');
+      if (sup !== null) params['Support'] = sup === '1' ? 'Ja' : 'Nein';
+      add('Duese °C',    'temperature');
+      add('Bett °C',     'bed_temperature');
+      add('Luefter %',   'max_fan_speed');
+      add('Druckzeit',   'estimated_printing_time_normal_mode');
+      add('Duese mm',    'nozzle_diameter');
+    } catch(e) {}
+  }
+
+  const price = item.unit_price != null ? item.unit_price
+    : (item.default_price != null ? item.default_price : null);
+
+  const printData = {
+    name:   item.item_name || item.description,
+    number: item.item_number || '',
+    desc:   item.item_name ? item.description : '',
+    qty:    item.quantity,
+    unit:   item.unit,
+    price:  price,
+    params
+  };
+
+  const scriptPath = path.join(__dirname, 'print_receipt.py');
+  execFile(PYTHON_CMD, [scriptPath, '--data', JSON.stringify(printData)],
+    { timeout: 20000 },
+    (error, stdout, stderr) => {
+      if (error) {
+        console.error('Pipsta error:', stderr || error.message);
+        return res.status(500).json({ error: (stderr || error.message).trim() });
+      }
+      console.log('Pipsta:', stdout.trim());
+      res.json({ ok: true });
+    }
+  );
 });
 
 // -- SHARED HELPERS --------------------------------------------

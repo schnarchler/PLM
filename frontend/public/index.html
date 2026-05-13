@@ -834,6 +834,9 @@ a{color:inherit;text-decoration:none}
         <div class="fg"><label class="fl">Einheit</label>
           <select class="fs" id="dim-unit"><option>Stk</option><option>Set</option><option>m</option><option>g</option><option>kg</option></select>
         </div>
+        <div class="fg"><label class="fl">Preis (CHF)</label><input class="fi" id="dim-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <div class="form-row">
         <div class="fg"><label class="fl">Notizen</label><input class="fi" id="dim-notes" placeholder="optional"></div>
       </div>
       <!-- 3MF Upload -->
@@ -2451,6 +2454,8 @@ function renderDeliveryItems(items, deliveryId) {
         ${item.item_number?`<span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${item.item_number}</span>`:''}
         <span style="font-size:12px;font-weight:500;flex:1">${esc(item.description)}</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--t2)">${item.quantity} ${item.unit}</span>
+        ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:11px;color:var(--green)">CHF ${parseFloat(item.unit_price).toFixed(2)}</span>`:''}
+        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id})" title="Beleg drucken">🖶</button>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="openDeliveryItemModal(${deliveryId},${item.id})" title="Bearbeiten">✏</button>
         <button class="btn btn-red btn-icon btn-sm" onclick="delDeliveryItem(${item.id},${deliveryId})">✕</button>
       </div>
@@ -2597,6 +2602,7 @@ function selectDimLinkedItem(item) {
   document.getElementById('dim-plm-name').textContent = item.name + ' · ' + item.project_name;
   document.getElementById('dim-plm-selected').style.display = 'flex';
   if (!V('dim-desc')) set('dim-desc', item.item_number + ' – ' + item.name);
+  if (item.default_price != null && !V('dim-price')) set('dim-price', item.default_price);
 }
 
 function clearDimLinkedItem() {
@@ -2667,12 +2673,11 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   document.getElementById('dim-3mf-input').value = '';
 
   if (itemId) {
-    const d = state.deliveries.find(x=>x.id===deliveryId);
-    // Need fresh data with items
     const fresh = await api(`/api/deliveries/${deliveryId}`);
     const it = (fresh.items||[]).find(x=>x.id===itemId);
     if (it) {
       set('dim-desc', it.description); set('dim-qty', it.quantity); set('dim-notes', it.notes||'');
+      set('dim-price', it.unit_price!=null ? it.unit_price : '');
       document.getElementById('dim-unit').value = it.unit||'Stk';
       if (it.item_id && it.item_number) {
         set('dim-linked-plm-id', it.item_id);
@@ -2694,7 +2699,8 @@ async function openDeliveryItemModal(deliveryId, itemId) {
     }
   } else {
     ['dim-desc','dim-notes'].forEach(f=>set(f,''));
-    set('dim-qty', 1); document.getElementById('dim-unit').value = 'Stk';
+    set('dim-qty', 1); set('dim-price', '');
+    document.getElementById('dim-unit').value = 'Stk';
   }
   openModal('deliveryItemModal');
 }
@@ -2703,9 +2709,11 @@ async function saveDeliveryItem() {
   const deliveryId = parseInt(V('dim-delivery-id'));
   const itemId = V('dim-item-id');
   const desc = V('dim-desc'); if (!desc) return toast('Beschreibung fehlt','err');
+  const priceVal = V('dim-price');
   const body = {
     description: desc, quantity: parseFloat(V('dim-qty'))||1,
     unit: document.getElementById('dim-unit').value,
+    unit_price: priceVal !== '' ? parseFloat(priceVal) : null,
     item_id: V('dim-linked-plm-id') ? parseInt(V('dim-linked-plm-id')) : null,
     print_settings_json: V('dim-settings-json') || null,
     notes: V('dim-notes')
@@ -2886,6 +2894,23 @@ async function generateDoc(id, type) {
   w.document.close();
 }
 
+
+// ── THERMAL PRINT ─────────────────────────────────────────────
+async function printReceipt(deliveryItemId) {
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    await api('/api/print-receipt', 'POST', { delivery_item_id: deliveryItemId });
+    toast('Beleg gedruckt ✓', 'ok');
+  } catch(e) {
+    // error already shown by api() toast
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
+}
 
 // ── DELIVERY DOC (Lieferschein / Produktionsblatt) ─────────────
 const SETTINGS_GROUPS_PDF = [
