@@ -2517,7 +2517,8 @@ const SETTINGS_GROUPS = [
   ]},
   { label: 'Temperatur', color: 'var(--red)', keys: [
     ['temperature','Düse (°C)'], ['first_layer_temperature','Düse 1. Schicht (°C)'],
-    ['bed_temperature','Bett (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht (°C)']
+    ['bed_temperature','Bett (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht (°C)'],
+    ['nozzle_temperature','Düse (°C)'], ['hot_plate_temp','Bett (°C)']
   ]},
   { label: 'Geschwindigkeit', color: 'var(--green)', keys: [
     ['perimeter_speed','Perimeter (mm/s)'], ['infill_speed','Infill (mm/s)'],
@@ -2545,8 +2546,9 @@ const SETTINGS_GROUPS = [
 function getFirstVal(v) {
   if (!v) return null;
   const first = v.split(';')[0].trim();
-  if (first === '0') return 'Nein';
+  if (first === '0' || first === '') return null;
   if (first === '1') return 'Ja';
+  // strip trailing % for cleaner display, keep value
   return first || null;
 }
 
@@ -2568,21 +2570,33 @@ function renderSettingsPreview(s) {
     </div>`;
   }).filter(Boolean).join('');
 
-  // Fallback: zeige alle Keys die nicht in bekannten Gruppen sind
-  const extraCells = Object.entries(s)
-    .filter(([k,v]) => !knownKeys.has(k) && v && String(v).trim())
-    .map(([k,v]) => {
-      const val = getFirstVal(v) || String(v).split(';')[0].trim();
-      if (!val) return '';
-      return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:5px 7px">
-        <div style="font-family:var(--mono);font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${esc(k.replace(/_/g,' '))}</div>
-        <div style="font-size:11px;font-weight:500;color:var(--t1)">${esc(val)}</div>
-      </div>`;
-    }).filter(Boolean).join('');
-  const extras = extraCells ? `<div style="margin-bottom:8px">
-    <div style="font-family:var(--mono);font-size:9px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Weitere Parameter</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${extraCells}</div>
-  </div>` : '';
+  // Weitere Parameter nur anzeigen wenn bekannte Gruppen leer sind (reiner Fallback)
+  const SKIP_KEYS = new Set([
+    'bed_shape','thumbnails','thumbnails_format','before_layer_gcode','after_layer_gcode',
+    'start_gcode','end_gcode','between_objects_gcode','toolchange_gcode','color_change_gcode',
+    'pause_print_gcode','template_custom_gcode','feature_gcode','machine_start_gcode',
+    'machine_end_gcode','change_filament_gcode','layer_change_gcode','time_lapse_gcode',
+    'printer_notes','notes','compatible_printers','compatible_prints','compatible_printers_condition',
+    'compatible_prints_condition','inherits','renamed_from','filename_format',
+  ]);
+  const SKIP_VALS = new Set(['', '0', 'nil', 'null', 'none', '0%', 'auto']);
+  const extras = groups ? '' : (() => {
+    const extraCells = Object.entries(s)
+      .filter(([k,v]) => !knownKeys.has(k) && !SKIP_KEYS.has(k) && v && String(v).trim())
+      .slice(0, 20)
+      .map(([k,v]) => {
+        const val = getFirstVal(v) || String(v).split(';')[0].trim();
+        if (!val || SKIP_VALS.has(val.toLowerCase()) || val.includes('\n') || val.length > 40) return '';
+        return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:5px 7px">
+          <div style="font-family:var(--mono);font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${esc(k.replace(/_/g,' '))}</div>
+          <div style="font-size:11px;font-weight:500;color:var(--t1)">${esc(val)}</div>
+        </div>`;
+      }).filter(Boolean).join('');
+    return extraCells ? `<div style="margin-bottom:8px">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Parameter</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${extraCells}</div>
+    </div>` : '';
+  })();
 
   return groups + extras || '<div style="font-size:11px;color:var(--t3)">Keine Settings geladen</div>';
 }

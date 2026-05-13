@@ -349,14 +349,68 @@ function parseIni(content) {
   const s = {};
   for (const line of content.split(/\r?\n/)) {
     const t = line.trim();
-    if (!t || t.startsWith(';') || t.startsWith('#') || t.startsWith('[')) continue;
+    if (!t || t.startsWith(';') || t.startsWith('#') || t.startsWith('[') || t.startsWith('<')) continue;
     const eq = t.indexOf('=');
     if (eq < 0) continue;
     const k = t.slice(0, eq).trim();
     const v = t.slice(eq + 1).trim();
-    if (k) s[k] = v;
+    if (k && !k.includes('<') && !k.includes('>')) s[k] = v;
   }
   return Object.keys(s).length ? s : null;
+}
+
+function parseJson(content) {
+  try {
+    const j = JSON.parse(content.trim());
+    if (j && typeof j === 'object' && !Array.isArray(j)) {
+      const s = {};
+      for (const [k, v] of Object.entries(j)) {
+        if (v !== null && v !== undefined && typeof v !== 'object') s[k] = String(v);
+        else if (Array.isArray(v) && v.length && typeof v[0] !== 'object') s[k] = v.join(';');
+      }
+      return Object.keys(s).length ? s : null;
+    }
+  } catch(e) {}
+  return null;
+}
+
+function parseConfig(content) {
+  const t = content.trim();
+  if (t.startsWith('{')) return parseJson(t);
+  return parseIni(t);
+}
+
+// Map OrcaSlicer / BambuStudio key names → PrusaSlicer equivalents
+const ORCA_KEY_MAP = {
+  nozzle_temperature:               'temperature',
+  nozzle_temperature_initial_layer: 'first_layer_temperature',
+  hot_plate_temp:                   'bed_temperature',
+  cool_plate_temp:                  'bed_temperature',
+  textured_plate_temp:              'bed_temperature',
+  hot_plate_temp_initial_layer:     'first_layer_bed_temperature',
+  initial_layer_print_height:       'first_layer_height',
+  sparse_infill_density:            'fill_density',
+  sparse_infill_pattern:            'fill_pattern',
+  wall_loops:                       'perimeters',
+  top_shell_layers:                 'top_solid_layers',
+  bottom_shell_layers:              'bottom_solid_layers',
+  enable_support:                   'support_material',
+  support_type:                     'support_material_style',
+  support_threshold_angle:          'support_material_threshold',
+  initial_layer_speed:              'first_layer_speed',
+  outer_wall_speed:                 'perimeter_speed',
+  internal_solid_infill_speed:      'solid_infill_speed',
+  process_name:                     'print_settings_id',
+  printer_model:                    'printer_settings_id',
+  filament_id:                      'filament_settings_id',
+};
+
+function normalizeSettings(s) {
+  const out = Object.assign({}, s);
+  for (const [from, to] of Object.entries(ORCA_KEY_MAP)) {
+    if (s[from] !== undefined && out[to] === undefined) out[to] = s[from];
+  }
+  return out;
 }
 
 function readZipEntry(entry) {
@@ -374,34 +428,35 @@ function parse3mfSettings(buffer) {
     const allEntries = zip.getEntries();
     const entryNames = allEntries.map(e => e.entryName);
 
-    // Find config entries: prefer known slicer names, then any .config
-    const CONFIG_NAMES = ['slic3r_pe', 'prusaslicer', 'superslicer', 'slic3r', 'orcaslicer', 'bambu'];
+    const CONFIG_PRIORITY = [
+      'slic3r_pe.config', 'prusaslicer', 'superslicer', 'slic3r',
+      'project_settings', 'orcaslicer', 'bambu'
+    ];
     const configEntries = allEntries.filter(e => {
       const n = e.entryName.toLowerCase().replace(/\\/g, '/');
-      return n.endsWith('.config') && !e.isDirectory;
+      if (e.isDirectory) return false;
+      if (n === 'metadata/model.config') return false; // standard 3MF XML, not print config
+      if (n.endsWith('.config')) return true;
+      if (n.startsWith('metadata/') && n.endsWith('.json')) return true;
+      return false;
     }).sort((a, b) => {
       const na = a.entryName.toLowerCase();
       const nb = b.entryName.toLowerCase();
-      const pa = CONFIG_NAMES.findIndex(c => na.includes(c));
-      const pb = CONFIG_NAMES.findIndex(c => nb.includes(c));
-      const ra = pa === -1 ? 99 : pa;
-      const rb = pb === -1 ? 99 : pb;
-      return ra - rb;
+      const pa = CONFIG_PRIORITY.findIndex(c => na.includes(c));
+      const pb = CONFIG_PRIORITY.findIndex(c => nb.includes(c));
+      return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
     });
 
     for (const entry of configEntries) {
       const content = readZipEntry(entry);
-      if (!content) {
-        console.log('3MF: entry', entry.entryName, 'getData returned empty');
-        continue;
-      }
-      console.log('3MF: trying', entry.entryName, '– first 120 chars:', content.slice(0, 120).replace(/\n/g, '↵'));
-      const parsed = parseIni(content);
+      if (!content) continue;
+      console.log('3MF: trying', entry.entryName, '– first 80 chars:', content.trim().slice(0, 80).replace(/\n/g, '↵'));
+      const parsed = parseConfig(content);
       if (parsed) {
-        console.log('3MF: parsed', Object.keys(parsed).length, 'keys from', entry.entryName);
-        return { settings: parsed, source: entry.entryName };
+        const normalized = normalizeSettings(parsed);
+        console.log('3MF: parsed', Object.keys(normalized).length, 'keys from', entry.entryName);
+        return { settings: normalized, source: entry.entryName };
       }
-      console.log('3MF: parseIni returned null for', entry.entryName);
     }
 
     return { settings: null, entries: entryNames };
