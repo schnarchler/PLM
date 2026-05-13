@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
-# PLM & ERP - Pipsta AP1400 Belegdruck (ESC/POS)
-# pip install pywin32
-import sys, json, argparse, ctypes, ctypes.wintypes as wt, winreg
+# PLM & ERP - Pipsta AP1400 Belegdruck (ESC/POS via PyUSB/WinUSB)
+# Einrichtung: Zadig -> WinUSB fuer VID_0483/PID_A053 installieren
+# pip install pyusb pywin32
+import sys, json, argparse
 from datetime import datetime
-
-try:
-    import win32file, win32con, win32print
-except ImportError:
-    print("FEHLER: pywin32 nicht installiert. Bitte ausfuehren: pip install pywin32", file=sys.stderr)
-    sys.exit(2)
 
 # ── ESC/POS Konstanten ────────────────────────────────────────
 ESC = b'\x1b'; GS = b'\x1d'
@@ -37,9 +32,8 @@ def lr(label, value, width=LINE_W):
     lbl=str(label)[:width-10]; val=str(value)
     return e(lbl+' '*max(1,width-len(lbl)-len(val))+val)+NL
 
-# ── Beleg ─────────────────────────────────────────────────────
 def build_receipt(data):
-    name=data.get('name') or '—'; number=data.get('number') or ''
+    name=data.get('name') or '-'; number=data.get('number') or ''
     desc=data.get('desc') or ''; qty=data.get('qty',1); unit=data.get('unit','Stk')
     price=data.get('price'); params=data.get('params') or {}
     now=datetime.now().strftime('%d.%m.%Y  %H:%M')
@@ -61,126 +55,72 @@ def build_receipt(data):
     o+=NL*3+CUT
     return o
 
-# ── USB-Gerätepfade suchen ────────────────────────────────────
-GUID_USBPRINT = '{28d78fad-5a12-11d1-ae5b-0000f803a8c2}'
+# ── PyUSB Direktdruck ─────────────────────────────────────────
+PIPSTA_VID = 0x0483
+PIPSTA_PID = 0xA053
 
-def _reg_usb_enum_paths():
-    # Konstruiert Geraetepfade aus HKLM Enum USBPRINT
-    paths = []
-    base = r'SYSTEM\CurrentControlSet\Enum\USBPRINT'
+def print_usb(data):
     try:
-        root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base)
-    except OSError:
-        return paths
-    i = 0
-    while True:
-        try: cls = winreg.EnumKey(root, i); i += 1
-        except OSError: break
-        try:
-            ck = winreg.OpenKey(root, cls)
-            j = 0
-            while True:
-                try: inst = winreg.EnumKey(ck, j); j += 1
-                except OSError: break
-                paths.append(f'\\\\?\\USBPRINT#{cls}#{inst}#{GUID_USBPRINT}')
-            winreg.CloseKey(ck)
-        except OSError: pass
-    winreg.CloseKey(root)
-    return paths
+        import usb.core, usb.util
+    except ImportError:
+        raise RuntimeError("pyusb nicht installiert. Bitte ausfuehren: pip install pyusb")
 
-def _reg_devclass_paths():
-    # ##?#USB#VID...#{GUID} in Registry -> \\?\USB#VID...#{GUID} als Geraetepfad
-    paths = []
-    base = f'SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{GUID_USBPRINT}'
-    try: root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base)
-    except OSError: return paths
-    i = 0
-    while True:
-        try: sub = winreg.EnumKey(root, i); i += 1
-        except OSError: break
-        if sub.startswith('##?#'):
-            paths.append('\\\\?\\' + sub[4:])
-    winreg.CloseKey(root)
-    return paths
+    dev = usb.core.find(idVendor=PIPSTA_VID, idProduct=PIPSTA_PID)
+    if dev is None:
+        raise RuntimeError(
+            f"Pipsta AP1400 nicht gefunden (VID_{PIPSTA_VID:04X}&PID_{PIPSTA_PID:04X}). "
+            "WinUSB-Treiber mit Zadig installiert? Drucker eingesteckt?"
+        )
 
-def _setupapi_paths():
-    # SetupDiGetClassDevs - zuverlaessigste Methode
+    # Claim interface (detach kernel driver on Linux)
+    if dev.is_kernel_driver_active(0):
+        dev.detach_kernel_driver(0)
+
+    dev.set_configuration()
+    cfg = dev.get_active_configuration()
+    intf = cfg[(0, 0)]
+
+    # Bulk-OUT Endpoint finden
+    ep_out = usb.util.find_descriptor(
+        intf,
+        custom_match=lambda e: (
+            usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT
+            and (e.bmAttributes & 0x03) == usb.util.ENDPOINT_TYPE_BULK
+        )
+    )
+    if ep_out is None:
+        raise RuntimeError("Bulk-OUT-Endpoint nicht gefunden. Anderen USB-Port versuchen.")
+
+    # In 64-Byte-Pakete aufteilen (Pipsta-Anforderung)
+    chunk = 64
+    for i in range(0, len(data), chunk):
+        ep_out.write(data[i:i+chunk])
+
+    usb.util.dispose_resources(dev)
+
+# ── Spooler-Fallback (win32print) ─────────────────────────────
+def print_spooler(data, preferred=''):
     try:
-        setupapi = ctypes.windll.SetupAPI
-    except Exception:
-        return []
+        import win32print
+    except ImportError:
+        raise RuntimeError("pywin32 nicht installiert.")
 
-    class GUID_S(ctypes.Structure):
-        _fields_ = [('D1',wt.DWORD),('D2',wt.WORD),('D3',wt.WORD),('D4',ctypes.c_uint8*8)]
+    printers = [p[2] for p in win32print.EnumPrinters(
+        win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)]
+    if not printers:
+        raise RuntimeError("Kein Drucker in Windows gefunden.")
 
-    def make_guid():
-        g=GUID_S(); g.D1=0x28D78FAD; g.D2=0x5A12; g.D3=0x11D1
-        for i,b in enumerate((0xAE,0x5B,0x00,0x00,0xF8,0x03,0xA8,0xC2)): g.D4[i]=b
-        return g
-
-    class IFACE(ctypes.Structure):
-        _fields_ = [('cbSize',wt.DWORD),('Guid',GUID_S),('Flags',wt.DWORD),('Reserved',ctypes.c_ulong)]
-
-    guid = make_guid()
-    hdi = setupapi.SetupDiGetClassDevsW(ctypes.byref(guid), None, None, 0x02|0x10)
-    INVALID = ctypes.cast(ctypes.c_void_p(-1), ctypes.c_void_p).value
-    if ctypes.cast(hdi, ctypes.c_void_p).value == INVALID:
-        return []
-
-    paths = []
-    iface = IFACE(); iface.cbSize = ctypes.sizeof(IFACE)
-    idx = 0
-    while setupapi.SetupDiEnumDeviceInterfaces(hdi, None, ctypes.byref(guid), idx, ctypes.byref(iface)):
-        idx += 1
-        needed = wt.DWORD(0)
-        setupapi.SetupDiGetDeviceInterfaceDetailW(hdi, ctypes.byref(iface), None, 0, ctypes.byref(needed), None)
-        if needed.value < 8: continue
-        buf = ctypes.create_unicode_buffer(needed.value // 2 + 4)
-        ctypes.cast(buf, ctypes.POINTER(wt.DWORD))[0] = 8 if ctypes.sizeof(ctypes.c_void_p)==8 else 6
-        if setupapi.SetupDiGetDeviceInterfaceDetailW(hdi, ctypes.byref(iface), buf, needed, None, None):
-            path = ctypes.wstring_at(ctypes.addressof(buf)+4)
-            if path: paths.append(path)
-    setupapi.SetupDiDestroyDeviceInfoList(hdi)
-    return paths
-
-def find_all_usb_paths():
-    seen = set(); paths = []
-    for p in _setupapi_paths() + _reg_devclass_paths() + _reg_usb_enum_paths():
-        if p not in seen: seen.add(p); paths.append(p)
-    return paths
-
-# ── Direkt auf USB schreiben ──────────────────────────────────
-def print_direct(data):
-    paths = find_all_usb_paths()
-    if not paths:
-        raise RuntimeError("Kein USB-Druckerpfad gefunden – Treiber pruefen.")
-    errors = []
-    for p in paths:
-        try:
-            h = win32file.CreateFile(p, win32con.GENERIC_WRITE,
-                win32con.FILE_SHARE_READ|win32con.FILE_SHARE_WRITE,
-                None, win32con.OPEN_EXISTING, 0, None)
-            win32file.WriteFile(h, data)
-            win32file.CloseHandle(h)
-            return p
-        except Exception as ex:
-            errors.append(f'{p}: {ex}')
-    raise RuntimeError("USB-Direktzugriff fehlgeschlagen:\n" + "\n".join(errors))
-
-# ── Spooler-Fallback ──────────────────────────────────────────
-def find_printer(preferred=''):
-    ps = [p[2] for p in win32print.EnumPrinters(
-        win32print.PRINTER_ENUM_LOCAL|win32print.PRINTER_ENUM_CONNECTIONS)]
-    if not ps: raise RuntimeError("Kein Drucker gefunden.")
+    name = None
     if preferred:
-        for p in ps:
-            if preferred.lower() in p.lower(): return p
-    for kw in ['pipsta','ap1400','generic','text']:
-        for p in ps:
-            if kw in p.lower(): return p
-    return ps[0]
+        for p in printers:
+            if preferred.lower() in p.lower(): name = p; break
+    if not name:
+        for kw in ['pipsta','ap1400','generic','text']:
+            for p in printers:
+                if kw in p.lower(): name = p; break
+            if name: break
+    if not name: name = printers[0]
 
-def print_spooler(name, data):
     h = win32print.OpenPrinter(name)
     try:
         win32print.StartDocPrinter(h, 1, ("PLM Beleg", None, "RAW"))
@@ -192,44 +132,37 @@ def print_spooler(name, data):
             win32print.EndDocPrinter(h)
     finally:
         win32print.ClosePrinter(h)
+    return name
 
 # ── Main ──────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', required=True)
     parser.add_argument('--printer', default='')
-    parser.add_argument('--debug', action='store_true', help='Zeigt gefundene USB-Pfade')
     args = parser.parse_args()
-
-    if args.debug:
-        paths = find_all_usb_paths()
-        print(f"USB-Pfade gefunden ({len(paths)}):")
-        for p in paths: print(f"  {p}")
-        return
 
     try:
         data = json.loads(args.data)
     except json.JSONDecodeError as ex:
-        print(f"FEHLER: Ungültiges JSON – {ex}", file=sys.stderr); sys.exit(1)
+        print(f"FEHLER: Ungültiges JSON - {ex}", file=sys.stderr); sys.exit(1)
 
     try:
         receipt = build_receipt(data)
 
         usb_err = None
         try:
-            used = print_direct(receipt)
-            print(f"OK: Direkt gedruckt via {used}")
+            print_usb(receipt)
+            print("OK: Beleg via USB (WinUSB/PyUSB) gedruckt")
             return
         except Exception as ex:
             usb_err = ex
-            print(f"INFO: USB-Direkt fehlgeschlagen: {ex}", file=sys.stderr)
+            print(f"INFO: USB-Direktdruck fehlgeschlagen: {ex}", file=sys.stderr)
 
-        printer = find_printer(args.printer)
         try:
-            print_spooler(printer, receipt)
-            print(f"OK: Spooler '{printer}' (USB hatte versagt)")
+            name = print_spooler(receipt, args.printer)
+            print(f"OK: Beleg via Spooler gedruckt auf '{name}'")
         except Exception as sp_err:
-            raise RuntimeError(f"USB: {usb_err} | Spooler '{printer}': {sp_err}")
+            raise RuntimeError(f"USB: {usb_err} | Spooler: {sp_err}")
 
     except Exception as ex:
         print(f"FEHLER: {ex}", file=sys.stderr); sys.exit(1)
