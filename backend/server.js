@@ -319,6 +319,39 @@ async function initDb() {
     db.run('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)', [k, v]);
   });
 
+  db.run(`CREATE TABLE IF NOT EXISTS printers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    cost_per_hour REAL DEFAULT 0
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS nozzles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    size TEXT NOT NULL
+  )`);
+  const _nz = get('SELECT COUNT(*) as n FROM nozzles');
+  if (!_nz || _nz.n === 0) {
+    ['0.2','0.4','0.6','0.8','1.0'].forEach(s => db.run('INSERT INTO nozzles (size) VALUES (?)', [s]));
+  }
+
+  db.run(`CREATE TABLE IF NOT EXISTS material_presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    print_temp TEXT,
+    bed_temp TEXT,
+    nozzle TEXT,
+    filament_price_kg REAL,
+    notes TEXT
+  )`);
+  const _mp = get('SELECT COUNT(*) as n FROM material_presets');
+  if (!_mp || _mp.n === 0) {
+    [['PLA','210','60','0.4',22],['PETG','235','85','0.4',24],
+     ['ASA','250','100','0.4',32],['ABS','240','110','0.4',20],['TPU','225','50','0.4',30]]
+    .forEach(([n,pt,bt,nz,fp]) => db.run(
+      'INSERT INTO material_presets (name,print_temp,bed_temp,nozzle,filament_price_kg) VALUES (?,?,?,?,?)',
+      [n,pt,bt,nz,fp]));
+  }
+
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
 }
@@ -1222,7 +1255,16 @@ app.get('/api/search', (req, res) => {
   const items = all('SELECT i.*,p.name as project_name,p.number as project_number FROM items i JOIN projects p ON i.project_id=p.id WHERE i.item_number LIKE ? OR i.name LIKE ? OR i.description LIKE ? ORDER BY i.id DESC LIMIT 30', [q,q,q]);
   items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
   const projects = all('SELECT * FROM projects WHERE number LIKE ? OR name LIKE ? OR description LIKE ? LIMIT 10', [q,q,q]);
-  res.json({ items, projects });
+  const datasets = all(`SELECT d.id, d.original_name, d.filename, d.ds_type, d.file_size, d.notes,
+    r.rev, i.item_number, i.name as item_name, i.id as item_id, i.project_id,
+    p.number as project_number, p.name as project_name
+    FROM datasets d
+    JOIN revisions r ON d.revision_id = r.id
+    JOIN items i ON r.item_id = i.id
+    JOIN projects p ON i.project_id = p.id
+    WHERE d.original_name LIKE ? OR d.notes LIKE ?
+    ORDER BY d.id DESC LIMIT 20`, [q, q]);
+  res.json({ items, projects, datasets });
 });
 
 app.get('/api/changelog', (req, res) => {
@@ -1327,6 +1369,57 @@ app.put('/api/settings', (req, res) => {
   });
   saveDb();
   res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
+});
+
+// -- PRINTERS --------------------------------------------------
+app.get('/api/printers', (req, res) => res.json(all('SELECT * FROM printers ORDER BY name')));
+app.post('/api/printers', (req, res) => {
+  const { name, cost_per_hour } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const id = runGetId('INSERT INTO printers (name,cost_per_hour) VALUES (?,?)', [name, cost_per_hour||0]);
+  res.json(get('SELECT * FROM printers WHERE id=?', [id]));
+});
+app.put('/api/printers/:id', (req, res) => {
+  const { name, cost_per_hour } = req.body;
+  run('UPDATE printers SET name=?,cost_per_hour=? WHERE id=?', [name, cost_per_hour||0, req.params.id]);
+  res.json(get('SELECT * FROM printers WHERE id=?', [req.params.id]));
+});
+app.delete('/api/printers/:id', (req, res) => {
+  run('DELETE FROM printers WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+// -- NOZZLES ---------------------------------------------------
+app.get('/api/nozzles', (req, res) => res.json(all('SELECT * FROM nozzles ORDER BY CAST(size AS REAL)')));
+app.post('/api/nozzles', (req, res) => {
+  const { size } = req.body;
+  if (!size) return res.status(400).json({ error: 'size required' });
+  const id = runGetId('INSERT INTO nozzles (size) VALUES (?)', [size]);
+  res.json(get('SELECT * FROM nozzles WHERE id=?', [id]));
+});
+app.delete('/api/nozzles/:id', (req, res) => {
+  run('DELETE FROM nozzles WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+// -- MATERIAL PRESETS ------------------------------------------
+app.get('/api/material-presets', (req, res) => res.json(all('SELECT * FROM material_presets ORDER BY name')));
+app.post('/api/material-presets', (req, res) => {
+  const { name, print_temp, bed_temp, nozzle, filament_price_kg, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const id = runGetId('INSERT INTO material_presets (name,print_temp,bed_temp,nozzle,filament_price_kg,notes) VALUES (?,?,?,?,?,?)',
+    [name, print_temp||'', bed_temp||'', nozzle||'', filament_price_kg||null, notes||'']);
+  res.json(get('SELECT * FROM material_presets WHERE id=?', [id]));
+});
+app.put('/api/material-presets/:id', (req, res) => {
+  const { name, print_temp, bed_temp, nozzle, filament_price_kg, notes } = req.body;
+  run('UPDATE material_presets SET name=?,print_temp=?,bed_temp=?,nozzle=?,filament_price_kg=?,notes=? WHERE id=?',
+    [name, print_temp||'', bed_temp||'', nozzle||'', filament_price_kg||null, notes||'', req.params.id]);
+  res.json(get('SELECT * FROM material_presets WHERE id=?', [req.params.id]));
+});
+app.delete('/api/material-presets/:id', (req, res) => {
+  run('DELETE FROM material_presets WHERE id=?', [req.params.id]);
+  res.json({ success: true });
 });
 
 // -- SHUTDOWN --------------------------------------------------

@@ -973,6 +973,13 @@ a{color:inherit;text-decoration:none}
   <div class="modal">
     <div class="modal-head"><div class="modal-title">Druckparameter</div><button class="btn btn-icon btn-ghost" onclick="closeModal('psModal')">✕</button></div>
     <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Material-Vorlage anwenden</label>
+          <select class="fs" id="ps-mat-preset" onchange="applyMaterialPreset(this.value)">
+            <option value="">— Vorlage auswählen (füllt Felder automatisch aus) —</option>
+          </select>
+        </div>
+      </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Material</label><input class="fi" id="ps-mat" placeholder="z.B. PETG, PLA, ASA"></div>
         <div class="fg"><label class="fl">Farbe</label><input class="fi" id="ps-col" placeholder="z.B. Schwarz, RAL 9005"></div>
@@ -985,12 +992,16 @@ a{color:inherit;text-decoration:none}
         </div>
       </div>
       <div class="form-row cols3">
-        <div class="fg"><label class="fl">Düse (mm)</label><input class="fi" id="ps-nozzle" placeholder="0.4"></div>
+        <div class="fg"><label class="fl">Düse (mm)</label>
+          <select class="fs" id="ps-nozzle"><option value="">—</option></select>
+        </div>
         <div class="fg"><label class="fl">Drucktemp (°C)</label><input class="fi" id="ps-temp" placeholder="215"></div>
         <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="ps-bed" placeholder="60"></div>
       </div>
       <div class="form-row cols2">
-        <div class="fg"><label class="fl">Drucker</label><input class="fi" id="ps-printer" placeholder="z.B. Bambu X1C"></div>
+        <div class="fg"><label class="fl">Drucker</label>
+          <select class="fs" id="ps-printer" onchange="onPsPrinterChange(this)"><option value="">— kein —</option></select>
+        </div>
         <div class="fg"><label class="fl">Notizen</label><input class="fi" id="ps-notes"></div>
       </div>
       <input type="hidden" id="ps-rev-id">
@@ -1007,7 +1018,6 @@ a{color:inherit;text-decoration:none}
         <div id="cost-preview" style="display:none" class="cost-result">
           <div class="cost-row"><span>Materialkosten (Filament)</span><span id="cr-mat">—</span></div>
           <div class="cost-row"><span>Maschinenkosten (Drucker)</span><span id="cr-mach">—</span></div>
-          <div class="cost-row"><span>Materialverlust (Stuetzen etc.)</span><span id="cr-waste">—</span></div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
             <span style="font-size:11px;color:var(--t3)">Gesamtkosten</span>
             <span class="cost-total" id="cr-total">—</span>
@@ -1094,16 +1104,60 @@ a{color:inherit;text-decoration:none}
       <div class="form-row">
         <div class="fg"><label class="fl">Notizen</label><input class="fi" id="dim-notes" placeholder="optional"></div>
       </div>
-      <!-- 3MF Upload -->
+      <!-- Print settings: 3MF or Manual -->
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
-        <div class="fl" style="margin-bottom:8px">3MF Druckeinstellungen <span style="color:var(--t3);font-weight:400;text-transform:none">(optional – Datei wird nicht gespeichert)</span></div>
-        <label class="upload-zone" style="padding:14px" for="dim-3mf-input">
-          <div style="font-size:20px;margin-bottom:4px">📐</div>
-          <div style="font-size:12px;color:var(--t2)">3MF-Datei hier ablegen oder klicken</div>
-          <input type="file" id="dim-3mf-input" accept=".3mf" style="display:none" onchange="handle3mfUpload(this.files[0])">
-        </label>
-        <div id="dim-3mf-status" style="margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--t3);min-height:16px"></div>
-        <div id="dim-3mf-preview" style="display:none;margin-top:10px"></div>
+        <div style="display:flex;gap:4px;margin-bottom:10px">
+          <button class="btn btn-sm active" id="dim-tab-3mf" onclick="dimTab('3mf')">3MF Import</button>
+          <button class="btn btn-sm btn-ghost" id="dim-tab-manual" onclick="dimTab('manual')">Manuelle Eingabe</button>
+        </div>
+        <!-- 3MF section -->
+        <div id="dim-section-3mf">
+          <label class="upload-zone" style="padding:14px" for="dim-3mf-input">
+            <div style="font-size:20px;margin-bottom:4px">📐</div>
+            <div style="font-size:12px;color:var(--t2)">3MF-Datei hier ablegen oder klicken</div>
+            <input type="file" id="dim-3mf-input" accept=".3mf" style="display:none" onchange="handle3mfUpload(this.files[0])">
+          </label>
+          <div id="dim-3mf-status" style="margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--t3);min-height:16px"></div>
+          <div id="dim-3mf-preview" style="display:none;margin-top:10px"></div>
+        </div>
+        <!-- Manual entry section -->
+        <div id="dim-section-manual" style="display:none">
+          <div class="form-row">
+            <div class="fg"><label class="fl">Material-Vorlage</label>
+              <select class="fs" id="dim-man-preset" onchange="applyDimPreset(this.value)">
+                <option value="">— Vorlage auswählen —</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row cols2">
+            <div class="fg"><label class="fl">Material</label><input class="fi" id="dim-man-mat" placeholder="z.B. PLA, PETG"></div>
+            <div class="fg"><label class="fl">Farbe</label><input class="fi" id="dim-man-color" placeholder="z.B. Schwarz"></div>
+          </div>
+          <div class="form-row cols3">
+            <div class="fg"><label class="fl">Layer (mm)</label><input class="fi" id="dim-man-layer" placeholder="0.2"></div>
+            <div class="fg"><label class="fl">Infill (%)</label><input class="fi" id="dim-man-infill" placeholder="20"></div>
+            <div class="fg"><label class="fl">Supports</label>
+              <select class="fs" id="dim-man-sup"><option value="">—</option><option>Nein</option><option>Ja (Normal)</option><option>Ja (Tree)</option></select>
+            </div>
+          </div>
+          <div class="form-row cols3">
+            <div class="fg"><label class="fl">Düse (mm)</label>
+              <select class="fs" id="dim-man-nozzle"><option value="">—</option></select>
+            </div>
+            <div class="fg"><label class="fl">Drucktemp (°C)</label><input class="fi" id="dim-man-temp" placeholder="215"></div>
+            <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="dim-man-bed" placeholder="60"></div>
+          </div>
+          <div class="form-row cols2">
+            <div class="fg"><label class="fl">Drucker</label>
+              <select class="fs" id="dim-man-printer"><option value="">— kein —</option></select>
+            </div>
+            <div class="fg"><label class="fl">Filament (g)</label><input class="fi" id="dim-man-fw" type="number" step="0.1" placeholder="45.5"></div>
+          </div>
+          <div class="form-row cols2">
+            <div class="fg"><label class="fl">Druckdauer (h)</label><input class="fi" id="dim-man-dur" type="number" step="0.01" placeholder="3.5"></div>
+            <div class="fg"><label class="fl">Notizen</label><input class="fi" id="dim-man-notes" placeholder="optional"></div>
+          </div>
+        </div>
       </div>
       <input type="hidden" id="dim-delivery-id">
       <input type="hidden" id="dim-item-id">
@@ -1145,7 +1199,7 @@ async function setDocStatus(type, id, status, el) {
   toast('Status gespeichert','ok');
   loadStats();
 }
-let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {} };
+let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false };
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -1226,6 +1280,11 @@ async function openProject(id) {
 
   renderProjectTree(p);
   openProjectDetail(p);
+}
+
+async function openProjectAndItem(projectId, itemId) {
+  await openProject(projectId);
+  await openItemDetail(itemId);
 }
 
 async function refreshProjectTree() {
@@ -1581,11 +1640,11 @@ function renderRevDetail(rev, item) {
           <span style="flex:1;font-size:12px">${esc(b.name)}</span>
           ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">Rev ${b.child_active_rev.rev}</span>` : ''}
           <span class="bom-qty">${b.quantity} ${b.unit}</span>
-          <button class="btn btn-icon btn-ghost btn-sm" onclick="delBom(${b.id},${item.id},${rev.id})">✕</button>
+          ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBom(${b.id},${item.id},${rev.id})">✕</button>`}
         </div>`).join('')
         : '<div style="padding:12px;color:var(--t3);font-size:12px;text-align:center">Noch keine Positionen</div>'}
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="openBomModal(${rev.id},${item.project_id})">+ Position hinzufügen</button>
+    ${locked ? '' : `<button class="btn btn-ghost btn-sm" onclick="openBomModal(${rev.id},${item.project_id})">+ Position hinzufügen</button>`}
     ` : ''}
 
     <!-- Datasets -->
@@ -1600,7 +1659,7 @@ function renderRevDetail(rev, item) {
     ${!isASM && !isDOC ? `
     <!-- Print settings -->
     <div class="sep-label" style="margin-top:12px">Druckparameter
-      ${locked ? '' : '<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openPsModal('+rev.id+', '+JSON.stringify(ps||{}).replace(/"/g,'&quot;')+')">Bearbeiten</button>'}
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openPsModal(${rev.id}, ${JSON.stringify(ps||{}).replace(/"/g,'&quot;')})">Bearbeiten</button>
     </div>
     ${ps && (ps.material||ps.layer_height||ps.printer_cost_hr) ? `
     <div class="ps-grid">
@@ -1673,7 +1732,7 @@ function renderDatasets(datasets, revId, locked) {
           </div>
           <a href="${API}/api/datasets/${f.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" title="Öffnen">&#x2197;</a>
           <a href="${API}/api/datasets/${f.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
-          <button class="btn btn-icon btn-ghost btn-sm" onclick="openEditDatasetModal(${f.id},'${esc(f.original_name)}','${esc(f.notes||'')}')" title="Info bearbeiten">✏️</button>
+          ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="openEditDatasetModal(${f.id},'${esc(f.original_name)}','${esc(f.notes||'')}')" title="Info bearbeiten">✏️</button>`}
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delDataset(${f.id},${revId})" title="Loeschen">&#x2715;</button>`}
         </div>`).join('')}
     </div>`
@@ -1958,6 +2017,39 @@ async function renderSettings() {
         <button class="btn btn-primary" onclick="saveSettings()">💾 Einstellungen speichern</button>
       </div>
 
+      <div class="sep-label" style="margin-top:24px">Drucker</div>
+      <div id="st-printers-list" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input class="fi" id="st-pr-name" style="width:200px" placeholder="Druckername">
+        <input class="fi" id="st-pr-cost" type="number" step="0.01" style="width:110px" placeholder="CHF/h (z.B. 1.50)">
+        <button class="btn btn-ghost btn-sm" onclick="addPrinter()">+ Drucker hinzufügen</button>
+      </div>
+
+      <div class="sep-label" style="margin-top:20px">Düsen</div>
+      <div id="st-nozzles-list" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input class="fi" id="st-nz-size" style="width:120px" placeholder="Grösse (z.B. 0.4)">
+        <button class="btn btn-ghost btn-sm" onclick="addNozzle()">+ Düse hinzufügen</button>
+      </div>
+
+      <div class="sep-label" style="margin-top:20px">Material-Vorlagen</div>
+      <div id="st-mats-list" style="margin-bottom:8px"></div>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-top:4px">
+        <div class="form-row cols3">
+          <div class="fg"><label class="fl">Name *</label><input class="fi" id="st-mat-name" placeholder="z.B. PLA"></div>
+          <div class="fg"><label class="fl">Düse</label>
+            <select class="fs" id="st-mat-nozzle"><option value="">—</option></select>
+          </div>
+          <div class="fg"><label class="fl">Filamentpreis (CHF/kg)</label><input class="fi" id="st-mat-price" type="number" step="0.01" placeholder="22.00"></div>
+        </div>
+        <div class="form-row cols3">
+          <div class="fg"><label class="fl">Drucktemp (°C)</label><input class="fi" id="st-mat-temp" placeholder="210"></div>
+          <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="st-mat-bed" placeholder="60"></div>
+          <div class="fg"><label class="fl">Notizen</label><input class="fi" id="st-mat-notes" placeholder="optional"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="addMaterialPreset()">+ Vorlage hinzufügen</button>
+      </div>
+
       <div class="sep-label" style="margin-top:24px">Datensicherung</div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
       <div style="display:flex;gap:8px">
@@ -1970,6 +2062,7 @@ async function renderSettings() {
         <button class="btn btn-ghost" onclick="gotoView('fileindex')">&#x1F4C2; Datei-Index öffnen</button>
       </div>
     </div>`);
+  loadAndRenderPrinterConfig();
 }
 
 async function saveSettings() {
@@ -1985,6 +2078,94 @@ async function saveSettings() {
   });
   state.settings = await api('/api/settings','PUT',body);
   toast('Einstellungen gespeichert','ok');
+}
+
+// ── PRINTER / NOZZLE / MATERIAL SETTINGS ──────────────────────
+async function loadAndRenderPrinterConfig() {
+  [state.printers, state.nozzles, state.materialPresets] = await Promise.all([
+    api('/api/printers'), api('/api/nozzles'), api('/api/material-presets')
+  ]);
+  state._psConfigLoaded = true;
+  _renderPrinterList(); _renderNozzleList(); _renderMatList();
+  // populate nozzle select in material form
+  const nzSel = document.getElementById('st-mat-nozzle');
+  if (nzSel) nzSel.innerHTML = '<option value="">—</option>' +
+    state.nozzles.map(n=>`<option value="${n.size}">${n.size} mm</option>`).join('');
+}
+function _renderPrinterList() {
+  const el = document.getElementById('st-printers-list'); if (!el) return;
+  el.innerHTML = state.printers.length ? state.printers.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);margin-bottom:4px">
+      <span style="flex:1;font-weight:500">${esc(p.name)}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--t3)">${p.cost_per_hour} CHF/h</span>
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="editPrinter(${p.id},'${esc(p.name)}',${p.cost_per_hour})">✏️</button>
+      <button class="btn btn-icon btn-red btn-sm" onclick="delPrinter(${p.id})">✕</button>
+    </div>`).join('') : '<div style="color:var(--t3);font-size:12px;padding:4px 0">Noch keine Drucker hinterlegt.</div>';
+}
+function _renderNozzleList() {
+  const el = document.getElementById('st-nozzles-list'); if (!el) return;
+  el.innerHTML = state.nozzles.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">` +
+    state.nozzles.map(n => `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px">
+      <span>${n.size} mm</span>
+      <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;width:14px;height:14px;font-size:10px" onclick="delNozzle(${n.id})">✕</button>
+    </div>`).join('') + '</div>' : '<div style="color:var(--t3);font-size:12px;padding:4px 0">Noch keine Düsen hinterlegt.</div>';
+}
+function _renderMatList() {
+  const el = document.getElementById('st-mats-list'); if (!el) return;
+  el.innerHTML = state.materialPresets.length ? state.materialPresets.map(m => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);margin-bottom:4px">
+      <span style="font-weight:500;min-width:60px">${esc(m.name)}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--t3)">${[m.print_temp&&m.print_temp+'°C',m.bed_temp&&'Bett '+m.bed_temp+'°C',m.nozzle&&m.nozzle+' mm',m.filament_price_kg&&m.filament_price_kg+' CHF/kg'].filter(Boolean).join(' · ')}</span>
+      <button class="btn btn-icon btn-red btn-sm" style="margin-left:auto" onclick="delMaterialPreset(${m.id})">✕</button>
+    </div>`).join('') : '<div style="color:var(--t3);font-size:12px;padding:4px 0">Noch keine Vorlagen hinterlegt.</div>';
+}
+async function addPrinter() {
+  const name = document.getElementById('st-pr-name').value.trim();
+  const cost = parseFloat(document.getElementById('st-pr-cost').value)||0;
+  if (!name) return toast('Name fehlt','err');
+  await api('/api/printers','POST',{name,cost_per_hour:cost});
+  document.getElementById('st-pr-name').value = '';
+  document.getElementById('st-pr-cost').value = '';
+  await loadAndRenderPrinterConfig(); toast('Drucker gespeichert','ok');
+}
+async function editPrinter(id, name, cost) {
+  const newName = prompt('Druckername:', name); if (!newName) return;
+  const newCost = prompt('Kosten (CHF/h):', cost);
+  await api(`/api/printers/${id}`,'PUT',{name:newName, cost_per_hour:parseFloat(newCost)||0});
+  await loadAndRenderPrinterConfig(); state._psConfigLoaded = false; toast('Gespeichert','ok');
+}
+async function delPrinter(id) {
+  await api(`/api/printers/${id}`,'DELETE');
+  await loadAndRenderPrinterConfig(); state._psConfigLoaded = false; toast('Drucker gelöscht','ok');
+}
+async function addNozzle() {
+  const size = document.getElementById('st-nz-size').value.trim();
+  if (!size) return toast('Grösse fehlt','err');
+  await api('/api/nozzles','POST',{size});
+  document.getElementById('st-nz-size').value = '';
+  await loadAndRenderPrinterConfig(); toast('Düse hinzugefügt','ok');
+}
+async function delNozzle(id) {
+  await api(`/api/nozzles/${id}`,'DELETE');
+  await loadAndRenderPrinterConfig(); state._psConfigLoaded = false; toast('Düse gelöscht','ok');
+}
+async function addMaterialPreset() {
+  const name = document.getElementById('st-mat-name').value.trim();
+  if (!name) return toast('Name fehlt','err');
+  await api('/api/material-presets','POST',{
+    name, print_temp: document.getElementById('st-mat-temp').value,
+    bed_temp: document.getElementById('st-mat-bed').value,
+    nozzle: document.getElementById('st-mat-nozzle').value,
+    filament_price_kg: parseFloat(document.getElementById('st-mat-price').value)||null,
+    notes: document.getElementById('st-mat-notes').value
+  });
+  ['st-mat-name','st-mat-temp','st-mat-bed','st-mat-price','st-mat-notes'].forEach(f=>set(f,''));
+  document.getElementById('st-mat-nozzle').value = '';
+  await loadAndRenderPrinterConfig(); state._psConfigLoaded = false; toast('Vorlage gespeichert','ok');
+}
+async function delMaterialPreset(id) {
+  await api(`/api/material-presets/${id}`,'DELETE');
+  await loadAndRenderPrinterConfig(); state._psConfigLoaded = false; toast('Vorlage gelöscht','ok');
 }
 
 // ── FILE INDEX ────────────────────────────────────────────────
@@ -2315,19 +2496,34 @@ async function onSearch(q) {
   searchTimer = setTimeout(async () => {
     if (state.view !== 'search') { state.view = 'search'; document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active')); }
     const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
+    const fmtSz = b => !b?'—':b<1024?b+'B':b<1048576?(b/1024).toFixed(0)+'KB':(b/1048576).toFixed(1)+'MB';
+    const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMG:'🖼',DOC:'📄'}[t]||'📎');
     const html = `
       ${r.projects.length ? `<div class="sep-label">Projekte</div><div class="card-grid">${r.projects.map(p=>`
         <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>
         <div class="card-num">${p.number}</div><div class="card-name">${esc(p.name)}</div></div>`).join('')}</div>` : ''}
-      ${r.items.length ? `<div class="sep-label" style="margin-top:14px">Items</div><div class="tbl-wrap"><table>
+      ${r.items?.length ? `<div class="sep-label" style="margin-top:14px">Items</div><div class="tbl-wrap"><table>
         <thead><tr><th>Nummer</th><th>Name</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
-        <tbody>${r.items.map(i=>`<tr onclick="openProject(${i.project_id})">
+        <tbody>${r.items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
           <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</td>
           <td>${esc(i.name)}</td><td style="color:var(--t3)">${i.project_name}</td>
           <td style="font-family:var(--mono);font-size:10px">${i.latest_revision?.rev||'—'}</td>
           <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
-      ${!r.projects.length&&!r.items.length?`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer für "${esc(q)}"</div></div>`:''}`;
+      ${r.datasets?.length ? `<div class="sep-label" style="margin-top:14px">Dateien</div><div class="tbl-wrap"><table>
+        <thead><tr><th>Datei</th><th>Item</th><th>Projekt</th><th>Rev</th><th>Grösse</th><th></th></tr></thead>
+        <tbody>${r.datasets.map(d=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${d.project_id},${d.item_id})" title="Item öffnen">
+          <td><span style="margin-right:5px">${dsIcon(d.ds_type)}</span>${esc(d.original_name)}</td>
+          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${d.item_number}</td>
+          <td style="color:var(--t3)">${d.project_name}</td>
+          <td style="font-family:var(--mono);font-size:10px">${d.rev||'—'}</td>
+          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtSz(d.file_size)}</td>
+          <td style="display:flex;gap:4px" onclick="event.stopPropagation()">
+            <a href="/api/datasets/${d.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" title="Öffnen">&#x2197;</a>
+            <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
+          </td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
+      ${!r.projects.length&&!r.items?.length&&!r.datasets?.length?`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer für "${esc(q)}"</div></div>`:''}`;
     setLeftBody(html);
   }, 300);
 }
@@ -2618,12 +2814,35 @@ async function delBom(bomId, itemId, revId) {
 }
 
 // ── PRINT SETTINGS ────────────────────────────────────────────
-function openPsModal(revId, ps) {
+async function loadPsConfig() {
+  if (state._psConfigLoaded) return;
+  [state.printers, state.nozzles, state.materialPresets] = await Promise.all([
+    api('/api/printers'), api('/api/nozzles'), api('/api/material-presets')
+  ]);
+  state._psConfigLoaded = true;
+}
+function _populatePsSelects() {
+  const matSel = document.getElementById('ps-mat-preset');
+  if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen (füllt Felder automatisch aus) —</option>' +
+    state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  const nozSel = document.getElementById('ps-nozzle');
+  if (nozSel) nozSel.innerHTML = '<option value="">—</option>' +
+    state.nozzles.map(n=>`<option value="${n.size}">${n.size} mm</option>`).join('');
+  const prSel = document.getElementById('ps-printer');
+  if (prSel) prSel.innerHTML = '<option value="">— kein —</option>' +
+    state.printers.map(p=>`<option value="${esc(p.name)}" data-cost="${p.cost_per_hour}">${esc(p.name)} (${p.cost_per_hour} CHF/h)</option>`).join('');
+}
+async function openPsModal(revId, ps) {
+  await loadPsConfig();
+  _populatePsSelects();
   set('ps-rev-id',revId);
   set('ps-mat',ps.material||''); set('ps-col',ps.color||''); set('ps-layer',ps.layer_height||'');
-  set('ps-infill',ps.infill||''); set('ps-nozzle',ps.nozzle||''); set('ps-temp',ps.print_temp||'');
-  set('ps-bed',ps.bed_temp||''); set('ps-printer',ps.printer||''); set('ps-notes',ps.notes||'');
+  set('ps-infill',ps.infill||''); set('ps-temp',ps.print_temp||'');
+  set('ps-bed',ps.bed_temp||''); set('ps-notes',ps.notes||'');
   document.getElementById('ps-sup').value = ps.supports||'';
+  document.getElementById('ps-nozzle').value = ps.nozzle||'';
+  document.getElementById('ps-printer').value = ps.printer||'';
+  document.getElementById('ps-mat-preset').value = '';
   set('ps-cost-hr', ps.printer_cost_hr||'');
   set('ps-fil-price', ps.filament_price_kg||'');
   set('ps-fil-weight', ps.filament_weight_total||'');
@@ -2632,21 +2851,67 @@ function openPsModal(revId, ps) {
   calcCost();
   openModal('psModal');
 }
+function applyMaterialPreset(presetId) {
+  if (!presetId) return;
+  const m = state.materialPresets.find(x => x.id == presetId);
+  if (!m) return;
+  set('ps-mat', m.name);
+  set('ps-temp', m.print_temp||'');
+  set('ps-bed', m.bed_temp||'');
+  if (m.nozzle) document.getElementById('ps-nozzle').value = m.nozzle;
+  if (m.filament_price_kg) set('ps-fil-price', m.filament_price_kg);
+  document.getElementById('ps-mat-preset').value = '';
+  calcCost();
+}
+function onPsPrinterChange(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.dataset.cost !== undefined && opt.dataset.cost !== '') {
+    set('ps-cost-hr', opt.dataset.cost);
+    calcCost();
+  }
+}
+// Same helpers exposed for delivery item manual entry
+function _populateDimSelects() {
+  const matSel = document.getElementById('dim-man-preset');
+  if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen —</option>' +
+    state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  const nozSel = document.getElementById('dim-man-nozzle');
+  if (nozSel) nozSel.innerHTML = '<option value="">—</option>' +
+    state.nozzles.map(n=>`<option value="${n.size}">${n.size} mm</option>`).join('');
+  const prSel = document.getElementById('dim-man-printer');
+  if (prSel) prSel.innerHTML = '<option value="">— kein —</option>' +
+    state.printers.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+}
+function applyDimPreset(presetId) {
+  if (!presetId) return;
+  const m = state.materialPresets.find(x => x.id == presetId);
+  if (!m) return;
+  set('dim-man-mat', m.name);
+  set('dim-man-temp', m.print_temp||'');
+  set('dim-man-bed', m.bed_temp||'');
+  if (m.nozzle) document.getElementById('dim-man-nozzle').value = m.nozzle;
+  document.getElementById('dim-man-preset').value = '';
+}
+function dimTab(tab) {
+  ['3mf','manual'].forEach(t => {
+    document.getElementById('dim-section-'+t).style.display = t===tab ? '' : 'none';
+    document.getElementById('dim-tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('dim-tab-'+t).classList.toggle('btn-ghost', t!==tab);
+  });
+}
 
 function calcCost() {
   const filPrice = parseFloat(V('ps-fil-price')) || 0;
   const filWeight = parseFloat(V('ps-fil-weight')) || 0;
-  const partWeight = parseFloat(V('ps-part-weight')) || 0;
   const duration = parseFloat(V('ps-duration')) || 0;
   const costHr = parseFloat(V('ps-cost-hr')) || 0;
   if (!filPrice && !costHr) { document.getElementById('cost-preview').style.display='none'; return; }
   const matCost = (filWeight / 1000) * filPrice;
   const machCost = duration * costHr;
-  const waste = filWeight > 0 && partWeight > 0 ? ((filWeight - partWeight) / 1000) * filPrice : 0;
+  const waste = 0;
   const total = matCost + machCost;
   document.getElementById('cr-mat').textContent = matCost.toFixed(2) + ' CHF';
   document.getElementById('cr-mach').textContent = machCost.toFixed(2) + ' CHF';
-  document.getElementById('cr-waste').textContent = waste.toFixed(2) + ' CHF';
   document.getElementById('cr-total').textContent = total.toFixed(2) + ' CHF';
   document.getElementById('cost-preview').style.display = 'block';
 }
@@ -2655,8 +2920,10 @@ async function savePrintSettings() {
   const revId = V('ps-rev-id');
   await api('/api/revisions/'+revId+'/print-settings','PUT',{
     material:V('ps-mat'),color:V('ps-col'),layer_height:V('ps-layer'),infill:V('ps-infill'),
-    supports:document.getElementById('ps-sup').value,nozzle:V('ps-nozzle'),
-    print_temp:V('ps-temp'),bed_temp:V('ps-bed'),printer:V('ps-printer'),notes:V('ps-notes'),
+    supports:document.getElementById('ps-sup').value,
+    nozzle:document.getElementById('ps-nozzle').value,
+    print_temp:V('ps-temp'),bed_temp:V('ps-bed'),
+    printer:document.getElementById('ps-printer').value,notes:V('ps-notes'),
     printer_cost_hr: parseFloat(V('ps-cost-hr'))||null,
     filament_price_kg: parseFloat(V('ps-fil-price'))||null,
     filament_weight_total: parseFloat(V('ps-fil-weight'))||null,
@@ -3562,6 +3829,9 @@ async function delDelivery(id) {
 }
 
 async function openDeliveryItemModal(deliveryId, itemId) {
+  await loadPsConfig();
+  _populateDimSelects();
+  dimTab('3mf');
   set('dim-delivery-id', deliveryId);
   set('dim-item-id', itemId||'');
   set('dim-linked-plm-id', '');
@@ -3575,6 +3845,11 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   document.getElementById('dim-3mf-preview').style.display = 'none';
   document.getElementById('dim-3mf-preview').innerHTML = '';
   document.getElementById('dim-3mf-input').value = '';
+  ['dim-man-mat','dim-man-color','dim-man-layer','dim-man-infill','dim-man-temp','dim-man-bed','dim-man-fw','dim-man-dur','dim-man-notes'].forEach(f=>set(f,''));
+  document.getElementById('dim-man-sup').value = '';
+  document.getElementById('dim-man-nozzle').value = '';
+  document.getElementById('dim-man-printer').value = '';
+  document.getElementById('dim-man-preset').value = '';
 
   if (itemId) {
     const fresh = await api(`/api/deliveries/${deliveryId}`);
@@ -3614,12 +3889,38 @@ async function saveDeliveryItem() {
   const itemId = V('dim-item-id');
   const desc = V('dim-desc'); if (!desc) return toast('Beschreibung fehlt','err');
   const priceVal = V('dim-price');
+  let settingsJson = V('dim-settings-json') || null;
+  if (document.getElementById('dim-tab-manual')?.classList.contains('active')) {
+    const mat = V('dim-man-mat'); const temp = V('dim-man-temp'); const bed = V('dim-man-bed');
+    const layer = V('dim-man-layer'); const infill = V('dim-man-infill');
+    const sup = document.getElementById('dim-man-sup').value;
+    const nozzle = document.getElementById('dim-man-nozzle').value;
+    const printer = document.getElementById('dim-man-printer').value;
+    const fw = V('dim-man-fw'); const dur = V('dim-man-dur'); const notes = V('dim-man-notes');
+    const color = V('dim-man-color');
+    if (mat || temp || bed || layer || infill) {
+      const obj = {};
+      if (mat) obj.filament_type = mat;
+      if (color) obj._color = color;
+      if (temp) obj.temperature = temp;
+      if (bed) obj.bed_temperature = bed;
+      if (layer) obj.layer_height = layer;
+      if (infill) obj.fill_density = infill + '%';
+      if (sup && sup !== '—') obj.support_material = (sup !== 'Nein') ? '1' : '0';
+      if (nozzle) obj.nozzle_diameter = nozzle;
+      if (printer) obj.print_settings_id = printer;
+      if (fw) obj._filament_weight = fw + ' g';
+      if (dur) obj._duration = dur + ' h';
+      if (notes) obj._notes = notes;
+      settingsJson = JSON.stringify(obj);
+    } else { settingsJson = null; }
+  }
   const body = {
     description: desc, quantity: parseFloat(V('dim-qty'))||1,
     unit: document.getElementById('dim-unit').value,
     unit_price: priceVal !== '' ? parseFloat(priceVal) : null,
     item_id: V('dim-linked-plm-id') ? parseInt(V('dim-linked-plm-id')) : null,
-    print_settings_json: V('dim-settings-json') || null,
+    print_settings_json: settingsJson,
     notes: V('dim-notes')
   };
   if (itemId) {
