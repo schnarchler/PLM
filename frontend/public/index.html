@@ -945,6 +945,7 @@ async function openProject(id) {
   const p = await api(`/api/projects/${id}`);
   state.project = p;
   state.item = null;
+  if (state.filterBomChildren === undefined) state.filterBomChildren = true;
   document.getElementById('ni-projects').classList.add('active');
 
   setLeftHeader(
@@ -954,31 +955,72 @@ async function openProject(id) {
      <button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="openItemModal(${p.id}, null, 'DOC')">+ Dokument</button>`
   );
 
-  const html = p.items.length
-    ? `<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
-        <span style="font-size:11px;color:var(--t3)">🧩 ${p.items.length} Items · Klicken zum Öffnen</span>
-       </div>
-       <div>${renderTreeNodes(p.items, null)}</div>`
-    : `<div class="empty"><div class="empty-icon">🔩</div><div class="empty-text">Noch keine Items</div>
-        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
-          <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'ASM')">+ Baugruppe</button>
-          <button class="btn btn-primary btn-sm" onclick="openItemModal(${p.id},null,'PRT')">+ Part</button>
-          <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'DOC')">+ Dokument</button>
-        </div></div>`;
-
-  setLeftBody(html);
+  renderProjectTree(p);
   openProjectDetail(p);
+}
+
+async function refreshProjectTree() {
+  if (!state.project) return;
+  const p = await api(`/api/projects/${state.project.id}`);
+  state.project = p;
+  renderProjectTree(p);
+}
+
+function renderProjectTree(p) {
+  const items = p.items || [];
+  if (!items.length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">🔩</div><div class="empty-text">Noch keine Items</div>
+      <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+        <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'ASM')">+ Baugruppe</button>
+        <button class="btn btn-primary btn-sm" onclick="openItemModal(${p.id},null,'PRT')">+ Part</button>
+        <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'DOC')">+ Dokument</button>
+      </div></div>`);
+    return;
+  }
+
+  // compute which items are referenced in any BOM in this project
+  const bomChildIds = new Set();
+  items.forEach(item => (item.latest_revision?.bom || []).forEach(b => bomChildIds.add(b.child_item_id)));
+
+  const filterOn = state.filterBomChildren !== false;
+  const rootItems = items.filter(i => i.parent_id === null);
+  const visibleRoots = filterOn ? rootItems.filter(i => !bomChildIds.has(i.id)) : rootItems;
+  const hiddenCount = rootItems.length - visibleRoots.length;
+
+  const filterBtnStyle = filterOn
+    ? 'background:rgba(74,158,255,.18);color:var(--blue);border:1px solid rgba(74,158,255,.4)'
+    : 'background:var(--bg3);color:var(--t3);border:1px solid var(--line)';
+
+  setLeftBody(`
+    <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--t3)">🧩 ${items.length} Items</span>
+      <button onclick="toggleBomFilter()" style="font-size:11px;padding:3px 9px;border-radius:var(--r);cursor:pointer;${filterBtnStyle}">
+        ${filterOn ? '● ' : '○ '}BOM-Kinder ausblenden${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
+      </button>
+    </div>
+    <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>`);
+}
+
+function toggleBomFilter() {
+  state.filterBomChildren = !state.filterBomChildren;
+  if (state.project) renderProjectTree(state.project);
 }
 
 
 let _nc = 0;
 function _nim() { return ++_nc; }
 
-function renderTreeNodes(items, parentId) {
+function renderTreeNodes(roots, allItems) {
   _nc = 0;
   const map = {};
-  items.forEach(i => map[i.id] = i);
-  return _renderRootNodes(items.filter(i => i.parent_id === parentId), map, true);
+  // support both call styles: renderTreeNodes(allItems, null) legacy OR renderTreeNodes(roots, allItems)
+  if (Array.isArray(allItems)) {
+    allItems.forEach(i => map[i.id] = i);
+  } else {
+    roots.forEach(i => map[i.id] = i);
+    roots = roots.filter(i => !i.parent_id);
+  }
+  return _renderRootNodes(roots, map, true);
 }
 
 function _renderRootNodes(children, map, isRoot) {
@@ -1193,7 +1235,8 @@ function renderItemDetail(item, activeRevId) {
   const icon = isASM ? '📦' : isDOC ? '📄' : '🔩';
   const editable = itemIsEditable(item);
   const editBtn = editable ? ` <button class="btn btn-ghost btn-sm" style="margin-left:8px;font-size:10px;padding:3px 8px" onclick="openEditItemModal(${item.id})">Umbenennen</button>` : '';
-  document.getElementById('dp-title').innerHTML = `${icon} <strong>${item.item_number}</strong> <span style="color:var(--t2)">${esc(item.name)}</span>${editBtn}`;
+  const moveBtn = ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="openMoveItemModal(${item.id})">&#x21AA; Verschieben</button>`;
+  document.getElementById('dp-title').innerHTML = `${icon} <strong>${item.item_number}</strong> <span style="color:var(--t2)">${esc(item.name)}</span>${editBtn}${moveBtn}`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
@@ -1797,6 +1840,60 @@ async function deleteProject(id) {
   toast('Projekt gelöscht','ok'); closeDetail(); gotoView('projects'); loadStats();
 }
 
+// ── ITEM MOVE ─────────────────────────────────────────────────
+async function openMoveItemModal(itemId) {
+  const [item, projects] = await Promise.all([
+    api('/api/items/' + itemId),
+    api('/api/projects')
+  ]);
+  const others = projects.filter(p => p.id !== item.project_id);
+  if (!others.length) return toast('Keine anderen Projekte vorhanden', 'err');
+
+  const opts = others.map(p => `<option value="${p.id}">${p.number} – ${esc(p.name)}</option>`).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.id = 'moveItemOverlay';
+  overlay.innerHTML = `<div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">↪ Verschieben: ${esc(item.item_number)}</div>
+      <button class="btn btn-icon btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t2);margin-bottom:14px">
+        <strong style="color:var(--t1)">${esc(item.name)}</strong> in ein anderes Projekt verschieben.<br>
+        <span style="font-size:12px;color:var(--t3);margin-top:4px;display:block">Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items (Kinder) werden mitgenommen.</span>
+      </div>
+      <div class="fg">
+        <label class="fl">Zielprojekt</label>
+        <select class="fi" id="move-target-project">${opts}</select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="confirmMoveItem(${itemId})">Verschieben</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function confirmMoveItem(itemId) {
+  const targetId = document.getElementById('move-target-project')?.value;
+  if (!targetId) return;
+  const overlay = document.getElementById('moveItemOverlay');
+  const btn = overlay?.querySelector('.btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await api('/api/items/' + itemId + '/move', 'PUT', { target_project_id: parseInt(targetId) });
+    overlay?.remove();
+    toast('Item verschoben', 'ok');
+    closeDetail();
+    if (state.project) openProject(state.project.id);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Verschieben'; }
+    toast('Fehler: ' + e, 'err');
+  }
+}
+
 // ── ITEM CRUD ─────────────────────────────────────────────────
 async function openEditItemModal(id) {
   const item = await api('/api/items/' + id);
@@ -1872,14 +1969,14 @@ async function doStatusChange() {
   const body = { status, description: V('sm-desc'), eco_reason: V('sm-eco'), released_by: 'User' };
   await api(`/api/revisions/${revId}/status`,'PUT',body);
   toast(`Status → ${status}`,'ok'); closeModal('statusModal');
-  if (state.item) await switchRev(state.item.id, state.activeRevId);
-  // reload to get new revision if ECO
-  if (status==='ECO') {
+  if (state.item) {
     const item = await api(`/api/items/${state.item.id}`);
-    state.item=item;
-    const newRev = item.revisions?.[0];
+    state.item = item;
+    const newRev = status === 'ECO' ? item.revisions?.[0] : item.revisions?.find(r => r.id === state.activeRevId) || item.revisions?.[0];
+    state.activeRevId = newRev?.id;
     renderItemDetail(item, newRev?.id);
   }
+  refreshProjectTree();
 }
 
 // ── DATASETS ─────────────────────────────────────────────────
@@ -1986,12 +2083,14 @@ async function doBomAdd() {
   await api(`/api/revisions/${revId}/bom`,'POST',{child_item_id:parseInt(childId),quantity:parseFloat(V('bom-qty'))||1,unit:V('bom-unit'),notes:V('bom-notes')});
   toast('Position hinzugefügt','ok'); closeModal('bomModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
+  refreshProjectTree();
 }
 
 async function delBom(bomId, itemId, revId) {
   await api(`/api/bom/${bomId}`,'DELETE');
   toast('Position entfernt','ok');
   if (state.item) await switchRev(itemId, revId);
+  refreshProjectTree();
 }
 
 // ── PRINT SETTINGS ────────────────────────────────────────────

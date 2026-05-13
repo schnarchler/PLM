@@ -688,6 +688,48 @@ app.put('/api/items/:id', (req, res) => {
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
 });
 
+app.put('/api/items/:id/move', (req, res) => {
+  const { target_project_id } = req.body;
+  const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  const targetProject = get('SELECT * FROM projects WHERE id=?', [target_project_id]);
+  if (!targetProject) return res.status(400).json({ error: 'Zielprojekt nicht gefunden' });
+  if (item.project_id === parseInt(target_project_id))
+    return res.status(400).json({ error: 'Item ist bereits in diesem Projekt' });
+  const oldProject = get('SELECT * FROM projects WHERE id=?', [item.project_id]);
+
+  function moveTree(itemId, newParentId) {
+    const it = get('SELECT * FROM items WHERE id=?', [itemId]);
+    if (!it) return;
+    let newNum;
+    if (it.item_type === 'ASM') {
+      newNum = targetProject.number + '-ASM-' + nextItemSeq(targetProject.id, 'ASM');
+    } else if (it.item_type === 'DOC') {
+      newNum = targetProject.number + '-DOC-' + nextItemSeq(targetProject.id, 'DOC');
+    } else {
+      if (newParentId) {
+        const np = get('SELECT * FROM items WHERE id=?', [newParentId]);
+        const asmMatch = np ? np.item_number.match(/-ASM-(\d+)/) : null;
+        const asmNum = asmMatch ? asmMatch[1] : null;
+        newNum = asmNum
+          ? targetProject.number + '-ASM-' + asmNum + '-PRT-' + nextPrtNumber(targetProject.id, asmNum)
+          : targetProject.number + '-PRT-' + nextPrtNumber(targetProject.id, null);
+      } else {
+        newNum = targetProject.number + '-PRT-' + nextPrtNumber(targetProject.id, null);
+      }
+    }
+    run('UPDATE items SET project_id=?,parent_id=?,item_number=? WHERE id=?',
+      [targetProject.id, newParentId, newNum, itemId]);
+    all('SELECT id FROM items WHERE parent_id=?', [itemId]).forEach(c => moveTree(c.id, itemId));
+  }
+
+  moveTree(item.id, null);
+  log('item', item.id, 'Verschoben', `→ Projekt ${targetProject.number} (${targetProject.name})`);
+  log('project', targetProject.id, 'Item erhalten', `${item.item_type} von Projekt ${oldProject?.number||'?'}`);
+  saveDb();
+  res.json({ success: true, item: get('SELECT * FROM items WHERE id=?', [item.id]) });
+});
+
 app.delete('/api/items/:id', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found' });
