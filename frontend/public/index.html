@@ -2034,7 +2034,7 @@ async function renderCustomers() {
   if (!customers.length) { setLeftBody(`<div class="empty"><div class="empty-icon">👤</div><div class="empty-text">Noch keine Kunden</div></div>`); return; }
   setLeftBody(`<div class="tbl-wrap"><table>
     <thead><tr><th>Nummer</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th>Adresse</th><th></th></tr></thead>
-    <tbody>${customers.map(c=>`<tr onclick="openCustomerModal(${c.id})">
+    <tbody>${customers.map(c=>`<tr onclick="openCustomerDetail(${c.id})">
       <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${c.number}</td>
       <td style="font-weight:500">${esc(c.name)}</td>
       <td style="color:var(--t2)">${c.email||'—'}</td>
@@ -2042,6 +2042,100 @@ async function renderCustomers() {
       <td style="color:var(--t3);font-size:11px">${[c.street,c.postal_code&&c.city?c.postal_code+' '+c.city:'',c.country].filter(Boolean).join(', ')||'—'}</td>
       <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delCustomer(${c.id})">✕</button></td>
     </tr>`).join('')}</tbody></table></div>`);
+}
+
+async function openCustomerDetail(id) {
+  const c = await api(`/api/customers/${id}`);
+  const ostLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
+  const ostCls   = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
+  const qstLabel = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
+  const qstCls   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
+  const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+  const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
+  const fmtChfD  = v => v != null ? 'CHF ' + parseFloat(v).toFixed(2) : '—';
+  const empty    = msg => `<div style="color:var(--t3);font-size:12px;padding:6px 0">${msg}</div>`;
+
+  const orderRevTotal  = c.orders.reduce((s,o)  => s + (o.total||0), 0);
+  const delivRevTotal  = c.deliveries.reduce((s,d) => s + (d.total||0), 0);
+
+  document.getElementById('dp-title').innerHTML =
+    `👤 <strong>${esc(c.name)}</strong> <span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:6px">${c.number}</span>`;
+
+  document.getElementById('dp-tabs').innerHTML = `
+    <button class="tab active" onclick="switchTab(this,'cd-orders')">Aufträge <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:10px;padding:1px 6px;margin-left:3px">${c.orders.length}</span></button>
+    <button class="tab" onclick="switchTab(this,'cd-quotes')">Angebote <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:10px;padding:1px 6px;margin-left:3px">${c.quotes.length}</span></button>
+    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Lieferungen <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:10px;padding:1px 6px;margin-left:3px">${c.deliveries.length}</span></button>
+    <button class="tab" onclick="switchTab(this,'cd-info')">Stammdaten</button>`;
+
+  const orderRows = c.orders.length ? c.orders.map(o => `
+    <div onclick="gotoView('orders')" style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <span class="status ${ostCls[o.status]||'st-DFT'}">${ostLabel[o.status]||o.status}</span>
+      <div>
+        <div style="font-weight:500">${esc(o.title)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${o.number}${o.order_date?' · '+o.order_date.slice(0,10):''}${o.delivery_date?' · 📅 '+o.delivery_date.slice(0,10):''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:12px">${fmtChfD(o.total)}</div>
+        <div style="font-size:10px;color:var(--t3)">${o.item_count} Pos.</div>
+      </div>
+    </div>`).join('') : empty('Keine Aufträge');
+
+  const quoteRows = c.quotes.length ? c.quotes.map(q => `
+    <div onclick="gotoView('quotes')" style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <span class="status ${qstCls[q.status]||'st-DFT'}">${qstLabel[q.status]||q.status}</span>
+      <div>
+        <div style="font-weight:500">${esc(q.title)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${q.number}${q.quote_date?' · '+q.quote_date.slice(0,10):''}${q.valid_until?' · gültig bis '+q.valid_until.slice(0,10):''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:12px">${fmtChfD(q.total)}</div>
+        <div style="font-size:10px;color:var(--t3)">${q.item_count} Pos.</div>
+      </div>
+    </div>`).join('') : empty('Keine Angebote');
+
+  const delivRows = c.deliveries.length ? c.deliveries.map(d => `
+    <div onclick="gotoView('deliveries')" style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <span class="status ${dstCls[d.status]||'st-DFT'}">${dstLabel[d.status]||d.status}</span>
+      <div>
+        <div style="font-weight:500">${esc(d.title)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${d.number}${d.order_number?' · Auftrag '+d.order_number:''}${d.delivery_date?' · '+d.delivery_date.slice(0,10):''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:12px">${fmtChfD(d.total)}</div>
+        <div style="font-size:10px;color:var(--t3)">${d.item_count} Pos.</div>
+      </div>
+    </div>`).join('') : empty('Keine Lieferungen');
+
+  document.getElementById('dp-body').innerHTML = `
+    <div id="cd-orders">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:11px;color:var(--t3)">
+        <span>${c.orders.length} Aufträge</span>
+        <span style="font-family:var(--mono);color:var(--t1)">Total ${fmtChfD(orderRevTotal)}</span>
+      </div>
+      ${orderRows}
+    </div>
+    <div id="cd-quotes" style="display:none">
+      ${quoteRows}
+    </div>
+    <div id="cd-deliveries" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:11px;color:var(--t3)">
+        <span>${c.deliveries.length} Lieferungen</span>
+        <span style="font-family:var(--mono);color:var(--t1)">Total ${fmtChfD(delivRevTotal)}</span>
+      </div>
+      ${delivRows}
+    </div>
+    <div id="cd-info" style="display:none;padding:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;margin-bottom:14px">
+        ${c.email?`<div><div class="ps-label">E-Mail</div><div class="ps-val"><a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a></div></div>`:''}
+        ${c.phone?`<div><div class="ps-label">Telefon</div><div class="ps-val">${esc(c.phone)}</div></div>`:''}
+        ${c.street?`<div style="grid-column:span 2"><div class="ps-label">Adresse</div><div class="ps-val">${esc(c.street)}, ${c.postal_code||''} ${c.city||''}, ${c.country||''}</div></div>`:''}
+        ${c.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><div class="ps-val" style="white-space:pre-wrap;color:var(--t2)">${esc(c.notes)}</div></div>`:''}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="openCustomerModal(${c.id})">✏️ Bearbeiten</button>
+      <button class="btn btn-red btn-sm" style="margin-left:6px" onclick="delCustomer(${c.id})">🗑 Löschen</button>
+    </div>`;
+
+  showDetail();
 }
 
 // ── ORDERS ────────────────────────────────────────────────────

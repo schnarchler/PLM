@@ -914,6 +914,34 @@ app.post('/api/customers', (req, res) => {
   res.json(get('SELECT * FROM customers WHERE id=?', [id]));
 });
 
+app.get('/api/customers/:id', (req, res) => {
+  const c = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
+  if (!c) return res.status(404).json({ error: 'Not found' });
+
+  c.orders = all(`
+    SELECT o.*, SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total,
+      COUNT(oi.id) as item_count
+    FROM orders o LEFT JOIN order_items oi ON oi.order_id = o.id
+    WHERE o.customer_id=? GROUP BY o.id ORDER BY o.id DESC`, [c.id]);
+
+  c.quotes = all(`
+    SELECT q.*, SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount_pct,0)/100.0)) as total,
+      COUNT(qi.id) as item_count
+    FROM quotes q LEFT JOIN quote_items qi ON qi.quote_id = q.id
+    WHERE q.customer_id=? GROUP BY q.id ORDER BY q.id DESC`, [c.id]);
+
+  c.deliveries = all(`
+    SELECT d.*, COUNT(di.id) as item_count,
+      SUM(di.quantity * COALESCE(di.unit_price,0)) as total,
+      o.number as order_number
+    FROM deliveries d
+    LEFT JOIN delivery_items di ON di.delivery_id = d.id
+    LEFT JOIN orders o ON d.order_id = o.id
+    WHERE d.customer_id=? GROUP BY d.id ORDER BY d.id DESC`, [c.id]);
+
+  res.json(c);
+});
+
 app.put('/api/customers/:id', (req, res) => {
   const { name, email, phone, street, postal_code, city, country, notes } = req.body;
   run('UPDATE customers SET name=?,email=?,phone=?,street=?,postal_code=?,city=?,country=?,notes=? WHERE id=?',
