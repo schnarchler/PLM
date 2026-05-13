@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""PLM & ERP – Pipsta AP1400 Belegdruck (ESC/POS via Windows-Druckerspooler)
-Einrichtung: Drucker als "Generic / Text Only" auf Port USB001 in Windows anlegen.
+"""PLM & ERP – Pipsta AP1400 Belegdruck (ESC/POS, direkter USB-Port-Zugriff)
+Umgeht den Windows-Spooler – schreibt direkt auf den USB-Druckerport.
+Einrichtung: Drucker als "Generic / Text Only" auf USB001 anlegen (nur um den
+             Port zu reservieren; der Spooler wird nicht verwendet).
              pip install pywin32
 Aufruf:  py print_receipt.py --data '{"name":"...","number":"...","params":{...},"price":9.90}'
 """
@@ -11,6 +13,8 @@ from datetime import datetime
 
 try:
     import win32print
+    import win32file
+    import win32con
 except ImportError:
     print("FEHLER: pywin32 nicht installiert. Bitte ausfuehren: pip install pywin32", file=sys.stderr)
     sys.exit(2)
@@ -19,22 +23,21 @@ except ImportError:
 ESC = b'\x1b'
 GS  = b'\x1d'
 
-INIT      = ESC + b'\x40'          # Drucker initialisieren
-ALIGN_L   = ESC + b'\x61\x00'      # Linksbündig
-ALIGN_C   = ESC + b'\x61\x01'      # Zentriert
-BOLD_ON   = ESC + b'\x45\x01'      # Fett an
-BOLD_OFF  = ESC + b'\x45\x00'      # Fett aus
-FONT_A    = ESC + b'\x4d\x00'      # Normal (~32 Zeichen/Zeile)
-FONT_B    = ESC + b'\x4d\x01'      # Klein  (~42 Zeichen/Zeile)
-DBL_H_ON  = GS  + b'\x21\x01'     # Doppelte Höhe an
-DBL_H_OFF = GS  + b'\x21\x00'     # Doppelte Höhe aus
-NL        = b'\x0a'                # Zeilenumbruch
-CUT       = GS  + b'\x56\x42\x40' # Teilschnitt (mit Papiervorschub)
+INIT      = ESC + b'\x40'
+ALIGN_L   = ESC + b'\x61\x00'
+ALIGN_C   = ESC + b'\x61\x01'
+BOLD_ON   = ESC + b'\x45\x01'
+BOLD_OFF  = ESC + b'\x45\x00'
+FONT_A    = ESC + b'\x4d\x00'
+FONT_B    = ESC + b'\x4d\x01'
+DBL_H_ON  = GS  + b'\x21\x01'
+DBL_H_OFF = GS  + b'\x21\x00'
+NL        = b'\x0a'
+CUT       = GS  + b'\x56\x42\x40'
 
-LINE_W = 32  # Zeichen pro Zeile bei 58mm Papier, Font A
+LINE_W = 32
 
 def e(text):
-    """Text zu Bytes (CP437 für Thermodrucker)"""
     return str(text).encode('cp437', errors='replace')
 
 def sep():
@@ -52,7 +55,6 @@ def row(text='', align=ALIGN_L, bold=False, small=False, tall=False):
     return out
 
 def lr(label, value, width=LINE_W):
-    """Zeile mit Label links, Wert rechts"""
     lbl = str(label)[:width - 10]
     val = str(value)
     pad = max(1, width - len(lbl) - len(val))
@@ -70,13 +72,10 @@ def build_receipt(data):
     now    = datetime.now().strftime('%d.%m.%Y  %H:%M')
 
     out = INIT + ALIGN_L
-
-    # ── Kopfzeile
     out += row('PLM & ERP', align=ALIGN_C, bold=True)
     out += row(now,          align=ALIGN_C, small=True)
     out += sep()
 
-    # ── Bauteil
     if number:
         out += row(number, bold=True)
     out += row(name, align=ALIGN_L, bold=True, tall=True)
@@ -85,7 +84,6 @@ def build_receipt(data):
     out += row(f'Menge: {qty} {unit}')
     out += sep()
 
-    # ── Druckparameter
     if params:
         out += row('DRUCKPARAMETER', bold=True)
         for label, val in params.items():
@@ -94,39 +92,73 @@ def build_receipt(data):
                 out += lr(str(label)[:14], val_str[:16])
         out += sep()
 
-    # ── Preis
     if price is not None:
         out += row(f'CHF {float(price):.2f}', align=ALIGN_C, bold=True, tall=True)
         out += sep()
 
-    # ── Abschluss
     out += NL * 3
     out += CUT
     return out
 
-# ── Windows-Drucker finden ────────────────────────────────────
-def find_printer(preferred=''):
+# ── Drucker-Port ermitteln ────────────────────────────────────
+def get_printer_port(preferred=''):
+    """Gibt (druckername, portname) zurück, z.B. ('Pipsta AP1400', 'USB001')"""
     printers = [p[2] for p in win32print.EnumPrinters(
         win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
     )]
     if not printers:
-        raise RuntimeError(
-            "Kein Drucker in Windows gefunden.\n"
-            "Bitte Drucker einrichten: Einstellungen → Drucker & Scanner → "
-            "Drucker hinzufügen → Lokal → USB001 → Generic / Text Only"
-        )
+        raise RuntimeError("Kein Drucker in Windows gefunden.")
+
+    # Drucker nach Name auswählen
+    chosen = None
     if preferred:
         for p in printers:
             if preferred.lower() in p.lower():
-                return p
-    for kw in ['pipsta', 'ap1400', 'generic', 'text only']:
-        for p in printers:
-            if kw in p.lower():
-                return p
-    return printers[0]  # Fallback: erster verfügbarer Drucker
+                chosen = p
+                break
+    if not chosen:
+        for kw in ['pipsta', 'ap1400', 'generic', 'text']:
+            for p in printers:
+                if kw in p.lower():
+                    chosen = p
+                    break
+            if chosen:
+                break
+    if not chosen:
+        chosen = printers[0]
 
-# ── Druckauftrag senden ───────────────────────────────────────
-def print_raw(printer_name, data):
+    # Port-Name aus den Druckereigenschaften lesen
+    h = win32print.OpenPrinter(chosen)
+    try:
+        info = win32print.GetPrinter(h, 2)
+        port = info['pPortName']  # z.B. 'USB001'
+    finally:
+        win32print.ClosePrinter(h)
+
+    return chosen, port
+
+# ── Direkt auf USB-Port schreiben (Spooler umgehen) ──────────
+def print_direct(port, data):
+    """Schreibt ESC/POS-Daten direkt auf \\.\USB001 – kein Spooler."""
+    device = r'\\.\{}'.format(port)
+    h = win32file.CreateFile(
+        device,
+        win32con.GENERIC_WRITE,
+        0,
+        None,
+        win32con.OPEN_EXISTING,
+        0,
+        None
+    )
+    if h == win32file.INVALID_HANDLE_VALUE:
+        raise RuntimeError(f"Port {device} konnte nicht geoeffnet werden.")
+    try:
+        win32file.WriteFile(h, data)
+    finally:
+        win32file.CloseHandle(h)
+
+# ── Fallback: über Windows-Spooler drucken ───────────────────
+def print_via_spooler(printer_name, data):
     h = win32print.OpenPrinter(printer_name)
     try:
         win32print.StartDocPrinter(h, 1, ("PLM Beleg", None, "RAW"))
@@ -146,21 +178,33 @@ def main():
                         help='JSON: name, number, desc, qty, unit, price, params')
     parser.add_argument('--printer', default='',
                         help='Windows-Druckername (optional, sonst Auto-Erkennung)')
+    parser.add_argument('--port',    default='',
+                        help='Direkt-Port z.B. USB001 (optional, sonst aus Druckerkonfig)')
     args = parser.parse_args()
 
     try:
         data = json.loads(args.data)
-    except json.JSONDecodeError as e:
-        print(f"FEHLER: Ungültiges JSON – {e}", file=sys.stderr)
+    except json.JSONDecodeError as ex:
+        print(f"FEHLER: Ungültiges JSON – {ex}", file=sys.stderr)
         sys.exit(1)
 
     try:
-        printer = find_printer(args.printer)
+        printer_name, port = get_printer_port(args.printer)
+        if args.port:
+            port = args.port
         receipt = build_receipt(data)
-        print_raw(printer, receipt)
-        print(f"OK: Beleg gedruckt auf '{printer}'")
-    except Exception as e:
-        print(f"FEHLER: {e}", file=sys.stderr)
+
+        # Erst direkten Zugriff versuchen, dann Spooler als Fallback
+        try:
+            print_direct(port, receipt)
+            print(f"OK: Beleg direkt auf Port {port} gedruckt (Drucker: '{printer_name}')")
+        except Exception as direct_err:
+            print(f"INFO: Direktzugriff fehlgeschlagen ({direct_err}), versuche Spooler...", file=sys.stderr)
+            print_via_spooler(printer_name, receipt)
+            print(f"OK: Beleg via Spooler gedruckt auf '{printer_name}'")
+
+    except Exception as ex:
+        print(f"FEHLER: {ex}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == '__main__':
