@@ -1295,7 +1295,12 @@ app.get('/api/items-all', (req, res) => {
     FROM items i JOIN projects p ON i.project_id=p.id
     WHERE i.item_number LIKE ? OR i.name LIKE ?
     ORDER BY i.item_number LIMIT 40`, [q, q]);
-  items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
+  items.forEach(i => {
+    i.latest_revision = getLatestRevision(i.id);
+    if (i.latest_revision) {
+      i.latest_revision.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [i.latest_revision.id]) || null;
+    }
+  });
   res.json(items);
 });
 

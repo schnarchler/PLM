@@ -2047,7 +2047,8 @@ async function renderSettings() {
           <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="st-mat-bed" placeholder="60"></div>
           <div class="fg"><label class="fl">Notizen</label><input class="fi" id="st-mat-notes" placeholder="optional"></div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="addMaterialPreset()">+ Vorlage hinzufügen</button>
+        <input type="hidden" id="st-mat-id" value="">
+        <button class="btn btn-ghost btn-sm" id="st-mat-add-btn" onclick="addMaterialPreset()">+ Vorlage hinzufügen</button>
       </div>
 
       <div class="sep-label" style="margin-top:24px">Datensicherung</div>
@@ -2116,7 +2117,8 @@ function _renderMatList() {
     <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);margin-bottom:4px">
       <span style="font-weight:500;min-width:60px">${esc(m.name)}</span>
       <span style="font-family:var(--mono);font-size:11px;color:var(--t3)">${[m.print_temp&&m.print_temp+'°C',m.bed_temp&&'Bett '+m.bed_temp+'°C',m.nozzle&&m.nozzle+' mm',m.filament_price_kg&&m.filament_price_kg+' CHF/kg'].filter(Boolean).join(' · ')}</span>
-      <button class="btn btn-icon btn-red btn-sm" style="margin-left:auto" onclick="delMaterialPreset(${m.id})">✕</button>
+      <button class="btn btn-icon btn-ghost btn-sm" style="margin-left:auto" onclick="editMaterialPreset(${m.id})">✏️</button>
+      <button class="btn btn-icon btn-red btn-sm" onclick="delMaterialPreset(${m.id})">✕</button>
     </div>`).join('') : '<div style="color:var(--t3);font-size:12px;padding:4px 0">Noch keine Vorlagen hinterlegt.</div>';
 }
 async function addPrinter() {
@@ -2149,16 +2151,33 @@ async function delNozzle(id) {
   await api(`/api/nozzles/${id}`,'DELETE');
   await loadAndRenderPrinterConfig(); state._psConfigLoaded = false; toast('Düse gelöscht','ok');
 }
+function editMaterialPreset(id) {
+  const m = state.materialPresets.find(x => x.id === id); if (!m) return;
+  document.getElementById('st-mat-id').value = id;
+  set('st-mat-name', m.name); set('st-mat-temp', m.print_temp||'');
+  set('st-mat-bed', m.bed_temp||''); set('st-mat-price', m.filament_price_kg||'');
+  set('st-mat-notes', m.notes||'');
+  document.getElementById('st-mat-nozzle').value = m.nozzle||'';
+  document.getElementById('st-mat-add-btn').textContent = '✓ Speichern';
+}
 async function addMaterialPreset() {
   const name = document.getElementById('st-mat-name').value.trim();
   if (!name) return toast('Name fehlt','err');
-  await api('/api/material-presets','POST',{
+  const body = {
     name, print_temp: document.getElementById('st-mat-temp').value,
     bed_temp: document.getElementById('st-mat-bed').value,
     nozzle: document.getElementById('st-mat-nozzle').value,
     filament_price_kg: parseFloat(document.getElementById('st-mat-price').value)||null,
     notes: document.getElementById('st-mat-notes').value
-  });
+  };
+  const editId = document.getElementById('st-mat-id').value;
+  if (editId) {
+    await api(`/api/material-presets/${editId}`,'PUT',body);
+    document.getElementById('st-mat-id').value = '';
+    document.getElementById('st-mat-add-btn').textContent = '+ Vorlage hinzufügen';
+  } else {
+    await api('/api/material-presets','POST',body);
+  }
   ['st-mat-name','st-mat-temp','st-mat-bed','st-mat-price','st-mat-notes'].forEach(f=>set(f,''));
   document.getElementById('st-mat-nozzle').value = '';
   await loadAndRenderPrinterConfig(); state._psConfigLoaded = false; toast('Vorlage gespeichert','ok');
@@ -3774,6 +3793,18 @@ function selectDimLinkedItem(item) {
   document.getElementById('dim-plm-selected').style.display = 'flex';
   if (!V('dim-desc')) set('dim-desc', item.item_number + ' – ' + item.name);
   if (item.default_price != null && !V('dim-price')) set('dim-price', item.default_price);
+  // Auto-fill manual print parameters from linked item's print settings
+  const ps = item.latest_revision && item.latest_revision.print_settings;
+  if (ps) {
+    if (ps.filament_weight_total && !V('dim-man-fw')) set('dim-man-fw', ps.filament_weight_total);
+    if (ps.print_duration && !V('dim-man-dur')) set('dim-man-dur', ps.print_duration);
+    if (ps.material && !V('dim-man-mat')) set('dim-man-mat', ps.material);
+    if (ps.print_temp && !V('dim-man-temp')) set('dim-man-temp', ps.print_temp);
+    if (ps.bed_temp && !V('dim-man-bed')) set('dim-man-bed', ps.bed_temp);
+    if (ps.nozzle && !document.getElementById('dim-man-nozzle').value) document.getElementById('dim-man-nozzle').value = ps.nozzle;
+    if (ps.layer_height && !V('dim-man-layer')) set('dim-man-layer', ps.layer_height);
+    if (ps.infill && !V('dim-man-infill')) set('dim-man-infill', ps.infill);
+  }
 }
 
 function clearDimLinkedItem() {
