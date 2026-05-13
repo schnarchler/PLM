@@ -1289,14 +1289,6 @@ function renderRevDetail(rev, item) {
 
   const ps = rev.print_settings;
   return `
-    <!-- Workflow -->
-    <div class="wf-strip">
-      <div class="wf-label">Freigabe-Workflow</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${wfBtns || '<span style="color:var(--t3);font-size:11px">Keine weiteren Aktionen möglich</span>'}
-      </div>
-    </div>
-
     <!-- Rev info -->
     <div class="sep-label">Revision ${rev.rev} – Details</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:12px">
@@ -1371,7 +1363,15 @@ function renderRevDetail(rev, item) {
     ` : `<div style="color:var(--t3);font-size:12px">Noch keine Druckparameter hinterlegt.</div>`}
     ` : ''}
 
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px">
+    <!-- Workflow -->
+    <div class="wf-strip" style="margin-top:16px">
+      <div class="wf-label">Freigabe-Workflow</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${wfBtns || '<span style="color:var(--t3);font-size:11px">Keine weiteren Aktionen möglich</span>'}
+      </div>
+    </div>
+
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px">
       <button class="btn btn-red btn-sm" onclick="deleteItem(${item.id})">🗑 Item löschen</button>
     </div>`;
 }
