@@ -2581,10 +2581,10 @@ async function deleteProject(id) {
 
 // ── ITEM MOVE ─────────────────────────────────────────────────
 async function openMoveItemModal(itemId) {
-  const [item, projects] = await Promise.all([
-    api('/api/items/' + itemId),
-    api('/api/projects')
-  ]);
+  let item, projects;
+  try {
+    [item, projects] = await Promise.all([api('/api/items/' + itemId), api('/api/projects')]);
+  } catch(e) { return toast('Fehler: ' + e, 'err'); }
   const others = projects.filter(p => p.id !== item.project_id);
   if (!others.length) return toast('Keine anderen Projekte vorhanden', 'err');
 
@@ -3213,9 +3213,16 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
         <th style="border-bottom:1px solid var(--line)"></th>
       </tr></thead>
       <tbody>
-        ${items.map(i=>{
+        ${items.map((i,idx)=>{
           const lineTotal = i.quantity*i.unit_price*(1-(i.discount_pct||0)/100);
+          const isFirst = idx===0, isLast = idx===items.length-1;
           return `<tr style="border-bottom:1px solid var(--line)" onclick="openLineItemModal('${parentType}',${parentId},${i.id})">
+            <td style="padding:3px 4px;width:28px" onclick="event.stopPropagation()">
+              <div style="display:flex;flex-direction:column;gap:1px">
+                <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:14px;font-size:9px;opacity:${isFirst?0.2:1}" ${isFirst?'disabled':''} onclick="moveLineItem('${parentType}',${i.id},${parentId},'up')">▲</button>
+                <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:14px;font-size:9px;opacity:${isLast?0.2:1}" ${isLast?'disabled':''} onclick="moveLineItem('${parentType}',${i.id},${parentId},'down')">▼</button>
+              </div>
+            </td>
             <td style="padding:7px 8px;font-size:12px;cursor:pointer">
               ${esc(i.description)}
               ${i.notes?`<div style="font-size:10px;color:var(--t3)">${esc(i.notes)}</div>`:''}
@@ -3356,6 +3363,10 @@ async function delLineItem(parentType, itemId, parentId) {
   toast('Position entfernt','ok');
   if (parentType==='order') { await renderOrders(); openOrderDetail(parentId); }
   else { await renderQuotes(); openQuoteDetail(parentId); }
+}
+async function moveLineItem(parentType, itemId, parentId, direction) {
+  await api(`/api/order-items/${itemId}/move`,'PUT',{direction});
+  if (parentType==='order') { const o=await api(`/api/orders/${parentId}`); document.getElementById('od-pos').innerHTML=renderLineItems(o.items||[],'order',parentId,o.tax_rate||8.1,o.discount_pct||0,!!o.include_tax)+'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal(\'order\','+parentId+')">+ Position</button>'; }
 }
 
 // ── DETAIL PANEL ──────────────────────────────────────────────
@@ -3605,9 +3616,15 @@ function renderDeliveryItems(items, deliveryId) {
     <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">🖶 Alle kurz</button>
     <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'full')">🖶 Alle mit Parametern</button>
   </div>` : '';
-  return allBtn + items.map(item => `
+  return allBtn + items.map((item,idx) => {
+    const isFirst = idx===0, isLast = idx===items.length-1;
+    return `
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:${item.print_settings?'1px solid var(--line)':'none'}">
+        <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">
+          <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:9px;opacity:${isFirst?0.2:1}" ${isFirst?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'up')">▲</button>
+          <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:9px;opacity:${isLast?0.2:1}" ${isLast?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'down')">▼</button>
+        </div>
         ${item.item_number?`<span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${item.item_number}</span>`:''}
         <span style="font-size:12px;font-weight:500;flex:1">${esc(item.description)}</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--t2)">${item.quantity} ${item.unit}</span>
@@ -3618,7 +3635,8 @@ function renderDeliveryItems(items, deliveryId) {
         <button class="btn btn-red btn-icon btn-sm" onclick="delDeliveryItem(${item.id},${deliveryId})">✕</button>
       </div>
       ${item.print_settings ? `<div style="padding:8px 10px">${renderSettingsPreview(item.print_settings)}</div>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── 3MF SETTINGS RENDERING ────────────────────────────────────
@@ -3969,6 +3987,12 @@ async function delDeliveryItem(itemId, deliveryId) {
   await api(`/api/delivery-items/${itemId}`,'DELETE');
   toast('Position entfernt','ok');
   await renderDeliveries(); openDeliveryDetail(deliveryId);
+}
+async function moveDeliveryItem(itemId, deliveryId, direction) {
+  await api(`/api/delivery-items/${itemId}/move`,'PUT',{direction});
+  const d = await api(`/api/deliveries/${deliveryId}`);
+  document.getElementById('dd-pos').innerHTML = renderDeliveryItems(d.items||[], deliveryId) +
+    `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${deliveryId})">+ Position</button>`;
 }
 
 // -- PDF GENERATION (Rechnung + Angebot) -----------------------

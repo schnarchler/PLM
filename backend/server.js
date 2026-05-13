@@ -221,6 +221,8 @@ async function initDb() {
   )`);
   migrate('ALTER TABLE order_items ADD COLUMN discount_pct REAL DEFAULT 0');
   migrate('ALTER TABLE order_items ADD COLUMN notes TEXT');
+  migrate('ALTER TABLE order_items ADD COLUMN position INTEGER DEFAULT 999');
+  migrate('ALTER TABLE quote_items ADD COLUMN position INTEGER DEFAULT 999');
 
   db.run(`CREATE TABLE IF NOT EXISTS quotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,8 +358,8 @@ async function initDb() {
 
   // One-time data migration: lowercase item types/numbers, revisions letters→numbers
   migrateOnce('lowercase-numbering-v1', () => {
-    db.run("UPDATE items SET item_type=LOWER(item_type) WHERE item_type GLOB '[A-Z]*'");
-    db.run("UPDATE items SET item_number=REPLACE(REPLACE(REPLACE(item_number,'-ASM-','-asm-'),'-PRT-','-prt-'),'-DOC-','-doc-')");
+    db.run("UPDATE items SET item_type=LOWER(item_type)");
+    db.run("UPDATE items SET item_number=REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(item_number,'-ASM-','-asm-'),'-PRT-','-prt-'),'-DOC-','-doc-'),'-Asm-','-asm-'),'-Prt-','-prt-'),'-Doc-','-doc-')");
     function letterToNum(s) {
       if (!s || /^\d+$/.test(s)) return s;
       let n = 0;
@@ -1042,7 +1044,7 @@ app.get('/api/orders/:id', (req, res) => {
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
   if (!o) return res.status(404).json({ error: 'Not found' });
-  o.items = all('SELECT oi.*,i.item_number FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=?', [o.id]);
+  o.items = all('SELECT oi.*,i.item_number FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
   res.json(o);
 });
 
@@ -1084,6 +1086,40 @@ app.put('/api/order-items/:id', (req, res) => {
 app.delete('/api/order-items/:id', (req, res) => {
   run('DELETE FROM order_items WHERE id=?', [req.params.id]);
   res.json({ success: true });
+});
+
+app.put('/api/order-items/:id/move', (req, res) => {
+  const { direction } = req.body;
+  const item = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  const siblings = all('SELECT id FROM order_items WHERE order_id=? ORDER BY COALESCE(position,id),id', [item.order_id]);
+  siblings.forEach((s, i) => run('UPDATE order_items SET position=? WHERE id=?', [i+1, s.id]));
+  const idx = siblings.findIndex(s => s.id === item.id);
+  if (direction === 'up' && idx > 0) {
+    run('UPDATE order_items SET position=? WHERE id=?', [idx, item.id]);
+    run('UPDATE order_items SET position=? WHERE id=?', [idx+1, siblings[idx-1].id]);
+  } else if (direction === 'down' && idx < siblings.length-1) {
+    run('UPDATE order_items SET position=? WHERE id=?', [idx+2, item.id]);
+    run('UPDATE order_items SET position=? WHERE id=?', [idx+1, siblings[idx+1].id]);
+  }
+  saveDb(); res.json({ success: true });
+});
+
+app.put('/api/delivery-items/:id/move', (req, res) => {
+  const { direction } = req.body;
+  const item = get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  const siblings = all('SELECT id FROM delivery_items WHERE delivery_id=? ORDER BY COALESCE(position,id),id', [item.delivery_id]);
+  siblings.forEach((s, i) => run('UPDATE delivery_items SET position=? WHERE id=?', [i+1, s.id]));
+  const idx = siblings.findIndex(s => s.id === item.id);
+  if (direction === 'up' && idx > 0) {
+    run('UPDATE delivery_items SET position=? WHERE id=?', [idx, item.id]);
+    run('UPDATE delivery_items SET position=? WHERE id=?', [idx+1, siblings[idx-1].id]);
+  } else if (direction === 'down' && idx < siblings.length-1) {
+    run('UPDATE delivery_items SET position=? WHERE id=?', [idx+2, item.id]);
+    run('UPDATE delivery_items SET position=? WHERE id=?', [idx+1, siblings[idx+1].id]);
+  }
+  saveDb(); res.json({ success: true });
 });
 
 // ==============================================================
