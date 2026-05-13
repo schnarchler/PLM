@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""PLM & ERP – Pipsta Classic Belegdruck
-Aufruf: py print_receipt.py --data '{"name":"...","number":"...","params":{...},"price":9.90}'
+"""PLM & ERP – Pipsta AP1400 Belegdruck (ESC/POS via Windows-Druckerspooler)
+Einrichtung: Drucker als "Generic / Text Only" auf Port USB001 in Windows anlegen.
+             pip install pywin32
+Aufruf:  py print_receipt.py --data '{"name":"...","number":"...","params":{...},"price":9.90}'
 """
 import sys
 import json
@@ -8,171 +10,142 @@ import argparse
 from datetime import datetime
 
 try:
-    import usb.core
-    import usb.util
+    import win32print
 except ImportError:
-    print("FEHLER: pyusb nicht installiert. Bitte ausfuehren: pip install pyusb", file=sys.stderr)
+    print("FEHLER: pywin32 nicht installiert. Bitte ausfuehren: pip install pywin32", file=sys.stderr)
     sys.exit(2)
 
-try:
-    from PIL import Image, ImageDraw, ImageFont
-except ImportError:
-    print("FEHLER: Pillow nicht installiert. Bitte ausfuehren: pip install Pillow", file=sys.stderr)
-    sys.exit(2)
+# ── ESC/POS Befehle ───────────────────────────────────────────
+ESC = b'\x1b'
+GS  = b'\x1d'
 
-# ── Pipsta Classic USB-Konstanten ─────────────────────────────
-VID            = 0x0483   # STMicroelectronics
-PID            = 0xa052   # Pipsta Classic
-PRINT_WIDTH    = 384      # Druckbreite in Pixeln
-BYTES_PER_LINE = PRINT_WIDTH // 8  # 48 Bytes pro Zeile
-FEED_LINES     = 10       # Leerzeilen am Ende (Papierschub)
+INIT      = ESC + b'\x40'          # Drucker initialisieren
+ALIGN_L   = ESC + b'\x61\x00'      # Linksbündig
+ALIGN_C   = ESC + b'\x61\x01'      # Zentriert
+BOLD_ON   = ESC + b'\x45\x01'      # Fett an
+BOLD_OFF  = ESC + b'\x45\x00'      # Fett aus
+FONT_A    = ESC + b'\x4d\x00'      # Normal (~32 Zeichen/Zeile)
+FONT_B    = ESC + b'\x4d\x01'      # Klein  (~42 Zeichen/Zeile)
+DBL_H_ON  = GS  + b'\x21\x01'     # Doppelte Höhe an
+DBL_H_OFF = GS  + b'\x21\x00'     # Doppelte Höhe aus
+NL        = b'\x0a'                # Zeilenumbruch
+CUT       = GS  + b'\x56\x42\x40' # Teilschnitt (mit Papiervorschub)
 
-# ── Drucker initialisieren ────────────────────────────────────
-def get_printer_ep():
-    dev = usb.core.find(idVendor=VID, idProduct=PID)
-    if dev is None:
-        raise RuntimeError(
-            f"Pipsta Classic nicht gefunden (VID=0x{VID:04x} PID=0x{PID:04x}). "
-            "Ist der Drucker angeschlossen und der WinUSB-Treiber installiert (Zadig)?"
-        )
-    # Windows: Treiber wird nicht losgeloest (nur Linux noetig)
-    try:
-        if dev.is_kernel_driver_active(0):
-            dev.detach_kernel_driver(0)
-    except Exception:
-        pass
-    try:
-        dev.set_configuration()
-    except usb.core.USBError:
-        pass  # Bereits konfiguriert
-    cfg  = dev.get_active_configuration()
-    intf = cfg[(0, 0)]
-    ep   = usb.util.find_descriptor(
-        intf,
-        custom_match=lambda e:
-            usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT
-    )
-    if ep is None:
-        raise RuntimeError("USB Output-Endpoint nicht gefunden")
-    return ep
+LINE_W = 32  # Zeichen pro Zeile bei 58mm Papier, Font A
 
-# ── Bild zum Drucker senden ───────────────────────────────────
-def send_image(ep, img):
-    img = img.convert('1')  # 1-Bit monochrom
-    blank = bytes(BYTES_PER_LINE)
-    # 2 Leerzeilen als oberer Rand
-    for _ in range(2):
-        ep.write(blank, timeout=2000)
-    for y in range(img.height):
-        row = bytearray(BYTES_PER_LINE)
-        for x in range(PRINT_WIDTH):
-            if img.getpixel((x, y)) == 0:  # Schwarzer Pixel
-                row[x >> 3] |= 0x80 >> (x & 7)
-        ep.write(bytes(row), timeout=3000)
-    # Papierschub am Ende
-    for _ in range(FEED_LINES):
-        ep.write(blank, timeout=1000)
+def e(text):
+    """Text zu Bytes (CP437 für Thermodrucker)"""
+    return str(text).encode('cp437', errors='replace')
 
-# ── Schriftarten laden ────────────────────────────────────────
-def load_font(size, bold=False):
-    # Windows-Systemfonts (monospace bevorzugt fuer saubere Ausrichtung)
-    candidates = (
-        ['consolab.ttf', 'courbd.ttf', 'consola.ttf', 'cour.ttf', 'lucon.ttf']
-        if bold else
-        ['consola.ttf', 'cour.ttf', 'lucon.ttf', 'consolab.ttf', 'courbd.ttf']
-    )
-    for name in candidates:
-        try:
-            return ImageFont.truetype(name, size)
-        except Exception:
-            pass
-    return ImageFont.load_default()
+def sep():
+    return e('-' * LINE_W) + NL
 
-# ── Beleg-Bild aufbauen ───────────────────────────────────────
+def row(text='', align=ALIGN_L, bold=False, small=False, tall=False):
+    out  = align
+    out += BOLD_ON  if bold  else b''
+    out += FONT_B   if small else b''
+    out += DBL_H_ON if tall  else b''
+    out += e(str(text)) + NL
+    out += DBL_H_OFF if tall  else b''
+    out += FONT_A    if small else b''
+    out += BOLD_OFF  if bold  else b''
+    return out
+
+def lr(label, value, width=LINE_W):
+    """Zeile mit Label links, Wert rechts"""
+    lbl = str(label)[:width - 10]
+    val = str(value)
+    pad = max(1, width - len(lbl) - len(val))
+    return e(lbl + ' ' * pad + val) + NL
+
+# ── Beleg zusammenbauen ───────────────────────────────────────
 def build_receipt(data):
-    W   = PRINT_WIDTH
-    PAD = 8
-
-    f_title  = load_font(20, bold=True)
-    f_bold   = load_font(15, bold=True)
-    f_normal = load_font(14)
-    f_small  = load_font(12)
-    f_price  = load_font(18, bold=True)
-
-    SEP = '─' * 34
-
-    now    = datetime.now().strftime('%d.%m.%Y  %H:%M')
-    name   = data.get('name') or '—'
+    name   = data.get('name')   or '—'
     number = data.get('number') or ''
-    desc   = data.get('desc') or ''
+    desc   = data.get('desc')   or ''
     qty    = data.get('qty', 1)
     unit   = data.get('unit', 'Stk')
     price  = data.get('price')
     params = data.get('params') or {}
+    now    = datetime.now().strftime('%d.%m.%Y  %H:%M')
 
-    # Zeilen: (text, font, zentriert, margin_top)
-    rows = [
-        ('PLM & ERP',           f_bold,   True,  6),
-        (now,                   f_small,  True,  2),
-        (SEP,                   f_small,  True,  4),
-    ]
+    out = INIT + ALIGN_L
+
+    # ── Kopfzeile
+    out += row('PLM & ERP', align=ALIGN_C, bold=True)
+    out += row(now,          align=ALIGN_C, small=True)
+    out += sep()
+
+    # ── Bauteil
     if number:
-        rows.append((number,    f_bold,   False, 8))
-    rows.append((name,          f_title,  False, 2))
+        out += row(number, bold=True)
+    out += row(name, align=ALIGN_L, bold=True, tall=True)
     if desc and desc != name:
-        rows.append((desc,      f_normal, False, 2))
-    rows.append((f'Menge: {qty} {unit}', f_normal, False, 4))
-    rows.append((SEP,           f_small,  True,  6))
+        out += row(desc, small=True)
+    out += row(f'Menge: {qty} {unit}')
+    out += sep()
 
+    # ── Druckparameter
     if params:
-        rows.append(('DRUCKPARAMETER', f_bold, False, 2))
-        rows.append(('',              f_small, False, 1))
+        out += row('DRUCKPARAMETER', bold=True)
         for label, val in params.items():
-            if val and str(val).strip() not in ('', '—', 'None'):
-                rows.append((f'{label}: {val}', f_normal, False, 1))
-        rows.append((SEP, f_small, True, 6))
+            val_str = str(val).strip()
+            if val_str and val_str not in ('', '-', 'None'):
+                out += lr(str(label)[:14], val_str[:16])
+        out += sep()
 
+    # ── Preis
     if price is not None:
-        rows.append((f'Preis:  CHF {float(price):.2f}', f_price, False, 4))
-        rows.append((SEP, f_small, True, 6))
+        out += row(f'CHF {float(price):.2f}', align=ALIGN_C, bold=True, tall=True)
+        out += sep()
 
-    # Hoehe berechnen
-    tmp   = Image.new('RGB', (W, 100), 'white')
-    tdraw = ImageDraw.Draw(tmp)
-    line_heights = []
-    total_h = PAD
-    for (text, font, _, mt) in rows:
-        if text:
-            bb = tdraw.textbbox((0, 0), text, font=font)
-            h  = bb[3] - bb[1]
-        else:
-            h = 4
-        line_heights.append(h)
-        total_h += mt + h
-    total_h += PAD
+    # ── Abschluss
+    out += NL * 3
+    out += CUT
+    return out
 
-    # Bild zeichnen
-    img  = Image.new('1', (W, total_h), 1)   # weisser Hintergrund
-    draw = ImageDraw.Draw(img)
-    y = PAD
-    for i, (text, font, center, mt) in enumerate(rows):
-        y += mt
-        if text:
-            if center:
-                bb = draw.textbbox((0, 0), text, font=font)
-                x  = max(0, (W - (bb[2] - bb[0])) // 2)
-            else:
-                x = PAD + 4
-            draw.text((x, y), text, font=font, fill=0)
-        y += line_heights[i]
+# ── Windows-Drucker finden ────────────────────────────────────
+def find_printer(preferred=''):
+    printers = [p[2] for p in win32print.EnumPrinters(
+        win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+    )]
+    if not printers:
+        raise RuntimeError(
+            "Kein Drucker in Windows gefunden.\n"
+            "Bitte Drucker einrichten: Einstellungen → Drucker & Scanner → "
+            "Drucker hinzufügen → Lokal → USB001 → Generic / Text Only"
+        )
+    if preferred:
+        for p in printers:
+            if preferred.lower() in p.lower():
+                return p
+    for kw in ['pipsta', 'ap1400', 'generic', 'text only']:
+        for p in printers:
+            if kw in p.lower():
+                return p
+    return printers[0]  # Fallback: erster verfügbarer Drucker
 
-    return img
+# ── Druckauftrag senden ───────────────────────────────────────
+def print_raw(printer_name, data):
+    h = win32print.OpenPrinter(printer_name)
+    try:
+        win32print.StartDocPrinter(h, 1, ("PLM Beleg", None, "RAW"))
+        try:
+            win32print.StartPagePrinter(h)
+            win32print.WritePrinter(h, data)
+            win32print.EndPagePrinter(h)
+        finally:
+            win32print.EndDocPrinter(h)
+    finally:
+        win32print.ClosePrinter(h)
 
 # ── Einstiegspunkt ────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description='PLM Pipsta Belegdruck')
-    parser.add_argument('--data', required=True,
-                        help='JSON: {"name":…,"number":…,"params":{…},"price":…}')
+    parser = argparse.ArgumentParser(description='PLM Pipsta AP1400 Belegdruck')
+    parser.add_argument('--data',    required=True,
+                        help='JSON: name, number, desc, qty, unit, price, params')
+    parser.add_argument('--printer', default='',
+                        help='Windows-Druckername (optional, sonst Auto-Erkennung)')
     args = parser.parse_args()
 
     try:
@@ -182,10 +155,10 @@ def main():
         sys.exit(1)
 
     try:
-        ep  = get_printer_ep()
-        img = build_receipt(data)
-        send_image(ep, img)
-        print(f"OK: {data.get('number') or data.get('name')} gedruckt ({img.height} Zeilen)")
+        printer = find_printer(args.printer)
+        receipt = build_receipt(data)
+        print_raw(printer, receipt)
+        print(f"OK: Beleg gedruckt auf '{printer}'")
     except Exception as e:
         print(f"FEHLER: {e}", file=sys.stderr)
         sys.exit(1)
