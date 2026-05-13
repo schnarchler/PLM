@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""PLM & ERP – Pipsta AP1400 Belegdruck (ESC/POS, direkter USB-Port-Zugriff)
-Umgeht den Windows-Spooler – schreibt direkt auf den USB-Druckerport.
-Einrichtung: Drucker als "Generic / Text Only" auf USB001 anlegen (nur um den
-             Port zu reservieren; der Spooler wird nicht verwendet).
-             pip install pywin32
+"""PLM & ERP – Pipsta AP1400 Belegdruck (ESC/POS, direkter USB-Gerätezugriff)
+Umgeht den Windows-Spooler vollständig.
+pip install pywin32
 Aufruf:  py print_receipt.py --data '{"name":"...","number":"...","params":{...},"price":9.90}'
 """
 import sys
 import json
 import argparse
+import winreg
 from datetime import datetime
 
 try:
-    import win32print
     import win32file
     import win32con
+    import win32print
 except ImportError:
     print("FEHLER: pywin32 nicht installiert. Bitte ausfuehren: pip install pywin32", file=sys.stderr)
     sys.exit(2)
@@ -100,64 +99,84 @@ def build_receipt(data):
     out += CUT
     return out
 
-# ── Drucker-Port ermitteln ────────────────────────────────────
-def get_printer_port(preferred=''):
-    """Gibt (druckername, portname) zurück, z.B. ('Pipsta AP1400', 'USB001')"""
+# ── USB-Drucker-Gerätepfad aus Registry ──────────────────────
+# GUID_DEVINTERFACE_USBPRINT: Schnittstelle für USB-Druckergeräte
+GUID_USBPRINT = '{28d78fad-5a12-11d1-ae5b-0000f803a8c2}'
+
+def find_usb_printer_paths():
+    """Alle USB-Drucker-Gerätepfade aus der Registry lesen."""
+    base = r'SYSTEM\CurrentControlSet\Control\DeviceClasses\{28d78fad-5a12-11d1-ae5b-0000f803a8c2}'
+    paths = []
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base)
+    except OSError:
+        return paths
+
+    i = 0
+    while True:
+        try:
+            subname = winreg.EnumKey(key, i)
+            i += 1
+        except OSError:
+            break
+        try:
+            sub = winreg.OpenKey(key, subname + r'\#')
+            sym = winreg.QueryValueEx(sub, 'SymbolicLink')[0]
+            winreg.CloseKey(sub)
+            if sym:
+                paths.append(sym)
+        except OSError:
+            pass
+
+    winreg.CloseKey(key)
+    return paths
+
+def print_direct_usb(data):
+    """Schreibt ESC/POS direkt auf das USB-Gerät (kein Spooler)."""
+    paths = find_usb_printer_paths()
+    if not paths:
+        raise RuntimeError(
+            "Kein USB-Drucker-Interface in Registry gefunden "
+            "(GUID_DEVINTERFACE_USBPRINT). Drucker eingesteckt?"
+        )
+
+    errors = []
+    for path in paths:
+        try:
+            h = win32file.CreateFile(
+                path,
+                win32con.GENERIC_WRITE,
+                win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE,
+                None,
+                win32con.OPEN_EXISTING,
+                0,
+                None
+            )
+            win32file.WriteFile(h, data)
+            win32file.CloseHandle(h)
+            return path  # Erfolg
+        except Exception as ex:
+            errors.append(f"{path}: {ex}")
+
+    raise RuntimeError("USB-Direktzugriff fehlgeschlagen:\n" + "\n".join(errors))
+
+# ── Fallback: Windows-Spooler ─────────────────────────────────
+def find_printer_name(preferred=''):
     printers = [p[2] for p in win32print.EnumPrinters(
         win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
     )]
     if not printers:
         raise RuntimeError("Kein Drucker in Windows gefunden.")
-
-    # Drucker nach Name auswählen
-    chosen = None
     if preferred:
         for p in printers:
             if preferred.lower() in p.lower():
-                chosen = p
-                break
-    if not chosen:
-        for kw in ['pipsta', 'ap1400', 'generic', 'text']:
-            for p in printers:
-                if kw in p.lower():
-                    chosen = p
-                    break
-            if chosen:
-                break
-    if not chosen:
-        chosen = printers[0]
+                return p
+    for kw in ['pipsta', 'ap1400', 'generic', 'text']:
+        for p in printers:
+            if kw in p.lower():
+                return p
+    return printers[0]
 
-    # Port-Name aus den Druckereigenschaften lesen
-    h = win32print.OpenPrinter(chosen)
-    try:
-        info = win32print.GetPrinter(h, 2)
-        port = info['pPortName']  # z.B. 'USB001'
-    finally:
-        win32print.ClosePrinter(h)
-
-    return chosen, port
-
-# ── Direkt auf USB-Port schreiben (Spooler umgehen) ──────────
-def print_direct(port, data):
-    # Schreibt ESC/POS-Daten direkt auf den Port (z.B. USB001) - kein Spooler.
-    device = r'\\.\{}'.format(port)
-    h = win32file.CreateFile(
-        device,
-        win32con.GENERIC_WRITE,
-        0,
-        None,
-        win32con.OPEN_EXISTING,
-        0,
-        None
-    )
-    if h == win32file.INVALID_HANDLE_VALUE:
-        raise RuntimeError(f"Port {device} konnte nicht geoeffnet werden.")
-    try:
-        win32file.WriteFile(h, data)
-    finally:
-        win32file.CloseHandle(h)
-
-# ── Fallback: über Windows-Spooler drucken ───────────────────
 def print_via_spooler(printer_name, data):
     h = win32print.OpenPrinter(printer_name)
     try:
@@ -173,13 +192,9 @@ def print_via_spooler(printer_name, data):
 
 # ── Einstiegspunkt ────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description='PLM Pipsta AP1400 Belegdruck')
-    parser.add_argument('--data',    required=True,
-                        help='JSON: name, number, desc, qty, unit, price, params')
-    parser.add_argument('--printer', default='',
-                        help='Windows-Druckername (optional, sonst Auto-Erkennung)')
-    parser.add_argument('--port',    default='',
-                        help='Direkt-Port z.B. USB001 (optional, sonst aus Druckerkonfig)')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data',    required=True)
+    parser.add_argument('--printer', default='')
     args = parser.parse_args()
 
     try:
@@ -189,19 +204,26 @@ def main():
         sys.exit(1)
 
     try:
-        printer_name, port = get_printer_port(args.printer)
-        if args.port:
-            port = args.port
         receipt = build_receipt(data)
 
-        # Erst direkten Zugriff versuchen, dann Spooler als Fallback
+        # 1. Direkt auf USB-Gerät schreiben (kein Spooler)
         try:
-            print_direct(port, receipt)
-            print(f"OK: Beleg direkt auf Port {port} gedruckt (Drucker: '{printer_name}')")
-        except Exception as direct_err:
-            print(f"INFO: Direktzugriff fehlgeschlagen ({direct_err}), versuche Spooler...", file=sys.stderr)
+            used_path = print_direct_usb(receipt)
+            print(f"OK: Beleg direkt gedruckt via {used_path}")
+            return
+        except Exception as usb_err:
+            print(f"INFO: USB-Direktzugriff fehlgeschlagen: {usb_err}", file=sys.stderr)
+
+        # 2. Spooler-Fallback
+        printer_name = find_printer_name(args.printer)
+        try:
             print_via_spooler(printer_name, receipt)
             print(f"OK: Beleg via Spooler gedruckt auf '{printer_name}'")
+        except Exception as spool_err:
+            raise RuntimeError(
+                f"Spooler '{printer_name}': {spool_err}\n"
+                f"(USB-Direktzugriff hatte auch versagt – siehe oben)"
+            )
 
     except Exception as ex:
         print(f"FEHLER: {ex}", file=sys.stderr)
