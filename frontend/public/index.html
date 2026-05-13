@@ -1854,26 +1854,27 @@ async function openMoveItemModal(itemId) {
   overlay.className = 'overlay';
   overlay.id = 'moveItemOverlay';
   overlay.innerHTML = `<div class="modal" style="max-width:400px">
-    <div class="modal-header">
+    <div class="modal-head">
       <div class="modal-title">↪ Verschieben: ${esc(item.item_number)}</div>
       <button class="btn btn-icon btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">✕</button>
     </div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t2);margin-bottom:14px">
         <strong style="color:var(--t1)">${esc(item.name)}</strong> in ein anderes Projekt verschieben.<br>
-        <span style="font-size:12px;color:var(--t3);margin-top:4px;display:block">Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items (Kinder) werden mitgenommen.</span>
+        <span style="font-size:12px;color:var(--t3);margin-top:4px;display:block">Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items werden mitgenommen.</span>
       </div>
       <div class="fg">
         <label class="fl">Zielprojekt</label>
         <select class="fi" id="move-target-project">${opts}</select>
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-foot">
       <button class="btn btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">Abbrechen</button>
       <button class="btn btn-primary" onclick="confirmMoveItem(${itemId})">Verschieben</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
 }
 
 async function confirmMoveItem(itemId) {
@@ -1933,9 +1934,10 @@ async function saveItem() {
   const projectId = V('im-project-id');
   const parentId = V('im-parent-id');
   const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null, source_url: V('im-url')||null, default_price: V('im-price') ? parseFloat(V('im-price')) : null };
-  await api(`/api/projects/${projectId}/items`,'POST',body);
+  const newItem = await api(`/api/projects/${projectId}/items`,'POST',body);
   toast('Item angelegt','ok'); closeModal('itemModal');
-  openProject(projectId); loadStats();
+  await openProject(projectId); loadStats();
+  if (newItem?.id) openItemDetail(newItem.id);
 }
 
 async function deleteItem(id) {
