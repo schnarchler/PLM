@@ -127,14 +127,13 @@ def print_winusb(data):
     except OSError:
         raise RuntimeError("winusb.dll nicht gefunden – Windows-Installation beschaedigt?")
 
-    GENERIC_RW   = 0xC0000000
-    OPEN_EXISTING = 3
-    FILE_ATTRIBUTE_NORMAL = 0x80
-    INVALID_HANDLE = wt.HANDLE(-1).value
+    GENERIC_RW            = 0xC0000000
+    OPEN_EXISTING         = 3
+    FILE_FLAG_OVERLAPPED  = 0x40000000  # WinUsb_Initialize erfordert dieses Flag
 
     last_err = [f'Pfade gefunden: {paths}']
     for path in paths:
-        h = k32.CreateFileW(path, GENERIC_RW, 0, None, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, None)
+        h = k32.CreateFileW(path, GENERIC_RW, 0, None, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, None)
         hval = ctypes.cast(h, ctypes.c_void_p).value
         if hval == ctypes.cast(wt.HANDLE(-1), ctypes.c_void_p).value:
             last_err.append(f'{path}: CreateFile fehlgeschlagen (err={ctypes.get_last_error()})')
