@@ -269,6 +269,10 @@ tbody tr:last-child{border-bottom:none}
 .st-REL{background:oklch(76% 0.16 150 / .14);color:var(--green)}
 .st-ECO{background:oklch(72% 0.15 295 / .14);color:var(--purple)}
 .st-OBS{background:oklch(45% 0.015 255 / .25);color:var(--t3)}
+.status-sel{font-family:var(--mono);font-size:9px;font-weight:600;padding:2px 4px 2px 8px;
+  border-radius:20px;text-transform:uppercase;letter-spacing:.5px;border:none;cursor:pointer;
+  outline:none;appearance:auto;font-family:inherit;}
+.status-sel:focus{box-shadow:0 0 0 2px var(--blue-light)}
 
 /* ── DATASET ROWS ── */
 .ds-row{
@@ -995,7 +999,6 @@ a{color:inherit;text-decoration:none}
           <div class="fg"><label class="fl">Filament gesamt (g)</label><input class="fi" id="ps-fil-weight" type="number" step="0.1" placeholder="z.B. 45.5" oninput="calcCost()"></div>
         </div>
         <div class="form-row cols2">
-          <div class="fg"><label class="fl">Gewicht Bauteil (g)</label><input class="fi" id="ps-part-weight" type="number" step="0.1" placeholder="z.B. 38.0" oninput="calcCost()"></div>
           <div class="fg"><label class="fl">Druckdauer (h)</label><input class="fi" id="ps-duration" type="number" step="0.01" placeholder="z.B. 3.5" oninput="calcCost()"></div>
         </div>
         <div id="cost-preview" style="display:none" class="cost-result">
@@ -1120,6 +1123,25 @@ const ORDER_ST_MAP   = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INV
 const ORDER_ST_LABEL = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
 const QUOTE_ST_MAP   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
 const QUOTE_ST_LABEL = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
+
+function _stSel(type, id, current) {
+  const maps   = {order:ORDER_ST_MAP,   quote:QUOTE_ST_MAP,   delivery:DELIVERY_ST_MAP  };
+  const labels = {order:ORDER_ST_LABEL, quote:QUOTE_ST_LABEL, delivery:DELIVERY_ST_LABEL};
+  const m = maps[type]||{}; const l = labels[type]||{};
+  const opts = Object.keys(m).map(s=>`<option value="${s}"${s===current?' selected':''}>${l[s]||s}</option>`).join('');
+  return `<select class="status-sel ${m[current]||''}" title="Status ändern"
+    onclick="event.stopPropagation()"
+    onchange="setDocStatus('${type}',${id},this.value,this)">${opts}</select>`;
+}
+async function setDocStatus(type, id, status, el) {
+  await api(`/api/${type}s/${id}/status`,'PUT',{status});
+  const m = type==='order'?ORDER_ST_MAP:type==='quote'?QUOTE_ST_MAP:DELIVERY_ST_MAP;
+  el.className = 'status-sel ' + (m[status]||'');
+  const arr = type==='order'?state.orders:type==='quote'?state.quotes:state.deliveries;
+  const rec = arr.find(x=>x.id===id); if (rec) rec.status = status;
+  toast('Status gespeichert','ok');
+  loadStats();
+}
 let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {} };
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -1590,7 +1612,6 @@ function renderRevDetail(rev, item) {
       ${ps.bed_temp?`<div class="ps-cell"><div class="ps-label">Bett</div><div class="ps-val">${ps.bed_temp}°C</div></div>`:''}
       ${ps.print_duration?`<div class="ps-cell"><div class="ps-label">Druckdauer</div><div class="ps-val">${ps.print_duration} h</div></div>`:''}
       ${ps.filament_weight_total?`<div class="ps-cell"><div class="ps-label">Filament ges.</div><div class="ps-val">${ps.filament_weight_total} g</div></div>`:''}
-      ${ps.part_weight?`<div class="ps-cell"><div class="ps-label">Bauteilgewicht</div><div class="ps-val">${ps.part_weight} g</div></div>`:''}
     </div>
     ${(ps.printer_cost_hr||ps.filament_price_kg) ? (() => {
       const mat = ((ps.filament_weight_total||0)/1000)*(ps.filament_price_kg||0);
@@ -2175,7 +2196,7 @@ function _renderOrderRows() {
     <td style="font-weight:500">${esc(o.title)}</td>
     <td style="color:var(--t2)">${o.customer_name||'—'}</td>
     <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(o.items||[]).length}</td>
-    <td><span class="status ${ORDER_ST_MAP[o.status]||''}">${ORDER_ST_LABEL[o.status]||o.status}</span></td>
+    <td>${_stSel('order',o.id,o.status)}</td>
     <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${o.order_date||'—'}</td>
     <td style="font-family:var(--mono);font-size:11px;text-align:right;color:var(--green)">${o.computed_total != null ? fmtChf(o.computed_total) : '—'}</td>
     <td style="display:flex;gap:4px">
@@ -2199,7 +2220,7 @@ async function openOrderDetail(id) {
     <div id="od-info" style="display:none">
       <div class="sep-label">Auftragsdaten</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
-        <div><div class="ps-label">Status</div><span class="status ${ORDER_ST_MAP[o.status]||''}">${ORDER_ST_LABEL[o.status]||o.status}</span></div>
+        <div><div class="ps-label">Status</div>${_stSel('order',id,o.status)}</div>
         <div><div class="ps-label">Kunde</div>${o.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${o.order_date||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div>${o.delivery_date||'—'}</div>
@@ -2551,7 +2572,6 @@ function openPsModal(revId, ps) {
   set('ps-cost-hr', ps.printer_cost_hr||'');
   set('ps-fil-price', ps.filament_price_kg||'');
   set('ps-fil-weight', ps.filament_weight_total||'');
-  set('ps-part-weight', ps.part_weight||'');
   set('ps-duration', ps.print_duration||'');
   document.getElementById('cost-preview').style.display = 'none';
   calcCost();
@@ -2585,7 +2605,6 @@ async function savePrintSettings() {
     printer_cost_hr: parseFloat(V('ps-cost-hr'))||null,
     filament_price_kg: parseFloat(V('ps-fil-price'))||null,
     filament_weight_total: parseFloat(V('ps-fil-weight'))||null,
-    part_weight: parseFloat(V('ps-part-weight'))||null,
     print_duration: parseFloat(V('ps-duration'))||null,
   });
   toast('Druckparameter gespeichert','ok'); closeModal('psModal');
@@ -2735,7 +2754,7 @@ function _renderQuoteRows() {
     <td style="font-weight:500">${esc(q.title)}</td>
     <td style="color:var(--t2)">${q.customer_name||'—'}</td>
     <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(q.items||[]).length}</td>
-    <td><span class="status ${QUOTE_ST_MAP[q.status]||''}">${QUOTE_ST_LABEL[q.status]||q.status}</span></td>
+    <td>${_stSel('quote',q.id,q.status)}</td>
     <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${q.valid_until||'—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${q.id},'quote')" title="Angebot PDF">&#128196;</button>
@@ -2758,7 +2777,7 @@ async function openQuoteDetail(id) {
     <div id="qd-info" style="display:none">
       <div class="sep-label">Angebotsdaten</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
-        <div><div class="ps-label">Status</div><span class="status ${QUOTE_ST_MAP[q.status]||''}">${QUOTE_ST_LABEL[q.status]||q.status}</span></div>
+        <div><div class="ps-label">Status</div>${_stSel('quote',id,q.status)}</div>
         <div><div class="ps-label">Kunde</div>${q.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${q.quote_date||'—'}</div>
         <div><div class="ps-label">Gültig bis</div>${q.valid_until||'—'}</div>
@@ -3210,7 +3229,7 @@ function _renderDeliveryRows() {
     <td style="font-weight:500">${esc(d.title)}</td>
     <td style="color:var(--t2)">${d.customer_name||'—'}</td>
     <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.item_count||0}</td>
-    <td><span class="status ${DELIVERY_ST_MAP[d.status]||''}">${DELIVERY_ST_LABEL[d.status]||d.status}</span></td>
+    <td>${_stSel('delivery',d.id,d.status)}</td>
     <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.delivery_date||'—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Druckansicht">&#128196;</button>
@@ -3233,7 +3252,7 @@ async function openDeliveryDetail(id) {
     <div id="dd-info" style="display:none">
       <div class="sep-label">Lieferscheindaten</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
-        <div><div class="ps-label">Status</div><span class="status ${DELIVERY_ST_MAP[d.status]||''}">${DELIVERY_ST_LABEL[d.status]||d.status}</span></div>
+        <div><div class="ps-label">Status</div>${_stSel('delivery',id,d.status)}</div>
         <div><div class="ps-label">Kunde</div>${d.customer_name||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div>${d.delivery_date||'—'}</div>
         ${d.order_number?`<div><div class="ps-label">Auftrag</div>${d.order_number} ${d.order_title?'– '+esc(d.order_title):''}</div>`:''}

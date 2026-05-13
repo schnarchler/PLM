@@ -997,6 +997,12 @@ app.put('/api/orders/:id', (req, res) => {
   res.json(get('SELECT * FROM orders WHERE id=?', [req.params.id]));
 });
 
+app.put('/api/orders/:id/status', (req, res) => {
+  const { status } = req.body;
+  run(`UPDATE orders SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
+  res.json({ success: true });
+});
+
 app.delete('/api/orders/:id', (req, res) => {
   run('DELETE FROM order_items WHERE order_id=?', [req.params.id]);
   run('DELETE FROM orders WHERE id=?', [req.params.id]);
@@ -1057,6 +1063,12 @@ app.put('/api/quotes/:id', (req, res) => {
     [customer_id||null, customer_name_free||null, title, status, notes, quote_date, valid_until,
      tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, req.params.id]);
   res.json(get('SELECT * FROM quotes WHERE id=?', [req.params.id]));
+});
+
+app.put('/api/quotes/:id/status', (req, res) => {
+  const { status } = req.body;
+  run(`UPDATE quotes SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
+  res.json({ success: true });
 });
 
 app.delete('/api/quotes/:id', (req, res) => {
@@ -1395,6 +1407,12 @@ app.put('/api/deliveries/:id', (req, res) => {
   run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
     [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, notes||'', req.params.id]);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [req.params.id]));
+});
+
+app.put('/api/deliveries/:id/status', (req, res) => {
+  const { status } = req.body;
+  run(`UPDATE deliveries SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
+  res.json({ success: true });
 });
 
 app.delete('/api/deliveries/:id', (req, res) => {
