@@ -2211,10 +2211,19 @@ async function openOrderDetail(id) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openOrderModal(${id})">✏️ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>
+        <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🚚 Lieferschein erstellen</button>
         <button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>
       </div>
     </div>`;
   showDetail();
+}
+
+async function orderToDelivery(orderId) {
+  if (!confirm('Lieferschein aus diesem Auftrag erstellen? Alle Positionen werden übernommen.')) return;
+  const d = await api(`/api/orders/${orderId}/to-delivery`, 'POST');
+  toast(`Lieferschein ${d.number} erstellt`, 'ok');
+  await renderDeliveries();
+  openDeliveryDetail(d.id);
 }
 
 // ── SEARCH ────────────────────────────────────────────────────

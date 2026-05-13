@@ -1599,6 +1599,28 @@ function computeTotals(doc) {
   doc.total = doc.net + doc.tax_amount;
 }
 
+// -- ORDER → DELIVERY ------------------------------------------
+app.post('/api/orders/:id/to-delivery', (req, res) => {
+  const o = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
+  if (!o) return res.status(404).json({ error: 'Not found' });
+  const number = nextDeliveryNumber();
+  const delivId = runGetId(
+    `INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,notes)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [number, o.title, o.id, o.customer_id||null, o.customer_name_free||null,
+     'DRAFT', o.delivery_date||null, o.notes||'']
+  );
+  const oItems = all('SELECT * FROM order_items WHERE order_id=?', [o.id]);
+  oItems.forEach((oi, idx) => {
+    run(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,notes,position)
+         VALUES (?,?,?,?,?,?,?,?)`,
+      [delivId, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk',
+       oi.unit_price||null, oi.notes||'', idx + 1]);
+  });
+  saveDb();
+  res.json(get('SELECT * FROM deliveries WHERE id=?', [delivId]));
+});
+
 // -- INVOICE DATA ----------------------------------------------
 app.get('/api/orders/:id/invoice-data', (req, res) => {
   const o = get(`SELECT o.*,c.name as customer_name,c.email as customer_email,
