@@ -12,7 +12,7 @@ INIT=ESC+b'\x40'; ALIGN_L=ESC+b'\x61\x00'; ALIGN_C=ESC+b'\x61\x01'
 BOLD_ON=ESC+b'\x45\x01'; BOLD_OFF=ESC+b'\x45\x00'
 FONT_A=ESC+b'\x4d\x00'; FONT_B=ESC+b'\x4d\x01'
 DBL_H_ON=GS+b'\x21\x01'; DBL_H_OFF=GS+b'\x21\x00'
-NL=b'\x0a'; CUT=GS+b'\x56\x42\x40'
+NL=b'\x0a'
 LINE_W=32
 
 def e(t): return str(t).encode('cp437', errors='replace')
@@ -58,8 +58,8 @@ def build_receipt(data):
     if number: o+=row(number,bold=True)
     o+=row(name,bold=True,tall=True)
     if desc and desc!=name: o+=row(desc,small=True)
-    o+=sep()
     if notes: o+=row(notes,small=True)
+    o+=sep()
     o+=row(f'Menge: {qty} {unit}'); o+=sep()
     if params:
         o+=row('DRUCKPARAMETER',bold=True)
@@ -69,7 +69,7 @@ def build_receipt(data):
         o+=sep()
     if price is not None:
         o+=row(f'Total CHF {float(price):.2f}',bold=True,tall=True,centered=True); o+=sep()
-    o+=NL*3+CUT
+    o+=NL*3
     return o
 
 # ── Geraetepfade aus Registry ─────────────────────────────────
