@@ -347,14 +347,20 @@ function nextDeliveryNumber() { return 'LS-' + new Date().getFullYear() + '-' + 
 
 function parseIni(content) {
   const s = {};
-  for (const line of content.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t || t.startsWith(';') || t.startsWith('#') || t.startsWith('[') || t.startsWith('<')) continue;
+  for (let line of content.split(/\r?\n/)) {
+    let t = line.trim();
+    if (!t || t.startsWith('<') || t.startsWith('[')) continue;
+    // PrusaSlicer 2.9+ stores config as commented lines: '; key = value'
+    if (t.startsWith('; ')) t = t.slice(2).trim();
+    else if (t.startsWith(';')) t = t.slice(1).trim();
+    else if (t.startsWith('#')) t = t.slice(1).trim();
+    if (!t) continue;
     const eq = t.indexOf('=');
     if (eq < 0) continue;
     const k = t.slice(0, eq).trim();
     const v = t.slice(eq + 1).trim();
-    if (k && !k.includes('<') && !k.includes('>')) s[k] = v;
+    // Skip keys with spaces or XML chars (not valid INI keys)
+    if (k && !k.includes(' ') && !k.includes('<') && !k.includes('>')) s[k] = v;
   }
   return Object.keys(s).length ? s : null;
 }
