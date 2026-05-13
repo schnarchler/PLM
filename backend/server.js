@@ -352,18 +352,43 @@ async function initDb() {
       [n,pt,bt,nz,fp]));
   }
 
+  db.run(`CREATE TABLE IF NOT EXISTS applied_migrations (key TEXT PRIMARY KEY)`);
+
+  // One-time data migration: lowercase item types/numbers, revisions letters→numbers
+  migrateOnce('lowercase-numbering-v1', () => {
+    db.run("UPDATE items SET item_type=LOWER(item_type) WHERE item_type GLOB '[A-Z]*'");
+    db.run("UPDATE items SET item_number=REPLACE(REPLACE(REPLACE(item_number,'-ASM-','-asm-'),'-PRT-','-prt-'),'-DOC-','-doc-')");
+    function letterToNum(s) {
+      if (!s || /^\d+$/.test(s)) return s;
+      let n = 0;
+      for (const c of s.toUpperCase()) n = n * 26 + (c.charCodeAt(0) - 64);
+      return String(n);
+    }
+    const revs = all('SELECT id, rev FROM revisions');
+    for (const r of revs) {
+      const newRev = letterToNum(r.rev);
+      if (newRev !== r.rev) db.run('UPDATE revisions SET rev=? WHERE id=?', [newRev, r.id]);
+    }
+    console.log('Migration lowercase-numbering-v1 angewendet');
+  });
+
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
 }
 
+function migrateOnce(key, fn) {
+  const applied = get('SELECT 1 as y FROM applied_migrations WHERE key=?', [key]);
+  if (applied) return;
+  fn();
+  db.run('INSERT OR IGNORE INTO applied_migrations (key) VALUES (?)', [key]);
+  saveDb();
+}
+
 // -- HELPERS ----------------------------------------------------
 function nextRev(current) {
-  if (!current) return 'A';
-  if (current === 'Z') return 'AA';
-  if (current.length === 1) return String.fromCharCode(current.charCodeAt(0) + 1);
-  const last = current[current.length - 1];
-  if (last === 'Z') return current.slice(0, -1) + 'AA';
-  return current.slice(0, -1) + String.fromCharCode(last.charCodeAt(0) + 1);
+  if (!current) return '1';
+  const n = parseInt(current);
+  return String(isNaN(n) ? 1 : n + 1);
 }
 
 function nextCounter(key) {
@@ -527,11 +552,11 @@ function nextItemSeq(projectId, type) {
 function nextPrtNumber(projectId, asmNum) {
   let rows;
   if (asmNum) {
-    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='PRT' AND item_number LIKE ?", [projectId, `%-ASM-${asmNum}-PRT-%`]);
+    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='prt' AND item_number LIKE ?", [projectId, `%-asm-${asmNum}-prt-%`]);
   } else {
-    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='PRT' AND item_number NOT LIKE '%-ASM-%PRT-%'", [projectId]);
+    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='prt' AND item_number NOT LIKE '%-asm-%-prt-%'", [projectId]);
   }
-  const nums = rows.map(r => { const m = r.item_number.match(/-PRT-(\d+)$/); return m ? parseInt(m[1]) : 0; });
+  const nums = rows.map(r => { const m = r.item_number.match(/-prt-(\d+)$/); return m ? parseInt(m[1]) : 0; });
   return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
 }
 
@@ -591,9 +616,9 @@ app.get('/api/projects', (req, res) => {
   const projects = all('SELECT * FROM projects ORDER BY number DESC');
   projects.forEach(p => {
     p.item_count = count('SELECT COUNT(*) as c FROM items WHERE project_id=?', [p.id]);
-    p.asm_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='ASM'", [p.id]);
-    p.prt_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='PRT'", [p.id]);
-    p.doc_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='DOC'", [p.id]);
+    p.asm_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='asm'", [p.id]);
+    p.prt_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='prt'", [p.id]);
+    p.doc_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='doc'", [p.id]);
     p.file_count = count('SELECT COUNT(*) as c FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id WHERE i.project_id=?', [p.id]);
   });
   res.json(projects);
@@ -618,7 +643,7 @@ app.get('/api/projects/:id', (req, res) => {
     item.revisions = all('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid DESC', [item.id]);
     if (item.latest_revision) {
       item.latest_revision.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [item.latest_revision.id]);
-      if (item.item_type === 'ASM') {
+      if (item.item_type === 'asm') {
         item.latest_revision.bom = all(
           'SELECT b.child_item_id, b.quantity, b.unit, b.position FROM bom b WHERE b.parent_rev_id=? ORDER BY b.position',
           [item.latest_revision.id]
@@ -672,7 +697,7 @@ app.get('/api/items/:id', (req, res) => {
   item.revisions.forEach(rev => {
     rev.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [rev.id]);
     rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
-    if (item.item_type === 'ASM') {
+    if (item.item_type === 'asm') {
       rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
       rev.bom.forEach(b => { b.child_active_rev = getActiveRevision(b.child_item_id); });
     }
@@ -689,27 +714,27 @@ app.post('/api/projects/:projectId/items', (req, res) => {
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
   let item_number;
-  if (item_type === 'ASM') {
-    item_number = project.number + '-ASM-' + nextItemSeq(project.id, 'ASM');
-  } else if (item_type === 'DOC') {
-    item_number = project.number + '-DOC-' + nextItemSeq(project.id, 'DOC');
+  if (item_type === 'asm') {
+    item_number = project.number + '-asm-' + nextItemSeq(project.id, 'asm');
+  } else if (item_type === 'doc') {
+    item_number = project.number + '-doc-' + nextItemSeq(project.id, 'doc');
   } else {
     if (parent_id) {
       const parent = get('SELECT * FROM items WHERE id=?', [parent_id]);
-      const asmMatch = parent ? parent.item_number.match(/-ASM-(\d+)/) : null;
+      const asmMatch = parent ? parent.item_number.match(/-asm-(\d+)/) : null;
       const asmNum = asmMatch ? asmMatch[1] : null;
       item_number = asmNum
-        ? project.number + '-ASM-' + asmNum + '-PRT-' + nextPrtNumber(project.id, asmNum)
-        : project.number + '-PRT-' + nextPrtNumber(project.id, null);
+        ? project.number + '-asm-' + asmNum + '-prt-' + nextPrtNumber(project.id, asmNum)
+        : project.number + '-prt-' + nextPrtNumber(project.id, null);
     } else {
-      item_number = project.number + '-PRT-' + nextPrtNumber(project.id, null);
+      item_number = project.number + '-prt-' + nextPrtNumber(project.id, null);
     }
   }
 
   const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price) VALUES (?,?,?,?,?,?,?,?)',
     [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null]);
-  run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, 'A', 'DFT', 'Initial revision']);
-  log('item', itemId, 'Created', item_type + ' ' + item_number + ' Rev A');
+  run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, '1', 'DFT', 'Initial revision']);
+  log('item', itemId, 'Created', item_type + ' ' + item_number + ' rev1');
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
 });
 
@@ -735,20 +760,20 @@ app.put('/api/items/:id/move', (req, res) => {
     const it = get('SELECT * FROM items WHERE id=?', [itemId]);
     if (!it) return;
     let newNum;
-    if (it.item_type === 'ASM') {
-      newNum = targetProject.number + '-ASM-' + nextItemSeq(targetProject.id, 'ASM');
-    } else if (it.item_type === 'DOC') {
-      newNum = targetProject.number + '-DOC-' + nextItemSeq(targetProject.id, 'DOC');
+    if (it.item_type === 'asm') {
+      newNum = targetProject.number + '-asm-' + nextItemSeq(targetProject.id, 'asm');
+    } else if (it.item_type === 'doc') {
+      newNum = targetProject.number + '-doc-' + nextItemSeq(targetProject.id, 'doc');
     } else {
       if (newParentId) {
         const np = get('SELECT * FROM items WHERE id=?', [newParentId]);
-        const asmMatch = np ? np.item_number.match(/-ASM-(\d+)/) : null;
+        const asmMatch = np ? np.item_number.match(/-asm-(\d+)/) : null;
         const asmNum = asmMatch ? asmMatch[1] : null;
         newNum = asmNum
-          ? targetProject.number + '-ASM-' + asmNum + '-PRT-' + nextPrtNumber(targetProject.id, asmNum)
-          : targetProject.number + '-PRT-' + nextPrtNumber(targetProject.id, null);
+          ? targetProject.number + '-asm-' + asmNum + '-prt-' + nextPrtNumber(targetProject.id, asmNum)
+          : targetProject.number + '-prt-' + nextPrtNumber(targetProject.id, null);
       } else {
-        newNum = targetProject.number + '-PRT-' + nextPrtNumber(targetProject.id, null);
+        newNum = targetProject.number + '-prt-' + nextPrtNumber(targetProject.id, null);
       }
     }
     run('UPDATE items SET project_id=?,parent_id=?,item_number=? WHERE id=?',
@@ -792,7 +817,7 @@ app.get('/api/revisions/:id', (req, res) => {
   rev.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [rev.id]);
   rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
   rev.item = get('SELECT * FROM items WHERE id=?', [rev.item_id]);
-  if (rev.item && rev.item.item_type === 'ASM') {
+  if (rev.item && rev.item.item_type === 'asm') {
     rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
   }
   res.json(rev);
@@ -810,7 +835,7 @@ app.put('/api/revisions/:id/status', (req, res) => {
   if (status === 'REL') {
     // For assemblies: all BOM children must have at least one REL revision
     const item = get('SELECT * FROM items WHERE id=?', [rev.item_id]);
-    if (item && item.item_type === 'ASM') {
+    if (item && item.item_type === 'asm') {
       const bomChildren = all('SELECT b.child_item_id FROM bom b WHERE b.parent_rev_id=?', [rev.id]);
       const unreleasedNames = [];
       for (const b of bomChildren) {
@@ -831,7 +856,7 @@ app.put('/api/revisions/:id/status', (req, res) => {
   } else if (status === 'ECO') {
     run("UPDATE revisions SET status=?,eco_reason=?,updated_at=datetime('now') WHERE id=?", [status, eco_reason || '', rev.id]);
     const lastRev = get('SELECT rev FROM revisions WHERE item_id=? ORDER BY rowid DESC LIMIT 1', [rev.item_id]);
-    const newRev = nextRev(lastRev ? lastRev.rev : 'A');
+    const newRev = nextRev(lastRev ? lastRev.rev : '0');
     run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
       [rev.item_id, newRev, 'DFT', 'ECO: ' + (eco_reason || '')]);
     log('revision', rev.id, 'ECO', 'New revision ' + newRev + ' created');
@@ -1237,8 +1262,8 @@ app.get('/api/stats', (req, res) => {
   res.json({
     projects:   count('SELECT COUNT(*) as c FROM projects'),
     items:      count('SELECT COUNT(*) as c FROM items'),
-    assemblies: count("SELECT COUNT(*) as c FROM items WHERE item_type='ASM'"),
-    parts:      count("SELECT COUNT(*) as c FROM items WHERE item_type='PRT'"),
+    assemblies: count("SELECT COUNT(*) as c FROM items WHERE item_type='asm'"),
+    parts:      count("SELECT COUNT(*) as c FROM items WHERE item_type='prt'"),
     datasets:   count('SELECT COUNT(*) as c FROM datasets'),
     customers:  count('SELECT COUNT(*) as c FROM customers'),
     orders:     count('SELECT COUNT(*) as c FROM orders'),
@@ -1356,7 +1381,7 @@ app.delete('/api/documents/:id', (req, res) => {
 });
 
 app.get('/api/projects/:id/items-for-bom', (req, res) => {
-  const items = all("SELECT * FROM items WHERE project_id=? AND item_type IN ('ASM','PRT')", [req.params.id]);
+  const items = all("SELECT * FROM items WHERE project_id=? AND item_type IN ('asm','prt')", [req.params.id]);
   items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
   res.json(items);
 });
@@ -1700,7 +1725,7 @@ app.post('/api/print-receipt-delivery', (req, res) => {
 // -- SHARED HELPERS --------------------------------------------
 function attachSubItems(positions) {
   positions.forEach(p => {
-    if (p.item_id && p.item_type === 'ASM') {
+    if (p.item_id && p.item_type === 'asm') {
       const rev = getActiveRevision(p.item_id);
       if (rev) p.sub_items = all('SELECT b.quantity,b.unit,i.item_number,i.name,i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
     }

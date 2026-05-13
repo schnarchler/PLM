@@ -18,11 +18,11 @@ Beim ersten Start werden alle Node-Pakete automatisch installiert (`npm install`
 
 ```
 Projekt:              0028
-Baugruppe:            0028-ASM-001
-Unter-Baugruppe:      0028-ASM-002
-Part in Baugruppe:    0028-ASM-001-PRT-001
-Part im Projekt:      0028-PRT-001
-Dokument:             0028-DOC-001
+Baugruppe:            0028-asm-001
+Unter-Baugruppe:      0028-asm-002
+Part in Baugruppe:    0028-asm-001-prt-001
+Part im Projekt:      0028-prt-001
+Dokument:             0028-doc-001
 
 Aufträge:             AUF-2026-0001
 Angebote:             ANG-2026-0001
@@ -39,6 +39,8 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
          │                └──► OBS (veraltet)
          └──► DFT (zurück)
 ```
+
+Revisionen: rev1, rev2, rev3, …
 
 | Status | Bedeutung |
 |--------|-----------|

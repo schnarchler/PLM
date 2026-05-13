@@ -631,10 +631,10 @@ a{color:inherit;text-decoration:none}
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Bezeichnung *</label><input class="fi" id="im-name" placeholder="z.B. Schultergelenk"></div>
         <div class="fg"><label class="fl">Typ</label>
-          <select class="fs" id="im-type" onchange="document.getElementById('im-title').textContent=document.getElementById('im-type').value==='ASM'?'Neue Baugruppe':document.getElementById('im-type').value==='DOC'?'Neues Dokument':'Neues Part'">
-            <option value="ASM">Baugruppe (ASM)</option>
-            <option value="PRT">Part (PRT)</option>
-            <option value="DOC">Dokument (DOC)</option>
+          <select class="fs" id="im-type" onchange="document.getElementById('im-title').textContent=document.getElementById('im-type').value==='asm'?'Neue Baugruppe':document.getElementById('im-type').value==='doc'?'Neues Dokument':'Neues Part'">
+            <option value="asm">Baugruppe (asm)</option>
+            <option value="prt">Part (prt)</option>
+            <option value="doc">Dokument (doc)</option>
           </select>
         </div>
       </div>
@@ -1251,9 +1251,9 @@ async function renderProjectsList() {
       <div class="card-name">${esc(p.name)}</div>
       <div class="card-meta">
         ${p.customer ? `<span>👤 ${esc(p.customer)}</span>` : ''}
-        ${p.asm_count ? `<span>📦 ${p.asm_count} ASM</span>` : ''}
-        ${p.prt_count ? `<span>🔩 ${p.prt_count} PRT</span>` : ''}
-        ${p.doc_count ? `<span>📄 ${p.doc_count} DOC</span>` : ''}
+        ${p.asm_count ? `<span>📦 ${p.asm_count} asm</span>` : ''}
+        ${p.prt_count ? `<span>🔩 ${p.prt_count} prt</span>` : ''}
+        ${p.doc_count ? `<span>📄 ${p.doc_count} doc</span>` : ''}
         ${p.file_count ? `<span>📁 ${p.file_count} Dateien</span>` : '<span style="color:var(--t3)">0 Dateien</span>'}
       </div>
       <div class="card-foot">
@@ -1273,9 +1273,9 @@ async function openProject(id) {
 
   setLeftHeader(
     `<div class="breadcrumb"><span onclick="gotoView('projects')">Projekte</span><span class="sep">/</span><strong style="color:var(--t1)">${esc(p.name)}</strong><span class="chip" style="margin-left:4px">${p.number}</span></div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id}, null, 'ASM')">+ Baugruppe</button>
-     <button class="btn btn-primary btn-sm" style="margin-left:4px" onclick="openItemModal(${p.id}, null, 'PRT')">+ Part</button>
-     <button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="openItemModal(${p.id}, null, 'DOC')">+ Dokument</button>`
+    `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id}, null, 'asm')">+ Baugruppe</button>
+     <button class="btn btn-primary btn-sm" style="margin-left:4px" onclick="openItemModal(${p.id}, null, 'prt')">+ Part</button>
+     <button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="openItemModal(${p.id}, null, 'doc')">+ Dokument</button>`
   );
 
   renderProjectTree(p);
@@ -1299,9 +1299,9 @@ function renderProjectTree(p) {
   if (!items.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">🔩</div><div class="empty-text">Noch keine Items</div>
       <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
-        <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'ASM')">+ Baugruppe</button>
-        <button class="btn btn-primary btn-sm" onclick="openItemModal(${p.id},null,'PRT')">+ Part</button>
-        <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'DOC')">+ Dokument</button>
+        <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'asm')">+ Baugruppe</button>
+        <button class="btn btn-primary btn-sm" onclick="openItemModal(${p.id},null,'prt')">+ Part</button>
+        <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'doc')">+ Dokument</button>
       </div></div>`);
     return;
   }
@@ -1357,8 +1357,8 @@ function _renderRootNodes(children, map, isRoot) {
 
 function _renderTreeNode(item, map, isRoot) {
   const rev = item.latest_revision;
-  const icon = item.item_type === 'ASM' ? '📦' : item.item_type === 'DOC' ? '📄' : '🔩';
-  const bomKids = (item.item_type === 'ASM' && rev && rev.bom) ? rev.bom : [];
+  const icon = item.item_type === 'asm' ? '📦' : item.item_type === 'doc' ? '📄' : '🔩';
+  const bomKids = (item.item_type === 'asm' && rev && rev.bom) ? rev.bom : [];
   const hasKids = bomKids.length > 0;
   const n = _nim(); const nid = `tn${n}`, tid = `tt${n}`;
   const childHtml = hasKids ? bomKids.map(b => {
@@ -1371,7 +1371,7 @@ function _renderTreeNode(item, map, isRoot) {
       <span class="tree-icon">${icon}</span>
       <span class="tree-num">${item.item_number}</span>
       <span class="tree-name">${esc(item.name)}</span>
-      ${rev ? `<span class="status st-${rev.status} tree-rev">Rev ${rev.rev} · ${rev.status}</span>` : ''}
+      ${rev ? `<span class="status st-${rev.status} tree-rev">rev${rev.rev} · ${rev.status}</span>` : ''}
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" style="display:none">${childHtml}</div>` : ''}
   </div>`;
@@ -1402,8 +1402,8 @@ function openProjectDetail(p) {
   function renderItemFiles(item, isRoot) {
     const rev = item.latest_revision;
     const datasets = rev && rev.datasets ? rev.datasets : [];
-    const icon = item.item_type === 'ASM' ? '📦' : item.item_type === 'DOC' ? '📄' : '🔩';
-    const bomKids = (item.item_type === 'ASM' && rev && rev.bom) ? rev.bom : [];
+    const icon = item.item_type === 'asm' ? '📦' : item.item_type === 'doc' ? '📄' : '🔩';
+    const bomKids = (item.item_type === 'asm' && rev && rev.bom) ? rev.bom : [];
     const hasKids = bomKids.length > 0;
     const n = _nim(); const nid = `dp${n}`, tid = `dt${n}`;
     const childHtml = hasKids ? bomKids.map(b => {
@@ -1420,7 +1420,7 @@ function openProjectDetail(p) {
           <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
           <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
         </span>
-        ${rev ? `<span class="status st-${rev.status}" style="flex-shrink:0">Rev ${rev.rev}</span>` : ''}
+        ${rev ? `<span class="status st-${rev.status}" style="flex-shrink:0">rev${rev.rev}</span>` : ''}
       </div>
       ${datasets.length ? `<div style="padding:3px 6px 3px 32px">
         ${datasets.map(d => `<div class="ds-row" style="margin-bottom:3px">
@@ -1558,8 +1558,8 @@ function itemIsEditable(item) {
 
 
 function renderItemDetail(item, activeRevId) {
-  const isASM = item.item_type === 'ASM';
-  const isDOC = item.item_type === 'DOC';
+  const isASM = item.item_type === 'asm';
+  const isDOC = item.item_type === 'doc';
   const icon = isASM ? '📦' : isDOC ? '📄' : '🔩';
   const editable = itemIsEditable(item);
   const editBtn = editable ? ` <button class="btn btn-ghost btn-sm" style="margin-left:8px;font-size:10px;padding:3px 8px" onclick="openEditItemModal(${item.id})">Umbenennen</button>` : '';
@@ -1584,12 +1584,12 @@ function renderItemDetail(item, activeRevId) {
       <div class="rev-strip">
         ${(item.revisions||[]).map(r => `
           <div class="rev-pill ${r.id === activeRevId ? 'active-rev' : ''}" onclick="switchRev(${item.id}, ${r.id})">
-            <span class="status st-${r.status}">Rev ${r.rev}</span>
+            <span class="status st-${r.status}">rev${r.rev}</span>
             <span style="color:var(--t2)">${r.status}</span>
           </div>`).join('')}
-        ${!isDOC ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},${isASM ? item.id : (item.parent_id||'null')},'PRT')" style="margin-left:auto">+ Part</button>` : ''}
-        ${isASM ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},${item.id},'ASM')">+ Unter-ASM</button>` : ''}
-        ${!isDOC ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},null,'DOC')">+ Dokument</button>` : ''}
+        ${!isDOC ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},${isASM ? item.id : (item.parent_id||'null')},'prt')" style="margin-left:auto">+ Part</button>` : ''}
+        ${isASM ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Unter-ASM</button>` : ''}
+        ${!isDOC ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},null,'doc')">+ Dokument</button>` : ''}
       </div>
       ${rev ? renderRevDetail(rev, item) : '<div style="color:var(--t3)">Keine Revision</div>'}
     </div>
@@ -1602,8 +1602,8 @@ function renderItemDetail(item, activeRevId) {
 }
 
 function renderRevDetail(rev, item) {
-  const isASM = item.item_type === 'ASM';
-  const isDOC = item.item_type === 'DOC';
+  const isASM = item.item_type === 'asm';
+  const isDOC = item.item_type === 'doc';
   const locked = rev.status === 'REL' || rev.status === 'OBS';
   const wfMap = {
     DFT: [{s:'REV',label:'→ In Review',cls:'btn-amber'}],
@@ -1618,7 +1618,7 @@ function renderRevDetail(rev, item) {
   const ps = rev.print_settings;
   return `
     <!-- Rev info -->
-    <div class="sep-label">Revision ${rev.rev} – Details</div>
+    <div class="sep-label">rev${rev.rev} – Details</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:12px">
       <div><div class="ps-label">Status</div><span class="status st-${rev.status}">${rev.status}</span></div>
       <div><div class="ps-label">Erstellt</div>${fmtDate(rev.created_at)}</div>
@@ -1635,10 +1635,10 @@ function renderRevDetail(rev, item) {
       ${(rev.bom||[]).length ? rev.bom.map(b => `
         <div class="bom-row">
           <span style="color:var(--t3);font-size:10px;width:24px">${b.position||'—'}</span>
-          <span>${b.item_type==='ASM'?'📦':b.item_type==='DOC'?'📄':'🔩'}</span>
+          <span>${b.item_type==='asm'?'📦':b.item_type==='doc'?'📄':'🔩'}</span>
           <span class="bom-num">${b.item_number}</span>
           <span style="flex:1;font-size:12px">${esc(b.name)}</span>
-          ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">Rev ${b.child_active_rev.rev}</span>` : ''}
+          ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">rev${b.child_active_rev.rev}</span>` : ''}
           <span class="bom-qty">${b.quantity} ${b.unit}</span>
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBom(${b.id},${item.id},${rev.id})">✕</button>`}
         </div>`).join('')
@@ -1761,7 +1761,7 @@ async function renderDashboard() {
   const qstCls   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
   const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
   const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
-  const itemIcon = t => t==='ASM'?'📦':t==='DOC'?'📄':'🔩';
+  const itemIcon = t => t==='asm'?'📦':t==='doc'?'📄':'🔩';
 
   const kpi = (icon, value, label, sub='', click='') => `
     <div style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:16px 14px;cursor:${click?'pointer':'default'}" ${click?`onclick="${click}"`:''}}>
@@ -1786,7 +1786,7 @@ async function renderDashboard() {
     ${kpi('⏳', d.inReview.length, 'Warten auf Freigabe', 'REV-Status', '')}
     ${kpi('🚚', d.recentDeliveries.filter(x=>x.status!=='DELIVERED').length, 'Aktive Lieferungen', '', "gotoView('deliveries')")}
     ${kpi('💶', 'CHF ' + (d.revenueMonth||0).toFixed(0), 'Umsatz diesen Monat', 'CHF ' + (d.revenueTotal||0).toFixed(0) + ' gesamt', '')}
-    ${kpi('📂', s.projects, 'Projekte', s.assemblies + ' ASM · ' + s.parts + ' PRT', "gotoView('projects')")}
+    ${kpi('📂', s.projects, 'Projekte', s.assemblies + ' asm · ' + s.parts + ' prt', "gotoView('projects')")}
   </div>`;
 
   // ── Offene Aufträge ──
@@ -1832,7 +1832,7 @@ async function renderDashboard() {
         <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
         <div style="font-size:10px;color:var(--t3);margin-top:1px">${esc(r.project_number)} ${esc(r.project_name)}</div>
       </div>
-      <span class="status st-REV">Rev ${r.rev} · REV</span>
+      <span class="status st-REV">rev${r.rev} · REV</span>
     </div>`).join('') : emptyRow('Keine Items in Prüfung');
 
   // ── Produktion (aktive Lieferschein-Items mit PLM-Link) ──
@@ -1924,7 +1924,7 @@ async function renderChangelog() {
     return '·';
   };
   const typeColor = t => ({item:'var(--blue)',revision:'var(--teal)',project:'var(--amber)'}[t]||'var(--t3)');
-  const itemTypeIcon = t => t === 'ASM' ? '📦' : t === 'PRT' ? '🔩' : t === 'DOC' ? '📄' : '';
+  const itemTypeIcon = t => t === 'asm' ? '📦' : t === 'prt' ? '🔩' : t === 'doc' ? '📄' : '';
 
   // Group by date
   const byDate = {};
@@ -2662,8 +2662,8 @@ function openItemModal(projectId, parentId, type) {
   set('im-name',''); set('im-desc',''); set('im-url',''); set('im-price','');
   set('im-project-id', projectId);
   set('im-parent-id', parentId||'');
-  document.getElementById('im-type').value = type||'PRT';
-  document.getElementById('im-title').textContent = type==='ASM' ? 'Neue Baugruppe' : type==='DOC' ? 'Neues Dokument' : 'Neues Part';
+  document.getElementById('im-type').value = type||'prt';
+  document.getElementById('im-title').textContent = type==='asm' ? 'Neue Baugruppe' : type==='doc' ? 'Neues Dokument' : 'Neues Part';
   openModal('itemModal');
 }
 
@@ -2759,9 +2759,9 @@ function handleFiles(files) {
 }
 
 function buildUploadName(originalName, itemNumber, rev, index) {
-  // Build: 0028-ASM-001-PRT-007_RevA_001.stl
+  // Build: 0028-asm-001-prt-007_rev1_001.stl
   const ext = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : '';
-  const base = itemNumber + '_Rev' + rev + '_' + String(index+1).padStart(3,'0');
+  const base = itemNumber + '_rev' + rev + '_' + String(index+1).padStart(3,'0');
   return base + ext;
 }
 
@@ -3253,7 +3253,7 @@ async function searchItemsForLine(q) {
     if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const rev = i.latest_revision;
-      const icon = i.item_type==='ASM'?'📦':i.item_type==='DOC'?'📄':'🔩';
+      const icon = i.item_type==='asm'?'📦':i.item_type==='doc'?'📄':'🔩';
       return `<div onclick="selectLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -3261,7 +3261,7 @@ async function searchItemsForLine(q) {
         <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</span>
         <span style="flex:1;font-size:12px">${esc(i.name)}</span>
         <span style="font-size:10px;color:var(--t3)">${i.project_name}</span>
-        ${rev?`<span class="status st-${rev.status}" style="margin-left:4px">Rev ${rev.rev}</span>`:''}
+        ${rev?`<span class="status st-${rev.status}" style="margin-left:4px">rev${rev.rev}</span>`:''}
       </div>`;
     }).join('');
     res.style.display = 'block';
@@ -3274,7 +3274,7 @@ function selectLinkedItem(item) {
   document.getElementById('li-plm-results').style.display = 'none';
   // Show badge
   const sel = document.getElementById('li-plm-selected');
-  document.getElementById('li-plm-badge').textContent = (item.item_type==='ASM'?'📦 ':'🔩 ') + item.item_number;
+  document.getElementById('li-plm-badge').textContent = (item.item_type==='asm'?'📦 ':'🔩 ') + item.item_number;
   document.getElementById('li-plm-name').textContent = item.name + ' · ' + item.project_name;
   sel.style.display = 'flex';
   // Pre-fill description if empty
@@ -3310,7 +3310,7 @@ function openLineItemModal(parentType, parentId, itemId) {
       // Show linked PLM item if any
       if (li.item_id && li.item_number) {
         set('li-linked-plm-id', li.item_id);
-        const icon = li.item_type==='ASM'?'📦':li.item_type==='DOC'?'📄':'🔩';
+        const icon = li.item_type==='asm'?'📦':li.item_type==='doc'?'📄':'🔩';
         document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
         document.getElementById('li-plm-name').textContent = li.description;
         document.getElementById('li-plm-selected').style.display = 'flex';
@@ -3423,14 +3423,14 @@ const DEMO = (() => {
     { id:2, number:'LS-2026-022', title:'Adapterring Muster', customer_name:'Bürkli Metalltechnik', status:'READY', delivery_date:'2026-05-13', order_number:null },
   ];
   const items = [
-    { id:101, item_number:'ASM-001', name:'Hauptbaugruppe Delta', item_type:'ASM', parent_id:null, latest_revision:{ rev:'B', status:'REL', datasets:[
+    { id:101, item_number:'asm-001', name:'Hauptbaugruppe Delta', item_type:'asm', parent_id:null, latest_revision:{ rev:'2', status:'REL', datasets:[
       { id:1, ds_type:'CAD', original_name:'delta_main.step' },
       { id:2, ds_type:'PDF', original_name:'Zeichnung_Hauptbaugruppe.pdf' }
     ], bom:[{ child_item_id:102, quantity:2, unit:'pcs' },{ child_item_id:103, quantity:1, unit:'pcs' },{ child_item_id:104, quantity:6, unit:'pcs' }] }},
-    { id:102, item_number:'PRT-014', name:'Schultergelenk', item_type:'PRT', parent_id:101, latest_revision:{ rev:'A', status:'REL', datasets:[{ id:3, ds_type:'CAD', original_name:'schulter.step' },{ id:4, ds_type:'GCODE', original_name:'schulter_PETG.gcode' }], bom:[] }},
-    { id:103, item_number:'PRT-015', name:'Effektor-Halterung', item_type:'PRT', parent_id:101, latest_revision:{ rev:'C', status:'REV', datasets:[{ id:5, ds_type:'CAD', original_name:'effektor.step' }], bom:[] }},
-    { id:104, item_number:'PRT-016', name:'Verbindungsstrebe 220mm', item_type:'PRT', parent_id:101, latest_revision:{ rev:'A', status:'DFT', datasets:[], bom:[] }},
-    { id:105, item_number:'DOC-002', name:'Lastenheft v2', item_type:'DOC', parent_id:null, latest_revision:{ rev:'B', status:'REL', datasets:[{ id:6, ds_type:'PDF', original_name:'Lastenheft_v2.pdf' }], bom:[] }},
+    { id:102, item_number:'prt-014', name:'Schultergelenk', item_type:'prt', parent_id:101, latest_revision:{ rev:'1', status:'REL', datasets:[{ id:3, ds_type:'CAD', original_name:'schulter.step' },{ id:4, ds_type:'GCODE', original_name:'schulter_PETG.gcode' }], bom:[] }},
+    { id:103, item_number:'prt-015', name:'Effektor-Halterung', item_type:'prt', parent_id:101, latest_revision:{ rev:'3', status:'REV', datasets:[{ id:5, ds_type:'CAD', original_name:'effektor.step' }], bom:[] }},
+    { id:104, item_number:'prt-016', name:'Verbindungsstrebe 220mm', item_type:'prt', parent_id:101, latest_revision:{ rev:'1', status:'DFT', datasets:[], bom:[] }},
+    { id:105, item_number:'doc-002', name:'Lastenheft v2', item_type:'doc', parent_id:null, latest_revision:{ rev:'2', status:'REL', datasets:[{ id:6, ds_type:'PDF', original_name:'Lastenheft_v2.pdf' }], bom:[] }},
   ];
   projects[0].items = items;
   projects[0].documents = [
@@ -3439,7 +3439,7 @@ const DEMO = (() => {
     { id:3, name:'Konzeptskizze', doc_type:'IMAGE', file_size:1240000, uploaded_at:'2026-04-12T15:10:00' },
   ];
   projects[0].changelog = [
-    { action:'Revision freigegeben', details:'ASM-001 Rev B → Release', created_at:'2026-05-11T14:20:00' },
+    { action:'Revision freigegeben', details:'asm-001 rev2 → Release', created_at:'2026-05-11T14:20:00' },
     { action:'BOM aktualisiert', details:'Verbindungsstrebe von 200mm → 220mm', created_at:'2026-05-09T10:00:00' },
     { action:'Projekt angelegt', details:'Initial commit von Roboterarm Delta v3', created_at:'2026-04-12T09:00:00' },
   ];
@@ -3769,7 +3769,7 @@ async function searchItemsForDim(q) {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
     if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
-      const icon = i.item_type==='ASM'?'📦':i.item_type==='DOC'?'📄':'🔩';
+      const icon = i.item_type==='asm'?'📦':i.item_type==='doc'?'📄':'🔩';
       return `<div onclick="selectDimLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -3787,7 +3787,7 @@ function selectDimLinkedItem(item) {
   set('dim-linked-plm-id', item.id);
   document.getElementById('dim-plm-search').value = '';
   document.getElementById('dim-plm-results').style.display = 'none';
-  const icon = item.item_type==='ASM'?'📦':item.item_type==='DOC'?'📄':'🔩';
+  const icon = item.item_type==='asm'?'📦':item.item_type==='doc'?'📄':'🔩';
   document.getElementById('dim-plm-badge').textContent = icon + ' ' + item.item_number;
   document.getElementById('dim-plm-name').textContent = item.name + ' · ' + item.project_name;
   document.getElementById('dim-plm-selected').style.display = 'flex';
@@ -3891,7 +3891,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
       document.getElementById('dim-unit').value = it.unit||'Stk';
       if (it.item_id && it.item_number) {
         set('dim-linked-plm-id', it.item_id);
-        const icon = it.item_type==='ASM'?'📦':it.item_type==='DOC'?'📄':'🔩';
+        const icon = it.item_type==='asm'?'📦':it.item_type==='doc'?'📄':'🔩';
         document.getElementById('dim-plm-badge').textContent = icon + ' ' + it.item_number;
         document.getElementById('dim-plm-name').textContent = it.description;
         document.getElementById('dim-plm-selected').style.display = 'flex';
@@ -4024,7 +4024,7 @@ async function generateDoc(id, type) {
     if (p.sub_items && p.sub_items.length) {
       html += p.sub_items.map(s =>
         '<tr style="background:#f9fafb">'
-        +'<td style="padding:4px 6px 4px 22px;color:#6b7280;font-size:11px">↳ '+(s.item_type==='ASM'?'📦':s.item_type==='DOC'?'📄':'🔩')+' '+escHtml(s.item_number)+' – '+escHtml(s.name)+'</td>'
+        +'<td style="padding:4px 6px 4px 22px;color:#6b7280;font-size:11px">↳ '+(s.item_type==='asm'?'📦':s.item_type==='doc'?'📄':'🔩')+' '+escHtml(s.item_number)+' – '+escHtml(s.name)+'</td>'
         +'<td style="padding:4px 6px;text-align:right;font-size:11px;color:#6b7280">'+s.quantity+' '+s.unit+'</td>'
         +'<td style="padding:4px 6px"></td>'
         +(hasDiscount?'<td style="padding:4px 6px"></td>':'')
