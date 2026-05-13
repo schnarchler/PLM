@@ -139,7 +139,7 @@ def get_printer_port(preferred=''):
 
 # ── Direkt auf USB-Port schreiben (Spooler umgehen) ──────────
 def print_direct(port, data):
-    """Schreibt ESC/POS-Daten direkt auf \\.\USB001 – kein Spooler."""
+    # Schreibt ESC/POS-Daten direkt auf den Port (z.B. USB001) - kein Spooler.
     device = r'\\.\{}'.format(port)
     h = win32file.CreateFile(
         device,
