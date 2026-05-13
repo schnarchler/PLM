@@ -312,7 +312,8 @@ async function initDb() {
     default_tax_rate: '8.1', default_payment_terms: '30 Tage netto',
     default_currency: 'CHF', quote_validity_days: '30',
     invoice_footer: 'Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen. Vielen Dank!',
-    quote_footer: 'Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.'
+    quote_footer: 'Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.',
+    receipt_footer: ''
   };
   Object.entries(defaults).forEach(([k, v]) => {
     db.run('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)', [k, v]);
@@ -1248,6 +1249,8 @@ app.post('/api/print-receipt', (req, res) => {
   if (!item) return res.status(404).json({ error: 'Item not found' });
   const cnRow = get("SELECT value FROM settings WHERE key='company_name'");
   const companyName = (cnRow && cnRow.value) ? cnRow.value : 'PLM & ERP';
+  const rfRow = get("SELECT value FROM settings WHERE key='receipt_footer'");
+  const receiptFooter = (rfRow && rfRow.value) ? rfRow.value : '';
 
   // Extract key print params from stored 3MF settings
   const params = {};
@@ -1291,6 +1294,7 @@ app.post('/api/print-receipt', (req, res) => {
     price:    price,
     customer: item.customer_name || '',
     notes:    item.notes || '',
+    footer:   receiptFooter,
     params
   };
 
@@ -1304,6 +1308,52 @@ app.post('/api/print-receipt', (req, res) => {
         return res.status(500).json({ error: detail || 'Unbekannter Fehler' });
       }
       console.log('Pipsta:', stdout.trim());
+      res.json({ ok: true });
+    }
+  );
+});
+
+app.post('/api/print-receipt-delivery', (req, res) => {
+  const { delivery_id } = req.body;
+  if (!delivery_id) return res.status(400).json({ error: 'delivery_id required' });
+
+  const delivery = get(`SELECT d.*, COALESCE(c.name, d.customer_name_free) as customer_name
+    FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id WHERE d.id=?`, [delivery_id]);
+  if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+
+  const rows = all(`SELECT di.*, i.item_number, i.name as item_name, i.default_price
+    FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
+    WHERE di.delivery_id=? ORDER BY di.position, di.id`, [delivery_id]);
+
+  const cnRow = get("SELECT value FROM settings WHERE key='company_name'");
+  const companyName = (cnRow && cnRow.value) ? cnRow.value : 'PLM & ERP';
+  const rfRow = get("SELECT value FROM settings WHERE key='receipt_footer'");
+  const receiptFooter = (rfRow && rfRow.value) ? rfRow.value : '';
+
+  let total = null;
+  const items = rows.map(item => {
+    const price = item.unit_price != null ? item.unit_price : (item.default_price != null ? item.default_price : null);
+    if (price != null) total = (total || 0) + price * item.quantity;
+    return {
+      name:   item.item_name || item.description,
+      number: item.item_number || '',
+      qty:    item.quantity,
+      unit:   item.unit,
+      price:  price != null ? price * item.quantity : null,
+      notes:  item.notes || ''
+    };
+  });
+
+  const printData = { header: companyName, customer: delivery.customer_name || '', items, total, footer: receiptFooter };
+  const scriptPath = require('path').join(__dirname, 'print_receipt.py');
+  const { execFile } = require('child_process');
+  execFile(PYTHON_CMD, [scriptPath, '--mode', 'multi', '--data', JSON.stringify(printData)],
+    { timeout: 20000, encoding: 'utf8', windowsHide: true },
+    (error, stdout, stderr) => {
+      if (error) {
+        const detail = [stderr, stdout, error.message].filter(Boolean).join(' | ').trim();
+        return res.status(500).json({ error: detail || 'Unbekannter Fehler' });
+      }
       res.json({ ok: true });
     }
   );

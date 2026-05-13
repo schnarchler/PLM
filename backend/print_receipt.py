@@ -7,11 +7,10 @@ import sys, json, argparse, ctypes, ctypes.wintypes as wt, winreg
 from datetime import datetime
 
 # ── ESC/POS ───────────────────────────────────────────────────
-ESC=b'\x1b'; GS=b'\x1d'
-INIT=ESC+b'\x40'; ALIGN_L=ESC+b'\x61\x00'; ALIGN_C=ESC+b'\x61\x01'
+ESC=b'\x1b'
+ALIGN_L=ESC+b'\x61\x00'
 BOLD_ON=ESC+b'\x45\x01'; BOLD_OFF=ESC+b'\x45\x00'
 FONT_A=ESC+b'\x4d\x00'; FONT_B=ESC+b'\x4d\x01'
-DBL_H_ON=GS+b'\x21\x01'; DBL_H_OFF=GS+b'\x21\x00'
 NL=b'\x0a'
 LINE_W=32
 
@@ -22,18 +21,16 @@ def center(text, width=LINE_W):
     t=str(text); pad=max(0,(width-len(t))//2)
     return ALIGN_L+e(' '*pad+t)+NL
 
-def row(text='', align=ALIGN_L, bold=False, small=False, tall=False, centered=False):
+def row(text='', bold=False, small=False, centered=False):
     o=ALIGN_L
     o+=BOLD_ON if bold else b''
     o+=FONT_B if small else b''
-    o+=DBL_H_ON if tall else b''
     if centered:
         t=str(text); pad=max(0,(LINE_W-len(t))//2)
         o+=e(' '*pad+t)
     else:
         o+=e(str(text))
     o+=NL
-    o+=DBL_H_OFF if tall else b''
     o+=FONT_A if small else b''
     o+=BOLD_OFF if bold else b''
     return o
@@ -48,15 +45,16 @@ def build_receipt(data):
     desc=data.get('desc') or ''; qty=data.get('qty',1); unit=data.get('unit','Stk')
     price=data.get('price'); params=data.get('params') or {}
     customer=data.get('customer') or ''; notes=data.get('notes') or ''
+    footer=data.get('footer') or ''
     now=datetime.now().strftime('%d.%m.%Y  %H:%M')
-    o=INIT+ALIGN_L
+    o=ALIGN_L
     o+=row(header,bold=True,centered=True)
     o+=row(now,small=True,centered=True)
     if customer:
         o+=row(customer,small=True,centered=True)
     o+=sep()
     if number: o+=row(number,bold=True)
-    o+=row(name,bold=True,tall=True)
+    o+=row(name,bold=True)
     if desc and desc!=name: o+=row(desc,small=True)
     if notes: o+=row(notes,small=True)
     o+=sep()
@@ -68,7 +66,40 @@ def build_receipt(data):
             if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16])
         o+=sep()
     if price is not None:
-        o+=row(f'Total CHF {float(price):.2f}',bold=True,tall=True,centered=True); o+=sep()
+        o+=row(f'Total CHF {float(price):.2f}',bold=True,centered=True); o+=sep()
+    if footer: o+=row(footer,small=True,centered=True)
+    o+=NL*3
+    return o
+
+def build_multi_receipt(data):
+    header=data.get('header') or 'PLM & ERP'
+    customer=data.get('customer') or ''
+    items=data.get('items') or []
+    total=data.get('total')
+    footer=data.get('footer') or ''
+    now=datetime.now().strftime('%d.%m.%Y  %H:%M')
+    o=ALIGN_L
+    o+=row(header,bold=True,centered=True)
+    o+=row(now,small=True,centered=True)
+    if customer:
+        o+=row(customer,small=True,centered=True)
+    o+=sep()
+    for item in items:
+        name=item.get('name') or '-'; number=item.get('number') or ''
+        qty=item.get('qty',1); unit=item.get('unit','Stk')
+        price=item.get('price'); notes=item.get('notes') or ''
+        if number: o+=row(number,small=True)
+        o+=row(name,bold=True)
+        if notes: o+=row(notes,small=True)
+        if price is not None:
+            o+=lr(f'{qty} {unit}',f'CHF {float(price):.2f}')
+        else:
+            o+=row(f'Menge: {qty} {unit}',small=True)
+        o+=sep()
+    if total is not None:
+        o+=row(f'Total CHF {float(total):.2f}',bold=True,centered=True)
+        o+=sep()
+    if footer: o+=row(footer,small=True,centered=True)
     o+=NL*3
     return o
 
@@ -277,6 +308,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', required=True)
     parser.add_argument('--printer', default='')
+    parser.add_argument('--mode', default='single')
     args = parser.parse_args()
 
     try:
@@ -285,7 +317,7 @@ def main():
         print(f"FEHLER: Ungültiges JSON - {ex}", file=sys.stderr); sys.exit(1)
 
     try:
-        receipt = build_receipt(data)
+        receipt = build_multi_receipt(data) if args.mode == 'multi' else build_receipt(data)
         err1 = err2 = None
         try:
             used = print_winusb(receipt)

@@ -1478,6 +1478,11 @@ async function renderSettings() {
         ${ft('quote_footer','Fusszeile Angebot',s.quote_footer,'Hinweis Gültigkeit, Lieferbedingungen …')}
       </div>
 
+      <div class="sep-label">Thermodrucker / Kassabon</div>
+      <div class="form-row">
+        ${ft('receipt_footer','Fusszeile Kassabon',s.receipt_footer,'z.B. Vielen Dank für Ihren Auftrag!')}
+      </div>
+
       <div style="margin-top:16px;display:flex;gap:8px">
         <button class="btn btn-primary" onclick="saveSettings()">💾 Einstellungen speichern</button>
       </div>
@@ -1495,7 +1500,7 @@ async function saveSettings() {
     'company_country','company_phone','company_email','company_website',
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
-    'invoice_footer','quote_footer'];
+    'invoice_footer','quote_footer','receipt_footer'];
   const body = {};
   keys.forEach(k => {
     const el = document.getElementById('st-' + k);
@@ -2475,7 +2480,8 @@ async function openDeliveryDetail(id) {
 
 function renderDeliveryItems(items, deliveryId) {
   if (!items.length) return `<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Positionen</div>`;
-  return items.map(item => `
+  const allBtn = items.length > 1 ? `<button class="btn btn-teal btn-sm" style="margin-bottom:8px" onclick="printReceiptAll(${deliveryId})">🖶 Alle drucken</button>` : '';
+  return allBtn + items.map(item => `
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:${item.print_settings?'1px solid var(--line)':'none'}">
         ${item.item_number?`<span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${item.item_number}</span>`:''}
@@ -2941,6 +2947,22 @@ async function generateDoc(id, type) {
 
 
 // ── THERMAL PRINT ─────────────────────────────────────────────
+async function printReceiptAll(deliveryId) {
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    await api('/api/print-receipt-delivery', 'POST', { delivery_id: deliveryId });
+    toast('Gesamtbeleg gedruckt ✓', 'ok');
+  } catch(e) {
+    alert('Druckfehler:\n\n' + (e.message || 'Unbekannter Fehler'));
+  } finally {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
+}
+
 async function printReceipt(deliveryItemId) {
   const btn = event.target;
   const orig = btn.textContent;
