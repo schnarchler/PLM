@@ -3147,15 +3147,19 @@ function toast(msg, type='ok') {
 
 // -- SHUTDOWN --------------------------------------------------
 async function shutdownServer() {
-  if (!confirm('Server wirklich beenden? Der Browser verliert dann die Verbindung.')) return;
-  try {
-    await fetch('/api/shutdown', { method: 'POST' });
-  } catch(e) {}
-  document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0c10;color:#dde4f0;font-family:IBM Plex Mono,monospace;gap:16px">'
-    + '<div style="font-size:40px">&#9632;</div>'
-    + '<div style="font-size:18px;color:#4a9eff">PLM & ERP wurde beendet</div>'
-    + '<div style="font-size:13px;color:#4a5470">Das CMD-Fenster kann jetzt geschlossen werden.</div>'
-    + '</div>';
+  if (!confirm('Server wirklich beenden?')) return;
+  try { await fetch('/api/shutdown', { method: 'POST' }); } catch(e) {}
+  // Tab schliessen
+  window.open('', '_self').close();
+  window.close();
+  // Fallback: Tab konnte nicht geschlossen werden
+  setTimeout(() => {
+    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0c10;color:#dde4f0;font-family:IBM Plex Mono,monospace;gap:16px">'
+      + '<div style="font-size:40px">&#9632;</div>'
+      + '<div style="font-size:18px;color:#4a9eff">PLM & ERP wurde beendet</div>'
+      + '<div style="font-size:13px;color:#4a5470">Dieser Tab kann jetzt geschlossen werden.</div>'
+      + '</div>';
+  }, 300);
 }
 
 // ── DELIVERIES ────────────────────────────────────────────────

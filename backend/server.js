@@ -1697,6 +1697,14 @@ app.get('/api/export', (req, res) => {
   res.send(zip);
 });
 
+app.get('/launcher', (req, res) => {
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PLM startet…</title>
+  <style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0c10;color:#4a9eff;font-family:monospace;font-size:14px}</style>
+  </head><body>PLM &amp; ERP wird geöffnet…
+  <script>var w=window.open('http://localhost:${PORT}/','_blank');if(!w){location.href='http://localhost:${PORT}/';}else{window.close();}</script>
+  </body></html>`);
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
 
 // -- START ------------------------------------------------------
