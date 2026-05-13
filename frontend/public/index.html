@@ -2545,6 +2545,7 @@ function getFirstVal(v) {
 }
 
 function renderSettingsPreview(s) {
+  const knownKeys = new Set(SETTINGS_GROUPS.flatMap(g => g.keys.map(([k]) => k)));
   const groups = SETTINGS_GROUPS.map(g => {
     const cells = g.keys.map(([k, label]) => {
       const v = getFirstVal(s[k]);
@@ -2560,7 +2561,24 @@ function renderSettingsPreview(s) {
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${cells}</div>
     </div>`;
   }).filter(Boolean).join('');
-  return groups || '<div style="font-size:11px;color:var(--t3)">Keine Settings geladen</div>';
+
+  // Fallback: zeige alle Keys die nicht in bekannten Gruppen sind
+  const extraCells = Object.entries(s)
+    .filter(([k,v]) => !knownKeys.has(k) && v && String(v).trim())
+    .map(([k,v]) => {
+      const val = getFirstVal(v) || String(v).split(';')[0].trim();
+      if (!val) return '';
+      return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:5px 7px">
+        <div style="font-family:var(--mono);font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${esc(k.replace(/_/g,' '))}</div>
+        <div style="font-size:11px;font-weight:500;color:var(--t1)">${esc(val)}</div>
+      </div>`;
+    }).filter(Boolean).join('');
+  const extras = extraCells ? `<div style="margin-bottom:8px">
+    <div style="font-family:var(--mono);font-size:9px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Weitere Parameter</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${extraCells}</div>
+  </div>` : '';
+
+  return groups + extras || '<div style="font-size:11px;color:var(--t3)">Keine Settings geladen</div>';
 }
 
 // ── 3MF UPLOAD HANDLING ───────────────────────────────────────

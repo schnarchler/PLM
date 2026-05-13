@@ -18,12 +18,21 @@ LINE_W=32
 def e(t): return str(t).encode('cp437', errors='replace')
 def sep(): return ALIGN_L+e('-'*LINE_W)+NL
 
-def row(text='', align=ALIGN_L, bold=False, small=False, tall=False):
-    o=align
+def center(text, width=LINE_W):
+    t=str(text); pad=max(0,(width-len(t))//2)
+    return ALIGN_L+e(' '*pad+t)+NL
+
+def row(text='', align=ALIGN_L, bold=False, small=False, tall=False, centered=False):
+    o=ALIGN_L
     o+=BOLD_ON if bold else b''
     o+=FONT_B if small else b''
     o+=DBL_H_ON if tall else b''
-    o+=e(str(text))+NL
+    if centered:
+        t=str(text); pad=max(0,(LINE_W-len(t))//2)
+        o+=e(' '*pad+t)
+    else:
+        o+=e(str(text))
+    o+=NL
     o+=DBL_H_OFF if tall else b''
     o+=FONT_A if small else b''
     o+=BOLD_OFF if bold else b''
@@ -34,16 +43,23 @@ def lr(label, value, width=LINE_W):
     return ALIGN_L+e(lbl+' '*max(1,width-len(lbl)-len(val))+val)+NL
 
 def build_receipt(data):
+    header=data.get('header') or 'PLM & ERP'
     name=data.get('name') or '-'; number=data.get('number') or ''
     desc=data.get('desc') or ''; qty=data.get('qty',1); unit=data.get('unit','Stk')
     price=data.get('price'); params=data.get('params') or {}
+    customer=data.get('customer') or ''; notes=data.get('notes') or ''
     now=datetime.now().strftime('%d.%m.%Y  %H:%M')
     o=INIT+ALIGN_L
-    o+=row('PLM & ERP',align=ALIGN_C,bold=True)
-    o+=row(now,align=ALIGN_C,small=True); o+=sep()
+    o+=row(header,bold=True,centered=True)
+    o+=row(now,small=True,centered=True)
+    if customer:
+        o+=row(customer,small=True,centered=True)
+    o+=sep()
     if number: o+=row(number,bold=True)
     o+=row(name,bold=True,tall=True)
     if desc and desc!=name: o+=row(desc,small=True)
+    o+=sep()
+    if notes: o+=row(notes,small=True)
     o+=row(f'Menge: {qty} {unit}'); o+=sep()
     if params:
         o+=row('DRUCKPARAMETER',bold=True)
@@ -52,7 +68,7 @@ def build_receipt(data):
             if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16])
         o+=sep()
     if price is not None:
-        o+=row(f'Total CHF {float(price):.2f}',align=ALIGN_C,bold=True,tall=True); o+=sep()
+        o+=row(f'Total CHF {float(price):.2f}',bold=True,tall=True,centered=True); o+=sep()
     o+=NL*3+CUT
     return o
 

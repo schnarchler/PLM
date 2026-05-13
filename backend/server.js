@@ -1238,10 +1238,16 @@ app.post('/api/print-receipt', (req, res) => {
   const { delivery_item_id } = req.body;
   if (!delivery_item_id) return res.status(400).json({ error: 'delivery_item_id required' });
 
-  const item = get(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price
-    FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
+  const item = get(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price,
+    COALESCE(c.name, d.customer_name_free) as customer_name
+    FROM delivery_items di
+    LEFT JOIN items i ON di.item_id=i.id
+    LEFT JOIN deliveries d ON di.delivery_id=d.id
+    LEFT JOIN customers c ON d.customer_id=c.id
     WHERE di.id=?`, [delivery_item_id]);
   if (!item) return res.status(404).json({ error: 'Item not found' });
+  const cnRow = get("SELECT value FROM settings WHERE key='company_name'");
+  const companyName = (cnRow && cnRow.value) ? cnRow.value : 'PLM & ERP';
 
   // Extract key print params from stored 3MF settings
   const params = {};
@@ -1276,12 +1282,15 @@ app.post('/api/print-receipt', (req, res) => {
     : (item.default_price != null ? item.default_price : null);
 
   const printData = {
-    name:   item.item_name || item.description,
-    number: item.item_number || '',
-    desc:   item.item_name ? item.description : '',
-    qty:    item.quantity,
-    unit:   item.unit,
-    price:  price,
+    header:   companyName,
+    name:     item.item_name || item.description,
+    number:   item.item_number || '',
+    desc:     item.item_name ? '' : (item.description || ''),
+    qty:      item.quantity,
+    unit:     item.unit,
+    price:    price,
+    customer: item.customer_name || '',
+    notes:    item.notes || '',
     params
   };
 
