@@ -21,16 +21,16 @@
   --red: #e05252;
   --purple: #9b7ff4;
   --green: #3dd68c;
-  --t1: #dde4f0;
-  --t2: #8a95b0;
-  --t3: #4a5470;
+  --t1: #eaeff8;
+  --t2: #a8b4cc;
+  --t3: #6b7a99;
   --mono: 'IBM Plex Mono', monospace;
   --sans: 'IBM Plex Sans', sans-serif;
   --r: 4px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
-body{font-family:var(--sans);background:var(--bg0);color:var(--t1);font-size:13px;display:flex;flex-direction:column}
+body{font-family:var(--sans);background:var(--bg0);color:var(--t1);font-size:14px;display:flex;flex-direction:column}
 
 /* ── TOPBAR ── */
 #topbar{height:48px;background:var(--bg1);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:0;flex-shrink:0;z-index:50}
@@ -49,7 +49,7 @@ body{font-family:var(--sans);background:var(--bg0);color:var(--t1);font-size:13p
 #nav{width:200px;flex-shrink:0;background:var(--bg1);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
 .nav-section{padding:12px 8px 4px}
 .nav-label{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;padding:0 8px;margin-bottom:4px}
-.nav-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r);cursor:pointer;color:var(--t2);font-size:12px;transition:all .12s;border:none;background:none;width:100%;text-align:left}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r);cursor:pointer;color:var(--t2);font-size:13px;transition:all .12s;border:none;background:none;width:100%;text-align:left}
 .nav-item:hover{background:var(--bg3);color:var(--t1)}
 .nav-item.active{background:rgba(74,158,255,.12);color:var(--blue)}
 .nav-item .ni{width:14px;height:14px;flex-shrink:0}
@@ -81,16 +81,16 @@ body{font-family:var(--sans);background:var(--bg0);color:var(--t1);font-size:13p
 .card:hover .card-accent{opacity:1}
 .card-num{font-family:var(--mono);font-size:10px;color:var(--blue);margin-bottom:6px}
 .card-name{font-size:14px;font-weight:500;margin-bottom:8px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card-meta{font-size:11px;color:var(--t3);display:flex;flex-wrap:wrap;gap:6px}
+.card-meta{font-size:12px;color:var(--t3);display:flex;flex-wrap:wrap;gap:6px}
 .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 
 /* ── TABLE ── */
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-thead th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+thead th{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 tbody tr{border-bottom:1px solid var(--line);transition:background .1s;cursor:pointer}
 tbody tr:hover{background:var(--bg3)}
-tbody td{padding:9px 10px;font-size:12px}
+tbody td{padding:9px 10px;font-size:13px}
 tbody tr:last-child{border-bottom:none}
 
 /* ── TREE (structure view) ── */
@@ -101,8 +101,8 @@ tbody tr:last-child{border-bottom:none}
 .tree-indent{display:flex;flex-direction:column}
 .tree-children{padding-left:18px;border-left:1px solid var(--line)}
 .tree-icon{font-size:13px;flex-shrink:0}
-.tree-num{font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0}
-.tree-name{font-size:12px;color:var(--t1)}
+.tree-num{font-family:var(--mono);font-size:11px;color:var(--blue);flex-shrink:0}
+.tree-name{font-size:13px;color:var(--t1)}
 .tree-rev{font-family:var(--mono);font-size:9px;margin-left:auto;flex-shrink:0}
 .tree-tog{width:14px;flex-shrink:0;text-align:center;font-size:10px;color:var(--t3);cursor:pointer;line-height:1}
 .tree-tog:hover{color:var(--t1)}
