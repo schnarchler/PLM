@@ -47,7 +47,7 @@ def build_receipt(data):
     customer=data.get('customer') or ''; notes=data.get('notes') or ''
     footer=data.get('footer') or ''
     now=datetime.now().strftime('%d.%m.%Y  %H:%M')
-    o=ALIGN_L
+    o=NL+ALIGN_L
     o+=row(header,bold=True,centered=True)
     o+=row(now,small=True,centered=True)
     if customer:
@@ -78,7 +78,7 @@ def build_multi_receipt(data):
     total=data.get('total')
     footer=data.get('footer') or ''
     now=datetime.now().strftime('%d.%m.%Y  %H:%M')
-    o=ALIGN_L
+    o=NL+ALIGN_L
     o+=row(header,bold=True,centered=True)
     o+=row(now,small=True,centered=True)
     if customer:
