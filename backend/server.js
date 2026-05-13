@@ -585,6 +585,12 @@ app.get('/api/projects/:id', (req, res) => {
     item.revisions = all('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid DESC', [item.id]);
     if (item.latest_revision) {
       item.latest_revision.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [item.latest_revision.id]);
+      if (item.item_type === 'ASM') {
+        item.latest_revision.bom = all(
+          'SELECT b.child_item_id, b.quantity, b.unit, b.position FROM bom b WHERE b.parent_rev_id=? ORDER BY b.position',
+          [item.latest_revision.id]
+        );
+      }
     }
   });
   p.changelog = all("SELECT * FROM changelog WHERE entity_type='project' AND entity_id=? ORDER BY created_at DESC LIMIT 20", [p.id]);

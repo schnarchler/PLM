@@ -104,6 +104,8 @@ tbody tr:last-child{border-bottom:none}
 .tree-num{font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0}
 .tree-name{font-size:12px;color:var(--t1)}
 .tree-rev{font-family:var(--mono);font-size:9px;margin-left:auto;flex-shrink:0}
+.tree-tog{width:14px;flex-shrink:0;text-align:center;font-size:10px;color:var(--t3);cursor:pointer;line-height:1}
+.tree-tog:hover{color:var(--t1)}
 
 /* ── DETAIL SPLIT ── */
 #detail-panel{width:520px;flex-shrink:0;border-left:1px solid var(--line);background:var(--bg1);display:flex;flex-direction:column;overflow:hidden;transition:width .2s}
@@ -969,23 +971,48 @@ async function openProject(id) {
 }
 
 
+let _nc = 0;
+function _nim() { return ++_nc; }
+
 function renderTreeNodes(items, parentId) {
-  const children = items.filter(i => i.parent_id === parentId);
-  if (!children.length) return '';
-  return children.map(item => {
-    const rev = item.latest_revision;
-    const icon = item.item_type === 'ASM' ? '📦' : item.item_type === 'DOC' ? '📄' : '🔩';
-    const sub = renderTreeNodes(items, item.id);
-    return `<div class="tree-node">
-      <div class="tree-row" onclick="openItemDetail(${item.id})" id="tr-${item.id}">
-        <span class="tree-icon">${icon}</span>
-        <span class="tree-num">${item.item_number}</span>
-        <span class="tree-name">${esc(item.name)}</span>
-        ${rev ? `<span class="status st-${rev.status} tree-rev">Rev ${rev.rev} · ${rev.status}</span>` : ''}
-      </div>
-      ${sub ? `<div class="tree-children">${sub}</div>` : ''}
-    </div>`;
-  }).join('');
+  _nc = 0;
+  const map = {};
+  items.forEach(i => map[i.id] = i);
+  return _renderRootNodes(items.filter(i => i.parent_id === parentId), map, true);
+}
+
+function _renderRootNodes(children, map, isRoot) {
+  return children.map(item => _renderTreeNode(item, map, isRoot)).join('');
+}
+
+function _renderTreeNode(item, map, isRoot) {
+  const rev = item.latest_revision;
+  const icon = item.item_type === 'ASM' ? '📦' : item.item_type === 'DOC' ? '📄' : '🔩';
+  const bomKids = (item.item_type === 'ASM' && rev && rev.bom) ? rev.bom : [];
+  const hasKids = bomKids.length > 0;
+  const n = _nim(); const nid = `tn${n}`, tid = `tt${n}`;
+  const childHtml = hasKids ? bomKids.map(b => {
+    const ci = map[b.child_item_id];
+    return ci ? _renderTreeNode(ci, map, false) : '';
+  }).join('') : '';
+  return `<div class="tree-node">
+    <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}>
+      <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')">${hasKids ? '▶' : ''}</span>
+      <span class="tree-icon">${icon}</span>
+      <span class="tree-num">${item.item_number}</span>
+      <span class="tree-name">${esc(item.name)}</span>
+      ${rev ? `<span class="status st-${rev.status} tree-rev">Rev ${rev.rev} · ${rev.status}</span>` : ''}
+    </div>
+    ${hasKids ? `<div id="${nid}" class="tree-children" style="display:none">${childHtml}</div>` : ''}
+  </div>`;
+}
+
+function togN(nid, tid) {
+  const n = document.getElementById(nid); const t = document.getElementById(tid);
+  if (!n) return;
+  const open = n.style.display !== 'none';
+  n.style.display = open ? 'none' : '';
+  if (t) t.textContent = open ? '▶' : '▼';
 }
 
 function openProjectDetail(p) {
@@ -996,21 +1023,36 @@ function openProjectDetail(p) {
     <button class="tab" onclick="switchTab(this,'pt-info')">Info</button>
     <button class="tab" onclick="switchTab(this,'pt-log')">Changelog</button>`;
 
-  // Build files/BOM overview: each item with its datasets
+  // Build files/BOM overview using BOM-based hierarchy
+  _nc = 0;
   const allItems = p.items || [];
-  function renderItemFiles(item) {
+  const dpMap = {};
+  allItems.forEach(i => dpMap[i.id] = i);
+
+  function renderItemFiles(item, isRoot) {
     const rev = item.latest_revision;
     const datasets = rev && rev.datasets ? rev.datasets : [];
     const icon = item.item_type === 'ASM' ? '📦' : item.item_type === 'DOC' ? '📄' : '🔩';
-    const children = allItems.filter(i => i.parent_id === item.id);
-    return `<div style="margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--bg3);border-radius:var(--r);cursor:pointer" onclick="openItemDetail(${item.id})">
-        <span>${icon}</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${item.item_number}</span>
-        <span style="font-size:12px;flex:1">${esc(item.name)}</span>
-        ${rev ? `<span class="status st-${rev.status}">Rev ${rev.rev}</span>` : ''}
+    const bomKids = (item.item_type === 'ASM' && rev && rev.bom) ? rev.bom : [];
+    const hasKids = bomKids.length > 0;
+    const n = _nim(); const nid = `dp${n}`, tid = `dt${n}`;
+    const childHtml = hasKids ? bomKids.map(b => {
+      const ci = dpMap[b.child_item_id];
+      if (!ci) return '';
+      const qty = (b.quantity && b.quantity !== 1) ? `<div style="padding:0 6px 4px 32px;font-size:10px;color:var(--t3)">Menge: ${b.quantity} ${b.unit||'Stk'}</div>` : '';
+      return renderItemFiles(ci, false) + qty;
+    }).join('') : '';
+    return `<div style="margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--bg3);border-radius:var(--r)">
+        <span class="tree-tog" onclick="togN('${nid}','${tid}')">${hasKids ? '▶' : ''}</span>
+        <span style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px;min-width:0" onclick="openItemDetail(${item.id})">
+          <span>${icon}</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
+          <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
+        </span>
+        ${rev ? `<span class="status st-${rev.status}" style="flex-shrink:0">Rev ${rev.rev}</span>` : ''}
       </div>
-      ${datasets.length ? `<div style="padding:3px 6px 3px 22px">
+      ${datasets.length ? `<div style="padding:3px 6px 3px 32px">
         ${datasets.map(d => `<div class="ds-row" style="margin-bottom:3px">
           <span class="ds-type dt-${d.ds_type}">${d.ds_type}</span>
           <div class="ds-info"><div class="ds-name">${esc(d.original_name)}</div></div>
@@ -1018,15 +1060,13 @@ function openProjectDetail(p) {
           <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
         </div>`).join('')}
       </div>` : ''}
-      ${children.length ? `<div style="padding-left:18px;border-left:1px solid var(--line);margin-left:10px;margin-top:2px">
-        ${children.map(renderItemFiles).join('')}
-      </div>` : ''}
+      ${hasKids ? `<div id="${nid}" class="tree-children" style="display:none">${childHtml}</div>` : ''}
     </div>`;
   }
 
   const roots = allItems.filter(i => !i.parent_id);
   const filesHtml = roots.length
-    ? roots.map(renderItemFiles).join('')
+    ? roots.map(i => renderItemFiles(i, true)).join('')
     : '<div style="color:var(--t3);font-size:12px;padding:8px">Keine Items im Projekt</div>';
 
   document.getElementById('dp-body').innerHTML = `
