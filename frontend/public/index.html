@@ -518,8 +518,15 @@ a{color:inherit;text-decoration:none}
 <!-- NAV -->
 <nav id="nav">
   <div class="nav-section">
+    <button class="nav-item active" id="ni-dashboard" onclick="gotoView('dashboard')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      Dashboard
+    </button>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-section">
     <div class="nav-label">PLM</div>
-    <button class="nav-item active" id="ni-projects" onclick="gotoView('projects')">
+    <button class="nav-item" id="ni-projects" onclick="gotoView('projects')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
       Projekte
       <span class="badge" id="badge-projects">—</span>
@@ -527,10 +534,6 @@ a{color:inherit;text-decoration:none}
     <button class="nav-item" id="ni-search" onclick="gotoView('search')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       Suche
-    </button>
-    <button class="nav-item" id="ni-dashboard" onclick="gotoView('dashboard')">
-      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-      Dashboard
     </button>
     <button class="nav-item" id="ni-changelog" onclick="gotoView('changelog')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -1147,7 +1150,7 @@ let state = { view: 'projects', projects: [], project: null, item: null, activeR
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
-  gotoView('projects');
+  gotoView('dashboard');
   loadStats();
   setupUploadDrag();
   document.addEventListener('click', e => {
@@ -1825,10 +1828,28 @@ async function renderDashboard() {
 }
 
 // ── CHANGELOG ─────────────────────────────────────────────────
+let _changelogRows = [];
+function exportChangelog() {
+  if (!_changelogRows.length) { toast('Keine Daten zum Exportieren','warn'); return; }
+  const header = ['Datum','Zeit','Typ','Referenz','Bezeichnung','Aktion','Details'];
+  const csvRows = _changelogRows.map(r => {
+    const dt = r.created_at ? r.created_at.replace('T',' ').slice(0,19) : '';
+    const date = dt.slice(0,10); const time = dt.slice(11,16);
+    return [date, time, r.entity_type||'', r.ref||'', r.label||'', r.action||'', r.details||''];
+  });
+  const csv = [header, ...csvRows].map(row => row.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+  a.download = 'changelog-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
 async function renderChangelog() {
-  setLeftHeader('Changelog', `<button class="btn btn-ghost btn-sm" onclick="renderChangelog()">↺ Aktualisieren</button>`);
+  setLeftHeader('Changelog', `
+    <button class="btn btn-ghost btn-sm" onclick="renderChangelog()">↺ Aktualisieren</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportChangelog()">&#x2B07; CSV</button>`);
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
-  const rows = await api('/api/changelog?limit=200');
+  const rows = await api('/api/changelog?limit=2000');
+  _changelogRows = rows;
   if (!rows.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Noch keine Einträge</div></div>`);
     return;
@@ -2048,21 +2069,43 @@ function exportFileIndex() {
 }
 
 // ── CUSTOMERS ─────────────────────────────────────────────────
+let _customerFilter = { text:'' };
+function _clearCustomerFilter(){_customerFilter={text:''};renderCustomers();}
 async function renderCustomers() {
   setLeftHeader('Kunden', `<button class="btn btn-primary btn-sm" onclick="openCustomerModal()">+ Kunde</button>`);
   const customers = await api('/api/customers');
   state.customers = customers;
   if (!customers.length) { setLeftBody(`<div class="empty"><div class="empty-icon">👤</div><div class="empty-text">Noch keine Kunden</div></div>`); return; }
-  setLeftBody(`<div class="tbl-wrap"><table>
-    <thead><tr><th>Nummer</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th>Adresse</th><th></th></tr></thead>
-    <tbody>${customers.map(c=>`<tr onclick="openCustomerDetail(${c.id})">
-      <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${c.number}</td>
-      <td style="font-weight:500">${esc(c.name)}</td>
-      <td style="color:var(--t2)">${c.email||'—'}</td>
-      <td style="color:var(--t2)">${c.phone||'—'}</td>
-      <td style="color:var(--t3);font-size:11px">${[c.street,c.postal_code&&c.city?c.postal_code+' '+c.city:'',c.country].filter(Boolean).join(', ')||'—'}</td>
-      <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delCustomer(${c.id})">✕</button></td>
-    </tr>`).join('')}</tbody></table></div>`);
+  const hasFilter = !!_customerFilter.text;
+  setLeftBody(`
+    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">
+      <input class="fi" style="flex:1" placeholder="Suchen nach Name, Nummer, E-Mail…" value="${esc(_customerFilter.text||'')}"
+        oninput="_customerFilter.text=this.value;_render_customerRows()">
+      ${hasFilter?`<button class="btn btn-ghost btn-sm" onclick="_clearCustomerFilter()" title="Filter zurücksetzen">✕</button>`:''}
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Nummer</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th>Adresse</th><th></th></tr></thead>
+      <tbody id="_customer-tbody"></tbody>
+    </table></div>`);
+  _render_customerRows();
+}
+function _render_customerRows() {
+  const t = _customerFilter.text.toLowerCase();
+  const rows = (state.customers||[]).filter(c =>
+    !t || c.name.toLowerCase().includes(t) || c.number.toLowerCase().includes(t) ||
+    (c.email||'').toLowerCase().includes(t) || (c.phone||'').toLowerCase().includes(t) ||
+    (c.city||'').toLowerCase().includes(t)
+  );
+  const el = document.getElementById('_customer-tbody');
+  if (!el) return;
+  el.innerHTML = rows.map(c=>`<tr onclick="openCustomerDetail(${c.id})">
+    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${c.number}</td>
+    <td style="font-weight:500">${esc(c.name)}</td>
+    <td style="color:var(--t2)">${c.email||'—'}</td>
+    <td style="color:var(--t2)">${c.phone||'—'}</td>
+    <td style="color:var(--t3);font-size:11px">${[c.street,c.postal_code&&c.city?c.postal_code+' '+c.city:'',c.country].filter(Boolean).join(', ')||'—'}</td>
+    <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delCustomer(${c.id})">✕</button></td>
+  </tr>`).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
 
 async function openCustomerDetail(id) {
@@ -2160,36 +2203,48 @@ async function openCustomerDetail(id) {
 }
 
 // ── ORDERS ────────────────────────────────────────────────────
-let _orderFilter = { text:'', status:'' };
+function _selOpts(pairs, cur) {
+  return pairs.map(([v,l])=>`<option value="${v}"${v===cur?' selected':''}>${l}</option>`).join('');
+}
+function _filterBar(filterObj, stOpts, clearFn, idPrefix) {
+  const hasFilter = filterObj.text||filterObj.status||filterObj.dateFrom||filterObj.dateTo;
+  return `<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+    <input class="fi" style="flex:1;min-width:150px" placeholder="Suchen…" value="${esc(filterObj.text||'')}"
+      oninput="${idPrefix}Filter.text=this.value;_render${idPrefix}Rows()">
+    <select class="fs" style="width:130px" onchange="${idPrefix}Filter.status=this.value;_render${idPrefix}Rows()">
+      <option value="">Alle Status</option>${_selOpts(stOpts,filterObj.status||'')}
+    </select>
+    <input class="fi" type="date" style="width:116px" title="Von Datum" value="${filterObj.dateFrom||''}"
+      onchange="${idPrefix}Filter.dateFrom=this.value;_render${idPrefix}Rows()">
+    <input class="fi" type="date" style="width:116px" title="Bis Datum" value="${filterObj.dateTo||''}"
+      onchange="${idPrefix}Filter.dateTo=this.value;_render${idPrefix}Rows()">
+    ${hasFilter?`<button class="btn btn-ghost btn-sm" onclick="${clearFn}()" title="Filter zurücksetzen">✕</button>`:''}
+  </div>`;
+}
+let _orderFilter = { text:'', status:'', dateFrom:'', dateTo:'' };
+function _clearOrderFilter(){_orderFilter={text:'',status:'',dateFrom:'',dateTo:''};renderOrders();}
 async function renderOrders() {
   setLeftHeader('Aufträge', `<button class="btn btn-primary btn-sm" onclick="openOrderModal()">+ Auftrag</button>`);
   const orders = await api('/api/orders');
   state.orders = orders;
-  _orderFilter = { text:'', status:'' };
   if (!orders.length) { setLeftBody(`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Noch keine Aufträge</div></div>`); return; }
-  setLeftBody(`
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input class="fi" style="flex:1;min-width:160px" placeholder="Suchen…" oninput="_orderFilter.text=this.value;_renderOrderRows()" >
-      <select class="fs" style="width:140px" onchange="_orderFilter.status=this.value;_renderOrderRows()">
-        <option value="">Alle Status</option>
-        <option value="DRAFT">Entwurf</option><option value="CONFIRMED">Bestätigt</option>
-        <option value="DELIVERED">Geliefert</option><option value="INVOICED">Fakturiert</option>
-        <option value="CANCELLED">Storniert</option>
-      </select>
-    </div>
-    <div class="tbl-wrap"><table>
+  setLeftBody(_filterBar(_orderFilter,[['DRAFT','Entwurf'],['CONFIRMED','Bestätigt'],['DELIVERED','Geliefert'],['INVOICED','Fakturiert'],['CANCELLED','Storniert']],'_clearOrderFilter','_order')+
+    `<div class="tbl-wrap"><table>
       <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Datum</th><th style="text-align:right">Total</th><th></th></tr></thead>
-      <tbody id="order-tbody"></tbody>
+      <tbody id="_order-tbody"></tbody>
     </table></div>`);
-  _renderOrderRows();
+  _render_orderRows();
 }
-function _renderOrderRows() {
+function _render_orderRows() {
   const t = _orderFilter.text.toLowerCase(); const s = _orderFilter.status;
+  const df = _orderFilter.dateFrom; const dt = _orderFilter.dateTo;
   const rows = (state.orders||[]).filter(o =>
     (!t || o.title.toLowerCase().includes(t) || (o.customer_name||'').toLowerCase().includes(t) || o.number.includes(t)) &&
-    (!s || o.status === s)
+    (!s || o.status === s) &&
+    (!df || (o.order_date||'') >= df) &&
+    (!dt || (o.order_date||'') <= dt)
   );
-  const el = document.getElementById('order-tbody');
+  const el = document.getElementById('_order-tbody');
   if (!el) return;
   el.innerHTML = rows.map(o=>`<tr onclick="openOrderDetail(${o.id})">
     <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${o.number}</td>
@@ -2719,35 +2774,30 @@ async function delOrder(id) {
 }
 
 // ── QUOTES ────────────────────────────────────────────────────
-let _quoteFilter = { text:'', status:'' };
+let _quoteFilter = { text:'', status:'', dateFrom:'', dateTo:'' };
+function _clearQuoteFilter(){_quoteFilter={text:'',status:'',dateFrom:'',dateTo:''};renderQuotes();}
 async function renderQuotes() {
   setLeftHeader('Angebote', `<button class="btn btn-primary btn-sm" onclick="openQuoteModal()">+ Angebot</button>`);
   const quotes = await api('/api/quotes');
   state.quotes = quotes;
-  _quoteFilter = { text:'', status:'' };
   if (!quotes.length) { setLeftBody(`<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Noch keine Angebote</div></div>`); return; }
-  setLeftBody(`
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input class="fi" style="flex:1;min-width:160px" placeholder="Suchen…" oninput="_quoteFilter.text=this.value;_renderQuoteRows()">
-      <select class="fs" style="width:140px" onchange="_quoteFilter.status=this.value;_renderQuoteRows()">
-        <option value="">Alle Status</option>
-        <option value="DRAFT">Entwurf</option><option value="SENT">Versendet</option>
-        <option value="ACCEPTED">Akzeptiert</option><option value="DECLINED">Abgelehnt</option>
-      </select>
-    </div>
-    <div class="tbl-wrap"><table>
+  setLeftBody(_filterBar(_quoteFilter,[['DRAFT','Entwurf'],['SENT','Versendet'],['ACCEPTED','Akzeptiert'],['DECLINED','Abgelehnt']],'_clearQuoteFilter','_quote')+
+    `<div class="tbl-wrap"><table>
       <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Gültig bis</th><th></th></tr></thead>
-      <tbody id="quote-tbody"></tbody>
+      <tbody id="_quote-tbody"></tbody>
     </table></div>`);
-  _renderQuoteRows();
+  _render_quoteRows();
 }
-function _renderQuoteRows() {
+function _render_quoteRows() {
   const t = _quoteFilter.text.toLowerCase(); const s = _quoteFilter.status;
+  const df = _quoteFilter.dateFrom; const dt = _quoteFilter.dateTo;
   const rows = (state.quotes||[]).filter(q =>
     (!t || q.title.toLowerCase().includes(t) || (q.customer_name||'').toLowerCase().includes(t) || q.number.includes(t)) &&
-    (!s || q.status === s)
+    (!s || q.status === s) &&
+    (!df || (q.quote_date||'') >= df) &&
+    (!dt || (q.quote_date||'') <= dt)
   );
-  const el = document.getElementById('quote-tbody');
+  const el = document.getElementById('_quote-tbody');
   if (!el) return;
   el.innerHTML = rows.map(q=>`<tr onclick="openQuoteDetail(${q.id})">
     <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${q.number}</td>
@@ -3194,35 +3244,31 @@ async function shutdownServer() {
 const DELIVERY_ST_MAP   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
 const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
 
-let _deliveryFilter = { text:'', status:'' };
+let _deliveryFilter = { text:'', status:'', dateFrom:'', dateTo:'' };
+function _clearDeliveryFilter(){_deliveryFilter={text:'',status:'',dateFrom:'',dateTo:''};renderDeliveries();}
 async function renderDeliveries() {
   setLeftHeader('Lieferscheine', `<button class="btn btn-primary btn-sm" onclick="openDeliveryModal()">+ Lieferschein</button>`);
   const rows = await api('/api/deliveries');
   state.deliveries = rows;
-  _deliveryFilter = { text:'', status:'' };
   if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🚚</div><div class="empty-text">Noch keine Lieferscheine</div></div>`); return; }
-  setLeftBody(`
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input class="fi" style="flex:1;min-width:160px" placeholder="Suchen…" oninput="_deliveryFilter.text=this.value;_renderDeliveryRows()">
-      <select class="fs" style="width:140px" onchange="_deliveryFilter.status=this.value;_renderDeliveryRows()">
-        <option value="">Alle Status</option>
-        <option value="DRAFT">Entwurf</option><option value="READY">Bereit</option><option value="DELIVERED">Geliefert</option>
-      </select>
-    </div>
-    <div class="tbl-wrap"><table>
+  setLeftBody(_filterBar(_deliveryFilter,[['DRAFT','Entwurf'],['READY','Bereit'],['DELIVERED','Geliefert']],'_clearDeliveryFilter','_delivery')+
+    `<div class="tbl-wrap"><table>
       <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Datum</th><th></th></tr></thead>
-      <tbody id="delivery-tbody"></tbody>
+      <tbody id="_delivery-tbody"></tbody>
     </table></div>`);
-  _renderDeliveryRows();
+  _render_deliveryRows();
 }
 
-function _renderDeliveryRows() {
+function _render_deliveryRows() {
   const t = _deliveryFilter.text.toLowerCase(); const s = _deliveryFilter.status;
+  const df = _deliveryFilter.dateFrom; const dt = _deliveryFilter.dateTo;
   const rows = (state.deliveries||[]).filter(d =>
     (!t || d.title.toLowerCase().includes(t) || (d.customer_name||'').toLowerCase().includes(t) || d.number.includes(t)) &&
-    (!s || d.status === s)
+    (!s || d.status === s) &&
+    (!df || (d.delivery_date||'') >= df) &&
+    (!dt || (d.delivery_date||'') <= dt)
   );
-  const el = document.getElementById('delivery-tbody');
+  const el = document.getElementById('_delivery-tbody');
   if (!el) return;
   el.innerHTML = rows.map(d => `<tr onclick="openDeliveryDetail(${d.id})">
     <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${d.number}</td>
