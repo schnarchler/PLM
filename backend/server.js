@@ -1284,11 +1284,12 @@ app.post('/api/print-receipt', (req, res) => {
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
   execFile(PYTHON_CMD, [scriptPath, '--data', JSON.stringify(printData)],
-    { timeout: 20000 },
+    { timeout: 20000, encoding: 'utf8', windowsHide: true },
     (error, stdout, stderr) => {
       if (error) {
-        console.error('Pipsta error:', stderr || error.message);
-        return res.status(500).json({ error: (stderr || error.message).trim() });
+        const detail = [stderr, stdout, error.message].filter(Boolean).join(' | ').trim();
+        console.error('Pipsta error:', detail);
+        return res.status(500).json({ error: detail || 'Unbekannter Fehler' });
       }
       console.log('Pipsta:', stdout.trim());
       res.json({ ok: true });

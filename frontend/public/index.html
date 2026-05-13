@@ -2334,7 +2334,7 @@ async function api(url, method='GET', body=null) {
   const opts = { method, headers: {} };
   if (body) { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
   const r = await fetch(API+url, opts);
-  if (!r.ok) { const e=await r.json().catch(()=>({error:'Fehler'})); toast(e.error||'Serverfehler','err'); throw new Error(e.error); }
+  if (!r.ok) { const e=await r.json().catch(()=>({error:'HTTP '+r.status})); toast(e.error||'Serverfehler','err'); throw new Error(e.error||'HTTP '+r.status); }
   return r.json();
 }
 
@@ -2905,7 +2905,7 @@ async function printReceipt(deliveryItemId) {
     await api('/api/print-receipt', 'POST', { delivery_item_id: deliveryItemId });
     toast('Beleg gedruckt ✓', 'ok');
   } catch(e) {
-    // error already shown by api() toast
+    alert('Druckfehler:\n\n' + (e.message || 'Unbekannter Fehler'));
   } finally {
     btn.textContent = orig;
     btn.disabled = false;
