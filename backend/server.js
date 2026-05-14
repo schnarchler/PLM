@@ -9,9 +9,21 @@ const initSqlJs = require('sql.js');
 
 const app  = express();
 const PORT = process.env.PLM_PORT || 3000;
+const CONFIG_PATH = path.join(__dirname, 'config.json');
 
+function loadConfig() {
+  try { return fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {}; }
+  catch { return {}; }
+}
+function saveConfig(obj) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(obj, null, 2));
+}
+
+const _config = loadConfig();
 const DATA_DIR    = process.env.PLM_DATA_DIR
   ? path.resolve(process.env.PLM_DATA_DIR)
+  : _config.data_dir
+  ? path.resolve(_config.data_dir)
   : path.join(__dirname, 'data');
 const DB_PATH     = path.join(DATA_DIR, 'plm.db');
 const FILES_DIR   = path.join(DATA_DIR, 'files');
@@ -1497,6 +1509,20 @@ app.put('/api/settings', (req, res) => {
   });
   saveDb();
   res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
+});
+
+// -- DATA PATH -------------------------------------------------
+app.get('/api/data-path', (req, res) => {
+  res.json({ data_dir: DATA_DIR, db_path: DB_PATH, files_dir: FILES_DIR });
+});
+
+app.put('/api/data-path', (req, res) => {
+  const { data_dir } = req.body;
+  if (!data_dir || typeof data_dir !== 'string') return res.status(400).json({ error: 'data_dir required' });
+  const cfg = loadConfig();
+  cfg.data_dir = data_dir.trim();
+  saveConfig(cfg);
+  res.json({ ok: true, message: 'Pfad gespeichert. Bitte Server neu starten damit die Änderung wirksam wird.' });
 });
 
 // -- PRINTERS --------------------------------------------------

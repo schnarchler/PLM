@@ -905,6 +905,19 @@ async function renderSettings() {
         <button class="btn btn-ghost btn-sm" id="st-mat-add-btn" onclick="addMaterialPreset()">+ Vorlage hinzufügen</button>
       </div>
 
+      <div class="sep-label" style="margin-top:24px">Datenpfad</div>
+      <div id="st-datapath-info" style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt aktuelle Pfade…</div>
+      <div class="form-row">
+        <div class="fg">
+          <label class="fl">Datenverzeichnis (Datenbank + Dateien)</label>
+          <input class="fi" id="st-data-dir" placeholder="/absoluter/pfad/zum/datenverzeichnis">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <button class="btn btn-ghost btn-sm" onclick="saveDataPath()">Pfad speichern</button>
+        <span id="st-datapath-msg" style="font-size:12px;color:var(--t3)"></span>
+      </div>
+
       <div class="sep-label" style="margin-top:24px">Datensicherung</div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
       <div style="display:flex;gap:8px">
@@ -918,6 +931,11 @@ async function renderSettings() {
       </div>
     </div>`);
   loadAndRenderPrinterConfig();
+  api('/api/data-path').then(d => {
+    document.getElementById('st-datapath-info').innerHTML =
+      `DB: <code style="user-select:all">${d.db_path}</code><br>Dateien: <code style="user-select:all">${d.files_dir}</code>`;
+    document.getElementById('st-data-dir').value = d.data_dir;
+  });
 }
 
 async function saveSettings() {
@@ -933,6 +951,20 @@ async function saveSettings() {
   });
   state.settings = await api('/api/settings','PUT',body);
   toast('Einstellungen gespeichert','ok');
+}
+
+async function saveDataPath() {
+  const input = document.getElementById('st-data-dir');
+  const msg   = document.getElementById('st-datapath-msg');
+  if (!input || !input.value.trim()) return;
+  try {
+    const r = await api('/api/data-path', 'PUT', { data_dir: input.value.trim() });
+    msg.textContent = r.message;
+    msg.style.color = 'var(--green)';
+  } catch(e) {
+    msg.textContent = 'Fehler beim Speichern';
+    msg.style.color = 'var(--red)';
+  }
 }
 
 // ── PRINTER / NOZZLE / MATERIAL SETTINGS ──────────────────────
