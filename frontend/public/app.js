@@ -3675,26 +3675,34 @@ async function loadTimeEntries(orderId) {
     : '<div style="color:var(--t3);font-size:12px;padding:12px 0">Noch keine Zeiteinträge</div>'}`;
 }
 
+function _showDynModal(html) {
+  document.getElementById('dynModal')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'overlay open'; ov.id = 'dynModal';
+  ov.innerHTML = html;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+function _hideDynModal() { document.getElementById('dynModal')?.remove(); }
+
 function openTimeModal(entry) {
-  const overlay = document.getElementById('overlay');
   const e = entry || {};
-  overlay.innerHTML = `<div class="modal" style="max-width:380px">
-    <div class="modal-header"><span>${e.id ? 'Zeiteintrag bearbeiten' : 'Zeiteintrag erfassen'}</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
-      <div><label class="ps-label">Datum</label>
-        <input id="te-date" type="date" class="form-input" value="${e.date||new Date().toISOString().slice(0,10)}"></div>
-      <div><label class="ps-label">Stunden</label>
-        <input id="te-hours" type="number" step="0.25" min="0.25" class="form-input" placeholder="1.5" value="${e.hours||''}"></div>
-      <div><label class="ps-label">Beschreibung</label>
-        <input id="te-desc" type="text" class="form-input" placeholder="Konstruktion, Montage …" value="${esc(e.description||'')}"></div>
+  _showDynModal(`<div class="modal" style="max-width:380px">
+    <div class="modal-head"><div class="modal-title">${e.id ? 'Zeiteintrag bearbeiten' : 'Zeiteintrag erfassen'}</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <div class="fg"><label class="fl">Datum</label>
+        <input id="te-date" type="date" class="fi" value="${e.date||new Date().toISOString().slice(0,10)}"></div>
+      <div class="fg"><label class="fl">Stunden</label>
+        <input id="te-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}"></div>
+      <div class="fg"><label class="fl">Beschreibung</label>
+        <input id="te-desc" type="text" class="fi" placeholder="Konstruktion, Montage …" value="${esc(e.description||'')}"></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveTimeEntry(${e.id||'null'})">Speichern</button>
     </div>
-  </div>`;
-  overlay.classList.remove('hidden');
+  </div>`);
 }
 
 async function saveTimeEntry(id) {
@@ -3707,7 +3715,7 @@ async function saveTimeEntry(id) {
   } else {
     await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, hours, description });
   }
-  closeModal();
+  _hideDynModal();
   loadTimeEntries(_teOrderId);
 }
 
@@ -3776,26 +3784,24 @@ async function openSupplierDetail(id) {
 
 async function openSupplierModal(id) {
   const s = id ? await api(`/api/suppliers/${id}`) : null;
-  const overlay = document.getElementById('overlay');
-  overlay.innerHTML = `<div class="modal" style="max-width:420px">
-    <div class="modal-header"><span>${s ? 'Lieferant bearbeiten' : 'Neuer Lieferant'}</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
+  _showDynModal(`<div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title">${s ? 'Lieferant bearbeiten' : 'Neuer Lieferant'}</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <div><label class="ps-label">Firma *</label><input id="sup-name" class="form-input" value="${esc(s?.name||'')}"></div>
+      <div class="fg"><label class="fl">Firma *</label><input id="sup-name" class="fi" value="${esc(s?.name||'')}"></div>
       <div class="cols2">
-        <div><label class="ps-label">Kontaktperson</label><input id="sup-contact" class="form-input" value="${esc(s?.contact_person||'')}"></div>
-        <div><label class="ps-label">Telefon</label><input id="sup-phone" class="form-input" value="${esc(s?.phone||'')}"></div>
+        <div class="fg"><label class="fl">Kontaktperson</label><input id="sup-contact" class="fi" value="${esc(s?.contact_person||'')}"></div>
+        <div class="fg"><label class="fl">Telefon</label><input id="sup-phone" class="fi" value="${esc(s?.phone||'')}"></div>
       </div>
-      <div><label class="ps-label">E-Mail</label><input id="sup-email" type="email" class="form-input" value="${esc(s?.email||'')}"></div>
-      <div><label class="ps-label">Adresse</label><textarea id="sup-address" class="form-input" rows="3" style="resize:vertical">${esc(s?.address||'')}</textarea></div>
-      <div><label class="ps-label">Notizen</label><textarea id="sup-notes" class="form-input" rows="2" style="resize:vertical">${esc(s?.notes||'')}</textarea></div>
+      <div class="fg"><label class="fl">E-Mail</label><input id="sup-email" type="email" class="fi" value="${esc(s?.email||'')}"></div>
+      <div class="fg"><label class="fl">Adresse</label><textarea id="sup-address" class="fs" rows="3" style="resize:vertical">${esc(s?.address||'')}</textarea></div>
+      <div class="fg"><label class="fl">Notizen</label><textarea id="sup-notes" class="fs" rows="2" style="resize:vertical">${esc(s?.notes||'')}</textarea></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveSupplier(${id||'null'})">Speichern</button>
     </div>
-  </div>`;
-  overlay.classList.remove('hidden');
+  </div>`);
 }
 
 async function saveSupplier(id) {
@@ -3809,7 +3815,7 @@ async function saveSupplier(id) {
   };
   if (!body.name) { toast('Name erforderlich', 'err'); return; }
   const s = id ? await api(`/api/suppliers/${id}`, 'PUT', body) : await api('/api/suppliers', 'POST', body);
-  closeModal();
+  _hideDynModal();
   await renderSuppliers();
   openSupplierDetail(s.id);
 }
@@ -3900,40 +3906,36 @@ async function openInventoryDetail(id) {
 async function openInventoryModal(id) {
   const item = id ? await api(`/api/inventory/${id}`) : null;
   const suppliers = await api('/api/suppliers');
-  const overlay = document.getElementById('overlay');
-  overlay.innerHTML = `<div class="modal" style="max-width:440px">
-    <div class="modal-header"><span>${item ? 'Artikel bearbeiten' : 'Neuer Lagerartikel'}</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
+  _showDynModal(`<div class="modal" style="max-width:440px">
+    <div class="modal-head"><div class="modal-title">${item ? 'Artikel bearbeiten' : 'Neuer Lagerartikel'}</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <div><label class="ps-label">Name *</label><input id="inv-name" class="form-input" value="${esc(item?.name||'')}"></div>
+      <div class="fg"><label class="fl">Name *</label><input id="inv-name" class="fi" value="${esc(item?.name||'')}"></div>
       <div class="cols2">
-        <div><label class="ps-label">Kategorie</label>
-          <select id="inv-cat" class="form-input">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'Sonstiges')===c?' selected':''}>${c}</option>`).join('')}</select></div>
-        <div><label class="ps-label">SKU / Artikelnr.</label><input id="inv-sku" class="form-input" value="${esc(item?.sku||'')}"></div>
+        <div class="fg"><label class="fl">Kategorie</label>
+          <select id="inv-cat" class="fi">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'Sonstiges')===c?' selected':''}>${c}</option>`).join('')}</select></div>
+        <div class="fg"><label class="fl">SKU / Artikelnr.</label><input id="inv-sku" class="fi" value="${esc(item?.sku||'')}"></div>
       </div>
       <div class="cols2">
-        <div><label class="ps-label">Einheit</label><input id="inv-unit" class="form-input" value="${esc(item?.unit||'Stk')}"></div>
-        <div><label class="ps-label">Mindestbestand</label><input id="inv-min" type="number" min="0" step="0.01" class="form-input" value="${item?.min_qty||0}"></div>
+        <div class="fg"><label class="fl">Einheit</label><input id="inv-unit" class="fi" value="${esc(item?.unit||'Stk')}"></div>
+        <div class="fg"><label class="fl">Mindestbestand</label><input id="inv-min" type="number" min="0" step="0.01" class="fi" value="${item?.min_qty||0}"></div>
       </div>
       <div class="cols2">
-        <div><label class="ps-label">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="form-input" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
-        <div><label class="ps-label">Lieferant</label>
-          <select id="inv-supplier" class="form-input">
+        <div class="fg"><label class="fl">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="fi" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
+        <div class="fg"><label class="fl">Lieferant</label>
+          <select id="inv-supplier" class="fi">
             <option value="">—</option>
             ${suppliers.map(s=>`<option value="${s.id}"${item?.supplier_id===s.id?' selected':''}>${esc(s.name)}</option>`).join('')}
           </select></div>
       </div>
-      ${!id ? `<div class="cols2">
-        <div><label class="ps-label">Anfangsbestand</label><input id="inv-stock" type="number" min="0" step="0.01" class="form-input" value="0"></div>
-      </div>` : ''}
-      <div><label class="ps-label">Notizen</label><textarea id="inv-notes" class="form-input" rows="2" style="resize:vertical">${esc(item?.notes||'')}</textarea></div>
+      ${!id ? `<div class="fg"><label class="fl">Anfangsbestand</label><input id="inv-stock" type="number" min="0" step="0.01" class="fi" value="0"></div>` : ''}
+      <div class="fg"><label class="fl">Notizen</label><textarea id="inv-notes" class="fs" rows="2" style="resize:vertical">${esc(item?.notes||'')}</textarea></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveInventoryItem(${id||'null'})">Speichern</button>
     </div>
-  </div>`;
-  overlay.classList.remove('hidden');
+  </div>`);
 }
 
 async function saveInventoryItem(id) {
@@ -3957,38 +3959,36 @@ async function saveInventoryItem(id) {
     if (body.stock_qty > 0) {
       await api(`/api/inventory/${item.id}/movement`, 'POST', { type: 'in', qty: body.stock_qty, notes: 'Anfangsbestand' });
     }
-    closeModal();
+    _hideDynModal();
     await renderInventory();
     openInventoryDetail(item.id);
     return;
   }
-  closeModal();
+  _hideDynModal();
   await renderInventory();
   openInventoryDetail(id);
 }
 
 function openMovementModal(itemId, defaultType) {
-  const overlay = document.getElementById('overlay');
-  overlay.innerHTML = `<div class="modal" style="max-width:360px">
-    <div class="modal-header"><span>Lagerbewegung</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
+  _showDynModal(`<div class="modal" style="max-width:360px">
+    <div class="modal-head"><div class="modal-title">Lagerbewegung</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <div><label class="ps-label">Typ</label>
-        <select id="mov-type" class="form-input">
+      <div class="fg"><label class="fl">Typ</label>
+        <select id="mov-type" class="fi">
           <option value="in"${defaultType==='in'?' selected':''}>Zugang (+)</option>
           <option value="out"${defaultType==='out'?' selected':''}>Abgang (−)</option>
           <option value="adjust">Korrektur (=)</option>
         </select></div>
-      <div><label class="ps-label">Menge</label><input id="mov-qty" type="number" min="0.01" step="0.01" class="form-input" placeholder="1"></div>
-      <div><label class="ps-label">Referenz (z.B. Auftragsnr.)</label><input id="mov-ref" class="form-input" placeholder="optional"></div>
-      <div><label class="ps-label">Notiz</label><input id="mov-notes" class="form-input" placeholder="optional"></div>
+      <div class="fg"><label class="fl">Menge</label><input id="mov-qty" type="number" min="0.01" step="0.01" class="fi" placeholder="1"></div>
+      <div class="fg"><label class="fl">Referenz (z.B. Auftragsnr.)</label><input id="mov-ref" class="fi" placeholder="optional"></div>
+      <div class="fg"><label class="fl">Notiz</label><input id="mov-notes" class="fi" placeholder="optional"></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveMovement(${itemId})">Buchen</button>
     </div>
-  </div>`;
-  overlay.classList.remove('hidden');
+  </div>`);
 }
 
 async function saveMovement(itemId) {
@@ -3998,7 +3998,7 @@ async function saveMovement(itemId) {
   const notes = document.getElementById('mov-notes').value.trim();
   if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
   await api(`/api/inventory/${itemId}/movement`, 'POST', { type, qty, reference, notes });
-  closeModal();
+  _hideDynModal();
   toast('Buchung gespeichert', 'ok');
   await renderInventory();
   openInventoryDetail(itemId);
