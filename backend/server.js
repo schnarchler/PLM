@@ -313,7 +313,7 @@ async function initDb() {
     key TEXT PRIMARY KEY,
     value INTEGER DEFAULT 0
   )`);
-  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0),('delivery',0)`);
+  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0),('delivery',0),('supplier',0)`);
 
   db.run(`CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -373,6 +373,52 @@ async function initDb() {
       [n,pt,bt,nz,fp]));
   }
 
+  db.run(`CREATE TABLE IF NOT EXISTS suppliers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    number TEXT UNIQUE,
+    name TEXT NOT NULL,
+    contact_person TEXT,
+    email TEXT,
+    phone TEXT,
+    address TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS inventory_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category TEXT DEFAULT 'Sonstiges',
+    sku TEXT,
+    unit TEXT DEFAULT 'Stk',
+    stock_qty REAL DEFAULT 0,
+    min_qty REAL DEFAULT 0,
+    price_per_unit REAL,
+    supplier_id INTEGER REFERENCES suppliers(id),
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS inventory_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL REFERENCES inventory_items(id),
+    type TEXT NOT NULL,
+    qty REAL NOT NULL,
+    reference TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS time_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER REFERENCES orders(id),
+    date TEXT,
+    hours REAL NOT NULL,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS applied_migrations (key TEXT PRIMARY KEY)`);
 
   // One-time data migration: lowercase item types/numbers, revisions letters→numbers
@@ -423,6 +469,7 @@ function nextCustomerNumber() { return 'KD-' + String(nextCounter('customer')).p
 function nextOrderNumber() { return 'AUF-' + new Date().getFullYear() + '-' + String(nextCounter('order')).padStart(4, '0'); }
 function nextQuoteNumber() { return 'ANG-' + new Date().getFullYear() + '-' + String(nextCounter('quote')).padStart(4, '0'); }
 function nextDeliveryNumber() { return 'LS-' + new Date().getFullYear() + '-' + String(nextCounter('delivery')).padStart(4, '0'); }
+function nextSupplierNumber() { return 'LF-' + String(nextCounter('supplier')).padStart(4, '0'); }
 
 function parseIni(content) {
   const s = {};
@@ -2023,6 +2070,138 @@ app.get('/launcher', (req, res) => {
   </head><body>PLM &amp; ERP wird geöffnet…
   <script>var w=window.open('http://localhost:${PORT}/','_blank');if(!w){location.href='http://localhost:${PORT}/';}else{window.close();}</script>
   </body></html>`);
+});
+
+// ==============================================================
+// SUPPLIERS
+// ==============================================================
+app.get('/api/suppliers', (req, res) => res.json(all('SELECT * FROM suppliers ORDER BY number')));
+
+app.post('/api/suppliers', (req, res) => {
+  const { name, contact_person, email, phone, address, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const number = nextSupplierNumber();
+  const id = runGetId('INSERT INTO suppliers (number,name,contact_person,email,phone,address,notes) VALUES (?,?,?,?,?,?,?)',
+    [number, name, contact_person||'', email||'', phone||'', address||'', notes||'']);
+  res.json(get('SELECT * FROM suppliers WHERE id=?', [id]));
+});
+
+app.get('/api/suppliers/:id', (req, res) => {
+  const s = get('SELECT * FROM suppliers WHERE id=?', [req.params.id]);
+  if (!s) return res.status(404).json({ error: 'Not found' });
+  s.inventory_items = all('SELECT * FROM inventory_items WHERE supplier_id=? ORDER BY name', [s.id]);
+  res.json(s);
+});
+
+app.put('/api/suppliers/:id', (req, res) => {
+  const { name, contact_person, email, phone, address, notes } = req.body;
+  run('UPDATE suppliers SET name=?,contact_person=?,email=?,phone=?,address=?,notes=? WHERE id=?',
+    [name, contact_person||'', email||'', phone||'', address||'', notes||'', req.params.id]);
+  res.json(get('SELECT * FROM suppliers WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/suppliers/:id', (req, res) => {
+  run('UPDATE inventory_items SET supplier_id=NULL WHERE supplier_id=?', [req.params.id]);
+  run('DELETE FROM suppliers WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+// ==============================================================
+// INVENTORY
+// ==============================================================
+app.get('/api/inventory', (req, res) => {
+  res.json(all(`SELECT ii.*, s.name as supplier_name FROM inventory_items ii
+    LEFT JOIN suppliers s ON ii.supplier_id=s.id ORDER BY ii.category, ii.name`));
+});
+
+app.post('/api/inventory', (req, res) => {
+  const { name, category, sku, unit, stock_qty, min_qty, price_per_unit, supplier_id, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const id = runGetId('INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,supplier_id,notes) VALUES (?,?,?,?,?,?,?,?,?)',
+    [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(stock_qty)||0, parseFloat(min_qty)||0,
+     price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'']);
+  res.json(get('SELECT * FROM inventory_items WHERE id=?', [id]));
+});
+
+app.get('/api/inventory/:id', (req, res) => {
+  const item = get(`SELECT ii.*, s.name as supplier_name FROM inventory_items ii
+    LEFT JOIN suppliers s ON ii.supplier_id=s.id WHERE ii.id=?`, [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  item.movements = all('SELECT * FROM inventory_movements WHERE item_id=? ORDER BY created_at DESC LIMIT 50', [item.id]);
+  res.json(item);
+});
+
+app.put('/api/inventory/:id', (req, res) => {
+  const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes } = req.body;
+  run(`UPDATE inventory_items SET name=?,category=?,sku=?,unit=?,min_qty=?,price_per_unit=?,supplier_id=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+    [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(min_qty)||0,
+     price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'', req.params.id]);
+  res.json(get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/inventory/:id', (req, res) => {
+  run('DELETE FROM inventory_movements WHERE item_id=?', [req.params.id]);
+  run('DELETE FROM inventory_items WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+app.post('/api/inventory/:id/movement', (req, res) => {
+  const { type, qty, reference, notes } = req.body;
+  if (!type || qty == null) return res.status(400).json({ error: 'type and qty required' });
+  const item = get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  const delta = type === 'out' ? -Math.abs(parseFloat(qty)) : Math.abs(parseFloat(qty));
+  run('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
+    [req.params.id, type, delta, reference||'', notes||'']);
+  run(`UPDATE inventory_items SET stock_qty=stock_qty+?,updated_at=datetime('now') WHERE id=?`, [delta, req.params.id]);
+  res.json(get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]));
+});
+
+// ==============================================================
+// TIME ENTRIES
+// ==============================================================
+app.get('/api/time-entries', (req, res) => {
+  const { order_id } = req.query;
+  if (!order_id) return res.status(400).json({ error: 'order_id required' });
+  res.json(all('SELECT * FROM time_entries WHERE order_id=? ORDER BY date DESC, id DESC', [order_id]));
+});
+
+app.post('/api/time-entries', (req, res) => {
+  const { order_id, date, hours, description } = req.body;
+  if (!order_id || hours == null) return res.status(400).json({ error: 'order_id and hours required' });
+  const id = runGetId('INSERT INTO time_entries (order_id,date,hours,description) VALUES (?,?,?,?)',
+    [order_id, date||new Date().toISOString().slice(0,10), parseFloat(hours), description||'']);
+  res.json(get('SELECT * FROM time_entries WHERE id=?', [id]));
+});
+
+app.put('/api/time-entries/:id', (req, res) => {
+  const { date, hours, description } = req.body;
+  run('UPDATE time_entries SET date=?,hours=?,description=? WHERE id=?',
+    [date, parseFloat(hours), description||'', req.params.id]);
+  res.json(get('SELECT * FROM time_entries WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/time-entries/:id', (req, res) => {
+  run('DELETE FROM time_entries WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+// ==============================================================
+// CLONE ORDER
+// ==============================================================
+app.post('/api/orders/:id/clone', (req, res) => {
+  const o = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
+  if (!o) return res.status(404).json({ error: 'Not found' });
+  const number = nextOrderNumber();
+  const newId = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [number, o.customer_id||null, o.customer_name_free||null, o.title+' (Kopie)', o.notes||'',
+     new Date().toISOString().slice(0,10), o.tax_rate??0, o.discount_pct||0, o.payment_terms||'', o.include_tax||0]);
+  all('SELECT * FROM order_items WHERE order_id=?', [o.id]).forEach((oi, idx) => {
+    run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,position) VALUES (?,?,?,?,?,?,?,?,?)',
+      [newId, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk', oi.unit_price||0, oi.discount_pct||0, oi.notes||'', idx+1]);
+  });
+  saveDb();
+  res.json(get('SELECT * FROM orders WHERE id=?', [newId]));
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
