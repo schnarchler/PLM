@@ -1430,6 +1430,7 @@ app.get('/api/stats', (req, res) => {
     orders:     count('SELECT COUNT(*) as c FROM orders'),
     quotes:     count('SELECT COUNT(*) as c FROM quotes'),
     deliveries: count('SELECT COUNT(*) as c FROM deliveries'),
+    inventory:  count('SELECT COUNT(*) as c FROM inventory_items'),
     by_status:  all("SELECT status, COUNT(*) as count FROM revisions GROUP BY status"),
     recent_items: recentItems,
     recent_projects: all('SELECT * FROM projects ORDER BY updated_at DESC LIMIT 5'),
