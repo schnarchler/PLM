@@ -421,8 +421,10 @@ async function initDb() {
     date TEXT,
     hours REAL NOT NULL,
     description TEXT,
+    billable INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
+  migrate('ALTER TABLE time_entries ADD COLUMN billable INTEGER DEFAULT 0');
 
   db.run(`CREATE TABLE IF NOT EXISTS applied_migrations (key TEXT PRIMARY KEY)`);
 
@@ -1967,6 +1969,18 @@ app.post('/api/orders/:id/to-delivery', (req, res) => {
       [delivId, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk',
        oi.unit_price||null, oi.notes||'', idx + 1]);
   });
+  if (req.body.include_time) {
+    const hourlyRateRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
+    const hourlyRate = parseFloat(hourlyRateRow?.value) || 0;
+    const billable = all("SELECT * FROM time_entries WHERE order_id=? AND billable=1 ORDER BY date,id", [o.id]);
+    const basePos = oItems.length + 1;
+    billable.forEach((te, idx) => {
+      const desc = ['Arbeitszeit', te.date, te.description].filter(Boolean).join(' – ');
+      run(`INSERT INTO delivery_items (delivery_id,description,quantity,unit,unit_price,notes,position)
+           VALUES (?,?,?,?,?,?,?)`,
+        [delivId, desc, te.hours, 'h', hourlyRate || null, '', basePos + idx]);
+    });
+  }
   saveDb();
   res.json(get('SELECT * FROM deliveries WHERE id=?', [delivId]));
 });
@@ -2185,17 +2199,17 @@ app.get('/api/time-entries', (req, res) => {
 });
 
 app.post('/api/time-entries', (req, res) => {
-  const { order_id, date, hours, description } = req.body;
+  const { order_id, date, hours, description, billable } = req.body;
   if (!order_id || hours == null) return res.status(400).json({ error: 'order_id and hours required' });
-  const id = runGetId('INSERT INTO time_entries (order_id,date,hours,description) VALUES (?,?,?,?)',
-    [order_id, date||new Date().toISOString().slice(0,10), parseFloat(hours), description||'']);
+  const id = runGetId('INSERT INTO time_entries (order_id,date,hours,description,billable) VALUES (?,?,?,?,?)',
+    [order_id, date||new Date().toISOString().slice(0,10), parseFloat(hours), description||'', billable?1:0]);
   res.json(get('SELECT * FROM time_entries WHERE id=?', [id]));
 });
 
 app.put('/api/time-entries/:id', (req, res) => {
-  const { date, hours, description } = req.body;
-  run('UPDATE time_entries SET date=?,hours=?,description=? WHERE id=?',
-    [date, parseFloat(hours), description||'', req.params.id]);
+  const { date, hours, description, billable } = req.body;
+  run('UPDATE time_entries SET date=?,hours=?,description=?,billable=? WHERE id=?',
+    [date, parseFloat(hours), description||'', billable?1:0, req.params.id]);
   res.json(get('SELECT * FROM time_entries WHERE id=?', [req.params.id]));
 });
 
