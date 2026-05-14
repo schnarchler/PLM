@@ -437,7 +437,14 @@ function renderItemDetail(item, activeRevId) {
             <span style="font-size:11px">CHF</span>
           </span>
           ${bomHint}
-        </div>`;
+        </div>
+        ${item.item_type === 'asm' && bom.length ? `<div style="font-size:10px;color:var(--t3);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:10px 20px;line-height:1.7">
+          <span style="font-weight:600;color:var(--t2);flex-basis:100%">Legende BOM-Preis</span>
+          <span><strong style="color:var(--teal);font-family:var(--mono)">CHF X.XX</strong> — Summe aller Teile (Einzelpreis × Stückzahl) aus der aktiven Revision</span>
+          <span><button style="pointer-events:none;font-size:9px;padding:0 4px;border:1px solid var(--line2);border-radius:2px;background:var(--bg2);color:var(--t2)">übernehmen</button> — trägt den BOM-Preis direkt ins VP-Feld ein und speichert</span>
+          <span><span style="color:var(--amber)">⚠ unvollständig</span> — nicht bei allen Teilen ist ein VP hinterlegt (BOM-Preis ist deshalb zu tief)</span>
+          <span><span style="color:var(--amber)">⚠ keine Preise hinterlegt</span> — BOM enthält Teile, aber keins hat einen VP</span>
+        </div>` : ''}`;
       })()}
       <!-- Rev strip -->
       <div class="sep-label">Revisionen</div>
