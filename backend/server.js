@@ -307,6 +307,7 @@ async function initDb() {
   migrate('ALTER TABLE orders ADD COLUMN customer_name_free TEXT');
   migrate('ALTER TABLE quotes ADD COLUMN customer_name_free TEXT');
   migrate('ALTER TABLE deliveries ADD COLUMN customer_name_free TEXT');
+  migrate('ALTER TABLE deliveries ADD COLUMN manufacture_date TEXT');
 
   db.run(`CREATE TABLE IF NOT EXISTS counters (
     key TEXT PRIMARY KEY,
@@ -1112,6 +1113,13 @@ app.put('/api/orders/:id', (req, res) => {
 
 app.put('/api/orders/:id/status', (req, res) => {
   const { status } = req.body;
+  if (status === 'DELIVERED') {
+    const existing = get('SELECT delivery_date FROM orders WHERE id=?', [req.params.id]);
+    if (!existing?.delivery_date) {
+      run(`UPDATE orders SET status=?,delivery_date=date('now'),updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
+      return res.json({ success: true, delivery_date: new Date().toISOString().slice(0, 10) });
+    }
+  }
   run(`UPDATE orders SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
   res.json({ success: true });
 });
@@ -1620,12 +1628,12 @@ app.get('/api/deliveries', (req, res) => {
 });
 
 app.post('/api/deliveries', (req, res) => {
-  const { title, order_id, customer_id, customer_name_free, status, delivery_date, notes } = req.body;
+  const { title, order_id, customer_id, customer_name_free, status, delivery_date, manufacture_date, notes } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextDeliveryNumber();
-  const id = runGetId(`INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,notes)
-    VALUES (?,?,?,?,?,?,?,?)`,
-    [number, title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, notes||'']);
+  const id = runGetId(`INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,manufacture_date,notes)
+    VALUES (?,?,?,?,?,?,?,?,?)`,
+    [number, title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, manufacture_date||null, notes||'']);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [id]));
 });
 
@@ -1651,9 +1659,9 @@ app.get('/api/deliveries/:id', (req, res) => {
 });
 
 app.put('/api/deliveries/:id', (req, res) => {
-  const { title, order_id, customer_id, customer_name_free, status, delivery_date, notes } = req.body;
-  run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
-    [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, notes||'', req.params.id]);
+  const { title, order_id, customer_id, customer_name_free, status, delivery_date, manufacture_date, notes } = req.body;
+  run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,manufacture_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+    [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, manufacture_date||null, notes||'', req.params.id]);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [req.params.id]));
 });
 

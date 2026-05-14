@@ -14,11 +14,16 @@ function _stSel(type, id, current) {
     onchange="setDocStatus('${type}',${id},this.value,this)">${opts}</select>`;
 }
 async function setDocStatus(type, id, status, el) {
-  await api(`/api/${type}s/${id}/status`,'PUT',{status});
+  const r = await api(`/api/${type}s/${id}/status`,'PUT',{status});
   const m = type==='order'?ORDER_ST_MAP:type==='quote'?QUOTE_ST_MAP:DELIVERY_ST_MAP;
   el.className = 'status-sel ' + (m[status]||'');
   const arr = type==='order'?state.orders:type==='quote'?state.quotes:state.deliveries;
   const rec = arr.find(x=>x.id===id); if (rec) rec.status = status;
+  if (type === 'order' && status === 'DELIVERED' && r.delivery_date) {
+    if (rec) rec.delivery_date = r.delivery_date;
+    const ddEl = document.getElementById('od-delivery-date');
+    if (ddEl) ddEl.textContent = r.delivery_date;
+  }
   toast('Status gespeichert','ok');
   loadStats();
 }
@@ -1511,7 +1516,7 @@ async function openOrderDetail(id) {
         <div><div class="ps-label">Status</div>${_stSel('order',id,o.status)}</div>
         <div><div class="ps-label">Kunde</div>${o.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${o.order_date||'—'}</div>
-        <div><div class="ps-label">Lieferdatum</div>${o.delivery_date||'—'}</div>
+        <div><div class="ps-label">Lieferdatum</div><span id="od-delivery-date">${o.delivery_date||'—'}</span></div>
         <div><div class="ps-label">MwSt.</div>${o.tax_rate??0} % ${o.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
         ${(o.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${o.discount_pct} %</div>`:''}
         ${o.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(o.payment_terms)}</div>`:''}
@@ -2692,6 +2697,7 @@ async function openDeliveryDetail(id) {
         <div><div class="ps-label">Status</div>${_stSel('delivery',id,d.status)}</div>
         <div><div class="ps-label">Kunde</div>${d.customer_name||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div>${d.delivery_date||'—'}</div>
+        ${d.manufacture_date?`<div><div class="ps-label">Herstellungsdatum</div>${d.manufacture_date}</div>`:''}
         ${d.order_number?`<div><div class="ps-label">Auftrag</div>${d.order_number} ${d.order_title?'– '+esc(d.order_title):''}</div>`:''}
         ${d.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(d.notes)}</span></div>`:''}
       </div>
@@ -2939,10 +2945,10 @@ async function openDeliveryModal(id) {
     const d = await api(`/api/deliveries/${id}`);
     set('dm-title-f', d.title); setCustFields('dm',d.customer_id,d.customer_name_free); oSel.value = d.order_id||'';
     document.getElementById('dm-status').value = d.status||'DRAFT';
-    set('dm-date', d.delivery_date||''); set('dm-notes', d.notes||'');
+    set('dm-date', d.delivery_date||''); set('dm-manufacture-date', d.manufacture_date||''); set('dm-notes', d.notes||'');
     document.getElementById('dm-title').textContent = 'Lieferschein bearbeiten';
   } else {
-    ['dm-title-f','dm-date','dm-notes'].forEach(f=>set(f,''));
+    ['dm-title-f','dm-date','dm-manufacture-date','dm-notes'].forEach(f=>set(f,''));
     document.getElementById('dm-status').value = 'DRAFT';
     cSel.value = ''; oSel.value = '';
     document.getElementById('dm-title').textContent = 'Neuer Lieferschein';
@@ -2953,7 +2959,8 @@ async function openDeliveryModal(id) {
 async function saveDelivery() {
   const title = V('dm-title-f'); if (!title) return toast('Bezeichnung fehlt','err');
   const body = { title, ...getCustBody('dm'), order_id: V('dm-order')||null,
-    status: document.getElementById('dm-status').value, delivery_date: V('dm-date')||null, notes: V('dm-notes') };
+    status: document.getElementById('dm-status').value, delivery_date: V('dm-date')||null,
+    manufacture_date: V('dm-manufacture-date')||null, notes: V('dm-notes') };
   if (editingDeliveryId) {
     await api(`/api/deliveries/${editingDeliveryId}`,'PUT',body);
     toast('Gespeichert','ok'); closeModal('deliveryModal');
@@ -3428,6 +3435,7 @@ async function generateDeliveryDoc(id) {
     <div class="meta">
       Erstellt: ${today}<br>
       ${d.delivery_date?'Lieferdatum: '+d.delivery_date+'<br>':''}
+      ${d.manufacture_date?'Herstellungsdatum: '+d.manufacture_date+'<br>':''}
       ${d.order_number?'Auftrag: '+escHtml(d.order_number):''}
     </div>
     <span class="badge" style="background:#dbeafe;color:#1d4ed8;margin-top:4px">${DELIVERY_ST_LABEL[d.status]||d.status}</span>
