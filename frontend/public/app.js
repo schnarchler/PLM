@@ -3873,7 +3873,7 @@ async function delTimeEntry(id) {
 }
 
 // ── LAGER / BESTAND ───────────────────────────────────────────
-const INV_CATS = ['Filament','Hardware','Elektronik','Komponenten','Werkzeug','Verbrauchsmaterial','Sonstiges'];
+const INV_CATS = ['3D Druck','Filament','Hardware','Elektronik','Komponenten','Werkzeug','Verbrauchsmaterial','Sonstiges'];
 
 async function renderInventory() {
   setLeftHeader('Lager', `<button class="btn btn-primary btn-sm" onclick="openInventoryModal()">+ Artikel</button>`);
