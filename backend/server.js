@@ -638,7 +638,7 @@ app.post('/api/projects', (req, res) => {
 app.get('/api/projects/:id', (req, res) => {
   const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
   if (!p) return res.status(404).json({ error: 'Not found' });
-  p.items = all('SELECT * FROM items WHERE project_id=? ORDER BY item_type, item_number', [p.id]);
+  p.items = all('SELECT * FROM items WHERE project_id=? ORDER BY item_type, item_number DESC', [p.id]);
   p.items.forEach(item => {
     item.latest_revision = getLatestRevision(item.id);
     item.active_revision = getActiveRevision(item.id);
@@ -963,7 +963,7 @@ app.delete('/api/datasets/:id', (req, res) => {
 // ==============================================================
 // CUSTOMERS
 // ==============================================================
-app.get('/api/customers', (req, res) => res.json(all('SELECT * FROM customers ORDER BY number')));
+app.get('/api/customers', (req, res) => res.json(all('SELECT * FROM customers ORDER BY number DESC')));
 
 app.post('/api/customers', (req, res) => {
   const { name, email, phone, street, postal_code, city, country, notes } = req.body;
