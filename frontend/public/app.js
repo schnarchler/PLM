@@ -70,7 +70,6 @@ async function gotoView(v) {
   else if (v === 'fileindex') await renderFileIndex();
   else if (v === 'search') renderSearchView();
   else if (v === 'profit') await renderProfitOverview();
-  else if (v === 'suppliers') await renderSuppliers();
   else if (v === 'inventory') await renderInventory();
 }
 
@@ -1017,6 +1016,9 @@ async function renderSettings() {
         ${fi('default_filament_price_kg','Standard Filamentpreis (CHF/kg)',s.default_filament_price_kg,'','number')}
         ${fi('default_machine_cost_hr','Standard Maschinenkosten (CHF/h)',s.default_machine_cost_hr,'','number')}
       </div>
+      <div class="form-row cols2">
+        ${fi('hourly_rate','Stundensatz (CHF/h)',s.hourly_rate,'z.B. 120','number')}
+      </div>
 
       <div class="sep-label">Dokument-Fussnoten</div>
       <div class="form-row">
@@ -1120,7 +1122,7 @@ async function saveSettings() {
     'company_country','company_phone','company_email','company_website',
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
-    'default_filament_price_kg','default_machine_cost_hr',
+    'default_filament_price_kg','default_machine_cost_hr','hourly_rate',
     'invoice_footer','quote_footer','receipt_footer','receipt_line_width'];
   const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes'];
   const body = {};
@@ -2324,10 +2326,39 @@ async function openQuoteDetail(id) {
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'qd-pos')">Positionen</button>
     <button class="tab" onclick="switchTab(this,'qd-info')">Details</button>`;
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
+  const estHours = q.estimated_hours || 0;
+  const hoursCost = estHours * hourlyRate;
+  const hoursSection = estHours > 0 ? (() => {
+    const items = q.items || [];
+    const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
+    const discAmt = subtotal * (q.discount_pct||0) / 100;
+    const net = subtotal - discAmt;
+    const grandNet = q.include_hours ? net + hoursCost : net;
+    const tax = q.include_tax ? grandNet * (q.tax_rate||0) / 100 : 0;
+    const grandTotal = grandNet + tax;
+    return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-weight:600;color:var(--t2)">Arbeitszeit</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="openQuoteModal(${id})">✏️ Ändern</button>
+      </div>
+      <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+        <span style="color:var(--t3)">${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h</span>
+        <span style="font-family:var(--mono);font-weight:600;color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>
+        <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${q.include_hours?'oklch(35% 0.1 145 / .25)':'var(--bg2)'};color:${q.include_hours?'var(--green)':'var(--t3)'}">${q.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
+      </div>
+      ${q.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
+        <div style="text-align:right;font-size:12px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
+          <span style="font-family:var(--mono);font-weight:700;font-size:14px;color:var(--green);margin-left:8px">${fmtCHF(grandTotal)}</span>
+        </div>
+      </div>` : ''}
+    </div>`;
+  })() : '';
   document.getElementById('dp-body').innerHTML = `
     <div id="qd-pos">
       ${renderLineItems(q.items||[], 'quote', id, q.tax_rate??0, q.discount_pct||0, !!q.include_tax)}
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal('quote',${id})">+ Position</button>
+      ${hoursSection}
+      <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('quote',${id})">+ Position</button>
     </div>
     <div id="qd-info" style="display:none">
       <div class="sep-label">Angebotsdaten</div>
@@ -2337,6 +2368,7 @@ async function openQuoteDetail(id) {
         <div><div class="ps-label">Datum</div>${q.quote_date||'—'}</div>
         <div><div class="ps-label">Gültig bis</div>${q.valid_until||'—'}</div>
         <div><div class="ps-label">MwSt.</div>${q.tax_rate??0} % ${q.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
+        ${estHours>0?`<div><div class="ps-label">Arbeitszeit</div>${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h = <span style="font-family:var(--mono);color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>${q.include_hours?' <span style="color:var(--green);font-size:10px">(eingerechnet)</span>':' <span style="color:var(--t3);font-size:10px">(nicht eingerechnet)</span>'}</div>`:''}
         ${(q.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${q.discount_pct} %</div>`:''}
         ${q.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(q.payment_terms)}</div>`:''}
         ${q.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(q.notes)}</span></div>`:''}
@@ -2363,6 +2395,8 @@ async function openQuoteModal(id) {
     set('qm-date',q.quote_date||''); set('qm-valid',q.valid_until||''); set('qm-notes',q.notes||'');
     set('qm-tax',q.tax_rate??''); set('qm-disc',q.discount_pct??0); set('qm-terms',q.payment_terms||'');
     document.getElementById('qm-include-tax').checked = !!q.include_tax;
+    set('qm-hours', q.estimated_hours||0);
+    document.getElementById('qm-include-hours').checked = !!q.include_hours;
     document.getElementById('qm-title').textContent='Angebot bearbeiten';
   } else {
     ['qm-title-f','qm-date','qm-valid','qm-notes','qm-terms'].forEach(f=>set(f,''));
@@ -2371,6 +2405,8 @@ async function openQuoteModal(id) {
     set('qm-disc', 0);
     set('qm-terms', state.settings.default_payment_terms || '');
     document.getElementById('qm-include-tax').checked = false;
+    set('qm-hours', 0);
+    document.getElementById('qm-include-hours').checked = false;
     const validDays = parseInt(state.settings.quote_validity_days);
     if (validDays > 0) {
       const validDate = new Date(); validDate.setDate(validDate.getDate() + validDays);
@@ -2388,7 +2424,9 @@ async function saveQuote() {
   const body={title,...getCustBody('qm'),status:document.getElementById('qm-status').value,
     notes:V('qm-notes'),quote_date:V('qm-date')||null,valid_until:V('qm-valid')||null,
     tax_rate:parseFloat(V('qm-tax'))||0, discount_pct:parseFloat(V('qm-disc'))||0,
-    payment_terms:V('qm-terms'), include_tax:document.getElementById('qm-include-tax').checked?1:0};
+    payment_terms:V('qm-terms'), include_tax:document.getElementById('qm-include-tax').checked?1:0,
+    estimated_hours:parseFloat(V('qm-hours'))||0,
+    include_hours:document.getElementById('qm-include-hours').checked?1:0};
   if (editingQuoteId) {
     await api(`/api/quotes/${editingQuoteId}`,'PUT',body);
     toast('Gespeichert','ok'); closeModal('quoteModal');
@@ -3733,108 +3771,6 @@ async function delTimeEntry(id) {
   loadTimeEntries(_teOrderId);
 }
 
-// ── LIEFERANTEN ───────────────────────────────────────────────
-async function renderSuppliers() {
-  setLeftHeader('Lieferanten', `<button class="btn btn-primary btn-sm" onclick="openSupplierModal()">+ Lieferant</button>`);
-  const suppliers = await api('/api/suppliers');
-  document.getElementById('badge-suppliers').textContent = suppliers.length || '—';
-  if (!suppliers.length) {
-    setLeftBody(`<div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Noch keine Lieferanten</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openSupplierModal()">Ersten Lieferant anlegen</button></div></div>`);
-    return;
-  }
-  setLeftBody(`<div class="tbl-wrap"><table>
-    <thead><tr><th>Nr.</th><th>Name</th><th>Kontakt</th><th>E-Mail</th><th>Telefon</th><th></th></tr></thead>
-    <tbody>${suppliers.map(s => `<tr onclick="openSupplierDetail(${s.id})" style="cursor:pointer">
-      <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${s.number}</td>
-      <td style="font-weight:500">${esc(s.name)}</td>
-      <td style="color:var(--t2)">${esc(s.contact_person||'—')}</td>
-      <td style="color:var(--t3);font-size:11px">${esc(s.email||'—')}</td>
-      <td style="color:var(--t3);font-size:11px">${esc(s.phone||'—')}</td>
-      <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delSupplier(${s.id})">✕</button></td>
-    </tr>`).join('')}
-    </tbody></table></div>`);
-}
-
-async function openSupplierDetail(id) {
-  const s = await api(`/api/suppliers/${id}`);
-  document.getElementById('dp-title').innerHTML = `<strong>${s.number}</strong>&nbsp;${esc(s.name)}`;
-  document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'sup-info')">Details</button>`;
-  document.getElementById('dp-body').innerHTML = `
-    <div id="sup-info">
-      <div class="sep-label">Lieferantendaten</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
-        <div><div class="ps-label">Nummer</div>${s.number}</div>
-        <div><div class="ps-label">Firma</div>${esc(s.name)}</div>
-        ${s.contact_person?`<div><div class="ps-label">Kontaktperson</div>${esc(s.contact_person)}</div>`:''}
-        ${s.email?`<div><div class="ps-label">E-Mail</div><a href="mailto:${esc(s.email)}" style="color:var(--blue)">${esc(s.email)}</a></div>`:''}
-        ${s.phone?`<div><div class="ps-label">Telefon</div>${esc(s.phone)}</div>`:''}
-        ${s.address?`<div style="grid-column:span 2"><div class="ps-label">Adresse</div><span style="white-space:pre-line;color:var(--t2)">${esc(s.address)}</span></div>`:''}
-        ${s.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(s.notes)}</span></div>`:''}
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:16px">
-        <button class="btn btn-ghost btn-sm" onclick="openSupplierModal(${id})">✏️ Bearbeiten</button>
-        <button class="btn btn-red btn-sm" onclick="delSupplier(${id})">🗑 Löschen</button>
-      </div>
-      ${s.inventory_items?.length ? `
-      <div class="sep-label">Lagerartikel (${s.inventory_items.length})</div>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>Name</th><th>Kategorie</th><th>Bestand</th><th>Einheit</th></tr></thead>
-        <tbody>${s.inventory_items.map(i => `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
-          <td>${esc(i.name)}</td>
-          <td style="color:var(--t3);font-size:11px">${i.category}</td>
-          <td style="font-family:var(--mono);font-size:11px;color:${i.stock_qty<=i.min_qty?'var(--red)':'var(--green)'}">${fmtN(i.stock_qty,2)}</td>
-          <td style="color:var(--t3)">${i.unit}</td>
-        </tr>`).join('')}</tbody>
-      </table></div>` : ''}
-    </div>`;
-  showDetail();
-}
-
-async function openSupplierModal(id) {
-  const s = id ? await api(`/api/suppliers/${id}`) : null;
-  _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">${s ? 'Lieferant bearbeiten' : 'Neuer Lieferant'}</div>
-      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <div class="fg"><label class="fl">Firma *</label><input id="sup-name" class="fi" value="${esc(s?.name||'')}"></div>
-      <div class="cols2">
-        <div class="fg"><label class="fl">Kontaktperson</label><input id="sup-contact" class="fi" value="${esc(s?.contact_person||'')}"></div>
-        <div class="fg"><label class="fl">Telefon</label><input id="sup-phone" class="fi" value="${esc(s?.phone||'')}"></div>
-      </div>
-      <div class="fg"><label class="fl">E-Mail</label><input id="sup-email" type="email" class="fi" value="${esc(s?.email||'')}"></div>
-      <div class="fg"><label class="fl">Adresse</label><textarea id="sup-address" class="fs" rows="3" style="resize:vertical">${esc(s?.address||'')}</textarea></div>
-      <div class="fg"><label class="fl">Notizen</label><textarea id="sup-notes" class="fs" rows="2" style="resize:vertical">${esc(s?.notes||'')}</textarea></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveSupplier(${id||'null'})">Speichern</button>
-    </div>
-  </div>`);
-}
-
-async function saveSupplier(id) {
-  const body = {
-    name: document.getElementById('sup-name').value.trim(),
-    contact_person: document.getElementById('sup-contact').value.trim(),
-    email: document.getElementById('sup-email').value.trim(),
-    phone: document.getElementById('sup-phone').value.trim(),
-    address: document.getElementById('sup-address').value.trim(),
-    notes: document.getElementById('sup-notes').value.trim()
-  };
-  if (!body.name) { toast('Name erforderlich', 'err'); return; }
-  const s = id ? await api(`/api/suppliers/${id}`, 'PUT', body) : await api('/api/suppliers', 'POST', body);
-  _hideDynModal();
-  await renderSuppliers();
-  openSupplierDetail(s.id);
-}
-
-async function delSupplier(id) {
-  if (!confirm('Lieferant löschen?')) return;
-  await api(`/api/suppliers/${id}`, 'DELETE');
-  closeDetail();
-  renderSuppliers();
-}
-
 // ── LAGER / BESTAND ───────────────────────────────────────────
 const INV_CATS = ['Filament','Hardware','Elektronik','Komponenten','Werkzeug','Verbrauchsmaterial','Sonstiges'];
 
@@ -3889,7 +3825,6 @@ async function openInventoryDetail(id) {
         <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${low?'var(--red)':'var(--green)'}">${fmtN(item.stock_qty,2)} ${item.unit}${low?' ⚠':''}</span></div>
         <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+item.unit:'—'}</div>
         ${item.price_per_unit!=null?`<div><div class="ps-label">Preis / Einheit</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
-        ${item.supplier_name?`<div><div class="ps-label">Lieferant</div>${esc(item.supplier_name)}</div>`:''}
         ${item.linked_item_number?`<div style="grid-column:span 2"><div class="ps-label">PLM-Teil</div>
           <span style="font-family:var(--mono);font-size:10px;color:var(--blue);cursor:pointer" onclick="gotoPlmItem(${item.item_id})">${esc(item.linked_item_number)} – ${esc(item.linked_item_name||'')}</span>
         </div>`:''}
@@ -3918,7 +3853,6 @@ async function openInventoryDetail(id) {
 
 async function openInventoryModal(id) {
   const item = id ? await api(`/api/inventory/${id}`) : null;
-  const suppliers = await api('/api/suppliers');
   _showDynModal(`<div class="modal" style="max-width:480px">
     <div class="modal-head"><div class="modal-title">${item ? 'Artikel bearbeiten' : 'Neuer Lagerartikel'}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
@@ -3937,14 +3871,7 @@ async function openInventoryModal(id) {
         <div class="fg"><label class="fl">Einheit</label><input id="inv-unit" class="fi" value="${esc(item?.unit||'Stk')}"></div>
         <div class="fg"><label class="fl">Mindestbestand</label><input id="inv-min" type="number" min="0" step="0.01" class="fi" value="${item?.min_qty||0}"></div>
       </div>
-      <div class="cols2">
-        <div class="fg"><label class="fl">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="fi" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
-        <div class="fg"><label class="fl">Lieferant</label>
-          <select id="inv-supplier" class="fi">
-            <option value="">—</option>
-            ${suppliers.map(s=>`<option value="${s.id}"${item?.supplier_id===s.id?' selected':''}>${esc(s.name)}</option>`).join('')}
-          </select></div>
-      </div>
+      <div class="fg"><label class="fl">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="fi" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
       <div class="fg"><label class="fl">Verknüpftes PLM-Teil</label>
         <div style="position:relative">
           <input id="inv-plm-search" class="fi" placeholder="Teil suchen…" autocomplete="off"
@@ -4003,7 +3930,6 @@ async function saveInventoryItem(id) {
     unit: document.getElementById('inv-unit').value.trim() || 'Stk',
     min_qty: document.getElementById('inv-min').value,
     price_per_unit: document.getElementById('inv-price').value || null,
-    supplier_id: document.getElementById('inv-supplier').value || null,
     item_id: document.getElementById('inv-item-id').value || null,
     notes: document.getElementById('inv-notes').value.trim()
   };
