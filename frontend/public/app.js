@@ -2815,7 +2815,8 @@ async function loadStats() {
   if (el) el.textContent = s.quotes||0;
   const el2 = document.getElementById('badge-deliveries');
   if (el2) el2.textContent = s.deliveries||0;
-  // Supplier/inventory badges loaded separately when visiting those views
+  const el3 = document.getElementById('badge-inventory');
+  if (el3) el3.textContent = s.inventory||0;
 }
 
 // ── API ───────────────────────────────────────────────────────
@@ -3920,7 +3921,10 @@ async function renderInventory() {
 
 function _invRenderTable(items) {
   const { col, dir } = _invSort;
+  // Always sort by name first so variants stay together, then by selected col within same name
   const sorted = [...items].sort((a, b) => {
+    const nameCmp = String(a.name||'').localeCompare(String(b.name||''), undefined, {sensitivity:'base'});
+    if (nameCmp !== 0) return col === 'name' ? nameCmp * dir : nameCmp;
     const av = a[col] ?? '', bv = b[col] ?? '';
     if (col === 'stock_qty' || col === 'min_qty') return ((parseFloat(av)||0) - (parseFloat(bv)||0)) * dir;
     return String(av).localeCompare(String(bv), undefined, {sensitivity:'base'}) * dir;
@@ -3940,25 +3944,50 @@ function _invRenderTable(items) {
     return `<th style="cursor:pointer;user-select:none;white-space:nowrap${active?';color:var(--blue)':''}" onclick="_invSetSort('${c}')">${label}${active?(dir===1?' ▲':' ▼'):''}</th>`;
   };
 
-  const rows = Object.entries(byCategory).map(([cat, catItems]) => `
-    <tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${cat}</td></tr>
-    ${catItems.map(i => {
-      const state = _invStockState(i);
-      const stockColor = state==='critical'?'var(--red)':state==='warn'?'var(--amber)':'var(--green)';
-      const stockIcon = state==='critical'?' ⚠':state==='warn'?' !':'';
-      return `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
-        <td style="font-weight:500">${esc(i.name)}</td>
-        <td style="color:var(--t2);font-size:11px">${esc(i.color||'—')}</td>
-        <td style="color:var(--t2);font-size:11px">${esc(i.material||'—')}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:${stockColor};font-weight:${state!=='ok'?600:400}">${fmtN(i.stock_qty,2)} ${i.unit}${stockIcon}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${i.min_qty>0?fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
-        <td style="display:flex;gap:4px">
-          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'in')">＋</button>
-          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'out')">－</button>
-          <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delInventoryItem(${i.id})">✕</button>
-        </td>
-      </tr>`;
-    }).join('')}`).join('');
+  const rows = Object.entries(byCategory).map(([cat, catItems]) => {
+    // Group by name within category
+    const nameGroups = [];
+    catItems.forEach(i => {
+      const last = nameGroups[nameGroups.length - 1];
+      if (last && last.name === i.name) last.items.push(i);
+      else nameGroups.push({ name: i.name, items: [i] });
+    });
+
+    const itemRows = nameGroups.map(group => {
+      const isMulti = group.items.length > 1;
+      return group.items.map((i, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === group.items.length - 1;
+        const state = _invStockState(i);
+        const stockColor = state==='critical'?'var(--red)':state==='warn'?'var(--amber)':'var(--green)';
+        const stockIcon = state==='critical'?' ⚠':state==='warn'?' !':'';
+        const borderBottom = isMulti && !isLast ? 'border-bottom:1px solid var(--bg3)' : '';
+        const nameTd = isFirst
+          ? `<td style="font-weight:500;vertical-align:top;padding-top:8px" rowspan="${group.items.length}">${esc(i.name)}${isMulti?` <span style="font-size:9px;color:var(--t3);font-weight:400">${group.items.length}×</span>`:''}</td>`
+          : '';
+        const variantLabel = [i.color, i.material].filter(Boolean);
+        const colorTd = isMulti
+          ? `<td style="color:var(--t2);font-size:11px;${borderBottom}">${esc(i.color||'—')}</td>
+             <td style="color:var(--t2);font-size:11px;${borderBottom}">${esc(i.material||'—')}</td>`
+          : `<td style="color:var(--t2);font-size:11px">${esc(i.color||'—')}</td>
+             <td style="color:var(--t2);font-size:11px">${esc(i.material||'—')}</td>`;
+        return `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
+          ${nameTd}
+          ${colorTd}
+          <td style="font-family:var(--mono);font-size:11px;color:${stockColor};font-weight:${state!=='ok'?600:400};${isMulti&&!isLast?borderBottom:''}">${fmtN(i.stock_qty,2)} ${i.unit}${stockIcon}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--t3);${isMulti&&!isLast?borderBottom:''}">${i.min_qty>0?fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
+          <td style="display:flex;gap:4px;${isMulti&&!isLast?borderBottom:''}">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'in')">＋</button>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'out')">－</button>
+            <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delInventoryItem(${i.id})">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }).join('');
+
+    return `<tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${cat}</td></tr>
+    ${itemRows}`;
+  }).join('');
 
   setLeftBody(banner + `<div class="tbl-wrap"><table>
     <thead><tr>${th('name','Artikel')}${th('color','Farbe')}${th('material','Material')}${th('stock_qty','Bestand')}${th('min_qty','Minimum')}<th></th></tr></thead>
