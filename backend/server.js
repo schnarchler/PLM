@@ -329,7 +329,12 @@ async function initDb() {
     default_filament_price_kg: '', default_machine_cost_hr: '',
     invoice_footer: 'Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen. Vielen Dank!',
     quote_footer: 'Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.',
-    receipt_footer: ''
+    receipt_footer: '',
+    receipt_line_width: '32',
+    receipt_show_datetime: '1',
+    receipt_show_customer: '1',
+    receipt_show_item_number: '1',
+    receipt_show_notes: '1'
   };
   Object.entries(defaults).forEach(([k, v]) => {
     db.run('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)', [k, v]);
@@ -1742,10 +1747,12 @@ app.post('/api/print-receipt', (req, res) => {
     LEFT JOIN customers c ON d.customer_id=c.id
     WHERE di.id=?`, [delivery_item_id]);
   if (!item) return res.status(404).json({ error: 'Item not found' });
-  const cnRow = get("SELECT value FROM settings WHERE key='company_name'");
-  const companyName = (cnRow && cnRow.value) ? cnRow.value : 'PLM & ERP';
-  const rfRow = get("SELECT value FROM settings WHERE key='receipt_footer'");
-  const receiptFooter = (rfRow && rfRow.value) ? rfRow.value : '';
+  const rcptSettings = Object.fromEntries(
+    all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_footer','receipt_line_width','receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes')")
+    .map(r => [r.key, r.value])
+  );
+  const companyName   = rcptSettings.company_name || 'PLM & ERP';
+  const receiptFooter = rcptSettings.receipt_footer || '';
 
   // Extract key print params from stored 3MF settings
   const params = {};
@@ -1780,17 +1787,22 @@ app.post('/api/print-receipt', (req, res) => {
     : (item.default_price != null ? item.default_price : null);
 
   const printData = {
-    header:   companyName,
-    name:     item.item_name || item.description,
-    number:   item.item_number || '',
-    desc:     item.item_name ? '' : (item.description || ''),
-    qty:      item.quantity,
-    unit:     item.unit,
-    price:    price,
-    customer: item.customer_name || '',
-    notes:    item.notes || '',
-    footer:   receiptFooter,
-    params:   short ? {} : params
+    header:          companyName,
+    name:            item.item_name || item.description,
+    number:          item.item_number || '',
+    desc:            item.item_name ? '' : (item.description || ''),
+    qty:             item.quantity,
+    unit:            item.unit,
+    price:           price,
+    customer:        item.customer_name || '',
+    notes:           item.notes || '',
+    footer:          receiptFooter,
+    params:          short ? {} : params,
+    line_width:      parseInt(rcptSettings.receipt_line_width) || 32,
+    show_datetime:   rcptSettings.receipt_show_datetime !== '0',
+    show_customer:   rcptSettings.receipt_show_customer !== '0',
+    show_item_number:rcptSettings.receipt_show_item_number !== '0',
+    show_notes:      rcptSettings.receipt_show_notes !== '0'
   };
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
@@ -1821,10 +1833,12 @@ app.post('/api/print-receipt-delivery', (req, res) => {
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
     WHERE di.delivery_id=? ORDER BY di.position, di.id`, [delivery_id]);
 
-  const cnRow = get("SELECT value FROM settings WHERE key='company_name'");
-  const companyName = (cnRow && cnRow.value) ? cnRow.value : 'PLM & ERP';
-  const rfRow = get("SELECT value FROM settings WHERE key='receipt_footer'");
-  const receiptFooter = (rfRow && rfRow.value) ? rfRow.value : '';
+  const rcptSettings = Object.fromEntries(
+    all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_footer','receipt_line_width','receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes')")
+    .map(r => [r.key, r.value])
+  );
+  const companyName   = rcptSettings.company_name || 'PLM & ERP';
+  const receiptFooter = rcptSettings.receipt_footer || '';
 
   let total = null;
   const items = rows.map(item => {
@@ -1840,7 +1854,17 @@ app.post('/api/print-receipt-delivery', (req, res) => {
     };
   });
 
-  const printData = { header: companyName, customer: delivery.customer_name || '', items, total, footer: receiptFooter };
+  const printData = {
+    header:           companyName,
+    customer:         delivery.customer_name || '',
+    items, total,
+    footer:           receiptFooter,
+    line_width:       parseInt(rcptSettings.receipt_line_width) || 32,
+    show_datetime:    rcptSettings.receipt_show_datetime !== '0',
+    show_customer:    rcptSettings.receipt_show_customer !== '0',
+    show_item_number: rcptSettings.receipt_show_item_number !== '0',
+    show_notes:       rcptSettings.receipt_show_notes !== '0'
+  };
   const scriptPath = require('path').join(__dirname, 'print_receipt.py');
   const { execFile } = require('child_process');
   execFile(PYTHON_CMD, [scriptPath, '--mode', 'multi', '--data', JSON.stringify(printData)],

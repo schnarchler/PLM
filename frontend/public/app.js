@@ -837,6 +837,8 @@ async function renderSettings() {
     `<div class="fg"><label class="fl">${label}</label><input class="fi" id="st-${id}" type="${type}" value="${esc(val||'')}" placeholder="${ph}"></div>`;
   const ft = (id, label, val, ph='') =>
     `<div class="fg"><label class="fl">${label}</label><textarea class="ft" id="st-${id}" rows="2" placeholder="${ph}">${esc(val||'')}</textarea></div>`;
+  const fck = (id, label, val) =>
+    `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--t2)"><input type="checkbox" id="st-${id}" ${val !== '0' ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">${label}</label>`;
 
   setLeftBody(`
     <div style="max-width:720px">
@@ -889,6 +891,19 @@ async function renderSettings() {
       <div class="sep-label">Thermodrucker / Kassabon</div>
       <div class="form-row">
         ${ft('receipt_footer','Fusszeile Kassabon',s.receipt_footer,'z.B. Vielen Dank für Ihren Auftrag!')}
+      </div>
+
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-top:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Bon-Aufbau</div>
+        <div class="form-row cols2" style="margin-bottom:8px">
+          ${fi('receipt_line_width','Zeilenbreite (Zeichen)',s.receipt_line_width,'32','number')}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
+          ${fck('receipt_show_datetime','Datum &amp; Uhrzeit anzeigen',s.receipt_show_datetime)}
+          ${fck('receipt_show_customer','Kundenname anzeigen',s.receipt_show_customer)}
+          ${fck('receipt_show_item_number','Artikelnummer anzeigen',s.receipt_show_item_number)}
+          ${fck('receipt_show_notes','Notizen anzeigen',s.receipt_show_notes)}
+        </div>
       </div>
 
       <div style="margin-top:16px;display:flex;gap:8px">
@@ -968,11 +983,16 @@ async function saveSettings() {
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
     'default_filament_price_kg','default_machine_cost_hr',
-    'invoice_footer','quote_footer','receipt_footer'];
+    'invoice_footer','quote_footer','receipt_footer','receipt_line_width'];
+  const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes'];
   const body = {};
   keys.forEach(k => {
     const el = document.getElementById('st-' + k);
     if (el) body[k] = el.value;
+  });
+  checkboxKeys.forEach(k => {
+    const el = document.getElementById('st-' + k);
+    if (el) body[k] = el.checked ? '1' : '0';
   });
   state.settings = await api('/api/settings','PUT',body);
   toast('Einstellungen gespeichert','ok');

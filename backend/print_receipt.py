@@ -12,22 +12,19 @@ ALIGN_L=ESC+b'\x61\x00'
 BOLD_ON=ESC+b'\x45\x01'; BOLD_OFF=ESC+b'\x45\x00'
 FONT_A=ESC+b'\x4d\x00'; FONT_B=ESC+b'\x4d\x01'
 NL=b'\x0a'
-LINE_W=32
+LINE_W=32  # default, overridden per print job
 
 def e(t): return str(t).encode('cp437', errors='replace')
 def rnd5(v): import math; return math.floor(float(v) * 20) / 20
-def sep(): return ALIGN_L+e('-'*LINE_W)+NL
 
-def center(text, width=LINE_W):
-    t=str(text); pad=max(0,(width-len(t))//2)
-    return ALIGN_L+e(' '*pad+t)+NL
+def sep(w=LINE_W): return ALIGN_L+e('-'*w)+NL
 
-def row(text='', bold=False, small=False, centered=False):
+def row(text='', bold=False, small=False, centered=False, w=LINE_W):
     o=ALIGN_L
     o+=BOLD_ON if bold else b''
     o+=FONT_B if small else b''
     if centered:
-        t=str(text); pad=max(0,(LINE_W-len(t))//2)
+        t=str(text); pad=max(0,(w-len(t))//2)
         o+=e(' '*pad+t)
     else:
         o+=e(str(text))
@@ -36,11 +33,16 @@ def row(text='', bold=False, small=False, centered=False):
     o+=BOLD_OFF if bold else b''
     return o
 
-def lr(label, value, width=LINE_W):
-    lbl=str(label)[:width-10]; val=str(value)
-    return ALIGN_L+e(lbl+' '*max(1,width-len(lbl)-len(val))+val)+NL
+def lr(label, value, w=LINE_W):
+    lbl=str(label)[:w-10]; val=str(value)
+    return ALIGN_L+e(lbl+' '*max(1,w-len(lbl)-len(val))+val)+NL
 
 def build_receipt(data):
+    w   = int(data.get('line_width') or LINE_W)
+    s_dt  = data.get('show_datetime',  True)
+    s_cu  = data.get('show_customer',  True)
+    s_nr  = data.get('show_item_number', True)
+    s_no  = data.get('show_notes',     True)
     header=data.get('header') or 'PLM & ERP'
     name=data.get('name') or '-'; number=data.get('number') or ''
     desc=data.get('desc') or ''; qty=data.get('qty',1); unit=data.get('unit','Stk')
@@ -49,33 +51,37 @@ def build_receipt(data):
     footer=data.get('footer') or ''
     now=datetime.now().strftime('%d.%m.%Y  %H:%M')
     o=NL+ALIGN_L
-    o+=row(header,bold=True,centered=True)
-    o+=row(now,small=True,centered=True)
-    if customer:
-        o+=row(customer,small=True,centered=True)
-    o+=sep()
-    if number: o+=row(number,bold=True)
-    o+=row(name,bold=True)
-    if desc and desc!=name: o+=row(desc,small=True)
-    if notes: o+=row(notes,small=True)
+    o+=row(header,bold=True,centered=True,w=w)
+    if s_dt: o+=row(now,small=True,centered=True,w=w)
+    if s_cu and customer: o+=row(customer,small=True,centered=True,w=w)
+    o+=sep(w)
+    if s_nr and number: o+=row(number,bold=True,w=w)
+    o+=row(name,bold=True,w=w)
+    if desc and desc!=name: o+=row(desc,small=True,w=w)
+    if s_no and notes: o+=row(notes,small=True,w=w)
     if price is not None:
-        o+=lr(f'{qty} {unit}', f'CHF {rnd5(price * qty):.2f}')
+        o+=lr(f'{qty} {unit}', f'CHF {rnd5(price * qty):.2f}', w=w)
     else:
-        o+=row(f'{qty} {unit}')
-    o+=sep()
+        o+=row(f'{qty} {unit}',w=w)
+    o+=sep(w)
     if params:
-        o+=row('DRUCKPARAMETER',bold=True)
+        o+=row('DRUCKPARAMETER',bold=True,w=w)
         for k,v in params.items():
             vs=str(v).strip()
-            if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16])
-        o+=sep()
+            if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16],w=w)
+        o+=sep(w)
     if price is not None:
-        o+=row(f'Total CHF {rnd5(price * qty):.2f}',bold=True,centered=True); o+=sep()
-    if footer: o+=row(footer,small=True,centered=True)
+        o+=row(f'Total CHF {rnd5(price * qty):.2f}',bold=True,centered=True,w=w); o+=sep(w)
+    if footer: o+=row(footer,small=True,centered=True,w=w)
     o+=NL*3
     return o
 
 def build_multi_receipt(data):
+    w   = int(data.get('line_width') or LINE_W)
+    s_dt  = data.get('show_datetime',  True)
+    s_cu  = data.get('show_customer',  True)
+    s_nr  = data.get('show_item_number', True)
+    s_no  = data.get('show_notes',     True)
     header=data.get('header') or 'PLM & ERP'
     customer=data.get('customer') or ''
     items=data.get('items') or []
@@ -83,27 +89,26 @@ def build_multi_receipt(data):
     footer=data.get('footer') or ''
     now=datetime.now().strftime('%d.%m.%Y  %H:%M')
     o=NL+ALIGN_L
-    o+=row(header,bold=True,centered=True)
-    o+=row(now,small=True,centered=True)
-    if customer:
-        o+=row(customer,small=True,centered=True)
-    o+=sep()
+    o+=row(header,bold=True,centered=True,w=w)
+    if s_dt: o+=row(now,small=True,centered=True,w=w)
+    if s_cu and customer: o+=row(customer,small=True,centered=True,w=w)
+    o+=sep(w)
     for item in items:
         name=item.get('name') or '-'; number=item.get('number') or ''
         qty=item.get('qty',1); unit=item.get('unit','Stk')
         price=item.get('price'); notes=item.get('notes') or ''
-        if number: o+=row(number,small=True)
-        o+=row(name,bold=True)
-        if notes: o+=row(notes,small=True)
+        if s_nr and number: o+=row(number,small=True,w=w)
+        o+=row(name,bold=True,w=w)
+        if s_no and notes: o+=row(notes,small=True,w=w)
         if price is not None:
-            o+=lr(f'{qty} {unit}',f'CHF {rnd5(price):.2f}')
+            o+=lr(f'{qty} {unit}',f'CHF {rnd5(price):.2f}',w=w)
         else:
-            o+=row(f'{qty} {unit}',small=True)
-        o+=sep()
+            o+=row(f'{qty} {unit}',small=True,w=w)
+        o+=sep(w)
     if total is not None:
-        o+=row(f'Total CHF {rnd5(total):.2f}',bold=True,centered=True)
-        o+=sep()
-    if footer: o+=row(footer,small=True,centered=True)
+        o+=row(f'Total CHF {rnd5(total):.2f}',bold=True,centered=True,w=w)
+        o+=sep(w)
+    if footer: o+=row(footer,small=True,centered=True,w=w)
     o+=NL*3
     return o
 
