@@ -58,15 +58,19 @@ def build_receipt(data):
     if desc and desc!=name: o+=row(desc,small=True)
     if notes: o+=row(notes,small=True)
     o+=sep()
-    o+=row(f'Menge: {qty} {unit}'); o+=sep()
+    if price is not None:
+        o+=lr(f'{qty} {unit}', f'CHF {float(price * qty):.2f}')
+    else:
+        o+=row(f'{qty} {unit}')
+    o+=sep()
     if params:
         o+=row('DRUCKPARAMETER',bold=True)
         for k,v in params.items():
             vs=str(v).strip()
             if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16])
         o+=sep()
-    if price is not None:
-        o+=row(f'Total CHF {float(price):.2f}',bold=True,centered=True); o+=sep()
+        if price is not None:
+            o+=row(f'Total CHF {float(price * qty):.2f}',bold=True,centered=True); o+=sep()
     if footer: o+=row(footer,small=True,centered=True)
     o+=NL*3
     return o
