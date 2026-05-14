@@ -472,6 +472,122 @@ function renderItemDetail(item, activeRevId) {
         <div><div class="cl-action">${cl.action}</div><div class="cl-detail">${cl.details||''}</div></div>
         <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:12px">Leer</div>'}
     </div>`;
+  setTimeout(() => {
+    document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
+      if (!c._stlInit) { c._stlInit = true; initSTLViewer(c.id, c.dataset.stlUrl); }
+    });
+  }, 0);
+}
+
+function parseSTL(buf) {
+  const pos = [], nrm = [];
+  let binary = false;
+  if (buf.byteLength >= 84) {
+    const cnt = new DataView(buf).getUint32(80, true);
+    if (buf.byteLength === 84 + cnt * 50) binary = true;
+  }
+  if (binary) {
+    const dv = new DataView(buf), cnt = dv.getUint32(80, true);
+    for (let i = 0; i < cnt; i++) {
+      const o = 84 + i * 50;
+      const nx=dv.getFloat32(o,true), ny=dv.getFloat32(o+4,true), nz=dv.getFloat32(o+8,true);
+      for (let v = 0; v < 3; v++) {
+        const vo = o + 12 + v * 12;
+        pos.push(dv.getFloat32(vo,true), dv.getFloat32(vo+4,true), dv.getFloat32(vo+8,true));
+        nrm.push(nx,ny,nz);
+      }
+    }
+  } else {
+    const txt = new TextDecoder().decode(new Uint8Array(buf));
+    const re = /facet normal\s+(\S+)\s+(\S+)\s+(\S+)[\s\S]*?vertex\s+(\S+)\s+(\S+)\s+(\S+)\s+vertex\s+(\S+)\s+(\S+)\s+(\S+)\s+vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
+    let m;
+    while ((m = re.exec(txt)) !== null) {
+      pos.push(+m[4],+m[5],+m[6], +m[7],+m[8],+m[9], +m[10],+m[11],+m[12]);
+      nrm.push(+m[1],+m[2],+m[3], +m[1],+m[2],+m[3], +m[1],+m[2],+m[3]);
+    }
+  }
+  return { pos: new Float32Array(pos), nrm: new Float32Array(nrm) };
+}
+
+function initSTLViewer(canvasId, url) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const loadDiv = document.getElementById('stl-load-' + canvasId.replace('stl-c-',''));
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) { if (loadDiv) loadDiv.textContent = 'WebGL nicht verfügbar'; return; }
+  fetch(url).then(r => r.arrayBuffer()).then(buf => {
+    const { pos, nrm } = parseSTL(buf);
+    if (loadDiv) loadDiv.style.display = 'none';
+    if (!pos.length) return;
+    let x0=Infinity,y0=Infinity,z0=Infinity,x1=-Infinity,y1=-Infinity,z1=-Infinity;
+    for (let i = 0; i < pos.length; i+=3) {
+      x0=Math.min(x0,pos[i]);   x1=Math.max(x1,pos[i]);
+      y0=Math.min(y0,pos[i+1]); y1=Math.max(y1,pos[i+1]);
+      z0=Math.min(z0,pos[i+2]); z1=Math.max(z1,pos[i+2]);
+    }
+    const sc = 1.8 / Math.max(x1-x0, y1-y0, z1-z0, 1e-9);
+    const cx=(x0+x1)/2, cy=(y0+y1)/2, cz=(z0+z1)/2;
+    const VS = 'attribute vec3 aP,aN;uniform mat4 uM;uniform mat3 uN;uniform vec3 uC;uniform float uS;varying vec3 vN;void main(){gl_Position=uM*vec4((aP-uC)*uS,1.);vN=normalize(uN*aN);}';
+    const FS = 'precision mediump float;varying vec3 vN;void main(){float d=clamp(dot(normalize(vN),normalize(vec3(1.,1.5,1.))),0.,1.)*.7+.3;gl_FragColor=vec4(.3*d,.55*d,.9*d,1.);}';
+    function mk(type, src) { const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); return s; }
+    const prog = gl.createProgram();
+    gl.attachShader(prog, mk(gl.VERTEX_SHADER, VS));
+    gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    [['aP',pos],['aN',nrm]].forEach(([attr,data]) => {
+      const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      const a = gl.getAttribLocation(prog, attr);
+      gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 3, gl.FLOAT, false, 0, 0);
+    });
+    const uM=gl.getUniformLocation(prog,'uM'), uN=gl.getUniformLocation(prog,'uN');
+    const uC=gl.getUniformLocation(prog,'uC'), uS=gl.getUniformLocation(prog,'uS');
+    gl.uniform3f(uC,cx,cy,cz); gl.uniform1f(uS,sc);
+    let rX=-0.4, rY=0.6, zoom=1, drag=false, lx=0, ly=0;
+    const mul4=(a,b)=>{const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)r[j*4+i]+=a[k*4+i]*b[j*4+k];return r;};
+    const Rx=a=>{const c=Math.cos(a),s=Math.sin(a);return new Float32Array([1,0,0,0,0,c,s,0,0,-s,c,0,0,0,0,1]);};
+    const Ry=a=>{const c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1]);};
+    const Tr=(x,y,z)=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1]);
+    const Pr=(f,a,n,fa)=>{const t=Math.tan(f/2);return new Float32Array([1/(a*t),0,0,0,0,1/t,0,0,0,0,-(fa+n)/(fa-n),-1,0,0,-2*fa*n/(fa-n),0]);};
+    const m3=(m)=>new Float32Array([m[0],m[1],m[2],m[4],m[5],m[6],m[8],m[9],m[10]]);
+    function draw() {
+      canvas.width=canvas.clientWidth||400; canvas.height=canvas.clientHeight||220;
+      const W=canvas.width, H=canvas.height;
+      gl.viewport(0,0,W,H);
+      gl.clearColor(0.11,0.12,0.14,1); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST);
+      const mod=mul4(Rx(rX),Ry(rY));
+      gl.uniformMatrix4fv(uM,false,mul4(Pr(Math.PI/4,W/H,0.01,100),mul4(Tr(0,0,-3.2/zoom),mod)));
+      gl.uniformMatrix3fv(uN,false,m3(mod));
+      gl.drawArrays(gl.TRIANGLES,0,pos.length/3);
+    }
+    canvas.onmousedown = e=>{drag=true;lx=e.clientX;ly=e.clientY;canvas.style.cursor='grabbing';e.preventDefault();};
+    window.addEventListener('mousemove', e=>{if(!drag||!document.getElementById(canvasId))return;rY+=(e.clientX-lx)*0.01;rX+=(e.clientY-ly)*0.01;lx=e.clientX;ly=e.clientY;draw();});
+    window.addEventListener('mouseup', ()=>{if(drag){drag=false;const c=document.getElementById(canvasId);if(c)c.style.cursor='grab';}});
+    canvas.addEventListener('wheel', e=>{zoom*=e.deltaY>0?0.92:1.09;zoom=Math.max(0.2,Math.min(6,zoom));draw();e.preventDefault();},{passive:false});
+    let t0=[];
+    canvas.addEventListener('touchstart',e=>{t0=[...e.touches];e.preventDefault();},{passive:false});
+    canvas.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      if(e.touches.length===1&&t0.length){rY+=(e.touches[0].clientX-t0[0].clientX)*0.01;rX+=(e.touches[0].clientY-t0[0].clientY)*0.01;}
+      else if(e.touches.length===2&&t0.length===2){const d0=Math.hypot(t0[0].clientX-t0[1].clientX,t0[0].clientY-t0[1].clientY),d1=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);zoom*=d1/Math.max(d0,1);zoom=Math.max(0.2,Math.min(6,zoom));}
+      t0=[...e.touches];draw();
+    },{passive:false});
+    draw();
+  }).catch(e=>{if(loadDiv)loadDiv.textContent='Fehler beim Laden.';console.error('STL viewer:',e);});
+}
+
+function switchSTLViewer(revId, url) {
+  const canvasId = 'stl-c-' + revId;
+  const old = document.getElementById(canvasId);
+  if (!old) return;
+  const loadDiv = document.getElementById('stl-load-' + revId);
+  if (loadDiv) { loadDiv.style.display = ''; loadDiv.textContent = 'Lade…'; }
+  const nc = document.createElement('canvas');
+  nc.id = canvasId; nc.style.cssText = 'width:100%;height:100%;display:block;cursor:grab';
+  nc.dataset.stlUrl = url;
+  old.replaceWith(nc);
+  initSTLViewer(canvasId, url);
 }
 
 function renderRevDetail(rev, item) {
@@ -519,6 +635,21 @@ function renderRevDetail(rev, item) {
     </div>
     ${locked ? '' : `<button class="btn btn-ghost btn-sm" onclick="openBomModal(${rev.id},${item.project_id})">+ Position hinzufügen</button>`}
     ` : ''}
+
+    ${(() => {
+      const stls = (rev.datasets||[]).filter(d => dtClass(d.original_name, d.ds_type) === 'dt-STL');
+      if (!stls.length) return '';
+      const fUrl = API+'/api/datasets/'+stls[0].id+'/download';
+      const sel = stls.length > 1
+        ? '<select style="margin-left:auto;font-size:11px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('+rev.id+',\''+API+'/api/datasets/\'+this.value+\'/download\')">'
+          + stls.map(d => '<option value="'+d.id+'">'+esc(d.original_name)+'</option>').join('')+'</select>'
+        : '';
+      return '<div class="sep-label" style="margin-top:12px">3D Vorschau'+sel+'</div>'
+        +'<div style="position:relative;width:100%;height:220px;border-radius:var(--r);overflow:hidden;margin-bottom:10px">'
+        +'<canvas id="stl-c-'+rev.id+'" data-stl-url="'+fUrl+'" style="width:100%;height:100%;display:block;cursor:grab"></canvas>'
+        +'<div id="stl-load-'+rev.id+'" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--t3);font-size:12px;pointer-events:none">Lade…</div>'
+        +'</div>';
+    })()}
 
     <!-- Datasets -->
     <div class="sep-label" style="margin-top:12px">Dateien (Datasets)
