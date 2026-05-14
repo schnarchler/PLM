@@ -34,7 +34,8 @@ function fmtN(v, dec = 2) {
   const [intPart, decPart] = n.toFixed(dec).split('.');
   return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, "'") + (decPart !== undefined ? '.' + decPart : '');
 }
-function fmtCHF(v) { return 'CHF ' + fmtN(v); }
+function rnd5(v) { return Math.floor((parseFloat(v) || 0) * 20) / 20; }
+function fmtCHF(v) { return 'CHF ' + fmtN(rnd5(v)); }
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {

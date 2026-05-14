@@ -15,6 +15,7 @@ NL=b'\x0a'
 LINE_W=32
 
 def e(t): return str(t).encode('cp437', errors='replace')
+def rnd5(v): import math; return math.floor(float(v) * 20) / 20
 def sep(): return ALIGN_L+e('-'*LINE_W)+NL
 
 def center(text, width=LINE_W):
@@ -59,7 +60,7 @@ def build_receipt(data):
     if notes: o+=row(notes,small=True)
     o+=sep()
     if price is not None:
-        o+=lr(f'{qty} {unit}', f'CHF {float(price * qty):.2f}')
+        o+=lr(f'{qty} {unit}', f'CHF {rnd5(price * qty):.2f}')
     else:
         o+=row(f'{qty} {unit}')
     o+=sep()
@@ -70,7 +71,7 @@ def build_receipt(data):
             if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16])
         o+=sep()
         if price is not None:
-            o+=row(f'Total CHF {float(price * qty):.2f}',bold=True,centered=True); o+=sep()
+            o+=row(f'Total CHF {rnd5(price * qty):.2f}',bold=True,centered=True); o+=sep()
     if footer: o+=row(footer,small=True,centered=True)
     o+=NL*3
     return o
@@ -96,12 +97,12 @@ def build_multi_receipt(data):
         o+=row(name,bold=True)
         if notes: o+=row(notes,small=True)
         if price is not None:
-            o+=lr(f'{qty} {unit}',f'CHF {float(price):.2f}')
+            o+=lr(f'{qty} {unit}',f'CHF {rnd5(price):.2f}')
         else:
-            o+=row(f'Menge: {qty} {unit}',small=True)
+            o+=row(f'{qty} {unit}',small=True)
         o+=sep()
     if total is not None:
-        o+=row(f'Total CHF {float(total):.2f}',bold=True,centered=True)
+        o+=row(f'Total CHF {rnd5(total):.2f}',bold=True,centered=True)
         o+=sep()
     if footer: o+=row(footer,small=True,centered=True)
     o+=NL*3
