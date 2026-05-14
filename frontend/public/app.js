@@ -126,6 +126,11 @@ async function openProjectAndItem(projectId, itemId) {
   await openItemDetail(itemId);
 }
 
+async function gotoPlmItem(itemId) {
+  const item = await api(`/api/items/${itemId}`);
+  if (item && item.project_id) await openProjectAndItem(item.project_id, itemId);
+}
+
 async function refreshProjectTree() {
   if (!state.project) return;
   const p = await api(`/api/projects/${state.project.id}`);
@@ -2455,7 +2460,10 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtChf(i.unit_price)}</td>
             ${showDiscount?`<td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--amber)">${i.discount_pct||0}%</td>`:''}
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px">${fmtChf(lineTotal)}</td>
-            <td style="padding:7px 8px"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delLineItem('${parentType}',${i.id},${parentId})">✕</button></td>
+            <td style="padding:7px 8px;white-space:nowrap">
+              ${parentType==='order'&&i.item_id?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;margin-right:2px" onclick="event.stopPropagation();openInventoryDeductModal(${i.id},${i.item_id},${i.quantity},'${parentId}')">📦</button>`:''}
+              <button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delLineItem('${parentType}',${i.id},${parentId})">✕</button>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -3876,10 +3884,15 @@ async function openInventoryDetail(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
         <div><div class="ps-label">Kategorie</div>${item.category}</div>
         <div><div class="ps-label">SKU</div>${esc(item.sku||'—')}</div>
+        ${item.color?`<div><div class="ps-label">Farbe</div>${esc(item.color)}</div>`:''}
+        ${item.material?`<div><div class="ps-label">Material</div>${esc(item.material)}</div>`:''}
         <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${low?'var(--red)':'var(--green)'}">${fmtN(item.stock_qty,2)} ${item.unit}${low?' ⚠':''}</span></div>
         <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+item.unit:'—'}</div>
         ${item.price_per_unit!=null?`<div><div class="ps-label">Preis / Einheit</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
         ${item.supplier_name?`<div><div class="ps-label">Lieferant</div>${esc(item.supplier_name)}</div>`:''}
+        ${item.linked_item_number?`<div style="grid-column:span 2"><div class="ps-label">PLM-Teil</div>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--blue);cursor:pointer" onclick="gotoPlmItem(${item.item_id})">${esc(item.linked_item_number)} – ${esc(item.linked_item_name||'')}</span>
+        </div>`:''}
         ${item.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(item.notes)}</span></div>`:''}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
@@ -3906,7 +3919,7 @@ async function openInventoryDetail(id) {
 async function openInventoryModal(id) {
   const item = id ? await api(`/api/inventory/${id}`) : null;
   const suppliers = await api('/api/suppliers');
-  _showDynModal(`<div class="modal" style="max-width:440px">
+  _showDynModal(`<div class="modal" style="max-width:480px">
     <div class="modal-head"><div class="modal-title">${item ? 'Artikel bearbeiten' : 'Neuer Lagerartikel'}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
@@ -3915,6 +3928,10 @@ async function openInventoryModal(id) {
         <div class="fg"><label class="fl">Kategorie</label>
           <select id="inv-cat" class="fi">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'Sonstiges')===c?' selected':''}>${c}</option>`).join('')}</select></div>
         <div class="fg"><label class="fl">SKU / Artikelnr.</label><input id="inv-sku" class="fi" value="${esc(item?.sku||'')}"></div>
+      </div>
+      <div class="cols2">
+        <div class="fg"><label class="fl">Farbe</label><input id="inv-color" class="fi" placeholder="z.B. Schwarz" value="${esc(item?.color||'')}"></div>
+        <div class="fg"><label class="fl">Material</label><input id="inv-material" class="fi" placeholder="z.B. PLA" value="${esc(item?.material||'')}"></div>
       </div>
       <div class="cols2">
         <div class="fg"><label class="fl">Einheit</label><input id="inv-unit" class="fi" value="${esc(item?.unit||'Stk')}"></div>
@@ -3928,6 +3945,15 @@ async function openInventoryModal(id) {
             ${suppliers.map(s=>`<option value="${s.id}"${item?.supplier_id===s.id?' selected':''}>${esc(s.name)}</option>`).join('')}
           </select></div>
       </div>
+      <div class="fg"><label class="fl">Verknüpftes PLM-Teil</label>
+        <div style="position:relative">
+          <input id="inv-plm-search" class="fi" placeholder="Teil suchen…" autocomplete="off"
+            oninput="searchInvPlmItem(this.value)"
+            value="${item?.linked_item_number ? item.linked_item_number+' – '+esc(item.linked_item_name||'') : ''}">
+          <input type="hidden" id="inv-item-id" value="${item?.item_id||''}">
+          <div id="inv-plm-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);z-index:200;max-height:160px;overflow-y:auto"></div>
+        </div>
+      </div>
       ${!id ? `<div class="fg"><label class="fl">Anfangsbestand</label><input id="inv-stock" type="number" min="0" step="0.01" class="fi" value="0"></div>` : ''}
       <div class="fg"><label class="fl">Notizen</label><textarea id="inv-notes" class="fs" rows="2" style="resize:vertical">${esc(item?.notes||'')}</textarea></div>
     </div>
@@ -3938,15 +3964,47 @@ async function openInventoryModal(id) {
   </div>`);
 }
 
+let _invPlmTimer;
+function searchInvPlmItem(q) {
+  clearTimeout(_invPlmTimer);
+  const res = document.getElementById('inv-plm-results');
+  if (!q || q.length < 1) { res.style.display='none'; return; }
+  _invPlmTimer = setTimeout(async () => {
+    const items = await api('/api/items-all?q='+encodeURIComponent(q));
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    res.innerHTML = items.map(i => {
+      const icon = i.item_type==='asm'?'📦':i.item_type==='doc'?'📄':'🔩';
+      return `<div onclick="selectInvPlmItem(${i.id},'${esc(i.item_number)}',${JSON.stringify(esc(i.name))})"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <span>${icon}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.item_number)}</span>
+        <span style="flex:1;font-size:12px">${esc(i.name)}</span>
+        <span style="font-size:10px;color:var(--t3)">${esc(i.project_name)}</span>
+      </div>`;
+    }).join('');
+    res.style.display = 'block';
+  }, 200);
+}
+
+function selectInvPlmItem(id, number, name) {
+  document.getElementById('inv-item-id').value = id;
+  document.getElementById('inv-plm-search').value = number + ' – ' + name;
+  document.getElementById('inv-plm-results').style.display = 'none';
+}
+
 async function saveInventoryItem(id) {
   const body = {
     name: document.getElementById('inv-name').value.trim(),
     category: document.getElementById('inv-cat').value,
     sku: document.getElementById('inv-sku').value.trim(),
+    color: document.getElementById('inv-color').value.trim() || null,
+    material: document.getElementById('inv-material').value.trim() || null,
     unit: document.getElementById('inv-unit').value.trim() || 'Stk',
     min_qty: document.getElementById('inv-min').value,
     price_per_unit: document.getElementById('inv-price').value || null,
     supplier_id: document.getElementById('inv-supplier').value || null,
+    item_id: document.getElementById('inv-item-id').value || null,
     notes: document.getElementById('inv-notes').value.trim()
   };
   if (!body.name) { toast('Name erforderlich', 'err'); return; }
@@ -4009,4 +4067,41 @@ async function delInventoryItem(id) {
   await api(`/api/inventory/${id}`, 'DELETE');
   closeDetail();
   renderInventory();
+}
+
+async function openInventoryDeductModal(orderItemId, plmItemId, qty, orderId) {
+  const invItems = await api(`/api/inventory?item_id=${plmItemId}`);
+  if (!invItems.length) { toast('Kein Lagerartikel für dieses Teil verknüpft', 'err'); return; }
+  const options = invItems.map(i => {
+    const variantLabel = [i.color, i.material].filter(Boolean).join(' / ');
+    const label = esc(i.name) + (variantLabel ? ` (${esc(variantLabel)})` : '') + ` — Bestand: ${fmtN(i.stock_qty,2)} ${esc(i.unit)}`;
+    return `<option value="${i.id}" data-stock="${i.stock_qty}" data-unit="${esc(i.unit)}">${label}</option>`;
+  }).join('');
+  _showDynModal(`<div class="modal" style="max-width:400px">
+    <div class="modal-head"><div class="modal-title">Lager abbuchen</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      ${invItems.length > 1 ? `<div class="fg"><label class="fl">Lagerartikel</label>
+        <select id="ded-inv-id" class="fi">${options}</select></div>` : `<input type="hidden" id="ded-inv-id" value="${invItems[0].id}">`}
+      <div class="fg"><label class="fl">Menge abbuchen</label>
+        <input id="ded-qty" type="number" min="0.01" step="0.01" class="fi" value="${qty}"></div>
+      <div class="fg"><label class="fl">Referenz</label>
+        <input id="ded-ref" class="fi" value="AUF-${orderId}" placeholder="Auftragsnr."></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-amber" onclick="deductFromInventory()">Abbuchen</button>
+    </div>
+  </div>`);
+}
+
+async function deductFromInventory() {
+  const invIdEl = document.getElementById('ded-inv-id');
+  const invId = invIdEl.tagName === 'SELECT' ? invIdEl.value : invIdEl.value;
+  const qty = parseFloat(document.getElementById('ded-qty').value);
+  const reference = document.getElementById('ded-ref').value.trim();
+  if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
+  await api(`/api/inventory/${invId}/movement`, 'POST', { type: 'out', qty, reference, notes: 'Auftragsabgang' });
+  _hideDynModal();
+  toast('Abgebucht', 'ok');
 }

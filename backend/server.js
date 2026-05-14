@@ -399,6 +399,9 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
+  migrate('ALTER TABLE inventory_items ADD COLUMN item_id INTEGER REFERENCES items(id)');
+  migrate('ALTER TABLE inventory_items ADD COLUMN color TEXT');
+  migrate('ALTER TABLE inventory_items ADD COLUMN material TEXT');
 
   db.run(`CREATE TABLE IF NOT EXISTS inventory_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2110,32 +2113,45 @@ app.delete('/api/suppliers/:id', (req, res) => {
 // INVENTORY
 // ==============================================================
 app.get('/api/inventory', (req, res) => {
-  res.json(all(`SELECT ii.*, s.name as supplier_name FROM inventory_items ii
-    LEFT JOIN suppliers s ON ii.supplier_id=s.id ORDER BY ii.category, ii.name`));
+  const { item_id } = req.query;
+  const base = `SELECT ii.*, s.name as supplier_name, it.item_number as linked_item_number, it.name as linked_item_name
+    FROM inventory_items ii
+    LEFT JOIN suppliers s ON ii.supplier_id=s.id
+    LEFT JOIN items it ON ii.item_id=it.id`;
+  if (item_id) {
+    res.json(all(base + ' WHERE ii.item_id=? ORDER BY ii.category, ii.name', [parseInt(item_id)]));
+  } else {
+    res.json(all(base + ' ORDER BY ii.category, ii.name'));
+  }
 });
 
 app.post('/api/inventory', (req, res) => {
-  const { name, category, sku, unit, stock_qty, min_qty, price_per_unit, supplier_id, notes } = req.body;
+  const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes, item_id, color, material } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
-  const id = runGetId('INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,supplier_id,notes) VALUES (?,?,?,?,?,?,?,?,?)',
-    [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(stock_qty)||0, parseFloat(min_qty)||0,
-     price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'']);
+  const id = runGetId('INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,supplier_id,notes,item_id,color,material) VALUES (?,?,?,?,0,?,?,?,?,?,?,?)',
+    [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(min_qty)||0,
+     price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'',
+     item_id||null, color||null, material||null]);
   res.json(get('SELECT * FROM inventory_items WHERE id=?', [id]));
 });
 
 app.get('/api/inventory/:id', (req, res) => {
-  const item = get(`SELECT ii.*, s.name as supplier_name FROM inventory_items ii
-    LEFT JOIN suppliers s ON ii.supplier_id=s.id WHERE ii.id=?`, [req.params.id]);
+  const item = get(`SELECT ii.*, s.name as supplier_name, it.item_number as linked_item_number, it.name as linked_item_name
+    FROM inventory_items ii
+    LEFT JOIN suppliers s ON ii.supplier_id=s.id
+    LEFT JOIN items it ON ii.item_id=it.id
+    WHERE ii.id=?`, [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found' });
   item.movements = all('SELECT * FROM inventory_movements WHERE item_id=? ORDER BY created_at DESC LIMIT 50', [item.id]);
   res.json(item);
 });
 
 app.put('/api/inventory/:id', (req, res) => {
-  const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes } = req.body;
-  run(`UPDATE inventory_items SET name=?,category=?,sku=?,unit=?,min_qty=?,price_per_unit=?,supplier_id=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+  const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes, item_id, color, material } = req.body;
+  run(`UPDATE inventory_items SET name=?,category=?,sku=?,unit=?,min_qty=?,price_per_unit=?,supplier_id=?,notes=?,item_id=?,color=?,material=?,updated_at=datetime('now') WHERE id=?`,
     [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(min_qty)||0,
-     price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'', req.params.id]);
+     price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'',
+     item_id||null, color||null, material||null, req.params.id]);
   res.json(get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]));
 });
 
