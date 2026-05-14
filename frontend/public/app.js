@@ -248,7 +248,7 @@ function openProjectDetail(p) {
       </div>
       ${datasets.length ? `<div style="padding:3px 6px 3px 32px">
         ${datasets.map(d => `<div class="ds-row" style="margin-bottom:3px">
-          <span class="ds-type dt-${d.ds_type}">${d.ds_type}</span>
+          <span class="ds-type ${dtClass(d.original_name,d.ds_type)}">${fileLabel(d.original_name,d.ds_type)}</span>
           <div class="ds-info"><div class="ds-name">${esc(d.original_name)}</div></div>
           <a href="/api/datasets/${d.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" title="Öffnen">&#x2197;</a>
           <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
@@ -530,15 +530,16 @@ function renderRevDetail(rev, item) {
 function fileLabel(originalName, dsType) {
   if (!originalName || !originalName.includes('.')) return dsType;
   const ext = originalName.split('.').pop().toUpperCase();
-  // Extensions that stay as their category label
   if (dsType === 'PDF') return 'PDF';
-  // CAD formats: show extension for well-known ones, else 'CAD'
   if (dsType === 'CAD') {
     const specific = ['STL','OBJ','3MF','STEP','STP','IGES','IGS','F3D','JT','X_T','X_B'];
     return specific.includes(ext) ? ext : 'CAD';
   }
-  // For everything else: show actual extension
   return ext;
+}
+function dtClass(originalName, dsType) {
+  if (dsType === 'CAD' && originalName && originalName.split('.').pop().toUpperCase() === 'STL') return 'dt-STL';
+  return 'dt-' + dsType;
 }
 
 function renderDatasets(datasets, revId, locked) {
@@ -549,7 +550,7 @@ function renderDatasets(datasets, revId, locked) {
     `<div style="margin-bottom:4px">
       ${files.map(f => `
         <div class="ds-row">
-          <span class="ds-type dt-${type}">${fileLabel(f.original_name, type)}</span>
+          <span class="ds-type ${dtClass(f.original_name, type)}">${fileLabel(f.original_name, type)}</span>
           <div class="ds-info">
             <div class="ds-name">${esc(f.original_name)}</div>
             <div class="ds-meta">v${f.version} · ${fmtSize(f.file_size)} · ${fmtDate(f.uploaded_at)}${f.notes?' · '+esc(f.notes):''}</div>
@@ -1370,6 +1371,7 @@ function _render_orderRows() {
 
 async function openOrderDetail(id) {
   const o = await api(`/api/orders/${id}`);
+  const rec = (state.orders||[]).find(x=>x.id===id); if (rec) Object.assign(rec, o);
   document.getElementById('dp-title').innerHTML = `<strong>${o.number}</strong>&nbsp;${esc(o.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'od-pos')">Positionen</button>
@@ -2008,6 +2010,7 @@ function _render_quoteRows() {
 
 async function openQuoteDetail(id) {
   const q = await api(`/api/quotes/${id}`);
+  const rec = (state.quotes||[]).find(x=>x.id===id); if (rec) Object.assign(rec, q);
   document.getElementById('dp-title').innerHTML = `<strong>${q.number}</strong>&nbsp;${esc(q.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'qd-pos')">Positionen</button>
@@ -2251,13 +2254,24 @@ function openLineItemModal(parentType, parentId, itemId) {
         document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
         document.getElementById('li-plm-name').textContent = li.description;
         document.getElementById('li-plm-selected').style.display = 'flex';
-        // Show cost hint if available
-        api('/api/items-all?q=' + encodeURIComponent(li.item_number)).then(results => {
-          const found = results.find(r => r.id === li.item_id);
-          if (found) selectLinkedItem({ ...found, default_price: li.unit_price });
-          document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
-          document.getElementById('li-plm-name').textContent = li.description;
-        }).catch(()=>{});
+        // Show cost hint directly from already-loaded data
+        const hint = document.getElementById('li-cost-hint');
+        const mc = li.manufacturing_cost;
+        if (mc) {
+          const parts = [];
+          if (mc.filament > 0) parts.push(`Filament CHF ${mc.filament.toFixed(2)}`);
+          if (mc.machine > 0) parts.push(`Maschine CHF ${mc.machine.toFixed(2)}`);
+          const sellPrice = li.unit_price;
+          const margin = sellPrice != null ? sellPrice - mc.total : null;
+          const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
+          const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
+          hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>CHF ${mc.total.toFixed(2)}</strong>`
+            + (parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
+            + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge CHF ${margin.toFixed(2)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
+          hint.style.display = 'block';
+        } else {
+          hint.style.display = 'none';
+        }
       } else {
         document.getElementById('li-plm-selected').style.display = 'none';
       }

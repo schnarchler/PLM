@@ -278,6 +278,7 @@ tbody tr:last-child{border-bottom:none}
   padding:3px 7px;border-radius:4px;flex-shrink:0;letter-spacing:.4px;
 }
 .dt-CAD{background:oklch(72% 0.16 252 / .2);color:var(--blue)}
+.dt-STL{background:oklch(72% 0.15 30 / .22);color:oklch(78% 0.15 30)}
 .dt-GCODE{background:oklch(76% 0.13 195 / .2);color:var(--teal)}
 .dt-PDF{background:oklch(70% 0.16 25 / .2);color:var(--red)}
 .dt-IMAGE{background:oklch(80% 0.13 75 / .2);color:var(--amber)}
