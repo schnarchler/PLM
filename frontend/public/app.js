@@ -70,6 +70,8 @@ async function gotoView(v) {
   else if (v === 'fileindex') await renderFileIndex();
   else if (v === 'search') renderSearchView();
   else if (v === 'profit') await renderProfitOverview();
+  else if (v === 'suppliers') await renderSuppliers();
+  else if (v === 'inventory') await renderInventory();
 }
 
 // ── PROJECTS LIST ─────────────────────────────────────────────
@@ -1656,7 +1658,8 @@ async function openOrderDetail(id) {
   document.getElementById('dp-title').innerHTML = `<strong>${o.number}</strong>&nbsp;${esc(o.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'od-pos')">Positionen</button>
-    <button class="tab" onclick="switchTab(this,'od-info')">Details</button>`;
+    <button class="tab" onclick="switchTab(this,'od-info')">Details</button>
+    <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="od-pos">
       ${renderLineItems(o.items||[], 'order', id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
@@ -1677,9 +1680,13 @@ async function openOrderDetail(id) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openOrderModal(${id})">✏️ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Klonen</button>
         <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🚚 Lieferschein erstellen</button>
         <button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>
       </div>
+    </div>
+    <div id="od-time" style="display:none">
+      <div id="time-entries-list"><div style="color:var(--t3);font-size:12px">Wird geladen…</div></div>
     </div>`;
   showDetail();
 }
@@ -2651,6 +2658,7 @@ async function loadStats() {
   if (el) el.textContent = s.quotes||0;
   const el2 = document.getElementById('badge-deliveries');
   if (el2) el2.textContent = s.deliveries||0;
+  // Supplier/inventory badges loaded separately when visiting those views
 }
 
 // ── API ───────────────────────────────────────────────────────
@@ -3628,3 +3636,377 @@ ${itemsHtml || '<p style="color:#9ca3af">Keine Positionen</p>'}
   w.document.close();
 }
 
+
+// ── CLONE ORDER ───────────────────────────────────────────────
+async function cloneOrder(id) {
+  const o = await api(`/api/orders/${id}/clone`, 'POST');
+  toast(`Auftrag ${o.number} erstellt`, 'ok');
+  await renderOrders();
+  openOrderDetail(o.id);
+}
+
+// ── ZEITERFASSUNG ─────────────────────────────────────────────
+let _teOrderId = null;
+
+async function loadTimeEntries(orderId) {
+  _teOrderId = orderId;
+  const entries = await api(`/api/time-entries?order_id=${orderId}`);
+  const totalH = entries.reduce((s, e) => s + (e.hours||0), 0);
+  const el = document.getElementById('time-entries-list');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div class="sep-label" style="margin:0;flex:1">Zeiterfassung</div>
+      <span style="font-size:11px;color:var(--t3)">Total: <strong style="color:var(--t1)">${fmtN(totalH,2)} h</strong></span>
+      <button class="btn btn-primary btn-sm" onclick="openTimeModal()">+ Eintrag</button>
+    </div>
+    ${entries.length ? `<div class="tbl-wrap"><table>
+      <thead><tr><th>Datum</th><th>Stunden</th><th>Beschreibung</th><th></th></tr></thead>
+      <tbody>${entries.map(e => `<tr>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${e.date||'—'}</td>
+        <td style="font-family:var(--mono);font-size:11px;font-weight:600">${fmtN(e.hours,2)} h</td>
+        <td style="color:var(--t2)">${esc(e.description||'')}</td>
+        <td style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
+          <button class="btn btn-red btn-sm btn-icon" onclick="delTimeEntry(${e.id})">✕</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>`
+    : '<div style="color:var(--t3);font-size:12px;padding:12px 0">Noch keine Zeiteinträge</div>'}`;
+}
+
+function openTimeModal(entry) {
+  const overlay = document.getElementById('overlay');
+  const e = entry || {};
+  overlay.innerHTML = `<div class="modal" style="max-width:380px">
+    <div class="modal-header"><span>${e.id ? 'Zeiteintrag bearbeiten' : 'Zeiteintrag erfassen'}</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div><label class="ps-label">Datum</label>
+        <input id="te-date" type="date" class="form-input" value="${e.date||new Date().toISOString().slice(0,10)}"></div>
+      <div><label class="ps-label">Stunden</label>
+        <input id="te-hours" type="number" step="0.25" min="0.25" class="form-input" placeholder="1.5" value="${e.hours||''}"></div>
+      <div><label class="ps-label">Beschreibung</label>
+        <input id="te-desc" type="text" class="form-input" placeholder="Konstruktion, Montage …" value="${esc(e.description||'')}"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveTimeEntry(${e.id||'null'})">Speichern</button>
+    </div>
+  </div>`;
+  overlay.classList.remove('hidden');
+}
+
+async function saveTimeEntry(id) {
+  const date = document.getElementById('te-date').value;
+  const hours = parseFloat(document.getElementById('te-hours').value);
+  const description = document.getElementById('te-desc').value.trim();
+  if (!hours || hours <= 0) { toast('Stunden erforderlich', 'err'); return; }
+  if (id) {
+    await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description });
+  } else {
+    await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, hours, description });
+  }
+  closeModal();
+  loadTimeEntries(_teOrderId);
+}
+
+async function delTimeEntry(id) {
+  if (!confirm('Eintrag löschen?')) return;
+  await api(`/api/time-entries/${id}`, 'DELETE');
+  loadTimeEntries(_teOrderId);
+}
+
+// ── LIEFERANTEN ───────────────────────────────────────────────
+async function renderSuppliers() {
+  setLeftHeader('Lieferanten', `<button class="btn btn-primary btn-sm" onclick="openSupplierModal()">+ Lieferant</button>`);
+  const suppliers = await api('/api/suppliers');
+  document.getElementById('badge-suppliers').textContent = suppliers.length || '—';
+  if (!suppliers.length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Noch keine Lieferanten</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openSupplierModal()">Ersten Lieferant anlegen</button></div></div>`);
+    return;
+  }
+  setLeftBody(`<div class="tbl-wrap"><table>
+    <thead><tr><th>Nr.</th><th>Name</th><th>Kontakt</th><th>E-Mail</th><th>Telefon</th><th></th></tr></thead>
+    <tbody>${suppliers.map(s => `<tr onclick="openSupplierDetail(${s.id})" style="cursor:pointer">
+      <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${s.number}</td>
+      <td style="font-weight:500">${esc(s.name)}</td>
+      <td style="color:var(--t2)">${esc(s.contact_person||'—')}</td>
+      <td style="color:var(--t3);font-size:11px">${esc(s.email||'—')}</td>
+      <td style="color:var(--t3);font-size:11px">${esc(s.phone||'—')}</td>
+      <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delSupplier(${s.id})">✕</button></td>
+    </tr>`).join('')}
+    </tbody></table></div>`);
+}
+
+async function openSupplierDetail(id) {
+  const s = await api(`/api/suppliers/${id}`);
+  document.getElementById('dp-title').innerHTML = `<strong>${s.number}</strong>&nbsp;${esc(s.name)}`;
+  document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'sup-info')">Details</button>`;
+  document.getElementById('dp-body').innerHTML = `
+    <div id="sup-info">
+      <div class="sep-label">Lieferantendaten</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+        <div><div class="ps-label">Nummer</div>${s.number}</div>
+        <div><div class="ps-label">Firma</div>${esc(s.name)}</div>
+        ${s.contact_person?`<div><div class="ps-label">Kontaktperson</div>${esc(s.contact_person)}</div>`:''}
+        ${s.email?`<div><div class="ps-label">E-Mail</div><a href="mailto:${esc(s.email)}" style="color:var(--blue)">${esc(s.email)}</a></div>`:''}
+        ${s.phone?`<div><div class="ps-label">Telefon</div>${esc(s.phone)}</div>`:''}
+        ${s.address?`<div style="grid-column:span 2"><div class="ps-label">Adresse</div><span style="white-space:pre-line;color:var(--t2)">${esc(s.address)}</span></div>`:''}
+        ${s.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(s.notes)}</span></div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:16px">
+        <button class="btn btn-ghost btn-sm" onclick="openSupplierModal(${id})">✏️ Bearbeiten</button>
+        <button class="btn btn-red btn-sm" onclick="delSupplier(${id})">🗑 Löschen</button>
+      </div>
+      ${s.inventory_items?.length ? `
+      <div class="sep-label">Lagerartikel (${s.inventory_items.length})</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Name</th><th>Kategorie</th><th>Bestand</th><th>Einheit</th></tr></thead>
+        <tbody>${s.inventory_items.map(i => `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
+          <td>${esc(i.name)}</td>
+          <td style="color:var(--t3);font-size:11px">${i.category}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:${i.stock_qty<=i.min_qty?'var(--red)':'var(--green)'}">${fmtN(i.stock_qty,2)}</td>
+          <td style="color:var(--t3)">${i.unit}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : ''}
+    </div>`;
+  showDetail();
+}
+
+async function openSupplierModal(id) {
+  const s = id ? await api(`/api/suppliers/${id}`) : null;
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `<div class="modal" style="max-width:420px">
+    <div class="modal-header"><span>${s ? 'Lieferant bearbeiten' : 'Neuer Lieferant'}</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <div><label class="ps-label">Firma *</label><input id="sup-name" class="form-input" value="${esc(s?.name||'')}"></div>
+      <div class="cols2">
+        <div><label class="ps-label">Kontaktperson</label><input id="sup-contact" class="form-input" value="${esc(s?.contact_person||'')}"></div>
+        <div><label class="ps-label">Telefon</label><input id="sup-phone" class="form-input" value="${esc(s?.phone||'')}"></div>
+      </div>
+      <div><label class="ps-label">E-Mail</label><input id="sup-email" type="email" class="form-input" value="${esc(s?.email||'')}"></div>
+      <div><label class="ps-label">Adresse</label><textarea id="sup-address" class="form-input" rows="3" style="resize:vertical">${esc(s?.address||'')}</textarea></div>
+      <div><label class="ps-label">Notizen</label><textarea id="sup-notes" class="form-input" rows="2" style="resize:vertical">${esc(s?.notes||'')}</textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveSupplier(${id||'null'})">Speichern</button>
+    </div>
+  </div>`;
+  overlay.classList.remove('hidden');
+}
+
+async function saveSupplier(id) {
+  const body = {
+    name: document.getElementById('sup-name').value.trim(),
+    contact_person: document.getElementById('sup-contact').value.trim(),
+    email: document.getElementById('sup-email').value.trim(),
+    phone: document.getElementById('sup-phone').value.trim(),
+    address: document.getElementById('sup-address').value.trim(),
+    notes: document.getElementById('sup-notes').value.trim()
+  };
+  if (!body.name) { toast('Name erforderlich', 'err'); return; }
+  const s = id ? await api(`/api/suppliers/${id}`, 'PUT', body) : await api('/api/suppliers', 'POST', body);
+  closeModal();
+  await renderSuppliers();
+  openSupplierDetail(s.id);
+}
+
+async function delSupplier(id) {
+  if (!confirm('Lieferant löschen?')) return;
+  await api(`/api/suppliers/${id}`, 'DELETE');
+  closeDetail();
+  renderSuppliers();
+}
+
+// ── LAGER / BESTAND ───────────────────────────────────────────
+const INV_CATS = ['Filament','Hardware','Elektronik','Komponenten','Werkzeug','Verbrauchsmaterial','Sonstiges'];
+
+async function renderInventory() {
+  setLeftHeader('Lager', `<button class="btn btn-primary btn-sm" onclick="openInventoryModal()">+ Artikel</button>`);
+  const items = await api('/api/inventory');
+  const low = items.filter(i => i.min_qty > 0 && i.stock_qty <= i.min_qty).length;
+  document.getElementById('badge-inventory').textContent = items.length || '—';
+  if (!items.length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Noch keine Lagerartikel</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openInventoryModal()">Ersten Artikel anlegen</button></div></div>`);
+    return;
+  }
+  const byCategory = {};
+  items.forEach(i => { (byCategory[i.category] = byCategory[i.category]||[]).push(i); });
+  const lowBanner = low ? `<div style="background:oklch(35% 0.12 25 / .15);border:1px solid oklch(60% 0.15 25 / .4);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)">⚠ ${low} Artikel unter Mindestbestand</div>` : '';
+  const rows = Object.entries(byCategory).map(([cat, catItems]) => `
+    <tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${cat}</td></tr>
+    ${catItems.map(i => {
+      const low = i.min_qty > 0 && i.stock_qty <= i.min_qty;
+      return `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
+        <td style="font-weight:500">${esc(i.name)}</td>
+        <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${esc(i.sku||'—')}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:${low?'var(--red)':'var(--green)'};font-weight:${low?600:400}">
+          ${fmtN(i.stock_qty,2)} ${i.unit}${low?' ⚠':''}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${i.min_qty>0?'Min: '+fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
+        <td style="color:var(--t3);font-size:11px">${esc(i.supplier_name||'—')}</td>
+        <td style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'in')">＋</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'out')">－</button>
+          <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delInventoryItem(${i.id})">✕</button>
+        </td>
+      </tr>`;
+    }).join('')}`).join('');
+  setLeftBody(lowBanner + `<div class="tbl-wrap"><table>
+    <thead><tr><th>Artikel</th><th>SKU</th><th>Bestand</th><th>Minimum</th><th>Lieferant</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`);
+}
+
+async function openInventoryDetail(id) {
+  const item = await api(`/api/inventory/${id}`);
+  const low = item.min_qty > 0 && item.stock_qty <= item.min_qty;
+  document.getElementById('dp-title').innerHTML = esc(item.name);
+  document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'inv-info')">Details</button>`;
+  document.getElementById('dp-body').innerHTML = `
+    <div id="inv-info">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+        <div><div class="ps-label">Kategorie</div>${item.category}</div>
+        <div><div class="ps-label">SKU</div>${esc(item.sku||'—')}</div>
+        <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${low?'var(--red)':'var(--green)'}">${fmtN(item.stock_qty,2)} ${item.unit}${low?' ⚠':''}</span></div>
+        <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+item.unit:'—'}</div>
+        ${item.price_per_unit!=null?`<div><div class="ps-label">Preis / Einheit</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
+        ${item.supplier_name?`<div><div class="ps-label">Lieferant</div>${esc(item.supplier_name)}</div>`:''}
+        ${item.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(item.notes)}</span></div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-primary btn-sm" onclick="openMovementModal(${id},'in')">+ Zugang</button>
+        <button class="btn btn-amber btn-sm" onclick="openMovementModal(${id},'out')">− Abgang</button>
+        <button class="btn btn-ghost btn-sm" onclick="openInventoryModal(${id})">✏️ Bearbeiten</button>
+        <button class="btn btn-red btn-sm" onclick="delInventoryItem(${id})">🗑 Löschen</button>
+      </div>
+      <div class="sep-label">Letzte Bewegungen</div>
+      ${item.movements?.length ? `<div class="tbl-wrap"><table>
+        <thead><tr><th>Datum</th><th>Typ</th><th>Menge</th><th>Referenz</th><th>Notiz</th></tr></thead>
+        <tbody>${item.movements.map(m => `<tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${(m.created_at||'').slice(0,16).replace('T',' ')}</td>
+          <td><span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'oklch(35% 0.1 145 / .3)':'oklch(35% 0.12 25 / .3)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
+          <td style="font-family:var(--mono);font-size:11px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
+          <td style="color:var(--t3);font-size:11px">${esc(m.reference||'—')}</td>
+          <td style="color:var(--t3);font-size:11px">${esc(m.notes||'')}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : '<div style="color:var(--t3);font-size:12px">Noch keine Bewegungen</div>'}
+    </div>`;
+  showDetail();
+}
+
+async function openInventoryModal(id) {
+  const item = id ? await api(`/api/inventory/${id}`) : null;
+  const suppliers = await api('/api/suppliers');
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `<div class="modal" style="max-width:440px">
+    <div class="modal-header"><span>${item ? 'Artikel bearbeiten' : 'Neuer Lagerartikel'}</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <div><label class="ps-label">Name *</label><input id="inv-name" class="form-input" value="${esc(item?.name||'')}"></div>
+      <div class="cols2">
+        <div><label class="ps-label">Kategorie</label>
+          <select id="inv-cat" class="form-input">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'Sonstiges')===c?' selected':''}>${c}</option>`).join('')}</select></div>
+        <div><label class="ps-label">SKU / Artikelnr.</label><input id="inv-sku" class="form-input" value="${esc(item?.sku||'')}"></div>
+      </div>
+      <div class="cols2">
+        <div><label class="ps-label">Einheit</label><input id="inv-unit" class="form-input" value="${esc(item?.unit||'Stk')}"></div>
+        <div><label class="ps-label">Mindestbestand</label><input id="inv-min" type="number" min="0" step="0.01" class="form-input" value="${item?.min_qty||0}"></div>
+      </div>
+      <div class="cols2">
+        <div><label class="ps-label">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="form-input" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
+        <div><label class="ps-label">Lieferant</label>
+          <select id="inv-supplier" class="form-input">
+            <option value="">—</option>
+            ${suppliers.map(s=>`<option value="${s.id}"${item?.supplier_id===s.id?' selected':''}>${esc(s.name)}</option>`).join('')}
+          </select></div>
+      </div>
+      ${!id ? `<div class="cols2">
+        <div><label class="ps-label">Anfangsbestand</label><input id="inv-stock" type="number" min="0" step="0.01" class="form-input" value="0"></div>
+      </div>` : ''}
+      <div><label class="ps-label">Notizen</label><textarea id="inv-notes" class="form-input" rows="2" style="resize:vertical">${esc(item?.notes||'')}</textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveInventoryItem(${id||'null'})">Speichern</button>
+    </div>
+  </div>`;
+  overlay.classList.remove('hidden');
+}
+
+async function saveInventoryItem(id) {
+  const body = {
+    name: document.getElementById('inv-name').value.trim(),
+    category: document.getElementById('inv-cat').value,
+    sku: document.getElementById('inv-sku').value.trim(),
+    unit: document.getElementById('inv-unit').value.trim() || 'Stk',
+    min_qty: document.getElementById('inv-min').value,
+    price_per_unit: document.getElementById('inv-price').value || null,
+    supplier_id: document.getElementById('inv-supplier').value || null,
+    notes: document.getElementById('inv-notes').value.trim()
+  };
+  if (!body.name) { toast('Name erforderlich', 'err'); return; }
+  if (id) {
+    await api(`/api/inventory/${id}`, 'PUT', body);
+  } else {
+    const stockEl = document.getElementById('inv-stock');
+    body.stock_qty = stockEl ? parseFloat(stockEl.value)||0 : 0;
+    const item = await api('/api/inventory', 'POST', body);
+    if (body.stock_qty > 0) {
+      await api(`/api/inventory/${item.id}/movement`, 'POST', { type: 'in', qty: body.stock_qty, notes: 'Anfangsbestand' });
+    }
+    closeModal();
+    await renderInventory();
+    openInventoryDetail(item.id);
+    return;
+  }
+  closeModal();
+  await renderInventory();
+  openInventoryDetail(id);
+}
+
+function openMovementModal(itemId, defaultType) {
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `<div class="modal" style="max-width:360px">
+    <div class="modal-header"><span>Lagerbewegung</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <div><label class="ps-label">Typ</label>
+        <select id="mov-type" class="form-input">
+          <option value="in"${defaultType==='in'?' selected':''}>Zugang (+)</option>
+          <option value="out"${defaultType==='out'?' selected':''}>Abgang (−)</option>
+          <option value="adjust">Korrektur (=)</option>
+        </select></div>
+      <div><label class="ps-label">Menge</label><input id="mov-qty" type="number" min="0.01" step="0.01" class="form-input" placeholder="1"></div>
+      <div><label class="ps-label">Referenz (z.B. Auftragsnr.)</label><input id="mov-ref" class="form-input" placeholder="optional"></div>
+      <div><label class="ps-label">Notiz</label><input id="mov-notes" class="form-input" placeholder="optional"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveMovement(${itemId})">Buchen</button>
+    </div>
+  </div>`;
+  overlay.classList.remove('hidden');
+}
+
+async function saveMovement(itemId) {
+  const type = document.getElementById('mov-type').value;
+  const qty = parseFloat(document.getElementById('mov-qty').value);
+  const reference = document.getElementById('mov-ref').value.trim();
+  const notes = document.getElementById('mov-notes').value.trim();
+  if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
+  await api(`/api/inventory/${itemId}/movement`, 'POST', { type, qty, reference, notes });
+  closeModal();
+  toast('Buchung gespeichert', 'ok');
+  await renderInventory();
+  openInventoryDetail(itemId);
+}
+
+async function delInventoryItem(id) {
+  if (!confirm('Artikel und alle Bewegungen löschen?')) return;
+  await api(`/api/inventory/${id}`, 'DELETE');
+  closeDetail();
+  renderInventory();
+}
