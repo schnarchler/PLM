@@ -551,6 +551,30 @@ function calcManufacturingCost(revisionId) {
   return { filament, machine, total: filament + machine };
 }
 
+function calcItemCost(itemId, _visited) {
+  const visited = _visited || new Set();
+  if (visited.has(itemId)) return null;
+  visited.add(itemId);
+  const rev = getLatestRevision(itemId);
+  if (!rev) return null;
+  // Direct print_settings take priority (parts)
+  const direct = calcManufacturingCost(rev.id);
+  if (direct) return { ...direct, from_bom: false };
+  // For assemblies: sum BOM children recursively
+  const bom = all('SELECT child_item_id, quantity FROM bom WHERE parent_rev_id=?', [rev.id]);
+  if (!bom.length) return null;
+  let filament = 0, machine = 0, hasAny = false;
+  for (const b of bom) {
+    const c = calcItemCost(b.child_item_id, new Set(visited));
+    if (!c) continue;
+    filament += c.filament * b.quantity;
+    machine  += c.machine  * b.quantity;
+    hasAny = true;
+  }
+  if (!hasAny) return null;
+  return { filament, machine, total: filament + machine, from_bom: true };
+}
+
 function log(type, id, action, details) {
   db.run('INSERT INTO changelog (entity_type,entity_id,action,details) VALUES (?,?,?,?)', [type, id, action, details || '']);
   saveDb();
@@ -1058,8 +1082,7 @@ app.get('/api/orders/:id', (req, res) => {
   o.items = all('SELECT oi.*,i.item_number,i.item_type,i.default_price FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
   o.items.forEach(li => {
     if (li.item_id) {
-      const rev = getLatestRevision(li.item_id);
-      li.manufacturing_cost = rev ? calcManufacturingCost(rev.id) : null;
+      li.manufacturing_cost = calcItemCost(li.item_id);
     }
   });
   res.json(o);
@@ -1166,8 +1189,7 @@ app.get('/api/quotes/:id', (req, res) => {
   q.items = all('SELECT qi.*,i.item_number,i.item_type,i.default_price FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
   q.items.forEach(li => {
     if (li.item_id) {
-      const rev = getLatestRevision(li.item_id);
-      li.manufacturing_cost = rev ? calcManufacturingCost(rev.id) : null;
+      li.manufacturing_cost = calcItemCost(li.item_id);
     }
   });
   res.json(q);
@@ -1383,7 +1405,7 @@ app.get('/api/items-all', (req, res) => {
     i.latest_revision = getLatestRevision(i.id);
     if (i.latest_revision) {
       i.latest_revision.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [i.latest_revision.id]) || null;
-      i.manufacturing_cost = calcManufacturingCost(i.latest_revision.id);
+      i.manufacturing_cost = calcItemCost(i.id);
     }
   });
   res.json(items);
@@ -1396,8 +1418,7 @@ app.get('/api/profit-overview', (req, res) => {
     WHERE i.item_type IN ('prt','asm')
     ORDER BY p.number, i.item_number`);
   items.forEach(i => {
-    const rev = getLatestRevision(i.id);
-    i.manufacturing_cost = rev ? calcManufacturingCost(rev.id) : null;
+    i.manufacturing_cost = calcItemCost(i.id);
     const cost = i.manufacturing_cost ? i.manufacturing_cost.total : null;
     const price = i.default_price;
     i.margin = (cost != null && price != null) ? price - cost : null;

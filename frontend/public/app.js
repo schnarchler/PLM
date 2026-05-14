@@ -2219,7 +2219,7 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
           const costTotal = mc ? mc.total * i.quantity : null;
           const margin = (costTotal != null) ? lineTotal - costTotal : null;
           const marginColor = margin == null ? '' : margin < 0 ? 'color:var(--red)' : margin < lineTotal * 0.15 ? 'color:var(--yellow)' : 'color:var(--green)';
-          const costHint = mc ? `<div style="font-size:10px;margin-top:2px;color:var(--t3)">Herst.: ${fmtChf(mc.total)}${i.quantity>1?` × ${i.quantity} = ${fmtChf(costTotal)}`:''}
+          const costHint = mc ? `<div style="font-size:10px;margin-top:2px;color:var(--t3)">Herst.: ${fmtChf(mc.total)}${mc.from_bom?' <span style="color:var(--teal)">(BOM)</span>':''}${i.quantity>1?` × ${i.quantity} = ${fmtChf(costTotal)}`:''}
             <span style="margin-left:6px;${marginColor}">Marge ${fmtChf(margin)}</span></div>` : '';
           return `<tr style="border-bottom:1px solid var(--line)" onclick="openLineItemModal('${parentType}',${parentId},${i.id})">
             <td style="padding:3px 4px;width:28px" onclick="event.stopPropagation()">
@@ -2303,7 +2303,7 @@ function selectLinkedItem(item) {
     const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
     const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
     hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>CHF ${mc.total.toFixed(2)}</strong>`
-      + (parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
+      + (mc.from_bom ? ` <span style="color:var(--teal);font-size:10px">(aus BOM)</span>` : parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
       + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge CHF ${margin.toFixed(2)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
     hint.style.display = 'block';
   } else {
