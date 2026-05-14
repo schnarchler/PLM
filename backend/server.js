@@ -539,6 +539,17 @@ function getActiveRevision(itemId) {
   return get("SELECT * FROM revisions WHERE item_id=? AND status='REL' ORDER BY rowid DESC LIMIT 1", [itemId])
     || getLatestRevision(itemId);
 }
+function calcManufacturingCost(revisionId) {
+  if (!revisionId) return null;
+  const ps = get('SELECT * FROM print_settings WHERE revision_id=?', [revisionId]);
+  if (!ps) return null;
+  const filament = (ps.filament_weight_total > 0 && ps.filament_price_kg > 0)
+    ? (ps.filament_weight_total / 1000) * ps.filament_price_kg : 0;
+  const machine = (ps.print_duration > 0 && ps.printer_cost_hr > 0)
+    ? ps.print_duration * ps.printer_cost_hr : 0;
+  if (filament === 0 && machine === 0) return null;
+  return { filament, machine, total: filament + machine };
+}
 
 function log(type, id, action, details) {
   db.run('INSERT INTO changelog (entity_type,entity_id,action,details) VALUES (?,?,?,?)', [type, id, action, details || '']);
@@ -1044,7 +1055,13 @@ app.get('/api/orders/:id', (req, res) => {
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
   if (!o) return res.status(404).json({ error: 'Not found' });
-  o.items = all('SELECT oi.*,i.item_number FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
+  o.items = all('SELECT oi.*,i.item_number,i.item_type,i.default_price FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
+  o.items.forEach(li => {
+    if (li.item_id) {
+      const rev = getLatestRevision(li.item_id);
+      li.manufacturing_cost = rev ? calcManufacturingCost(rev.id) : null;
+    }
+  });
   res.json(o);
 });
 
@@ -1146,7 +1163,13 @@ app.get('/api/quotes/:id', (req, res) => {
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
   if (!q) return res.status(404).json({ error: 'Not found' });
-  q.items = all('SELECT qi.*,i.item_number FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
+  q.items = all('SELECT qi.*,i.item_number,i.item_type,i.default_price FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
+  q.items.forEach(li => {
+    if (li.item_id) {
+      const rev = getLatestRevision(li.item_id);
+      li.manufacturing_cost = rev ? calcManufacturingCost(rev.id) : null;
+    }
+  });
   res.json(q);
 });
 
@@ -1360,7 +1383,25 @@ app.get('/api/items-all', (req, res) => {
     i.latest_revision = getLatestRevision(i.id);
     if (i.latest_revision) {
       i.latest_revision.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [i.latest_revision.id]) || null;
+      i.manufacturing_cost = calcManufacturingCost(i.latest_revision.id);
     }
+  });
+  res.json(items);
+});
+
+app.get('/api/profit-overview', (req, res) => {
+  const items = all(`SELECT i.id, i.project_id, i.item_number, i.name, i.item_type, i.default_price,
+    p.id as project_db_id, p.name as project_name, p.number as project_number
+    FROM items i JOIN projects p ON i.project_id=p.id
+    WHERE i.item_type IN ('prt','asm')
+    ORDER BY p.number, i.item_number`);
+  items.forEach(i => {
+    const rev = getLatestRevision(i.id);
+    i.manufacturing_cost = rev ? calcManufacturingCost(rev.id) : null;
+    const cost = i.manufacturing_cost ? i.manufacturing_cost.total : null;
+    const price = i.default_price;
+    i.margin = (cost != null && price != null) ? price - cost : null;
+    i.margin_pct = (i.margin != null && cost > 0) ? (i.margin / cost * 100) : null;
   });
   res.json(items);
 });

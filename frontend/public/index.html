@@ -563,6 +563,10 @@ a{color:inherit;text-decoration:none}
       Lieferscheine
       <span class="badge" id="badge-deliveries">—</span>
     </button>
+    <button class="nav-item" id="ni-profit" onclick="gotoView('profit')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      Kalkulation
+    </button>
   </div>
   <div style="flex:1"></div>
   <div class="nav-sep"></div>
@@ -886,6 +890,7 @@ a{color:inherit;text-decoration:none}
         </div>
         <div class="fg"><label class="fl">Einzelpreis (CHF)</label><input class="fi" id="li-price" type="number" step="0.01" value="0"></div>
       </div>
+      <div id="li-cost-hint" style="display:none;margin:-4px 0 8px;padding:7px 10px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r);font-size:11px;color:var(--t2)"></div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Rabatt (%)</label><input class="fi" id="li-disc" type="number" step="0.1" value="0" min="0" max="100"></div>
         <div class="fg"><label class="fl">Notizen</label><input class="fi" id="li-notes" placeholder="optional"></div>
@@ -1233,6 +1238,7 @@ async function gotoView(v) {
   else if (v === 'settings') await renderSettings();
   else if (v === 'fileindex') await renderFileIndex();
   else if (v === 'search') renderSearchView();
+  else if (v === 'profit') await renderProfitOverview();
 }
 
 // ── PROJECTS LIST ─────────────────────────────────────────────
@@ -2268,6 +2274,89 @@ function exportFileIndex() {
   a.click();
 }
 
+// ── PROFIT OVERVIEW ───────────────────────────────────────────
+async function renderProfitOverview() {
+  setLeftHeader('Kalkulation', '');
+  closeDetail();
+  const items = await api('/api/profit-overview');
+
+  const withCost = items.filter(i => i.manufacturing_cost);
+  const withPrice = items.filter(i => i.default_price != null);
+  const withBoth = items.filter(i => i.manufacturing_cost && i.default_price != null);
+  const totalMargin = withBoth.reduce((s, i) => s + i.margin, 0);
+
+  const marginColor = m => m == null ? 'var(--t3)' : m < 0 ? 'var(--red)' : m < 1 ? 'var(--yellow)' : 'var(--green)';
+  const marginBg = m => m == null ? '' : m < 0 ? 'background:oklch(50% 0.18 25 / .08)' : m < 1 ? 'background:oklch(75% 0.18 85 / .07)' : 'background:oklch(65% 0.18 145 / .07)';
+
+  const rows = items.map(i => {
+    const cost = i.manufacturing_cost ? i.manufacturing_cost.total : null;
+    const price = i.default_price;
+    const margin = i.margin;
+    const marginPct = i.margin_pct;
+    const mc = i.manufacturing_cost;
+    const costDetail = mc ? `<span style="font-size:10px;color:var(--t3)">`
+      + (mc.filament > 0 ? `Fil. ${mc.filament.toFixed(2)}` : '')
+      + (mc.filament > 0 && mc.machine > 0 ? ' + ' : '')
+      + (mc.machine > 0 ? `Mach. ${mc.machine.toFixed(2)}` : '')
+      + `</span>` : '';
+    return `<tr style="border-bottom:1px solid var(--line);cursor:pointer;${marginBg(margin)}" onclick="openProjectAndItem(${i.project_db_id},${i.id})" title="Im PLM öffnen">
+      <td style="padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.project_number)}</td>
+      <td style="padding:5px 8px;font-size:11px;white-space:nowrap">${i.item_type==='asm'?'📦':'🔩'} ${esc(i.item_number)}</td>
+      <td style="padding:5px 8px;font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">
+        ${cost != null ? `CHF ${cost.toFixed(2)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}
+      </td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">
+        ${price != null ? `CHF ${price.toFixed(2)}` : '<span style="color:var(--t3)">—</span>'}
+      </td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:${marginColor(margin)}">
+        ${margin != null ? `CHF ${margin.toFixed(2)}` : '—'}
+        ${marginPct != null ? `<br><span style="font-size:10px;font-weight:400">${marginPct.toFixed(0)}%</span>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  setLeftBody(`<div style="padding:4px 0;max-width:1100px">
+    <div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:130px">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Teile gesamt</div>
+        <div style="font-size:20px;font-weight:600">${items.length}</div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:130px">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Mit Herst.-kosten</div>
+        <div style="font-size:20px;font-weight:600">${withCost.length}</div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:130px">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Mit Verkaufspreis</div>
+        <div style="font-size:20px;font-weight:600">${withPrice.length}</div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:160px">
+        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Gesamtmarge (alle Teile)</div>
+        <div style="font-size:20px;font-weight:600;color:${marginColor(totalMargin)}">${withBoth.length ? 'CHF ' + totalMargin.toFixed(2) : '—'}</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="border-bottom:2px solid var(--line)">
+          <th style="text-align:left;padding:6px 8px;color:var(--t3);font-weight:600">Projekt</th>
+          <th style="text-align:left;padding:6px 8px;color:var(--t3);font-weight:600">Nummer</th>
+          <th style="text-align:left;padding:6px 8px;color:var(--t3);font-weight:600">Name</th>
+          <th style="text-align:right;padding:6px 8px;color:var(--t3);font-weight:600">Herst.-kosten</th>
+          <th style="text-align:right;padding:6px 8px;color:var(--t3);font-weight:600">Verkaufspreis</th>
+          <th style="text-align:right;padding:6px 8px;color:var(--t3);font-weight:600">Marge</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--t3)">Keine Parts / Baugruppen vorhanden</td></tr>'}
+      </tbody>
+    </table>
+    <div style="margin-top:10px;font-size:11px;color:var(--t3)">
+      Herstellungskosten = Filamentkosten (g × CHF/kg) + Maschinenkosten (h × CHF/h) aus den Druckparametern der letzten Revision.
+      Fehlende Werte: Filamentgewicht, CHF/kg oder Druckdauer/CHF/h nicht eingetragen.
+    </div>
+  </div>`);
+}
+
 // ── CUSTOMERS ─────────────────────────────────────────────────
 let _customerFilter = { text:'' };
 function _clearCustomerFilter(){_customerFilter={text:''};renderCustomers();}
@@ -3216,6 +3305,12 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
         ${items.map((i,idx)=>{
           const lineTotal = i.quantity*i.unit_price*(1-(i.discount_pct||0)/100);
           const isFirst = idx===0, isLast = idx===items.length-1;
+          const mc = i.manufacturing_cost;
+          const costTotal = mc ? mc.total * i.quantity : null;
+          const margin = (costTotal != null) ? lineTotal - costTotal : null;
+          const marginColor = margin == null ? '' : margin < 0 ? 'color:var(--red)' : margin < lineTotal * 0.15 ? 'color:var(--yellow)' : 'color:var(--green)';
+          const costHint = mc ? `<div style="font-size:10px;margin-top:2px;color:var(--t3)">Herst.: ${fmtChf(mc.total)}${i.quantity>1?` × ${i.quantity} = ${fmtChf(costTotal)}`:''}
+            <span style="margin-left:6px;${marginColor}">Marge ${fmtChf(margin)}</span></div>` : '';
           return `<tr style="border-bottom:1px solid var(--line)" onclick="openLineItemModal('${parentType}',${parentId},${i.id})">
             <td style="padding:3px 4px;width:28px" onclick="event.stopPropagation()">
               <div style="display:flex;flex-direction:column;gap:1px">
@@ -3226,6 +3321,7 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
             <td style="padding:7px 8px;font-size:12px;cursor:pointer">
               ${esc(i.description)}
               ${i.notes?`<div style="font-size:10px;color:var(--t3)">${esc(i.notes)}</div>`:''}
+              ${costHint}
             </td>
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${i.quantity} ${i.unit}</td>
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtChf(i.unit_price)}</td>
@@ -3279,21 +3375,37 @@ function selectLinkedItem(item) {
   set('li-linked-plm-id', item.id);
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-plm-results').style.display = 'none';
-  // Show badge
   const sel = document.getElementById('li-plm-selected');
   document.getElementById('li-plm-badge').textContent = (item.item_type==='asm'?'📦 ':'🔩 ') + item.item_number;
   document.getElementById('li-plm-name').textContent = item.name + ' · ' + item.project_name;
   sel.style.display = 'flex';
-  // Pre-fill description if empty
   if (!V('li-desc')) set('li-desc', item.item_number + ' – ' + item.name);
-  // Pre-fill price from item's default_price if price not yet set
   if (item.default_price != null && !(parseFloat(V('li-price')) > 0)) set('li-price', item.default_price);
+  // Show manufacturing cost hint
+  const hint = document.getElementById('li-cost-hint');
+  const mc = item.manufacturing_cost;
+  if (mc) {
+    const parts = [];
+    if (mc.filament > 0) parts.push(`Filament CHF ${mc.filament.toFixed(2)}`);
+    if (mc.machine > 0) parts.push(`Maschine CHF ${mc.machine.toFixed(2)}`);
+    const sellPrice = item.default_price;
+    const margin = sellPrice != null ? sellPrice - mc.total : null;
+    const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
+    const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
+    hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>CHF ${mc.total.toFixed(2)}</strong>`
+      + (parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
+      + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge CHF ${margin.toFixed(2)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
+    hint.style.display = 'block';
+  } else {
+    hint.style.display = 'none';
+  }
 }
 
 function clearLinkedItem() {
   set('li-linked-plm-id', '');
   document.getElementById('li-plm-selected').style.display = 'none';
   document.getElementById('li-plm-search').value = '';
+  document.getElementById('li-cost-hint').style.display = 'none';
 }
 
 function openLineItemModal(parentType, parentId, itemId) {
@@ -3305,6 +3417,7 @@ function openLineItemModal(parentType, parentId, itemId) {
   document.getElementById('li-save').textContent = itemId ? 'Speichern' : 'Hinzufügen';
   document.getElementById('li-plm-results').style.display = 'none';
   document.getElementById('li-plm-search').value = '';
+  document.getElementById('li-cost-hint').style.display = 'none';
 
   if (itemId) {
     const src = parentType === 'order' ? state.orders : (state.quotes||[]);
@@ -3314,13 +3427,19 @@ function openLineItemModal(parentType, parentId, itemId) {
       set('li-desc',li.description); set('li-qty',li.quantity); set('li-price',li.unit_price);
       set('li-disc',li.discount_pct||0); set('li-notes',li.notes||'');
       document.getElementById('li-unit').value = li.unit||'Stk';
-      // Show linked PLM item if any
       if (li.item_id && li.item_number) {
         set('li-linked-plm-id', li.item_id);
         const icon = li.item_type==='asm'?'📦':li.item_type==='doc'?'📄':'🔩';
         document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
         document.getElementById('li-plm-name').textContent = li.description;
         document.getElementById('li-plm-selected').style.display = 'flex';
+        // Show cost hint if available
+        api('/api/items-all?q=' + encodeURIComponent(li.item_number)).then(results => {
+          const found = results.find(r => r.id === li.item_id);
+          if (found) selectLinkedItem({ ...found, default_price: li.unit_price });
+          document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
+          document.getElementById('li-plm-name').textContent = li.description;
+        }).catch(()=>{});
       } else {
         document.getElementById('li-plm-selected').style.display = 'none';
       }
