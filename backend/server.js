@@ -323,8 +323,9 @@ async function initDb() {
     company_name: '', company_street: '', company_postal_code: '', company_city: '',
     company_country: 'Schweiz', company_phone: '', company_email: '', company_website: '',
     company_uid: '', bank_name: '', bank_iban: '', bank_bic: '',
-    default_tax_rate: '8.1', default_payment_terms: '30 Tage netto',
-    default_currency: 'CHF', quote_validity_days: '30',
+    default_tax_rate: '', default_payment_terms: '30 Tage netto',
+    default_currency: 'CHF', quote_validity_days: '',
+    default_filament_price_kg: '', default_machine_cost_hr: '',
     invoice_footer: 'Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen. Vielen Dank!',
     quote_footer: 'Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.',
     receipt_footer: ''
@@ -1071,7 +1072,7 @@ app.get('/api/orders', (req, res) => {
     const sub = o.items.reduce((s,i) => s + i.quantity*i.unit_price*(1-(i.discount_pct||0)/100), 0);
     const disc = sub * (o.discount_pct||0) / 100;
     const net = sub - disc;
-    o.computed_total = net + (o.include_tax ? net*(o.tax_rate||8.1)/100 : 0);
+    o.computed_total = net + (o.include_tax ? net*(o.tax_rate||0)/100 : 0);
   });
   res.json(orders);
 });
@@ -1860,7 +1861,7 @@ function computeTotals(doc) {
   doc.subtotal = doc.positions.reduce((s, p) => s + (p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100)), 0);
   doc.discount_amount = doc.subtotal * (doc.discount_pct||0) / 100;
   doc.net = doc.subtotal - doc.discount_amount;
-  doc.tax_amount = doc.include_tax ? doc.net * (doc.tax_rate||19) / 100 : 0;
+  doc.tax_amount = doc.include_tax ? doc.net * (doc.tax_rate||0) / 100 : 0;
   doc.total = doc.net + doc.tax_amount;
 }
 

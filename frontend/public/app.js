@@ -24,6 +24,13 @@ async function setDocStatus(type, id, status, el) {
 }
 let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false };
 
+function fmtN(v, dec = 2) {
+  const n = parseFloat(v) || 0;
+  const [intPart, decPart] = n.toFixed(dec).split('.');
+  return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, "'") + (decPart !== undefined ? '.' + decPart : '');
+}
+function fmtCHF(v) { return 'CHF ' + fmtN(v); }
+
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
@@ -534,11 +541,11 @@ function renderRevDetail(rev, item) {
       const total = mat+mach;
       return '<div class="cost-result" style="margin-top:8px">'
         +'<div style="font-size:10px;font-family:var(--mono);color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Kostenrechnung</div>'
-        +(mat?'<div class="cost-row"><span>Materialkosten</span><span>'+mat.toFixed(2)+' CHF</span></div>':'')
-        +(mach?'<div class="cost-row"><span>Maschinenkosten</span><span>'+mach.toFixed(2)+' CHF</span></div>':'')
+        +(mat?'<div class="cost-row"><span>Materialkosten</span><span>'+fmtN(mat)+' CHF</span></div>':'')
+        +(mach?'<div class="cost-row"><span>Maschinenkosten</span><span>'+fmtN(mach)+' CHF</span></div>':'')
         +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">'
         +'<span style="font-size:11px;color:var(--t3)">Gesamt</span>'
-        +'<span class="cost-total">'+total.toFixed(2)+' CHF</span></div></div>';
+        +'<span class="cost-total">'+fmtN(total)+' CHF</span></div></div>';
     })() : ''}
     ` : `<div style="color:var(--t3);font-size:12px">Noch keine Druckparameter hinterlegt.</div>`}
     ` : ''}
@@ -607,7 +614,7 @@ async function renderDashboard() {
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
   const [s, d] = await Promise.all([api('/api/stats'), api('/api/dashboard')]);
 
-  const fmtChfD = v => 'CHF ' + (v||0).toFixed(2);
+  const fmtChfD = v => fmtCHF(v||0);
   const stColors = {DFT:'var(--blue)',REV:'var(--amber)',REL:'var(--green)',ECO:'var(--purple)',OBS:'var(--t3)'};
   const ostLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
   const ostCls   = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
@@ -849,9 +856,13 @@ async function renderSettings() {
 
       <div class="sep-label">Standardwerte</div>
       <div class="form-row cols3">
-        ${fi('default_tax_rate','Standard MwSt. (%)',s.default_tax_rate,'8.1','number')}
-        ${fi('quote_validity_days','Angebot gültig (Tage)',s.quote_validity_days,'30','number')}
+        ${fi('default_tax_rate','Standard MwSt. (%)',s.default_tax_rate,'','number')}
+        ${fi('quote_validity_days','Angebot gültig (Tage)',s.quote_validity_days,'','number')}
         ${fi('default_payment_terms','Zahlungsbedingungen',s.default_payment_terms,'30 Tage netto')}
+      </div>
+      <div class="form-row cols2">
+        ${fi('default_filament_price_kg','Standard Filamentpreis (CHF/kg)',s.default_filament_price_kg,'','number')}
+        ${fi('default_machine_cost_hr','Standard Maschinenkosten (CHF/h)',s.default_machine_cost_hr,'','number')}
       </div>
 
       <div class="sep-label">Dokument-Fussnoten</div>
@@ -943,6 +954,7 @@ async function saveSettings() {
     'company_country','company_phone','company_email','company_website',
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
+    'default_filament_price_kg','default_machine_cost_hr',
     'invoice_footer','quote_footer','receipt_footer'];
   const body = {};
   keys.forEach(k => {
@@ -1181,7 +1193,7 @@ async function renderProfitOverview() {
       </div>
       <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:150px">
         <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Gesamtmarge</div>
-        <div style="font-size:20px;font-weight:600;color:${marginColor(totalMargin)}">${withBoth.length ? 'CHF ' + totalMargin.toFixed(2) : '—'}</div>
+        <div style="font-size:20px;font-weight:600;color:${marginColor(totalMargin)}">${withBoth.length ? fmtCHF(totalMargin) : '—'}</div>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
@@ -1266,16 +1278,16 @@ function _renderProfitRows() {
     const mc = i.manufacturing_cost;
     const cost = mc ? mc.total : null;
     const costDetail = mc ? `<span style="font-size:10px;color:var(--t3)">`
-      + (mc.filament > 0 ? `Fil. ${mc.filament.toFixed(2)}` : '')
+      + (mc.filament > 0 ? `Fil. ${fmtN(mc.filament)}` : '')
       + (mc.filament > 0 && mc.machine > 0 ? ' + ' : '')
-      + (mc.machine > 0 ? `Mach. ${mc.machine.toFixed(2)}` : '') + `</span>` : '';
+      + (mc.machine > 0 ? `Mach. ${fmtN(mc.machine)}` : '') + `</span>` : '';
     return `<tr style="border-bottom:1px solid var(--line);cursor:pointer;${marginBg(i.margin)}" onclick="openProjectAndItem(${i.project_db_id},${i.id})" title="Im PLM öffnen">
       <td style="padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.project_number)}</td>
       <td style="padding:5px 8px;font-size:11px;white-space:nowrap">${i.item_type==='asm'?'📦':'🔩'} ${esc(i.item_number)}</td>
       <td style="padding:5px 8px;font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${cost != null ? `CHF ${cost.toFixed(2)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${i.default_price != null ? `CHF ${i.default_price.toFixed(2)}` : '<span style="color:var(--t3)">—</span>'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:${marginColor(i.margin)}">${i.margin != null ? `CHF ${i.margin.toFixed(2)}` : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${cost != null ? `${fmtCHF(cost)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t3)">—</span>'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:${marginColor(i.margin)}">${i.margin != null ? fmtCHF(i.margin) : '—'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:${marginColor(i.margin)}">${i.margin_pct != null ? i.margin_pct.toFixed(0)+'%' : '—'}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Einträge</td></tr>';
@@ -1329,7 +1341,7 @@ async function openCustomerDetail(id) {
   const qstCls   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
   const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
   const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
-  const fmtChfD  = v => v != null ? 'CHF ' + parseFloat(v).toFixed(2) : '—';
+  const fmtChfD  = v => v != null ? fmtCHF(parseFloat(v)) : '—';
   const empty    = msg => `<div style="color:var(--t3);font-size:12px;padding:6px 0">${msg}</div>`;
 
   const orderRevTotal  = c.orders.reduce((s,o)  => s + (o.total||0), 0);
@@ -1483,7 +1495,7 @@ async function openOrderDetail(id) {
     <button class="tab" onclick="switchTab(this,'od-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="od-pos">
-      ${renderLineItems(o.items||[], 'order', id, o.tax_rate||8.1, o.discount_pct||0, !!o.include_tax)}
+      ${renderLineItems(o.items||[], 'order', id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal('order',${id})">+ Position</button>
     </div>
     <div id="od-info" style="display:none">
@@ -1493,7 +1505,7 @@ async function openOrderDetail(id) {
         <div><div class="ps-label">Kunde</div>${o.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${o.order_date||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div>${o.delivery_date||'—'}</div>
-        <div><div class="ps-label">MwSt.</div>${o.tax_rate||8.1} % ${o.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
+        <div><div class="ps-label">MwSt.</div>${o.tax_rate??0} % ${o.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
         ${(o.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${o.discount_pct} %</div>`:''}
         ${o.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(o.payment_terms)}</div>`:''}
         ${o.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(o.notes)}</span></div>`:''}
@@ -1892,8 +1904,8 @@ async function openPsModal(revId, ps) {
   document.getElementById('ps-nozzle').value = ps.nozzle||'';
   document.getElementById('ps-printer').value = ps.printer||'';
   document.getElementById('ps-mat-preset').value = '';
-  set('ps-cost-hr', ps.printer_cost_hr||'');
-  set('ps-fil-price', ps.filament_price_kg||'');
+  set('ps-cost-hr', ps.printer_cost_hr || state.settings.default_machine_cost_hr || '');
+  set('ps-fil-price', ps.filament_price_kg || state.settings.default_filament_price_kg || '');
   set('ps-fil-weight', ps.filament_weight_total||'');
   set('ps-duration', ps.print_duration||'');
   document.getElementById('cost-preview').style.display = 'none';
@@ -1959,9 +1971,9 @@ function calcCost() {
   const machCost = duration * costHr;
   const waste = 0;
   const total = matCost + machCost;
-  document.getElementById('cr-mat').textContent = matCost.toFixed(2) + ' CHF';
-  document.getElementById('cr-mach').textContent = machCost.toFixed(2) + ' CHF';
-  document.getElementById('cr-total').textContent = total.toFixed(2) + ' CHF';
+  document.getElementById('cr-mat').textContent = fmtN(matCost) + ' CHF';
+  document.getElementById('cr-mach').textContent = fmtN(machCost) + ' CHF';
+  document.getElementById('cr-total').textContent = fmtN(total) + ' CHF';
   document.getElementById('cost-preview').style.display = 'block';
 }
 
@@ -2051,13 +2063,13 @@ async function openOrderModal(id) {
     const o=await api(`/api/orders/${id}`);
     set('om-title-f',o.title); setCustFields('om',o.customer_id,o.customer_name_free); document.getElementById('om-status').value=o.status;
     set('om-date',o.order_date||''); set('om-delivery',o.delivery_date||''); set('om-notes',o.notes||'');
-    set('om-tax',o.tax_rate??8.1); set('om-disc',o.discount_pct??0); set('om-terms',o.payment_terms||'');
+    set('om-tax',o.tax_rate??''); set('om-disc',o.discount_pct??0); set('om-terms',o.payment_terms||'');
     document.getElementById('om-include-tax').checked = !!o.include_tax;
     document.getElementById('om-title').textContent='Auftrag bearbeiten';
   } else {
     ['om-title-f','om-date','om-delivery','om-notes','om-terms'].forEach(f=>set(f,''));
     document.getElementById('om-status').value='DRAFT';
-    set('om-tax', state.settings.default_tax_rate || 8.1);
+    set('om-tax', state.settings.default_tax_rate ?? '');
     set('om-disc',0);
     set('om-terms', state.settings.default_payment_terms || '');
     document.getElementById('om-include-tax').checked = false;
@@ -2070,7 +2082,7 @@ async function saveOrder() {
   const title=V('om-title-f'); if(!title) return toast('Bezeichnung fehlt','err');
   const body={title,...getCustBody('om'),status:document.getElementById('om-status').value,
     notes:V('om-notes'),order_date:V('om-date')||null,delivery_date:V('om-delivery')||null,
-    tax_rate:parseFloat(V('om-tax'))||8.1, discount_pct:parseFloat(V('om-disc'))||0,
+    tax_rate:parseFloat(V('om-tax'))||0, discount_pct:parseFloat(V('om-disc'))||0,
     payment_terms:V('om-terms'), include_tax:document.getElementById('om-include-tax').checked?1:0};
   if (editingOrderId) {
     await api(`/api/orders/${editingOrderId}`,'PUT',body);
@@ -2138,7 +2150,7 @@ async function openQuoteDetail(id) {
     <button class="tab" onclick="switchTab(this,'qd-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="qd-pos">
-      ${renderLineItems(q.items||[], 'quote', id, q.tax_rate||8.1, q.discount_pct||0, !!q.include_tax)}
+      ${renderLineItems(q.items||[], 'quote', id, q.tax_rate??0, q.discount_pct||0, !!q.include_tax)}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal('quote',${id})">+ Position</button>
     </div>
     <div id="qd-info" style="display:none">
@@ -2148,7 +2160,7 @@ async function openQuoteDetail(id) {
         <div><div class="ps-label">Kunde</div>${q.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${q.quote_date||'—'}</div>
         <div><div class="ps-label">Gültig bis</div>${q.valid_until||'—'}</div>
-        <div><div class="ps-label">MwSt.</div>${q.tax_rate||8.1} % ${q.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
+        <div><div class="ps-label">MwSt.</div>${q.tax_rate??0} % ${q.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
         ${(q.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${q.discount_pct} %</div>`:''}
         ${q.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(q.payment_terms)}</div>`:''}
         ${q.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(q.notes)}</span></div>`:''}
@@ -2173,20 +2185,23 @@ async function openQuoteModal(id) {
     const q=await api(`/api/quotes/${id}`);
     set('qm-title-f',q.title); setCustFields('qm',q.customer_id,q.customer_name_free); document.getElementById('qm-status').value=q.status;
     set('qm-date',q.quote_date||''); set('qm-valid',q.valid_until||''); set('qm-notes',q.notes||'');
-    set('qm-tax',q.tax_rate??8.1); set('qm-disc',q.discount_pct??0); set('qm-terms',q.payment_terms||'');
+    set('qm-tax',q.tax_rate??''); set('qm-disc',q.discount_pct??0); set('qm-terms',q.payment_terms||'');
     document.getElementById('qm-include-tax').checked = !!q.include_tax;
     document.getElementById('qm-title').textContent='Angebot bearbeiten';
   } else {
     ['qm-title-f','qm-date','qm-valid','qm-notes','qm-terms'].forEach(f=>set(f,''));
     document.getElementById('qm-status').value='DRAFT';
-    set('qm-tax', state.settings.default_tax_rate || 8.1);
+    set('qm-tax', state.settings.default_tax_rate ?? '');
     set('qm-disc', 0);
     set('qm-terms', state.settings.default_payment_terms || '');
     document.getElementById('qm-include-tax').checked = false;
-    // Default valid_until = today + validity days
-    const validDays = parseInt(state.settings.quote_validity_days) || 30;
-    const validDate = new Date(); validDate.setDate(validDate.getDate() + validDays);
-    set('qm-valid', validDate.toISOString().split('T')[0]);
+    const validDays = parseInt(state.settings.quote_validity_days);
+    if (validDays > 0) {
+      const validDate = new Date(); validDate.setDate(validDate.getDate() + validDays);
+      set('qm-valid', validDate.toISOString().split('T')[0]);
+    } else {
+      set('qm-valid', '');
+    }
     document.getElementById('qm-title').textContent='Neues Angebot';
   }
   set('qm-id',id||''); openModal('quoteModal');
@@ -2196,7 +2211,7 @@ async function saveQuote() {
   const title=V('qm-title-f'); if(!title) return toast('Bezeichnung fehlt','err');
   const body={title,...getCustBody('qm'),status:document.getElementById('qm-status').value,
     notes:V('qm-notes'),quote_date:V('qm-date')||null,valid_until:V('qm-valid')||null,
-    tax_rate:parseFloat(V('qm-tax'))||8.1, discount_pct:parseFloat(V('qm-disc'))||0,
+    tax_rate:parseFloat(V('qm-tax'))||0, discount_pct:parseFloat(V('qm-disc'))||0,
     payment_terms:V('qm-terms'), include_tax:document.getElementById('qm-include-tax').checked?1:0};
   if (editingQuoteId) {
     await api(`/api/quotes/${editingQuoteId}`,'PUT',body);
@@ -2328,15 +2343,15 @@ function selectLinkedItem(item) {
   const mc = item.manufacturing_cost;
   if (mc) {
     const parts = [];
-    if (mc.filament > 0) parts.push(`Filament CHF ${mc.filament.toFixed(2)}`);
-    if (mc.machine > 0) parts.push(`Maschine CHF ${mc.machine.toFixed(2)}`);
+    if (mc.filament > 0) parts.push(`Filament ${fmtCHF(mc.filament)}`);
+    if (mc.machine > 0) parts.push(`Maschine ${fmtCHF(mc.machine)}`);
     const sellPrice = item.default_price;
     const margin = sellPrice != null ? sellPrice - mc.total : null;
     const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
     const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
-    hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>CHF ${mc.total.toFixed(2)}</strong>`
+    hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>${fmtCHF(mc.total)}</strong>`
       + (mc.from_bom ? ` <span style="color:var(--teal);font-size:10px">(aus BOM)</span>` : parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
-      + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge CHF ${margin.toFixed(2)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
+      + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge ${fmtCHF(margin)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
     hint.style.display = 'block';
   } else {
     hint.style.display = 'none';
@@ -2380,15 +2395,15 @@ function openLineItemModal(parentType, parentId, itemId) {
         const mc = li.manufacturing_cost;
         if (mc) {
           const parts = [];
-          if (mc.filament > 0) parts.push(`Filament CHF ${mc.filament.toFixed(2)}`);
-          if (mc.machine > 0) parts.push(`Maschine CHF ${mc.machine.toFixed(2)}`);
+          if (mc.filament > 0) parts.push(`Filament ${fmtCHF(mc.filament)}`);
+          if (mc.machine > 0) parts.push(`Maschine ${fmtCHF(mc.machine)}`);
           const sellPrice = li.unit_price;
           const margin = sellPrice != null ? sellPrice - mc.total : null;
           const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
           const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
-          hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>CHF ${mc.total.toFixed(2)}</strong>`
+          hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>${fmtCHF(mc.total)}</strong>`
             + (parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
-            + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge CHF ${margin.toFixed(2)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
+            + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge ${fmtCHF(margin)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
           hint.style.display = 'block';
         } else {
           hint.style.display = 'none';
@@ -2438,7 +2453,7 @@ async function delLineItem(parentType, itemId, parentId) {
 }
 async function moveLineItem(parentType, itemId, parentId, direction) {
   await api(`/api/order-items/${itemId}/move`,'PUT',{direction});
-  if (parentType==='order') { const o=await api(`/api/orders/${parentId}`); document.getElementById('od-pos').innerHTML=renderLineItems(o.items||[],'order',parentId,o.tax_rate||8.1,o.discount_pct||0,!!o.include_tax)+'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal(\'order\','+parentId+')">+ Position</button>'; }
+  if (parentType==='order') { const o=await api(`/api/orders/${parentId}`); document.getElementById('od-pos').innerHTML=renderLineItems(o.items||[],'order',parentId,o.tax_rate??0,o.discount_pct||0,!!o.include_tax)+'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal(\'order\','+parentId+')">+ Position</button>'; }
 }
 
 // ── DETAIL PANEL ──────────────────────────────────────────────
@@ -2580,7 +2595,7 @@ const set = (id,v) => { const el=document.getElementById(id); if(el) el.value=v?
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmtDate = d => d ? new Date(d).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 const fmtSize = b => { if(!b) return '—'; if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; };
-const fmtChf = v => 'CHF ' + (parseFloat(v)||0).toFixed(2);
+const fmtChf = v => fmtCHF(parseFloat(v)||0);
 
 function toast(msg, type='ok') {
   const c=document.getElementById('toasts');
@@ -2700,7 +2715,7 @@ function renderDeliveryItems(items, deliveryId) {
         ${item.item_number?`<span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${item.item_number}</span>`:''}
         <span style="font-size:12px;font-weight:500;flex:1">${esc(item.description)}</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--t2)">${item.quantity} ${item.unit}</span>
-        ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:11px;color:var(--green)">CHF ${parseFloat(item.unit_price).toFixed(2)}</span>`:''}
+        ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmtCHF(parseFloat(item.unit_price))}</span>`:''}
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="Kurzbeleg">🖶</button>
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'full')" title="Vollbeleg mit Parametern">🖶≡</button>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="openDeliveryItemModal(${deliveryId},${item.id})" title="Bearbeiten">✏</button>
@@ -3113,9 +3128,9 @@ async function generateDoc(id, type) {
       +'<td style="padding:8px 6px">'+escHtml(p.description)+(p.item_number?' <span style="font-size:10px;color:#6b7280">['+p.item_number+']</span>':'')
       +(p.notes?'<br><span style="font-size:10px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+p.unit+'</td>'
-      +'<td style="padding:8px 6px;text-align:right">CHF '+parseFloat(p.unit_price).toFixed(2)+'</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+fmtCHF(parseFloat(p.unit_price))+'</td>'
       +(hasDiscount?(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>'):'')
-      +'<td style="padding:8px 6px;text-align:right;font-weight:600">CHF '+lineTotal.toFixed(2)+'</td>'
+      +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtCHF(lineTotal)+'</td>'
       +'</tr>';
     if (p.sub_items && p.sub_items.length) {
       html += p.sub_items.map(s =>
@@ -3206,11 +3221,11 @@ async function generateDoc(id, type) {
 </table>
 
 <div class="totals">
-  ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>CHF '+d.subtotal.toFixed(2)+'</span></div>'
-    +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-CHF '+d.discount_amount.toFixed(2)+'</span></div>' : ''}
-  <div class="total-row"><span>Nettobetrag</span><span>CHF ${d.net.toFixed(2)}</span></div>
-  ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate||8.1)+'%</span><span>CHF '+d.tax_amount.toFixed(2)+'</span></div>' : ''}
-  <div class="total-gross"><span>Gesamtbetrag</span><span>CHF ${d.total.toFixed(2)}</span></div>
+  ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>'+fmtCHF(d.subtotal)+'</span></div>'
+    +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-'+fmtCHF(d.discount_amount)+'</span></div>' : ''}
+  <div class="total-row"><span>Nettobetrag</span><span>${fmtCHF(d.net)}</span></div>
+  ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate ?? 0)+'%</span><span>'+fmtCHF(d.tax_amount)+'</span></div>' : ''}
+  <div class="total-gross"><span>Gesamtbetrag</span><span>${fmtCHF(d.total)}</span></div>
 </div>
 
 <div class="footer">
