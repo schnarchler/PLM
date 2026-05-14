@@ -762,7 +762,7 @@ async function renderDashboard() {
   setLeftHeader('Dashboard', `<button class="btn btn-ghost btn-sm" onclick="renderDashboard()">↺</button>`);
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
-  const [s, d] = await Promise.all([api('/api/stats'), api('/api/dashboard')]);
+  const [s, d, invItems] = await Promise.all([api('/api/stats'), api('/api/dashboard'), api('/api/inventory')]);
 
   const fmtChfD = v => fmtCHF(v||0);
   const stColors = {DFT:'var(--blue)',REV:'var(--amber)',REL:'var(--green)',ECO:'var(--purple)',OBS:'var(--t3)'};
@@ -790,7 +790,13 @@ async function renderDashboard() {
 
   const emptyRow = msg => `<div style="color:var(--t3);font-size:12px;padding:8px 4px">${msg}</div>`;
 
+  // ── Inventory low-stock ──
+  const invCritical = invItems.filter(i => i.min_qty > 0 && i.stock_qty < i.min_qty);
+  const invWarn     = invItems.filter(i => i.min_qty > 0 && i.stock_qty === i.min_qty);
+  const invLow      = [...invCritical, ...invWarn];
+
   // ── KPIs ──
+  const invKpiSub = invCritical.length ? `<span style="color:var(--red)">${invCritical.length} kritisch</span>` + (invWarn.length ? ` · <span style="color:var(--amber)">${invWarn.length} Warnung</span>` : '') : invWarn.length ? `<span style="color:var(--amber)">${invWarn.length} auf Minimum</span>` : 'alles ok';
   const kpiHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:22px">
     ${kpi('📋', d.openOrders.length, 'Offene Aufträge', d.openOrders.filter(o=>o.status==='CONFIRMED').length + ' bestätigt', "gotoView('orders')")}
     ${kpi('📄', d.openQuotes.length, 'Offene Angebote', d.openQuotes.filter(q=>q.status==='SENT').length + ' versendet', "gotoView('quotes')")}
@@ -798,6 +804,7 @@ async function renderDashboard() {
     ${kpi('🚚', d.recentDeliveries.filter(x=>x.status!=='DELIVERED').length, 'Aktive Lieferungen', '', "gotoView('deliveries')")}
     ${kpi('💶', 'CHF ' + (d.revenueMonth||0).toFixed(0), 'Umsatz diesen Monat', 'CHF ' + (d.revenueTotal||0).toFixed(0) + ' gesamt', '')}
     ${kpi('📂', s.projects, 'Projekte', s.assemblies + ' asm · ' + s.parts + ' prt', "gotoView('projects')")}
+    ${kpi('📦', invLow.length || '✓', 'Lager-Warnungen', invKpiSub, "gotoView('inventory')")}
   </div>`;
 
   // ── Offene Aufträge ──
@@ -881,6 +888,21 @@ async function renderDashboard() {
       <span style="font-family:var(--mono);font-size:11px;color:var(--t2);width:24px;text-align:right">${st.count}</span>
     </div>`).join('');
 
+  // ── Lager-Warnungen ──
+  const invLowHtml = invLow.length ? invLow.map(i => {
+    const isCritical = i.stock_qty < i.min_qty;
+    const color = isCritical ? 'var(--red)' : 'var(--amber)';
+    const borderColor = isCritical ? 'oklch(60% 0.2 25 / .3)' : 'oklch(70% 0.15 60 / .3)';
+    return `<div onclick="gotoView('inventory');openInventoryDetail(${i.id})" style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid ${borderColor};border-radius:6px;margin-bottom:6px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${color}'" onmouseout="this.style.borderColor='${borderColor}'">
+      <div>
+        <div style="font-size:12px;font-weight:500">${esc(i.name)}${i.color?` <span style="color:var(--t3);font-weight:400">${esc(i.color)}</span>`:''}${i.material?` <span style="color:var(--t3);font-weight:400">${esc(i.material)}</span>`:''}</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:1px">${esc(i.category)}</div>
+      </div>
+      <div style="text-align:right;font-family:var(--mono);font-size:11px;color:${color};font-weight:600">${fmtN(i.stock_qty,2)} ${i.unit}</div>
+      <div style="text-align:right;font-family:var(--mono);font-size:10px;color:var(--t3)">Min: ${fmtN(i.min_qty,2)}</div>
+    </div>`;
+  }).join('') : emptyRow('Alle Artikel über Mindestbestand ✓');
+
   setLeftBody(`<div style="max-width:900px">
     ${kpiHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
@@ -891,6 +913,7 @@ async function renderDashboard() {
       </div>
       <div>
         ${section('📄 Offene Angebote', quotesHtml)}
+        ${section('📦 Lager – unter/auf Mindestbestand', invLowHtml)}
         ${section('🏭 Aktive Produktion', prodHtml)}
       </div>
     </div>
@@ -3875,29 +3898,60 @@ async function delTimeEntry(id) {
 // ── LAGER / BESTAND ───────────────────────────────────────────
 const INV_CATS = ['3D Druck','Filament','Hardware','Elektronik','Komponenten','Werkzeug','Verbrauchsmaterial','Sonstiges'];
 
+let _invSort = { col: 'name', dir: 1 };
+
+function _invStockState(i) {
+  if (!i.min_qty || i.min_qty <= 0) return 'ok';
+  if (i.stock_qty < i.min_qty) return 'critical';
+  if (i.stock_qty === i.min_qty) return 'warn';
+  return 'ok';
+}
+
 async function renderInventory() {
   setLeftHeader('Lager', `<button class="btn btn-primary btn-sm" onclick="openInventoryModal()">+ Artikel</button>`);
   const items = await api('/api/inventory');
-  const low = items.filter(i => i.min_qty > 0 && i.stock_qty <= i.min_qty).length;
   document.getElementById('badge-inventory').textContent = items.length || '—';
   if (!items.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Noch keine Lagerartikel</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openInventoryModal()">Ersten Artikel anlegen</button></div></div>`);
     return;
   }
+  _invRenderTable(items);
+}
+
+function _invRenderTable(items) {
+  const { col, dir } = _invSort;
+  const sorted = [...items].sort((a, b) => {
+    const av = a[col] ?? '', bv = b[col] ?? '';
+    if (col === 'stock_qty' || col === 'min_qty') return ((parseFloat(av)||0) - (parseFloat(bv)||0)) * dir;
+    return String(av).localeCompare(String(bv), undefined, {sensitivity:'base'}) * dir;
+  });
   const byCategory = {};
-  items.forEach(i => { (byCategory[i.category] = byCategory[i.category]||[]).push(i); });
-  const lowBanner = low ? `<div style="background:oklch(35% 0.12 25 / .15);border:1px solid oklch(60% 0.15 25 / .4);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)">⚠ ${low} Artikel unter Mindestbestand</div>` : '';
+  sorted.forEach(i => { (byCategory[i.category] = byCategory[i.category]||[]).push(i); });
+
+  const critical = items.filter(i => _invStockState(i) === 'critical').length;
+  const warn = items.filter(i => _invStockState(i) === 'warn').length;
+  const banner = (critical || warn) ? `<div style="background:oklch(35% 0.12 25 / .15);border:1px solid oklch(60% 0.15 25 / .4);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:12px">
+    ${critical?`<span style="color:var(--red)">● ${critical} unter Mindestbestand</span>`:''}
+    ${warn?`<span style="color:var(--amber)">● ${warn} auf Mindestbestand</span>`:''}
+  </div>` : '';
+
+  const th = (c, label) => {
+    const active = col === c;
+    return `<th style="cursor:pointer;user-select:none;white-space:nowrap${active?';color:var(--blue)':''}" onclick="_invSetSort('${c}')">${label}${active?(dir===1?' ▲':' ▼'):''}</th>`;
+  };
+
   const rows = Object.entries(byCategory).map(([cat, catItems]) => `
     <tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${cat}</td></tr>
     ${catItems.map(i => {
-      const low = i.min_qty > 0 && i.stock_qty <= i.min_qty;
+      const state = _invStockState(i);
+      const stockColor = state==='critical'?'var(--red)':state==='warn'?'var(--amber)':'var(--green)';
+      const stockIcon = state==='critical'?' ⚠':state==='warn'?' !':'';
       return `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
         <td style="font-weight:500">${esc(i.name)}</td>
-        <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${esc(i.sku||'—')}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:${low?'var(--red)':'var(--green)'};font-weight:${low?600:400}">
-          ${fmtN(i.stock_qty,2)} ${i.unit}${low?' ⚠':''}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${i.min_qty>0?'Min: '+fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
-        <td style="color:var(--t3);font-size:11px">${esc(i.supplier_name||'—')}</td>
+        <td style="color:var(--t2);font-size:11px">${esc(i.color||'—')}</td>
+        <td style="color:var(--t2);font-size:11px">${esc(i.material||'—')}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:${stockColor};font-weight:${state!=='ok'?600:400}">${fmtN(i.stock_qty,2)} ${i.unit}${stockIcon}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${i.min_qty>0?fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
         <td style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'in')">＋</button>
           <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'out')">－</button>
@@ -3905,25 +3959,33 @@ async function renderInventory() {
         </td>
       </tr>`;
     }).join('')}`).join('');
-  setLeftBody(lowBanner + `<div class="tbl-wrap"><table>
-    <thead><tr><th>Artikel</th><th>SKU</th><th>Bestand</th><th>Minimum</th><th>Lieferant</th><th></th></tr></thead>
+
+  setLeftBody(banner + `<div class="tbl-wrap"><table>
+    <thead><tr>${th('name','Artikel')}${th('color','Farbe')}${th('material','Material')}${th('stock_qty','Bestand')}${th('min_qty','Minimum')}<th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`);
 }
 
+function _invSetSort(col) {
+  if (_invSort.col === col) _invSort.dir *= -1;
+  else { _invSort.col = col; _invSort.dir = 1; }
+  renderInventory();
+}
+
 async function openInventoryDetail(id) {
   const item = await api(`/api/inventory/${id}`);
-  const low = item.min_qty > 0 && item.stock_qty <= item.min_qty;
+  const state = _invStockState(item);
+  const stockColor = state==='critical'?'var(--red)':state==='warn'?'var(--amber)':'var(--green)';
+  const stockIcon = state==='critical'?' ⚠':state==='warn'?' !':'';
   document.getElementById('dp-title').innerHTML = esc(item.name);
   document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'inv-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="inv-info">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
         <div><div class="ps-label">Kategorie</div>${item.category}</div>
-        <div><div class="ps-label">SKU</div>${esc(item.sku||'—')}</div>
         ${item.color?`<div><div class="ps-label">Farbe</div>${esc(item.color)}</div>`:''}
         ${item.material?`<div><div class="ps-label">Material</div>${esc(item.material)}</div>`:''}
-        <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${low?'var(--red)':'var(--green)'}">${fmtN(item.stock_qty,2)} ${item.unit}${low?' ⚠':''}</span></div>
+        <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${stockColor}">${fmtN(item.stock_qty,2)} ${item.unit}${stockIcon}</span></div>
         <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+item.unit:'—'}</div>
         ${item.price_per_unit!=null?`<div><div class="ps-label">Preis / Einheit</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
         ${item.linked_item_number?`<div style="grid-column:span 2"><div class="ps-label">PLM-Teil</div>
