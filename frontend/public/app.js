@@ -989,6 +989,11 @@ async function renderChangelog() {
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────
+function _stTab(name) {
+  document.querySelectorAll('.st-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.st-tab-pane').forEach(p => p.hidden = p.dataset.tab !== name);
+}
+
 async function renderSettings() {
   setLeftHeader('Einstellungen', `<button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Speichern</button>`);
   closeDetail();
@@ -1002,136 +1007,173 @@ async function renderSettings() {
 
   setLeftBody(`
     <div style="max-width:720px">
-
-      <div class="sep-label" style="margin-top:4px">Firma / Briefkopf</div>
-      <div class="form-row cols2">
-        ${fi('company_name','Firmenname *',s.company_name,'Muster GmbH')}
-        ${fi('company_uid','UID / MwSt-Nr.',s.company_uid,'CHE-123.456.789 MWST')}
-      </div>
-      <div class="form-row">
-        ${fi('company_street','Straße + Hausnummer',s.company_street,'Industriestraße 42')}
-      </div>
-      <div class="form-row cols3">
-        ${fi('company_postal_code','PLZ',s.company_postal_code,'8000')}
-        ${fi('company_city','Ort',s.company_city,'Zürich')}
-        ${fi('company_country','Land',s.company_country,'Schweiz')}
-      </div>
-      <div class="form-row cols3">
-        ${fi('company_phone','Telefon',s.company_phone,'+41 44 000 00 00')}
-        ${fi('company_email','E-Mail',s.company_email,'info@firma.ch','email')}
-        ${fi('company_website','Website',s.company_website,'www.firma.ch')}
+      <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px">
+        <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Firma</button>
+        <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kalkulation</button>
+        <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kassabon</button>
+        <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
+        <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
       </div>
 
-      <div class="sep-label">Bankangaben</div>
-      <div class="form-row cols3">
-        ${fi('bank_name','Bank',s.bank_name,'Zürcher Kantonalbank')}
-        ${fi('bank_iban','IBAN',s.bank_iban,'CH00 0000 0000 0000 0000 0')}
-        ${fi('bank_bic','BIC / SWIFT',s.bank_bic,'ZKBKCHZZ80A')}
-      </div>
-
-      <div class="sep-label">Standardwerte</div>
-      <div class="form-row cols3">
-        ${fi('default_tax_rate','Standard MwSt. (%)',s.default_tax_rate,'','number')}
-        ${fi('quote_validity_days','Angebot gültig (Tage)',s.quote_validity_days,'','number')}
-        ${fi('default_payment_terms','Zahlungsbedingungen',s.default_payment_terms,'30 Tage netto')}
-      </div>
-      <div class="form-row cols2">
-        ${fi('default_filament_price_kg','Standard Filamentpreis (CHF/kg)',s.default_filament_price_kg,'','number')}
-        ${fi('default_machine_cost_hr','Standard Maschinenkosten (CHF/h)',s.default_machine_cost_hr,'','number')}
-      </div>
-      <div class="form-row cols2">
-        ${fi('hourly_rate','Stundensatz (CHF/h)',s.hourly_rate,'z.B. 120','number')}
-      </div>
-
-      <div class="sep-label">Dokument-Fussnoten</div>
-      <div class="form-row">
-        ${ft('invoice_footer','Fusszeile Rechnung',s.invoice_footer,'Zahlungshinweis, Bankverbindung …')}
-      </div>
-      <div class="form-row">
-        ${ft('quote_footer','Fusszeile Angebot',s.quote_footer,'Hinweis Gültigkeit, Lieferbedingungen …')}
-      </div>
-
-      <div class="sep-label">Thermodrucker / Kassabon</div>
-      <div class="form-row">
-        ${ft('receipt_footer','Fusszeile Kassabon',s.receipt_footer,'z.B. Vielen Dank für Ihren Auftrag!')}
-      </div>
-
-      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-top:8px">
-        <div style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Bon-Aufbau</div>
-        <div class="form-row cols2" style="margin-bottom:8px">
-          ${fi('receipt_line_width','Zeilenbreite (Zeichen)',s.receipt_line_width,'32','number')}
+      <!-- TAB: Firma -->
+      <div class="st-tab-pane" data-tab="firma">
+        <div class="sep-label" style="margin-top:0">Firma / Briefkopf</div>
+        <div class="form-row cols2">
+          ${fi('company_name','Firmenname *',s.company_name,'Muster GmbH')}
+          ${fi('company_uid','UID / MwSt-Nr.',s.company_uid,'CHE-123.456.789 MWST')}
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
-          ${fck('receipt_show_datetime','Datum &amp; Uhrzeit anzeigen',s.receipt_show_datetime)}
-          ${fck('receipt_show_customer','Kundenname anzeigen',s.receipt_show_customer)}
-          ${fck('receipt_show_item_number','Artikelnummer anzeigen',s.receipt_show_item_number)}
-          ${fck('receipt_show_notes','Notizen anzeigen',s.receipt_show_notes)}
+        <div class="form-row">
+          ${fi('company_street','Straße + Hausnummer',s.company_street,'Industriestraße 42')}
         </div>
-      </div>
-
-      <div style="margin-top:16px;display:flex;gap:8px">
-        <button class="btn btn-primary" onclick="saveSettings()">💾 Einstellungen speichern</button>
-      </div>
-
-      <div class="sep-label" style="margin-top:24px">Drucker</div>
-      <div id="st-printers-list" style="margin-bottom:8px"></div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input class="fi" id="st-pr-name" style="width:200px" placeholder="Druckername">
-        <input class="fi" id="st-pr-cost" type="number" step="0.01" style="width:110px" placeholder="CHF/h (z.B. 1.50)">
-        <button class="btn btn-ghost btn-sm" onclick="addPrinter()">+ Drucker hinzufügen</button>
-      </div>
-
-      <div class="sep-label" style="margin-top:20px">Düsen</div>
-      <div id="st-nozzles-list" style="margin-bottom:8px"></div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input class="fi" id="st-nz-size" style="width:120px" placeholder="Grösse (z.B. 0.4)">
-        <button class="btn btn-ghost btn-sm" onclick="addNozzle()">+ Düse hinzufügen</button>
-      </div>
-
-      <div class="sep-label" style="margin-top:20px">Material-Vorlagen</div>
-      <div id="st-mats-list" style="margin-bottom:8px"></div>
-      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-top:4px">
         <div class="form-row cols3">
-          <div class="fg"><label class="fl">Name *</label><input class="fi" id="st-mat-name" placeholder="z.B. PLA"></div>
-          <div class="fg"><label class="fl">Düse</label>
-            <select class="fs" id="st-mat-nozzle"><option value="">—</option></select>
+          ${fi('company_postal_code','PLZ',s.company_postal_code,'8000')}
+          ${fi('company_city','Ort',s.company_city,'Zürich')}
+          ${fi('company_country','Land',s.company_country,'Schweiz')}
+        </div>
+        <div class="form-row cols3">
+          ${fi('company_phone','Telefon',s.company_phone,'+41 44 000 00 00')}
+          ${fi('company_email','E-Mail',s.company_email,'info@firma.ch','email')}
+          ${fi('company_website','Website',s.company_website,'www.firma.ch')}
+        </div>
+        <div class="sep-label">Bankangaben</div>
+        <div class="form-row cols3">
+          ${fi('bank_name','Bank',s.bank_name,'Zürcher Kantonalbank')}
+          ${fi('bank_iban','IBAN',s.bank_iban,'CH00 0000 0000 0000 0000 0')}
+          ${fi('bank_bic','BIC / SWIFT',s.bank_bic,'ZKBKCHZZ80A')}
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" onclick="saveSettings()">💾 Speichern</button>
+        </div>
+      </div>
+
+      <!-- TAB: Kalkulation -->
+      <div class="st-tab-pane" data-tab="kalk" hidden>
+        <div class="sep-label" style="margin-top:0">Standardwerte</div>
+        <div class="form-row cols3">
+          ${fi('default_tax_rate','Standard MwSt. (%)',s.default_tax_rate,'','number')}
+          ${fi('quote_validity_days','Angebot gültig (Tage)',s.quote_validity_days,'','number')}
+          ${fi('default_payment_terms','Zahlungsbedingungen',s.default_payment_terms,'30 Tage netto')}
+        </div>
+        <div class="form-row cols3">
+          ${fi('hourly_rate','Stundensatz (CHF/h)',s.hourly_rate,'z.B. 120','number')}
+          ${fi('default_filament_price_kg','Filamentpreis (CHF/kg)',s.default_filament_price_kg,'','number')}
+          ${fi('default_machine_cost_hr','Maschinenkosten (CHF/h)',s.default_machine_cost_hr,'','number')}
+        </div>
+        <div class="sep-label">Dokument-Fussnoten</div>
+        <div class="form-row">
+          ${ft('invoice_footer','Fusszeile Rechnung',s.invoice_footer,'Zahlungshinweis, Bankverbindung …')}
+        </div>
+        <div class="form-row">
+          ${ft('quote_footer','Fusszeile Angebot',s.quote_footer,'Hinweis Gültigkeit, Lieferbedingungen …')}
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" onclick="saveSettings()">💾 Speichern</button>
+        </div>
+      </div>
+
+      <!-- TAB: Kassabon -->
+      <div class="st-tab-pane" data-tab="bon" hidden>
+        <div class="sep-label" style="margin-top:0">Fusszeile</div>
+        <div class="form-row">
+          ${ft('receipt_footer','Fusszeile Kassabon',s.receipt_footer,'z.B. Vielen Dank für Ihren Auftrag!')}
+        </div>
+        <div class="sep-label">Bon-Aufbau</div>
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">
+          <div class="form-row cols2" style="margin-bottom:8px">
+            ${fi('receipt_line_width','Zeilenbreite (Zeichen)',s.receipt_line_width,'32','number')}
           </div>
-          <div class="fg"><label class="fl">Filamentpreis (CHF/kg)</label><input class="fi" id="st-mat-price" type="number" step="0.01" placeholder="22.00"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
+            ${fck('receipt_show_datetime','Datum &amp; Uhrzeit anzeigen',s.receipt_show_datetime)}
+            ${fck('receipt_show_customer','Kundenname anzeigen',s.receipt_show_customer)}
+            ${fck('receipt_show_item_number','Artikelnummer anzeigen',s.receipt_show_item_number)}
+            ${fck('receipt_show_notes','Notizen anzeigen',s.receipt_show_notes)}
+          </div>
         </div>
-        <div class="form-row cols3">
-          <div class="fg"><label class="fl">Drucktemp (°C)</label><input class="fi" id="st-mat-temp" placeholder="210"></div>
-          <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="st-mat-bed" placeholder="60"></div>
-          <div class="fg"><label class="fl">Notizen</label><input class="fi" id="st-mat-notes" placeholder="optional"></div>
-        </div>
-        <input type="hidden" id="st-mat-id" value="">
-        <button class="btn btn-ghost btn-sm" id="st-mat-add-btn" onclick="addMaterialPreset()">+ Vorlage hinzufügen</button>
-      </div>
-
-      <div class="sep-label" style="margin-top:24px">Datenpfad</div>
-      <div id="st-datapath-info" style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt aktuelle Pfade…</div>
-      <div class="form-row">
-        <div class="fg">
-          <label class="fl">Datenverzeichnis (Datenbank + Dateien)</label>
-          <input class="fi" id="st-data-dir" placeholder="/absoluter/pfad/zum/datenverzeichnis">
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" onclick="saveSettings()">💾 Speichern</button>
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-        <button class="btn btn-ghost btn-sm" onclick="saveDataPath()">Pfad speichern</button>
-        <span id="st-datapath-msg" style="font-size:12px;color:var(--t3)"></span>
+
+      <!-- TAB: 3D-Druck -->
+      <div class="st-tab-pane" data-tab="druck3d" hidden>
+        <div class="sep-label" style="margin-top:0">Drucker</div>
+        <div id="st-printers-list" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input class="fi" id="st-pr-name" style="width:200px" placeholder="Druckername">
+          <input class="fi" id="st-pr-cost" type="number" step="0.01" style="width:110px" placeholder="CHF/h (z.B. 1.50)">
+          <button class="btn btn-ghost btn-sm" onclick="addPrinter()">+ Drucker hinzufügen</button>
+        </div>
+
+        <div class="sep-label" style="margin-top:20px">Düsen</div>
+        <div id="st-nozzles-list" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="fi" id="st-nz-size" style="width:120px" placeholder="Grösse (z.B. 0.4)">
+          <button class="btn btn-ghost btn-sm" onclick="addNozzle()">+ Düse hinzufügen</button>
+        </div>
+
+        <div class="sep-label" style="margin-top:20px">Material-Vorlagen</div>
+        <div id="st-mats-list" style="margin-bottom:8px"></div>
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-top:4px">
+          <div class="form-row cols3">
+            <div class="fg"><label class="fl">Name *</label><input class="fi" id="st-mat-name" placeholder="z.B. PLA"></div>
+            <div class="fg"><label class="fl">Düse</label>
+              <select class="fs" id="st-mat-nozzle"><option value="">—</option></select>
+            </div>
+            <div class="fg"><label class="fl">Filamentpreis (CHF/kg)</label><input class="fi" id="st-mat-price" type="number" step="0.01" placeholder="22.00"></div>
+          </div>
+          <div class="form-row cols3">
+            <div class="fg"><label class="fl">Drucktemp (°C)</label><input class="fi" id="st-mat-temp" placeholder="210"></div>
+            <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="st-mat-bed" placeholder="60"></div>
+            <div class="fg"><label class="fl">Notizen</label><input class="fi" id="st-mat-notes" placeholder="optional"></div>
+          </div>
+          <input type="hidden" id="st-mat-id" value="">
+          <button class="btn btn-ghost btn-sm" id="st-mat-add-btn" onclick="addMaterialPreset()">+ Vorlage hinzufügen</button>
+        </div>
       </div>
 
-      <div class="sep-label" style="margin-top:24px">Datensicherung</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
-      <div style="display:flex;gap:8px">
-        <a class="btn btn-ghost" href="/api/export" download>&#x1F4E6; Gesamtexport herunterladen</a>
+      <!-- TAB: Daten -->
+      <div class="st-tab-pane" data-tab="daten" hidden>
+        <div class="sep-label" style="margin-top:0">Datenpfad</div>
+        <div id="st-datapath-info" style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt aktuelle Pfade…</div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Datenverzeichnis (Datenbank + Dateien)</label>
+            <input class="fi" id="st-data-dir" placeholder="/absoluter/pfad/zum/datenverzeichnis">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" onclick="saveDataPath()">Pfad speichern</button>
+          <span id="st-datapath-msg" style="font-size:12px;color:var(--t3)"></span>
+        </div>
+
+        <div class="sep-label" style="margin-top:24px">Datensicherung</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
+        <div style="display:flex;gap:8px">
+          <a class="btn btn-ghost" href="/api/export" download>&#x1F4E6; Gesamtexport herunterladen</a>
+        </div>
+
+        <div class="sep-label" style="margin-top:24px">Datei-Index</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Übersicht aller gespeicherten Dateien mit angezeigtem Namen und tatsächlichem Dateinamen auf der Festplatte (Notfall-Referenz).</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="gotoView('fileindex')">&#x1F4C2; Datei-Index öffnen</button>
+        </div>
       </div>
 
-      <div class="sep-label" style="margin-top:24px">Datei-Index</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Übersicht aller gespeicherten Dateien mit angezeigtem Namen und tatsächlichem Dateinamen auf der Festplatte (Notfall-Referenz).</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="gotoView('fileindex')">&#x1F4C2; Datei-Index öffnen</button>
-      </div>
     </div>`);
+
+  // active tab styling
+  document.querySelectorAll('.st-tab-btn').forEach(b => {
+    b.addEventListener('mouseenter', () => { if (!b.classList.contains('active')) b.style.color = 'var(--t1)'; });
+    b.addEventListener('mouseleave', () => { if (!b.classList.contains('active')) b.style.color = 'var(--t2)'; });
+  });
+  const styleActiveTabs = () => document.querySelectorAll('.st-tab-btn').forEach(b => {
+    b.style.color = b.classList.contains('active') ? 'var(--blue)' : 'var(--t2)';
+    b.style.borderBottomColor = b.classList.contains('active') ? 'var(--blue)' : 'transparent';
+    b.style.fontWeight = b.classList.contains('active') ? '600' : '400';
+  });
+  styleActiveTabs();
+  document.querySelectorAll('.st-tab-btn').forEach(b => b.addEventListener('click', styleActiveTabs));
+
   loadAndRenderPrinterConfig();
   api('/api/data-path').then(d => {
     document.getElementById('st-datapath-info').innerHTML =
