@@ -399,18 +399,39 @@ function renderItemDetail(item, activeRevId) {
 
   document.getElementById('dp-body').innerHTML = `
     <div id="it-revs">
-      <div style="margin-bottom:10px;font-size:12px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-        ${item.source_url ? `<span>Quelle: <a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a></span>` : ''}
-        <span style="display:flex;align-items:center;gap:6px">
-          <span>Verkaufspreis:</span>
-          <input id="item-price-field" type="number" step="0.01" min="0" placeholder="—"
-            value="${item.default_price != null ? item.default_price : ''}"
-            style="width:90px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:3px 7px;font-size:12px;color:var(--t1);font-family:var(--mono)"
-            onblur="saveItemPrice(${item.id},this)"
-            onkeydown="if(event.key==='Enter')this.blur()">
-          <span style="font-size:11px">CHF</span>
-        </span>
-      </div>
+      ${(() => {
+        const activeRev = item.active_revision || (item.revisions||[])[0];
+        const bom = activeRev?.bom || [];
+        const bomTotal = item.item_type === 'asm' && bom.length
+          ? bom.reduce((s, b) => s + (b.default_price != null ? b.default_price * b.quantity : 0), 0)
+          : null;
+        const allPriced = item.item_type === 'asm' && bom.length && bom.every(b => b.default_price != null);
+        const bomHint = bomTotal != null && bomTotal > 0
+          ? `<span style="font-size:11px;color:var(--t3);display:flex;align-items:center;gap:5px">
+              BOM-Preis:
+              <strong style="color:var(--teal);font-family:var(--mono)">${fmtChf(bomTotal)}</strong>
+              ${!allPriced ? '<span title="Nicht alle Teile haben einen VP"style="color:var(--amber)">⚠ unvollständig</span>' : ''}
+              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:10px"
+                onclick="document.getElementById(\'item-price-field\').value=${bomTotal.toFixed(2)};document.getElementById(\'item-price-field\').dispatchEvent(new Event(\'blur\'))">
+                übernehmen
+              </button>
+             </span>`
+          : (item.item_type === 'asm' && bom.length ? `<span style="font-size:11px;color:var(--t3)">BOM-Preis: <span style="color:var(--amber)">⚠ keine Preise hinterlegt</span></span>` : '');
+        return `<div style="margin-bottom:10px;font-size:12px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+          ${item.source_url ? `<span>Quelle: <a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a></span>` : ''}
+          <span style="display:flex;align-items:center;gap:6px">
+            <span>Verkaufspreis:</span>
+            <input id="item-price-field" type="number" step="0.01" min="0" placeholder="—"
+              value="${item.default_price != null ? item.default_price : ''}"
+              style="width:90px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:3px 7px;font-size:12px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
+              class="no-spin"
+              onblur="saveItemPrice(${item.id},this)"
+              onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="font-size:11px">CHF</span>
+          </span>
+          ${bomHint}
+        </div>`;
+      })()}
       <!-- Rev strip -->
       <div class="sep-label">Revisionen</div>
       <div class="rev-strip">

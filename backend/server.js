@@ -711,7 +711,7 @@ app.get('/api/items/:id', (req, res) => {
     rev.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [rev.id]);
     rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
     if (item.item_type === 'asm') {
-      rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
+      rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
       rev.bom.forEach(b => { b.child_active_rev = getActiveRevision(b.child_item_id); });
     }
   });
@@ -831,7 +831,7 @@ app.get('/api/revisions/:id', (req, res) => {
   rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
   rev.item = get('SELECT * FROM items WHERE id=?', [rev.item_id]);
   if (rev.item && rev.item.item_type === 'asm') {
-    rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
+    rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
   }
   res.json(rev);
 });
