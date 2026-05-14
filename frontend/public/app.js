@@ -2899,18 +2899,14 @@ async function api(url, method='GET', body=null) {
   try {
     const r = await fetch(API+url, opts);
     if (!r.ok) {
-      if ((r.status === 404 || r.status === 0) && !_demoMode) {
-        _demoMode = true;
-        document.getElementById('demo-banner')?.removeAttribute('hidden');
-        return api(url, method, body);
-      }
-      const e=await r.json().catch(()=>({error:'HTTP '+r.status}));
-      toast(e.error||'Serverfehler','err');
+      const e = await r.json().catch(() => ({ error: 'HTTP '+r.status }));
+      if (r.status !== 404) toast(e.error||'Serverfehler', 'err');
       throw new Error(e.error||'HTTP '+r.status);
     }
     return r.json();
   } catch (err) {
-    if (!_demoMode) {
+    // Only switch to demo mode on a real network error (server unreachable)
+    if (err instanceof TypeError && !_demoMode) {
       _demoMode = true;
       document.getElementById('demo-banner')?.removeAttribute('hidden');
       return api(url, method, body);
@@ -3879,14 +3875,19 @@ async function saveTimeEntry(id) {
   const description = document.getElementById('te-desc').value.trim();
   const billable = document.getElementById('te-billable').checked ? 1 : 0;
   if (!hours || hours <= 0) { toast('Stunden erforderlich', 'err'); return; }
-  if (id) {
-    await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description, billable });
-  } else {
-    await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, hours, description, billable });
+  try {
+    if (id) {
+      await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description, billable });
+    } else {
+      await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, hours, description, billable });
+    }
+    _hideDynModal();
+    loadTimeEntries(_teOrderId);
+    refreshOrderPositionen(_teOrderId);
+  } catch(e) {
+    _hideDynModal();
+    toast('Fehler beim Speichern', 'err');
   }
-  _hideDynModal();
-  loadTimeEntries(_teOrderId);
-  refreshOrderPositionen(_teOrderId);
 }
 
 async function delTimeEntry(id) {
@@ -3911,7 +3912,8 @@ function _invStockState(i) {
 async function renderInventory() {
   setLeftHeader('Lager', `<button class="btn btn-primary btn-sm" onclick="openInventoryModal()">+ Artikel</button>`);
   const items = await api('/api/inventory');
-  document.getElementById('badge-inventory').textContent = items.length || '—';
+  const badgeInv = document.getElementById('badge-inventory');
+  if (badgeInv) badgeInv.textContent = items.length || '—';
   if (!items.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Noch keine Lagerartikel</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openInventoryModal()">Ersten Artikel anlegen</button></div></div>`);
     return;
