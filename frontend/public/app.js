@@ -399,10 +399,18 @@ function renderItemDetail(item, activeRevId) {
 
   document.getElementById('dp-body').innerHTML = `
     <div id="it-revs">
-      ${(item.source_url || item.default_price != null) ? `<div style="margin-bottom:10px;font-size:12px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
+      <div style="margin-bottom:10px;font-size:12px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
         ${item.source_url ? `<span>Quelle: <a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a></span>` : ''}
-        ${item.default_price != null ? `<span>Listenpreis: <strong style="color:var(--t1)">${fmtChf(item.default_price)}</strong></span>` : ''}
-      </div>` : ''}
+        <span style="display:flex;align-items:center;gap:6px">
+          <span>Verkaufspreis:</span>
+          <input id="item-price-field" type="number" step="0.01" min="0" placeholder="—"
+            value="${item.default_price != null ? item.default_price : ''}"
+            style="width:90px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:3px 7px;font-size:12px;color:var(--t1);font-family:var(--mono)"
+            onblur="saveItemPrice(${item.id},this)"
+            onkeydown="if(event.key==='Enter')this.blur()">
+          <span style="font-size:11px">CHF</span>
+        </span>
+      </div>
       <!-- Rev strip -->
       <div class="sep-label">Revisionen</div>
       <div class="rev-strip">
@@ -1538,6 +1546,22 @@ async function confirmMoveItem(itemId) {
     if (state.project) openProject(state.project.id);
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Verschieben'; }
+    toast('Fehler: ' + e, 'err');
+  }
+}
+
+async function saveItemPrice(itemId, input) {
+  const val = input.value.trim();
+  const price = val === '' ? null : parseFloat(val);
+  try {
+    const item = await api('/api/items/' + itemId);
+    await api('/api/items/' + itemId, 'PUT', {
+      name: item.name, description: item.description,
+      source_url: item.source_url || null, default_price: price
+    });
+    input.style.borderColor = 'var(--green)';
+    setTimeout(() => input.style.borderColor = '', 1200);
+  } catch(e) {
     toast('Fehler: ' + e, 'err');
   }
 }
