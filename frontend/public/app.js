@@ -2820,99 +2820,16 @@ async function loadStats() {
 }
 
 // ── API ───────────────────────────────────────────────────────
-// Demo-Mode: wenn Backend nicht erreichbar, werden Beispieldaten ausgeliefert,
-// damit die Oberfläche auch ohne Server begutachtet werden kann.
-const DEMO = (() => {
-  const projects = [
-    { id:1, number:'PRJ-2026-001', name:'Roboterarm Delta v3', customer:'Mecano AG', asm_count:4, prt_count:18, doc_count:6, file_count:42, created_at:'2026-04-12T09:00:00', description:'6-Achs Cobot, modularer Aufbau. Zielmarkt Pick&Place für KMU.', items:[], documents:[], changelog:[] },
-    { id:2, number:'PRJ-2026-002', name:'Gehäuse Steuerbox X1', customer:'Helios Engineering', asm_count:2, prt_count:7, doc_count:3, file_count:18, created_at:'2026-04-28T13:20:00', description:'Schaltschrank für Außenmontage IP65.', items:[], documents:[], changelog:[] },
-    { id:3, number:'PRJ-2026-003', name:'Filament-Trockner Pro', customer:'Eigenentwicklung', asm_count:3, prt_count:11, doc_count:2, file_count:24, created_at:'2026-05-04T10:30:00', description:'Beheiztes Lagerkonzept für 4× 1kg Spulen, USB-C Steuerung.', items:[], documents:[], changelog:[] },
-    { id:4, number:'PRJ-2026-004', name:'Adapterring CNC-Spannfutter', customer:'Bürkli Metalltechnik', asm_count:1, prt_count:3, doc_count:1, file_count:8, created_at:'2026-05-09T08:15:00', description:'Adapter für ø100/ø125, einseitig plangedreht.', items:[], documents:[], changelog:[] },
-    { id:5, number:'PRJ-2026-005', name:'Drohnen-Rahmen QR-7', customer:'AeroVision Studio', asm_count:5, prt_count:22, doc_count:4, file_count:51, created_at:'2026-05-11T16:45:00', description:'7" FPV Rahmen aus Carbon, 3D-gedruckte Pods.', items:[], documents:[], changelog:[] },
-    { id:6, number:'PRJ-2026-006', name:'Sensorhalter LiDAR', customer:'Mecano AG', asm_count:1, prt_count:4, doc_count:2, file_count:12, created_at:'2026-05-13T11:00:00', description:'Klemmhalter für RPLidar A3 am Trolley.', items:[], documents:[], changelog:[] },
-  ];
-  const customers = [
-    { id:1, number:'KD-001', name:'Mecano AG', email:'info@mecano.ch', phone:'+41 44 555 12 34', city:'Zürich', country:'Schweiz' },
-    { id:2, number:'KD-002', name:'Helios Engineering', email:'kontakt@helios.de', phone:'+49 711 90 80 70', city:'Stuttgart', country:'Deutschland' },
-    { id:3, number:'KD-003', name:'Bürkli Metalltechnik', email:'office@buerkli.ch', phone:'+41 62 311 88 22', city:'Aarau', country:'Schweiz' },
-    { id:4, number:'KD-004', name:'AeroVision Studio', email:'fly@aerovision.io', phone:'+41 78 200 55 11', city:'Luzern', country:'Schweiz' },
-  ];
-  const quotes = [
-    { id:1, number:'ANG-2026-014', title:'Roboterarm v3 – Pilotserie 3 Stk', customer_name:'Mecano AG', status:'SENT', total:18450.00, date:'2026-05-02', valid_until:'2026-06-02' },
-    { id:2, number:'ANG-2026-015', title:'Gehäuse X1 – Charge 50', customer_name:'Helios Engineering', status:'ACCEPTED', total:6850.00, date:'2026-05-04', valid_until:'2026-06-04' },
-    { id:3, number:'ANG-2026-016', title:'Adapterring Variante B', customer_name:'Bürkli Metalltechnik', status:'DRAFT', total:380.00, date:'2026-05-12', valid_until:'2026-06-12' },
-  ];
-  const orders = [
-    { id:1, number:'AUF-2026-008', title:'Gehäuse X1 – 50 Stk', customer_name:'Helios Engineering', status:'CONFIRMED', total:6850.00, date:'2026-05-06', delivery_date:'2026-05-28' },
-    { id:2, number:'AUF-2026-009', title:'Roboterarm Prototyp', customer_name:'Mecano AG', status:'DRAFT', total:5650.00, date:'2026-05-10', delivery_date:'2026-06-15' },
-  ];
-  const deliveries = [
-    { id:1, number:'LS-2026-021', title:'Gehäuse X1 – Charge 1/2', customer_name:'Helios Engineering', status:'DELIVERED', delivery_date:'2026-05-09', order_number:'AUF-2026-008' },
-    { id:2, number:'LS-2026-022', title:'Adapterring Muster', customer_name:'Bürkli Metalltechnik', status:'READY', delivery_date:'2026-05-13', order_number:null },
-  ];
-  const items = [
-    { id:101, item_number:'asm-001', name:'Hauptbaugruppe Delta', item_type:'asm', parent_id:null, latest_revision:{ rev:'2', status:'REL', datasets:[
-      { id:1, ds_type:'CAD', original_name:'delta_main.step' },
-      { id:2, ds_type:'PDF', original_name:'Zeichnung_Hauptbaugruppe.pdf' }
-    ], bom:[{ child_item_id:102, quantity:2, unit:'pcs' },{ child_item_id:103, quantity:1, unit:'pcs' },{ child_item_id:104, quantity:6, unit:'pcs' }] }},
-    { id:102, item_number:'prt-014', name:'Schultergelenk', item_type:'prt', parent_id:101, latest_revision:{ rev:'1', status:'REL', datasets:[{ id:3, ds_type:'CAD', original_name:'schulter.step' },{ id:4, ds_type:'GCODE', original_name:'schulter_PETG.gcode' }], bom:[] }},
-    { id:103, item_number:'prt-015', name:'Effektor-Halterung', item_type:'prt', parent_id:101, latest_revision:{ rev:'3', status:'REV', datasets:[{ id:5, ds_type:'CAD', original_name:'effektor.step' }], bom:[] }},
-    { id:104, item_number:'prt-016', name:'Verbindungsstrebe 220mm', item_type:'prt', parent_id:101, latest_revision:{ rev:'1', status:'DFT', datasets:[], bom:[] }},
-    { id:105, item_number:'doc-002', name:'Lastenheft v2', item_type:'doc', parent_id:null, latest_revision:{ rev:'2', status:'REL', datasets:[{ id:6, ds_type:'PDF', original_name:'Lastenheft_v2.pdf' }], bom:[] }},
-  ];
-  projects[0].items = items;
-  projects[0].documents = [
-    { id:1, name:'Pflichtenheft', doc_type:'PDF', file_size:482000, uploaded_at:'2026-04-15T11:00:00' },
-    { id:2, name:'Materialliste', doc_type:'SPREADSHEET', file_size:34500, uploaded_at:'2026-04-22T09:30:00' },
-    { id:3, name:'Konzeptskizze', doc_type:'IMAGE', file_size:1240000, uploaded_at:'2026-04-12T15:10:00' },
-  ];
-  projects[0].changelog = [
-    { action:'Revision freigegeben', details:'asm-001 rev2 → Release', created_at:'2026-05-11T14:20:00' },
-    { action:'BOM aktualisiert', details:'Verbindungsstrebe von 200mm → 220mm', created_at:'2026-05-09T10:00:00' },
-    { action:'Projekt angelegt', details:'Initial commit von Roboterarm Delta v3', created_at:'2026-04-12T09:00:00' },
-  ];
-
-  return {
-    '/api/settings': { company_name:'Beispiel Werkstatt GmbH', company_street:'Industriestraße 14', company_postal_code:'8400', company_city:'Winterthur', company_phone:'+41 52 100 20 30', company_email:'kontakt@beispiel.ch' },
-    '/api/projects': projects,
-    '/api/customers': customers,
-    '/api/quotes': quotes,
-    '/api/orders': orders,
-    '/api/deliveries': deliveries,
-    '/api/stats': { projects: projects.length, customers: customers.length, quotes: quotes.length, orders: orders.length, deliveries: deliveries.length },
-    '_projectById': id => projects.find(p => p.id == id),
-  };
-})();
-let _demoMode = false;
 async function api(url, method='GET', body=null) {
-  // Demo-Mode kurzschließen, sobald aktiv
-  if (_demoMode && method === 'GET') {
-    if (DEMO[url]) return JSON.parse(JSON.stringify(DEMO[url]));
-    const m = url.match(/^\/api\/projects\/(\d+)$/);
-    if (m) { const p = DEMO._projectById(m[1]); if (p) return JSON.parse(JSON.stringify(p)); }
-    return [];
-  }
-  if (_demoMode) return {}; // Schreibzugriffe still ignorieren
-
   const opts = { method, headers: {} };
   if (body) { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
-  try {
-    const r = await fetch(API+url, opts);
-    if (!r.ok) {
-      const e = await r.json().catch(() => ({ error: 'HTTP '+r.status }));
-      if (r.status !== 404) toast(e.error||'Serverfehler', 'err');
-      throw new Error(e.error||'HTTP '+r.status);
-    }
-    return r.json();
-  } catch (err) {
-    // Only switch to demo mode on a real network error (server unreachable)
-    if (err instanceof TypeError && !_demoMode) {
-      _demoMode = true;
-      document.getElementById('demo-banner')?.removeAttribute('hidden');
-      return api(url, method, body);
-    }
-    throw err;
+  const r = await fetch(API+url, opts);
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ error: 'HTTP '+r.status }));
+    if (r.status !== 404) toast(e.error||'Serverfehler', 'err');
+    throw new Error(e.error||'HTTP '+r.status);
   }
+  return r.json();
 }
 
 // ── UTILS ─────────────────────────────────────────────────────
