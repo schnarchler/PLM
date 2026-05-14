@@ -1659,18 +1659,79 @@ function _render_orderRows() {
   </tr>`).join('') || '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
 
+function _renderBillableTimeSection(timeEntries, taxRate, discountPct, includeTax, itemsTotal) {
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
+  const billable = timeEntries.filter(e => e.billable);
+  if (!billable.length) return '';
+  const billableH = billable.reduce((s,e)=>s+(e.hours||0),0);
+  const timeCost = billableH * hourlyRate;
+  const discAmt = itemsTotal * discountPct / 100;
+  const netItems = itemsTotal - discAmt;
+  const grandNet = netItems + timeCost;
+  const tax = includeTax ? grandNet * taxRate / 100 : 0;
+  const grandTotal = grandNet + tax;
+  return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
+    <div style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Arbeitszeit (verrechenbar)</div>
+    <table style="width:100%"><tbody>
+      ${billable.map(e => {
+        const cost = e.hours * hourlyRate;
+        return `<tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:6px 8px;width:28px"></td>
+          <td style="padding:6px 8px;font-size:12px">${esc(e.description||'Arbeitszeit')}
+            <div style="font-size:10px;color:var(--t3)">${e.date||''}</div></td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtN(e.hours,2)} h</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtCHF(hourlyRate)}/h</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:11px">${fmtCHF(cost)}</td>
+          <td style="padding:6px 8px"></td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>
+    <div style="padding:10px 12px;border-top:1px solid var(--line);font-size:12px">
+      <div style="display:flex;justify-content:flex-end;gap:24px">
+        <div style="text-align:right">
+          <div style="color:var(--t3)">Positionen: <span style="font-family:var(--mono)">${fmtCHF(netItems)}</span></div>
+          <div style="color:var(--t2)">+ Arbeitszeit ${fmtN(billableH,2)} h: <span style="font-family:var(--mono)">${fmtCHF(timeCost)}</span></div>
+          ${includeTax?`<div style="color:var(--t3)">MwSt. ${taxRate}%: <span style="font-family:var(--mono)">${fmtCHF(tax)}</span></div>`:''}
+          <div style="font-size:14px;font-weight:600;margin-top:4px;color:var(--green)">Gesamttotal: <span style="font-family:var(--mono)">${fmtCHF(grandTotal)}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function refreshOrderPositionen(orderId) {
+  const posDiv = document.getElementById('od-pos');
+  if (!posDiv) return;
+  const [o, timeEntries] = await Promise.all([
+    api(`/api/orders/${orderId}`),
+    api(`/api/time-entries?order_id=${orderId}`)
+  ]);
+  const items = o.items || [];
+  const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
+  posDiv.innerHTML = `
+    ${renderLineItems(items, 'order', orderId, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
+    ${_renderBillableTimeSection(timeEntries, o.tax_rate??0, o.discount_pct||0, !!o.include_tax, subtotal)}
+    <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('order',${orderId})">+ Position</button>`;
+}
+
 async function openOrderDetail(id) {
-  const o = await api(`/api/orders/${id}`);
+  const [o, timeEntries] = await Promise.all([
+    api(`/api/orders/${id}`),
+    api(`/api/time-entries?order_id=${id}`)
+  ]);
   const rec = (state.orders||[]).find(x=>x.id===id); if (rec) Object.assign(rec, o);
   document.getElementById('dp-title').innerHTML = `<strong>${o.number}</strong>&nbsp;${esc(o.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'od-pos')">Positionen</button>
     <button class="tab" onclick="switchTab(this,'od-info')">Details</button>
     <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>`;
+  const items = o.items || [];
+  const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
   document.getElementById('dp-body').innerHTML = `
     <div id="od-pos">
-      ${renderLineItems(o.items||[], 'order', id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openLineItemModal('order',${id})">+ Position</button>
+      ${renderLineItems(items, 'order', id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
+      ${_renderBillableTimeSection(timeEntries, o.tax_rate??0, o.discount_pct||0, !!o.include_tax, subtotal)}
+      <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('order',${id})">+ Position</button>
     </div>
     <div id="od-info" style="display:none">
       <div class="sep-label">Auftragsdaten</div>
@@ -1699,8 +1760,35 @@ async function openOrderDetail(id) {
 }
 
 async function orderToDelivery(orderId) {
-  if (!confirm('Lieferschein aus diesem Auftrag erstellen? Alle Positionen werden übernommen.')) return;
-  const d = await api(`/api/orders/${orderId}/to-delivery`, 'POST');
+  const timeEntries = await api(`/api/time-entries?order_id=${orderId}`);
+  const billable = timeEntries.filter(e => e.billable);
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
+  const billableH = billable.reduce((s,e)=>s+(e.hours||0),0);
+  _showDynModal(`<div class="modal" style="max-width:400px">
+    <div class="modal-head"><div class="modal-title">Lieferschein erstellen</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:12px;color:var(--t2)">Alle Positionen des Auftrags werden übernommen.</div>
+      ${billable.length ? `<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r)">
+        <input type="checkbox" id="dtd-include-time" checked style="width:15px;height:15px;margin-top:1px;cursor:pointer;accent-color:var(--blue);flex-shrink:0">
+        <div>
+          <div style="font-size:12px;font-weight:500;color:var(--t1)">Verrechenbare Zeiten übernehmen</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">${billable.length} Einträge · ${fmtN(billableH,2)} h${hourlyRate>0?' · '+fmtCHF(billableH*hourlyRate):''}</div>
+        </div>
+      </label>` : `<div style="font-size:11px;color:var(--t3);padding:8px 0">Keine verrechenbaren Zeiteinträge vorhanden.</div>`}
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="_doCreateDelivery(${orderId})">🚚 Erstellen</button>
+    </div>
+  </div>`);
+}
+
+async function _doCreateDelivery(orderId) {
+  const cb = document.getElementById('dtd-include-time');
+  const include_time = cb ? cb.checked : false;
+  _hideDynModal();
+  const d = await api(`/api/orders/${orderId}/to-delivery`, 'POST', { include_time });
   toast(`Lieferschein ${d.number} erstellt`, 'ok');
   await renderDeliveries();
   openDeliveryDetail(d.id);
@@ -3698,20 +3786,24 @@ async function loadTimeEntries(orderId) {
   _teOrderId = orderId;
   const entries = await api(`/api/time-entries?order_id=${orderId}`);
   const totalH = entries.reduce((s, e) => s + (e.hours||0), 0);
+  const billableH = entries.filter(e=>e.billable).reduce((s,e)=>s+(e.hours||0),0);
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
   const el = document.getElementById('time-entries-list');
   if (!el) return;
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <div class="sep-label" style="margin:0;flex:1">Zeiterfassung</div>
       <span style="font-size:11px;color:var(--t3)">Total: <strong style="color:var(--t1)">${fmtN(totalH,2)} h</strong></span>
+      ${billableH>0&&hourlyRate>0?`<span style="font-size:11px;color:var(--green)">verrechenbar: <strong>${fmtN(billableH,2)} h = ${fmtCHF(billableH*hourlyRate)}</strong></span>`:''}
       <button class="btn btn-primary btn-sm" onclick="openTimeModal()">+ Eintrag</button>
     </div>
     ${entries.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Datum</th><th>Stunden</th><th>Beschreibung</th><th></th></tr></thead>
+      <thead><tr><th>Datum</th><th>Stunden</th><th>Beschreibung</th><th>Verrechnen</th><th></th></tr></thead>
       <tbody>${entries.map(e => `<tr>
         <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${e.date||'—'}</td>
         <td style="font-family:var(--mono);font-size:11px;font-weight:600">${fmtN(e.hours,2)} h</td>
         <td style="color:var(--t2)">${esc(e.description||'')}</td>
+        <td style="text-align:center"><span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${e.billable?'oklch(35% 0.1 145 / .25)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
         <td style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm btn-icon" onclick="openTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
           <button class="btn btn-red btn-sm btn-icon" onclick="delTimeEntry(${e.id})">✕</button>
@@ -3733,6 +3825,7 @@ function _hideDynModal() { document.getElementById('dynModal')?.remove(); }
 
 function openTimeModal(entry) {
   const e = entry || {};
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
   _showDynModal(`<div class="modal" style="max-width:380px">
     <div class="modal-head"><div class="modal-title">${e.id ? 'Zeiteintrag bearbeiten' : 'Zeiteintrag erfassen'}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
@@ -3743,6 +3836,11 @@ function openTimeModal(entry) {
         <input id="te-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}"></div>
       <div class="fg"><label class="fl">Beschreibung</label>
         <input id="te-desc" type="text" class="fi" placeholder="Konstruktion, Montage …" value="${esc(e.description||'')}"></div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;padding:6px 0;border-top:1px solid var(--line)">
+        <input type="checkbox" id="te-billable" ${e.billable?'checked':''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
+        <span style="color:var(--t2)">Zeit verrechnen</span>
+        ${hourlyRate>0?`<span style="color:var(--t3);margin-left:4px">(${fmtCHF(hourlyRate)}/h)</span>`:''}
+      </label>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -3755,20 +3853,23 @@ async function saveTimeEntry(id) {
   const date = document.getElementById('te-date').value;
   const hours = parseFloat(document.getElementById('te-hours').value);
   const description = document.getElementById('te-desc').value.trim();
+  const billable = document.getElementById('te-billable').checked ? 1 : 0;
   if (!hours || hours <= 0) { toast('Stunden erforderlich', 'err'); return; }
   if (id) {
-    await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description });
+    await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description, billable });
   } else {
-    await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, hours, description });
+    await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, hours, description, billable });
   }
   _hideDynModal();
   loadTimeEntries(_teOrderId);
+  refreshOrderPositionen(_teOrderId);
 }
 
 async function delTimeEntry(id) {
   if (!confirm('Eintrag löschen?')) return;
   await api(`/api/time-entries/${id}`, 'DELETE');
   loadTimeEntries(_teOrderId);
+  refreshOrderPositionen(_teOrderId);
 }
 
 // ── LAGER / BESTAND ───────────────────────────────────────────
@@ -3857,6 +3958,15 @@ async function openInventoryModal(id) {
     <div class="modal-head"><div class="modal-title">${item ? 'Artikel bearbeiten' : 'Neuer Lagerartikel'}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <div class="fg"><label class="fl">Verknüpftes PLM-Teil</label>
+        <div style="position:relative">
+          <input id="inv-plm-search" class="fi" placeholder="Teil suchen…" autocomplete="off"
+            oninput="searchInvPlmItem(this.value)"
+            value="${item?.linked_item_number ? item.linked_item_number+' – '+esc(item.linked_item_name||'') : ''}">
+          <input type="hidden" id="inv-item-id" value="${item?.item_id||''}">
+          <div id="inv-plm-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);z-index:200;max-height:160px;overflow-y:auto"></div>
+        </div>
+      </div>
       <div class="fg"><label class="fl">Name *</label><input id="inv-name" class="fi" value="${esc(item?.name||'')}"></div>
       <div class="cols2">
         <div class="fg"><label class="fl">Kategorie</label>
@@ -3872,15 +3982,6 @@ async function openInventoryModal(id) {
         <div class="fg"><label class="fl">Mindestbestand</label><input id="inv-min" type="number" min="0" step="0.01" class="fi" value="${item?.min_qty||0}"></div>
       </div>
       <div class="fg"><label class="fl">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="fi" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
-      <div class="fg"><label class="fl">Verknüpftes PLM-Teil</label>
-        <div style="position:relative">
-          <input id="inv-plm-search" class="fi" placeholder="Teil suchen…" autocomplete="off"
-            oninput="searchInvPlmItem(this.value)"
-            value="${item?.linked_item_number ? item.linked_item_number+' – '+esc(item.linked_item_name||'') : ''}">
-          <input type="hidden" id="inv-item-id" value="${item?.item_id||''}">
-          <div id="inv-plm-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);z-index:200;max-height:160px;overflow-y:auto"></div>
-        </div>
-      </div>
       ${!id ? `<div class="fg"><label class="fl">Anfangsbestand</label><input id="inv-stock" type="number" min="0" step="0.01" class="fi" value="0"></div>` : ''}
       <div class="fg"><label class="fl">Notizen</label><textarea id="inv-notes" class="fs" rows="2" style="resize:vertical">${esc(item?.notes||'')}</textarea></div>
     </div>
@@ -3901,12 +4002,15 @@ function searchInvPlmItem(q) {
     if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const icon = i.item_type==='asm'?'📦':i.item_type==='doc'?'📄':'🔩';
-      return `<div onclick="selectInvPlmItem(${i.id},'${esc(i.item_number)}',${JSON.stringify(esc(i.name))})"
+      const mc = i.manufacturing_cost;
+      const price = i.default_price ?? mc?.total ?? null;
+      return `<div onclick="selectInvPlmItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
         style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${icon}</span>
         <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.item_number)}</span>
         <span style="flex:1;font-size:12px">${esc(i.name)}</span>
+        ${price!=null?`<span style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtCHF(price)}</span>`:''}
         <span style="font-size:10px;color:var(--t3)">${esc(i.project_name)}</span>
       </div>`;
     }).join('');
@@ -3914,10 +4018,18 @@ function searchInvPlmItem(q) {
   }, 200);
 }
 
-function selectInvPlmItem(id, number, name) {
-  document.getElementById('inv-item-id').value = id;
-  document.getElementById('inv-plm-search').value = number + ' – ' + name;
+function selectInvPlmItem(item) {
+  document.getElementById('inv-item-id').value = item.id;
+  document.getElementById('inv-plm-search').value = item.item_number + ' – ' + item.name;
   document.getElementById('inv-plm-results').style.display = 'none';
+  const nameEl = document.getElementById('inv-name');
+  if (nameEl && !nameEl.value.trim()) nameEl.value = item.item_number + ' – ' + item.name;
+  const priceEl = document.getElementById('inv-price');
+  if (priceEl && !priceEl.value) {
+    const mc = item.manufacturing_cost;
+    const price = item.default_price ?? mc?.total ?? null;
+    if (price != null) priceEl.value = price;
+  }
 }
 
 async function saveInventoryItem(id) {
