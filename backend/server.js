@@ -253,6 +253,8 @@ async function initDb() {
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
   migrate('ALTER TABLE quotes ADD COLUMN include_tax INTEGER DEFAULT 0');
+  migrate('ALTER TABLE quotes ADD COLUMN estimated_hours REAL DEFAULT 0');
+  migrate('ALTER TABLE quotes ADD COLUMN include_hours INTEGER DEFAULT 0');
 
   db.run(`CREATE TABLE IF NOT EXISTS quote_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1248,11 +1250,11 @@ app.get('/api/quotes', (req, res) => {
 });
 
 app.post('/api/quotes', (req, res) => {
-  const { customer_id, customer_name_free, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  const { customer_id, customer_name_free, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextQuoteNumber();
-  const id = runGetId('INSERT INTO quotes (number,customer_id,customer_name_free,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, customer_name_free||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0]);
+  const id = runGetId('INSERT INTO quotes (number,customer_id,customer_name_free,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, customer_name_free||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0]);
   res.json(get('SELECT * FROM quotes WHERE id=?', [id]));
 });
 
@@ -1272,11 +1274,11 @@ app.get('/api/quotes/:id', (req, res) => {
 });
 
 app.put('/api/quotes/:id', (req, res) => {
-  const { customer_id, customer_name_free, title, status, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  const { customer_id, customer_name_free, title, status, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours } = req.body;
   run(`UPDATE quotes SET customer_id=?,customer_name_free=?,title=?,status=?,notes=?,quote_date=?,valid_until=?,
-    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,updated_at=datetime('now') WHERE id=?`,
+    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,estimated_hours=?,include_hours=?,updated_at=datetime('now') WHERE id=?`,
     [customer_id||null, customer_name_free||null, title, status, notes, quote_date, valid_until,
-     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, req.params.id]);
+     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, req.params.id]);
   res.json(get('SELECT * FROM quotes WHERE id=?', [req.params.id]));
 });
 
