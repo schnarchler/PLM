@@ -468,7 +468,9 @@ function nextRev(current) {
 function nextCounter(key) {
   db.run('UPDATE counters SET value=value+1 WHERE key=?', [key]);
   saveDb();
-  return get('SELECT value FROM counters WHERE key=?', [key]).value;
+  const row = get('SELECT value FROM counters WHERE key=?', [key]);
+  if (!row) throw new Error('Counter not found: ' + key);
+  return row.value;
 }
 
 function nextProjectNumber() { return String(nextCounter('project')).padStart(4, '0'); }
