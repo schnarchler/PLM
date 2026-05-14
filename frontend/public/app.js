@@ -641,8 +641,8 @@ function renderRevDetail(rev, item) {
       if (!stls.length) return '';
       const fUrl = API+'/api/datasets/'+stls[0].id+'/download';
       const sel = stls.length > 1
-        ? '<select style="margin-left:auto;font-size:11px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('+rev.id+',\''+API+'/api/datasets/\'+this.value+\'/download\')">'
-          + stls.map(d => '<option value="'+d.id+'">'+esc(d.original_name)+'</option>').join('')+'</select>'
+        ? '<select style="margin-left:auto;font-size:11px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('+rev.id+', this.value)">'
+          + stls.map(d => '<option value="'+API+'/api/datasets/'+d.id+'/download">'+esc(d.original_name)+'</option>').join('')+'</select>'
         : '';
       return '<div class="sep-label" style="margin-top:12px">3D Vorschau'+sel+'</div>'
         +'<div style="position:relative;width:100%;height:220px;border-radius:var(--r);overflow:hidden;margin-bottom:10px">'
