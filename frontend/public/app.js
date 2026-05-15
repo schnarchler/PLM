@@ -896,7 +896,7 @@ async function renderDashboard() {
   const invLowHtml = invLow.length ? invLow.map(i => {
     const isCritical = i.stock_qty < i.min_qty;
     const color = isCritical ? 'var(--red)' : 'var(--amber)';
-    const borderColor = isCritical ? 'oklch(60% 0.2 25 / .3)' : 'oklch(70% 0.15 60 / .3)';
+    const borderColor = isCritical ? 'rgba(241,120,120,.3)' : 'rgba(239,177,74,.3)';
     return `<div onclick="gotoView('inventory');openInventoryDetail(${i.id})" style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid ${borderColor};border-radius:6px;margin-bottom:6px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${color}'" onmouseout="this.style.borderColor='${borderColor}'">
       <div>
         <div style="font-size:12px;font-weight:500">${esc(i.name)}${i.color?` <span style="color:var(--t3);font-weight:400">${esc(i.color)}</span>`:''}${i.material?` <span style="color:var(--t3);font-weight:400">${esc(i.material)}</span>`:''}</div>
@@ -1480,7 +1480,7 @@ function _renderProfitRows() {
   const { sort, dir, text, margin, type } = _profitState;
   const q = text.toLowerCase();
   const marginColor = m => m == null ? 'var(--t3)' : m < 0 ? 'var(--red)' : m < 1 ? 'var(--yellow)' : 'var(--green)';
-  const marginBg    = m => m == null ? '' : m < 0 ? 'background:oklch(50% 0.18 25/.08)' : m < 1 ? 'background:oklch(75% 0.18 85/.07)' : 'background:oklch(65% 0.18 145/.07)';
+  const marginBg    = m => m == null ? '' : m < 0 ? 'background:rgba(241,120,120,.08)' : m < 1 ? 'background:rgba(239,177,74,.08)' : 'background:rgba(91,211,138,.08)';
 
   let rows = _profitData.filter(i => {
     if (q && !i.item_number.toLowerCase().includes(q) && !i.name.toLowerCase().includes(q) && !i.project_number.toLowerCase().includes(q) && !(i.project_name||'').toLowerCase().includes(q)) return false;
@@ -2502,7 +2502,7 @@ async function openQuoteDetail(id) {
       <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
         <span style="color:var(--t3)">${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h</span>
         <span style="font-family:var(--mono);font-weight:600;color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>
-        <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${q.include_hours?'oklch(35% 0.1 145 / .25)':'var(--bg2)'};color:${q.include_hours?'var(--green)':'var(--t3)'}">${q.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
+        <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${q.include_hours?'rgba(91,211,138,.12)':'var(--bg2)'};color:${q.include_hours?'var(--green)':'var(--t3)'}">${q.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
       </div>
       ${q.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
         <div style="text-align:right;font-size:12px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
@@ -3805,7 +3805,7 @@ async function loadTimeEntries(orderId) {
         <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${e.date||'—'}</td>
         <td style="font-family:var(--mono);font-size:11px;font-weight:600">${fmtN(e.hours,2)} h</td>
         <td style="color:var(--t2)">${esc(e.description||'')}</td>
-        <td style="text-align:center"><span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${e.billable?'oklch(35% 0.1 145 / .25)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
+        <td style="text-align:center"><span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(91,211,138,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
         <td style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm btn-icon" onclick="openTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
           <button class="btn btn-red btn-sm btn-icon" onclick="delTimeEntry(${e.id})">✕</button>
@@ -3918,7 +3918,7 @@ function _invRenderTable(items) {
 
   const critical = items.filter(i => _invStockState(i) === 'critical').length;
   const warn = items.filter(i => _invStockState(i) === 'warn').length;
-  const banner = (critical || warn) ? `<div style="background:oklch(35% 0.12 25 / .15);border:1px solid oklch(60% 0.15 25 / .4);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:12px">
+  const banner = (critical || warn) ? `<div style="background:rgba(241,120,120,.10);border:1px solid rgba(241,120,120,.30);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:12px">
     ${critical?`<span style="color:var(--red)">● ${critical} unter Mindestbestand</span>`:''}
     ${warn?`<span style="color:var(--amber)">● ${warn} auf Mindestbestand</span>`:''}
   </div>` : '';
@@ -4017,7 +4017,7 @@ async function openInventoryDetail(id) {
         <thead><tr><th>Datum</th><th>Typ</th><th>Menge</th><th>Referenz</th><th>Notiz</th></tr></thead>
         <tbody>${item.movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${(m.created_at||'').slice(0,16).replace('T',' ')}</td>
-          <td><span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'oklch(35% 0.1 145 / .3)':'oklch(35% 0.12 25 / .3)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
+          <td><span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(91,211,138,.15)':'rgba(241,120,120,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
           <td style="font-family:var(--mono);font-size:11px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
           <td style="color:var(--t3);font-size:11px">${esc(m.reference||'—')}</td>
           <td style="color:var(--t3);font-size:11px">${esc(m.notes||'')}</td>
