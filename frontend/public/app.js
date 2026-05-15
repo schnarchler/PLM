@@ -415,7 +415,8 @@ function renderItemDetail(item, activeRevId) {
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
-    <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>`;
+    <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>
+    ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}`;
   document.getElementById('dp-tabs').innerHTML = tabs;
 
   const rev = item.revisions?.find(r => r.id === activeRevId) || item.revisions?.[0];
@@ -481,7 +482,10 @@ function renderItemDetail(item, activeRevId) {
         <div class="cl-row"><div class="cl-dot"></div>
         <div><div class="cl-action">${cl.action}</div><div class="cl-detail">${cl.details||''}</div></div>
         <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:12px">Leer</div>'}
-    </div>`;
+    </div>
+    ${!isDOC ? `<div id="it-time" style="display:none">
+      <div id="item-time-list"><div style="color:var(--t3);font-size:12px;padding:8px 0">Wird geladen…</div></div>
+    </div>` : ''}`;
   setTimeout(() => {
     document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
       if (!c._stlInit) { c._stlInit = true; initSTLViewer(c.id, c.dataset.stlUrl); }
@@ -1412,8 +1416,56 @@ function exportFileIndex() {
 let _profitData = [];
 let _profitState = { sort: 'number', dir: 1, text: '', margin: '' };
 
+function _exportProfitCsv() {
+  const { sort, dir, text, margin, type } = _profitState;
+  const q = text.toLowerCase();
+  let rows = _profitData.filter(i => {
+    if (q && !i.item_number.toLowerCase().includes(q) && !i.name.toLowerCase().includes(q) && !i.project_number.toLowerCase().includes(q) && !(i.project_name||'').toLowerCase().includes(q)) return false;
+    if (type && i.item_type !== type) return false;
+    if (margin === 'pos'     && !(i.margin != null && i.margin >= 0)) return false;
+    if (margin === 'neg'     && !(i.margin != null && i.margin < 0))  return false;
+    if (margin === 'missing' && i.margin != null) return false;
+    return true;
+  });
+  const val = i => ({
+    project: i.project_number, number: i.item_number, name: i.name,
+    cost: i.manufacturing_cost ? i.manufacturing_cost.total : -Infinity,
+    price: i.default_price ?? -Infinity,
+    margin: i.margin ?? -Infinity,
+    margin_pct: i.margin_pct ?? -Infinity,
+  })[sort] ?? '';
+  rows.sort((a, b) => { const av = val(a), bv = val(b); return dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv); });
+
+  const csvNum = v => v == null ? '' : String(v).replace('.', ',');
+  const csvStr = s => '"' + String(s||'').replace(/"/g, '""') + '"';
+  const lines = [
+    ['Projekt','Nummer','Typ','Name','Herst.-kosten (CHF)','Filament (CHF)','Maschine (CHF)','Verkaufspreis (CHF)','Marge (CHF)','Marge (%)'].join(';'),
+    ...rows.map(i => {
+      const mc = i.manufacturing_cost;
+      return [
+        csvStr(i.project_number),
+        csvStr(i.item_number),
+        csvStr(i.item_type === 'asm' ? 'Baugruppe' : 'Part'),
+        csvStr(i.name),
+        csvNum(mc ? mc.total?.toFixed(2) : null),
+        csvNum(mc ? mc.filament?.toFixed(2) : null),
+        csvNum(mc ? mc.machine?.toFixed(2) : null),
+        csvNum(i.default_price != null ? i.default_price.toFixed(2) : null),
+        csvNum(i.margin != null ? i.margin.toFixed(2) : null),
+        csvNum(i.margin_pct != null ? i.margin_pct.toFixed(1) : null),
+      ].join(';');
+    })
+  ];
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Kalkulation_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 async function renderProfitOverview() {
-  setLeftHeader('Kalkulation', `<button class="btn btn-ghost btn-sm" onclick="renderProfitOverview()">↺ Aktualisieren</button>`);
+  setLeftHeader('Kalkulation', `<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="_exportProfitCsv()">↓ CSV</button><button class="btn btn-ghost btn-sm" onclick="renderProfitOverview()">↺ Aktualisieren</button></div>`);
   closeDetail();
   _profitData = await api('/api/profit-overview');
   _profitState = { sort: 'number', dir: 1, text: '', margin: '' };
@@ -3877,6 +3929,80 @@ async function delTimeEntry(id) {
   await api(`/api/time-entries/${id}`, 'DELETE');
   loadTimeEntries(_teOrderId);
   refreshOrderPositionen(_teOrderId);
+}
+
+// ── ITEM ZEITERFASSUNG ────────────────────────────────────────
+let _teItemId = null;
+
+async function loadItemTimeEntries(itemId) {
+  _teItemId = itemId;
+  const el = document.getElementById('item-time-list');
+  if (!el) return;
+  const entries = await api(`/api/time-entries?item_id=${itemId}`);
+  const totalH = entries.reduce((s, e) => s + (parseFloat(e.hours)||0), 0);
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:11px;color:var(--t3)">${entries.length ? `${entries.length} Einträge · ${fmtN(totalH,2)} h gesamt` : 'Noch keine Einträge'}</span>
+      <button class="btn btn-primary btn-sm" onclick="openItemTimeModal()">+ Eintrag</button>
+    </div>
+    ${entries.length ? `<div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Datum</th><th>Stunden</th><th>Beschreibung</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${entries.map(e => `<tr>
+          <td style="font-family:var(--mono);font-size:11px">${e.date||'—'}</td>
+          <td style="font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtN(parseFloat(e.hours)||0,2)} h</td>
+          <td style="font-size:12px;color:var(--t2)">${esc(e.description||'—')}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="openItemTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
+            <button class="btn btn-red btn-sm btn-icon" onclick="delItemTimeEntry(${e.id})">✕</button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` : ''}`;
+}
+
+function openItemTimeModal(entry) {
+  const e = entry || {};
+  _showDynModal(`<div class="modal" style="max-width:380px">
+    <div class="modal-head">
+      <div class="modal-title">${e.id ? 'Zeit bearbeiten' : 'Zeit erfassen'}</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <div class="fg"><label class="fl">Datum</label>
+        <input id="ite-date" type="date" class="fi" value="${e.date||new Date().toISOString().slice(0,10)}"></div>
+      <div class="fg"><label class="fl">Stunden</label>
+        <input id="ite-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}"></div>
+      <div class="fg"><label class="fl">Beschreibung</label>
+        <input id="ite-desc" type="text" class="fi" placeholder="Konstruktion, Recherche, CAD …" value="${esc(e.description||'')}"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveItemTimeEntry(${e.id||'null'})">Speichern</button>
+    </div>
+  </div>`);
+}
+
+async function saveItemTimeEntry(id) {
+  const date  = document.getElementById('ite-date').value;
+  const hours = parseFloat(document.getElementById('ite-hours').value);
+  const description = document.getElementById('ite-desc').value.trim();
+  if (!hours || hours <= 0) { toast('Stunden erforderlich', 'err'); return; }
+  if (id) {
+    await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description, billable: 0 });
+  } else {
+    await api('/api/time-entries', 'POST', { item_id: _teItemId, date, hours, description, billable: 0 });
+  }
+  _hideDynModal();
+  loadItemTimeEntries(_teItemId);
+}
+
+async function delItemTimeEntry(id) {
+  if (!confirm('Eintrag löschen?')) return;
+  await api(`/api/time-entries/${id}`, 'DELETE');
+  loadItemTimeEntries(_teItemId);
 }
 
 // ── LAGER / BESTAND ───────────────────────────────────────────

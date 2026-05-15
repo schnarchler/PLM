@@ -425,6 +425,7 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
   migrate('ALTER TABLE time_entries ADD COLUMN billable INTEGER DEFAULT 0');
+  migrate('ALTER TABLE time_entries ADD COLUMN item_id INTEGER REFERENCES items(id)');
 
   db.run(`CREATE TABLE IF NOT EXISTS applied_migrations (key TEXT PRIMARY KEY)`);
 
@@ -2207,16 +2208,20 @@ app.post('/api/inventory/:id/movement', (req, res) => {
 // TIME ENTRIES
 // ==============================================================
 app.get('/api/time-entries', (req, res) => {
-  const { order_id } = req.query;
-  if (!order_id) return res.status(400).json({ error: 'order_id required' });
+  const { order_id, item_id } = req.query;
+  if (item_id) return res.json(all('SELECT * FROM time_entries WHERE item_id=? ORDER BY date DESC, id DESC', [item_id]));
+  if (!order_id) return res.status(400).json({ error: 'order_id or item_id required' });
   res.json(all('SELECT * FROM time_entries WHERE order_id=? ORDER BY date DESC, id DESC', [order_id]));
 });
 
 app.post('/api/time-entries', (req, res) => {
-  const { order_id, date, hours, description, billable } = req.body;
-  if (!order_id || hours == null) return res.status(400).json({ error: 'order_id and hours required' });
-  const id = runGetId('INSERT INTO time_entries (order_id,date,hours,description,billable) VALUES (?,?,?,?,?)',
-    [order_id, date||new Date().toISOString().slice(0,10), parseFloat(hours), description||'', billable?1:0]);
+  const { order_id, item_id, date, hours, description, billable } = req.body;
+  if (!order_id && !item_id) return res.status(400).json({ error: 'order_id or item_id required' });
+  if (hours == null) return res.status(400).json({ error: 'hours required' });
+  const id = runGetId(
+    'INSERT INTO time_entries (order_id,item_id,date,hours,description,billable) VALUES (?,?,?,?,?,?)',
+    [order_id||null, item_id||null, date||new Date().toISOString().slice(0,10), parseFloat(hours), description||'', billable?1:0]
+  );
   res.json(get('SELECT * FROM time_entries WHERE id=?', [id]));
 });
 
