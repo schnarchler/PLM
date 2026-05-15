@@ -24,6 +24,10 @@ async function setDocStatus(type, id, status, el) {
     const ddEl = document.getElementById('od-delivery-date');
     if (ddEl) ddEl.textContent = r.delivery_date;
   }
+  if (type === 'delivery' && status === 'DELIVERED' && r.delivery_date) {
+    if (rec) rec.delivery_date = r.delivery_date;
+    openDeliveryDetail(id);
+  }
   toast('Status gespeichert','ok');
   loadStats();
 }
@@ -3433,6 +3437,24 @@ async function generateDoc(id, type) {
     return html;
   }).join('');
 
+  // Billable time entries (only for invoices/orders, not quotes)
+  const billableTime = !isQuote && d.billable_time?.length ? d.billable_time : [];
+  const hourlyRate = !isQuote ? (d.hourly_rate || 0) : 0;
+  const timeRows = billableTime.map(t => {
+    const hrs = parseFloat(t.hours) || 0;
+    const cost = hrs * hourlyRate;
+    return '<tr style="border-bottom:1px solid #e5e7eb">'
+      +'<td style="padding:8px 6px">'+(t.description||'Arbeitszeit')+(t.date?' <span style="font-size:10px;color:#9ca3af">['+t.date+']</span>':'')+'</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+fmtN(hrs,2)+' h</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+fmtCHF(hourlyRate)+'/h</td>'
+      +(hasDiscount?'<td style="padding:8px 6px"></td>':'')
+      +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtCHF(cost)+'</td>'
+      +'</tr>';
+  }).join('');
+  const timeTotal = billableTime.reduce((s, t) => s + (parseFloat(t.hours)||0) * hourlyRate, 0);
+  // Grand total including time
+  const grandTotal = (d.total || 0) + timeTotal;
+
   const html = `<!DOCTYPE html>
 <html lang="de-CH">
 <head><meta charset="UTF-8"><title>${docLabel} ${d.number}</title>
@@ -3504,15 +3526,16 @@ async function generateDoc(id, type) {
     ${hasDiscount ? '<th style="text-align:right">Rabatt</th>' : ''}
     <th style="text-align:right">Total</th>
   </tr></thead>
-  <tbody>${rows || `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}</tbody>
+  <tbody>${rows || `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}${timeRows}</tbody>
 </table>
 
 <div class="totals">
   ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>'+fmtCHF(d.subtotal)+'</span></div>'
     +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-'+fmtCHF(d.discount_amount)+'</span></div>' : ''}
-  <div class="total-row"><span>Nettobetrag</span><span>${fmtCHF(d.net)}</span></div>
+  <div class="total-row"><span>Positionen Netto</span><span>${fmtCHF(d.net)}</span></div>
+  ${billableTime.length && hourlyRate > 0 ? '<div class="total-row"><span>Arbeitszeit</span><span>'+fmtCHF(timeTotal)+'</span></div>' : ''}
   ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate ?? 0)+'%</span><span>'+fmtCHF(d.tax_amount)+'</span></div>' : ''}
-  <div class="total-gross"><span>Gesamtbetrag</span><span>${fmtCHF(d.total)}</span></div>
+  <div class="total-gross"><span>Gesamtbetrag</span><span>${fmtCHF(billableTime.length && hourlyRate > 0 ? grandTotal : d.total)}</span></div>
 </div>
 
 <div class="footer">
@@ -3921,7 +3944,7 @@ function _invRenderTable(items) {
         const isLast = idx === group.items.length - 1;
         const state = _invStockState(i);
         const stockColor = state==='critical'?'var(--red)':state==='warn'?'var(--amber)':'var(--green)';
-        const stockIcon = state==='critical'?' ⚠':state==='warn'?' !':'';
+        const stockIcon = state==='critical'?' ⚠':'';
         const borderBottom = isMulti && !isLast ? 'border-bottom:1px solid var(--bg3)' : '';
         const nameTd = isFirst
           ? `<td style="font-weight:500;vertical-align:top;padding-top:8px" rowspan="${group.items.length}">${esc(i.name)}${isMulti?` <span style="font-size:9px;color:var(--t3);font-weight:400">${group.items.length}×</span>`:''}</td>`
@@ -3966,7 +3989,7 @@ async function openInventoryDetail(id) {
   const item = await api(`/api/inventory/${id}`);
   const state = _invStockState(item);
   const stockColor = state==='critical'?'var(--red)':state==='warn'?'var(--amber)':'var(--green)';
-  const stockIcon = state==='critical'?' ⚠':state==='warn'?' !':'';
+  const stockIcon = state==='critical'?' ⚠':'';
   document.getElementById('dp-title').innerHTML = esc(item.name);
   document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'inv-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `

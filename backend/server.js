@@ -1729,6 +1729,14 @@ app.put('/api/deliveries/:id', (req, res) => {
 
 app.put('/api/deliveries/:id/status', (req, res) => {
   const { status } = req.body;
+  if (status === 'DELIVERED') {
+    const existing = get('SELECT delivery_date FROM deliveries WHERE id=?', [req.params.id]);
+    if (!existing?.delivery_date) {
+      const today = new Date().toISOString().slice(0, 10);
+      run(`UPDATE deliveries SET status=?,delivery_date=?,updated_at=datetime('now') WHERE id=?`, [status, today, req.params.id]);
+      return res.json({ success: true, delivery_date: today });
+    }
+  }
   run(`UPDATE deliveries SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
   res.json({ success: true });
 });
@@ -1998,6 +2006,9 @@ app.get('/api/orders/:id/invoice-data', (req, res) => {
   o.positions = all('SELECT oi.*,i.item_number,i.item_type FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=?', [o.id]);
   attachSubItems(o.positions);
   computeTotals(o);
+  o.billable_time = all('SELECT * FROM time_entries WHERE order_id=? AND billable=1 ORDER BY date', [o.id]);
+  const hrRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
+  o.hourly_rate = hrRow ? parseFloat(hrRow.value) || 0 : 0;
   res.json(o);
 });
 
