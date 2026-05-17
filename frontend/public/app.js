@@ -14,22 +14,37 @@ function _stSel(type, id, current) {
     onchange="setDocStatus('${type}',${id},this.value,this)">${opts}</select>`;
 }
 async function setDocStatus(type, id, status, el) {
-  const r = await api(`/api/${type}s/${id}/status`,'PUT',{status});
-  const m = type==='order'?ORDER_ST_MAP:type==='quote'?QUOTE_ST_MAP:DELIVERY_ST_MAP;
-  el.className = 'status-sel ' + (m[status]||'');
-  const arr = type==='order'?state.orders:type==='quote'?state.quotes:state.deliveries;
-  const rec = arr.find(x=>x.id===id); if (rec) rec.status = status;
-  if (type === 'order' && status === 'DELIVERED' && r.delivery_date) {
-    if (rec) rec.delivery_date = r.delivery_date;
-    const ddEl = document.getElementById('od-delivery-date');
-    if (ddEl) ddEl.textContent = r.delivery_date;
+  const prevValue = el.value;
+  const prevClass = el.className;
+  try {
+    const r = await api(`/api/${type}s/${id}/status`, 'PUT', { status });
+    const m = type==='order' ? ORDER_ST_MAP : type==='quote' ? QUOTE_ST_MAP : DELIVERY_ST_MAP;
+    el.className = 'status-sel ' + (m[status]||'');
+
+    const arr = type==='order' ? state.orders : type==='quote' ? state.quotes : state.deliveries;
+    const rec = arr.find(x => x.id === id);
+    if (rec) rec.status = status;
+
+    if (type === 'order' && r.delivery_date) {
+      if (rec) rec.delivery_date = r.delivery_date;
+      const ddEl = document.getElementById('od-delivery-date');
+      if (ddEl) ddEl.textContent = r.delivery_date;
+    }
+    if (type === 'delivery') {
+      if (r.delivery_date && rec) rec.delivery_date = r.delivery_date;
+      // Refresh detail so delivery_date and linked order status update
+      openDeliveryDetail(id);
+      // If all deliveries for an order are now delivered, reload orders list
+      if (status === 'DELIVERED') { await renderOrders(); }
+    }
+    toast('Status gespeichert', 'ok');
+    loadStats();
+  } catch(e) {
+    // Revert dropdown on failure
+    el.value = prevValue;
+    el.className = prevClass;
+    toast('Status konnte nicht gespeichert werden', 'err');
   }
-  if (type === 'delivery' && status === 'DELIVERED' && r.delivery_date) {
-    if (rec) rec.delivery_date = r.delivery_date;
-    openDeliveryDetail(id);
-  }
-  toast('Status gespeichert','ok');
-  loadStats();
 }
 let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false };
 
@@ -3463,6 +3478,9 @@ async function generateDoc(id, type) {
     d.customer_country && d.customer_country !== 'Schweiz' ? d.customer_country : ''
   ].filter(Boolean);
 
+  // fmtP: unrounded price for line items; fmtCHF only for the grand total (5-Rappen rounding)
+  const fmtP = v => 'CHF ' + fmtN(parseFloat(v) || 0);
+
   const hasDiscount = (d.discount_pct||0) > 0 || (d.positions||[]).some(p=>(p.discount_pct||0)>0);
   const cols = hasDiscount ? 5 : 4;
   const rows = (d.positions||[]).map(p => {
@@ -3471,9 +3489,9 @@ async function generateDoc(id, type) {
       +'<td style="padding:8px 6px">'+escHtml(p.description)+(p.item_number?' <span style="font-size:10px;color:#6b7280">['+p.item_number+']</span>':'')
       +(p.notes?'<br><span style="font-size:10px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+p.unit+'</td>'
-      +'<td style="padding:8px 6px;text-align:right">'+fmtCHF(parseFloat(p.unit_price))+'</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+fmtP(p.unit_price)+'</td>'
       +(hasDiscount?(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>'):'')
-      +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtCHF(lineTotal)+'</td>'
+      +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtP(lineTotal)+'</td>'
       +'</tr>';
     if (p.sub_items && p.sub_items.length) {
       html += p.sub_items.map(s =>
@@ -3498,9 +3516,9 @@ async function generateDoc(id, type) {
     return '<tr style="border-bottom:1px solid #e5e7eb">'
       +'<td style="padding:8px 6px">'+(t.description||'Arbeitszeit')+(t.date?' <span style="font-size:10px;color:#9ca3af">['+t.date+']</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtN(hrs,2)+' h</td>'
-      +'<td style="padding:8px 6px;text-align:right">'+fmtCHF(hourlyRate)+'/h</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+fmtP(hourlyRate)+'/h</td>'
       +(hasDiscount?'<td style="padding:8px 6px"></td>':'')
-      +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtCHF(cost)+'</td>'
+      +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtP(cost)+'</td>'
       +'</tr>';
   }).join('');
   const timeTotal = billableTime.reduce((s, t) => s + (parseFloat(t.hours)||0) * hourlyRate, 0);
@@ -3582,11 +3600,11 @@ async function generateDoc(id, type) {
 </table>
 
 <div class="totals">
-  ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>'+fmtCHF(d.subtotal)+'</span></div>'
-    +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-'+fmtCHF(d.discount_amount)+'</span></div>' : ''}
-  <div class="total-row"><span>Positionen Netto</span><span>${fmtCHF(d.net)}</span></div>
-  ${billableTime.length && hourlyRate > 0 ? '<div class="total-row"><span>Arbeitszeit</span><span>'+fmtCHF(timeTotal)+'</span></div>' : ''}
-  ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate ?? 0)+'%</span><span>'+fmtCHF(d.tax_amount)+'</span></div>' : ''}
+  ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>'+fmtP(d.subtotal)+'</span></div>'
+    +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-'+fmtP(d.discount_amount)+'</span></div>' : ''}
+  <div class="total-row"><span>Positionen Netto</span><span>${fmtP(d.net)}</span></div>
+  ${billableTime.length && hourlyRate > 0 ? '<div class="total-row"><span>Arbeitszeit</span><span>'+fmtP(timeTotal)+'</span></div>' : ''}
+  ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate ?? 0)+'%</span><span>'+fmtP(d.tax_amount)+'</span></div>' : ''}
   <div class="total-gross"><span>Gesamtbetrag</span><span>${fmtCHF(billableTime.length && hourlyRate > 0 ? grandTotal : d.total)}</span></div>
 </div>
 
