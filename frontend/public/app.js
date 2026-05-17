@@ -782,163 +782,204 @@ async function switchRev(itemId, revId) {
 
 // ── DASHBOARD ─────────────────────────────────────────────────
 async function renderDashboard() {
-  setLeftHeader('Dashboard', `<button class="btn btn-ghost btn-sm" onclick="renderDashboard()">↺</button>`);
+  const today = new Date().toLocaleDateString('de-CH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  setLeftHeader('Dashboard', `<span style="font-size:11px;color:var(--t3);font-family:var(--mono)">${today}</span><button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="renderDashboard()">↺</button>`);
   closeDetail();
-  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
+  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:12px">Lade…</div></div>`);
   const [s, d, invItems] = await Promise.all([api('/api/stats'), api('/api/dashboard'), api('/api/inventory')]);
 
-  const fmtChfD = v => fmtCHF(v||0);
-  const stColors = {DFT:'var(--blue)',REV:'var(--amber)',REL:'var(--green)',ECO:'var(--purple)',OBS:'var(--t3)'};
-  const ostLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
   const ostCls   = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
-  const qstLabel = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
+  const ostLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
   const qstCls   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
-  const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+  const qstLabel = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
   const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
+  const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+  const stColors = {DFT:'var(--blue)',REV:'var(--amber)',REL:'var(--green)',ECO:'var(--purple)',OBS:'var(--t3)'};
   const itemIcon = t => t==='asm'?'📦':t==='doc'?'📄':'🔩';
 
-  const kpi = (icon, value, label, sub='', click='') => `
-    <div style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:16px 14px;cursor:${click?'pointer':'default'}" ${click?`onclick="${click}"`:''}}>
-      <div style="font-size:18px;margin-bottom:6px">${icon}</div>
-      <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--t1);line-height:1">${value}</div>
-      <div style="font-size:12px;color:var(--t3);margin-top:4px">${label}</div>
-      ${sub?`<div style="font-size:11px;color:var(--t2);margin-top:3px">${sub}</div>`:''}
-    </div>`;
-
-  const section = (title, content) => `
-    <div style="margin-bottom:20px">
-      <div style="font-family:var(--mono);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3);padding:6px 0 8px;border-bottom:1px solid var(--line);margin-bottom:10px">${title}</div>
-      ${content}
-    </div>`;
-
-  const emptyRow = msg => `<div style="color:var(--t3);font-size:12px;padding:8px 4px">${msg}</div>`;
-
-  // ── Inventory low-stock ──
   const invCritical = invItems.filter(i => i.min_qty > 0 && i.stock_qty < i.min_qty);
   const invWarn     = invItems.filter(i => i.min_qty > 0 && i.stock_qty === i.min_qty);
   const invLow      = [...invCritical, ...invWarn];
+  const activeDeliveries = d.recentDeliveries.filter(x => x.status !== 'DELIVERED');
 
-  // ── KPIs ──
-  const invKpiSub = invCritical.length ? `<span style="color:var(--red)">${invCritical.length} kritisch</span>` + (invWarn.length ? ` · <span style="color:var(--amber)">${invWarn.length} Warnung</span>` : '') : invWarn.length ? `<span style="color:var(--amber)">${invWarn.length} auf Minimum</span>` : 'alles ok';
-  const kpiHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:22px">
-    ${kpi('📋', d.openOrders.length, 'Offene Aufträge', d.openOrders.filter(o=>o.status==='CONFIRMED').length + ' bestätigt', "gotoView('orders')")}
-    ${kpi('📄', d.openQuotes.length, 'Offene Angebote', d.openQuotes.filter(q=>q.status==='SENT').length + ' versendet', "gotoView('quotes')")}
-    ${kpi('⏳', d.inReview.length, 'Warten auf Freigabe', 'REV-Status', '')}
-    ${kpi('🚚', d.recentDeliveries.filter(x=>x.status!=='DELIVERED').length, 'Aktive Lieferungen', '', "gotoView('deliveries')")}
-    ${kpi('💶', 'CHF ' + (d.revenueMonth||0).toFixed(0), 'Umsatz diesen Monat', 'CHF ' + (d.revenueTotal||0).toFixed(0) + ' gesamt', '')}
-    ${kpi('📂', s.projects, 'Projekte', s.assemblies + ' asm · ' + s.parts + ' prt', "gotoView('projects')")}
-    ${kpi('📦', invLow.length || '✓', 'Lager-Warnungen', invKpiSub, "gotoView('inventory')")}
-  </div>`;
+  // ── KPI tiles ──
+  const kpiTile = (label, value, sub, accent, click) => `
+    <div onclick="${click||''}" style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:${click?'pointer':'default'};transition:border-color .15s" onmouseover="this.style.borderColor='var(--line3)'" onmouseout="this.style.borderColor='var(--line)'">
+      <div style="font-size:11px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
+        <span style="width:6px;height:6px;border-radius:50%;background:${accent};flex-shrink:0;display:inline-block"></span>
+        ${label}
+      </div>
+      <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--t1);line-height:1;letter-spacing:-0.02em">${value}</div>
+      ${sub ? `<div style="font-size:11px;color:var(--t3);margin-top:6px">${sub}</div>` : ''}
+    </div>`;
 
-  // ── Offene Aufträge ──
-  const ordersHtml = d.openOrders.length ? d.openOrders.map(o => `
-    <div onclick="gotoView('orders')" style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;padding:10px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:6px;margin-bottom:6px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--line2)'" onmouseout="this.style.borderColor='var(--line)'">
-      <span class="status ${ostCls[o.status]||'st-DFT'}" style="margin-top:1px">${ostLabel[o.status]||o.status}</span>
-      <div>
-        <div style="font-weight:500;font-size:13px">${esc(o.title)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">
-          ${o.number} · ${esc(o.customer_name||'Kein Kunde')}
-          ${o.delivery_date?` · 📅 ${o.delivery_date.slice(0,10)}`:''}
+  const confirmedOrders = d.openOrders.filter(o => o.status === 'CONFIRMED').length;
+  const sentQuotes = d.openQuotes.filter(q => q.status === 'SENT').length;
+  const invAlert = invCritical.length
+    ? `<span style="color:var(--red)">${invCritical.length} kritisch</span>${invWarn.length ? ` · <span style="color:var(--amber)">${invWarn.length} Warnung</span>` : ''}`
+    : invWarn.length ? `<span style="color:var(--amber)">${invWarn.length} auf Min.</span>` : '<span style="color:var(--green)">alles ok</span>';
+
+  // Revenue tile wider than others
+  const kpiHtml = `
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:24px">
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
+          Umsatz
         </div>
+        <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--t1);line-height:1;letter-spacing:-0.02em">${fmtCHF(d.revenueMonth||0)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:6px">diesen Monat · <span style="color:var(--t2)">${fmtCHF(d.revenueTotal||0)} gesamt</span></div>
+      </div>
+      ${kpiTile('Aufträge', d.openOrders.length, confirmedOrders + ' bestätigt', 'var(--blue)', "gotoView('orders')")}
+      ${kpiTile('Angebote', d.openQuotes.length, sentQuotes + ' versendet', 'var(--teal)', "gotoView('quotes')")}
+      ${kpiTile('Lieferungen', activeDeliveries.length, 'aktiv offen', 'var(--amber)', "gotoView('deliveries')")}
+      ${kpiTile('Freigabe', d.inReview.length, 'warten auf REV', 'var(--purple)', '')}
+      ${kpiTile('Lager', invLow.length || '—', invAlert, invCritical.length ? 'var(--red)' : invWarn.length ? 'var(--amber)' : 'var(--green)', "gotoView('inventory')")}
+    </div>`;
+
+  // ── Section header ──
+  const sh = label => `<div style="font-family:var(--mono);font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--t4);font-weight:500;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:8px">${label}</div>`;
+  const emptyRow = msg => `<div style="color:var(--t3);font-size:12px;padding:10px 0">${msg}</div>`;
+
+  // ── Aufträge ──
+  const ordersHtml = d.openOrders.length ? d.openOrders.map(o => `
+    <div onclick="gotoView('orders')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <span class="status ${ostCls[o.status]||'st-DFT'}" style="flex-shrink:0">${ostLabel[o.status]||o.status}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.title)}</div>
+        <div style="font-size:10.5px;color:var(--t3);margin-top:1px">${o.number} · ${esc(o.customer_name||'—')}${o.delivery_date?' · '+o.delivery_date.slice(0,10):''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:12px;color:var(--t1)">${fmtChfD(o.total)}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:2px">${o.item_count} Pos.</div>
+        <div style="font-family:var(--mono);font-size:11.5px;color:var(--t1)">${fmtCHF(o.total||0)}</div>
+        <div style="font-size:10px;color:var(--t4);margin-top:1px">${o.item_count} Pos.</div>
       </div>
     </div>`).join('') : emptyRow('Keine offenen Aufträge');
 
-  // ── Offene Angebote ──
+  // ── Angebote ──
   const quotesHtml = d.openQuotes.length ? d.openQuotes.map(q => `
-    <div onclick="gotoView('quotes')" style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;padding:10px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:6px;margin-bottom:6px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--line2)'" onmouseout="this.style.borderColor='var(--line)'">
-      <span class="status ${qstCls[q.status]||'st-DFT'}" style="margin-top:1px">${qstLabel[q.status]||q.status}</span>
-      <div>
-        <div style="font-weight:500;font-size:13px">${esc(q.title)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">
-          ${q.number} · ${esc(q.customer_name||'Kein Kunde')}
-          ${q.valid_until?` · gültig bis ${q.valid_until.slice(0,10)}`:''}
-        </div>
+    <div onclick="gotoView('quotes')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <span class="status ${qstCls[q.status]||'st-DFT'}" style="flex-shrink:0">${qstLabel[q.status]||q.status}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
+        <div style="font-size:10.5px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}${q.valid_until?' · bis '+q.valid_until.slice(0,10):''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:12px;color:var(--t1)">${fmtChfD(q.total)}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:2px">${q.item_count} Pos.</div>
+        <div style="font-family:var(--mono);font-size:11.5px;color:var(--t1)">${fmtCHF(q.total||0)}</div>
+        <div style="font-size:10px;color:var(--t4);margin-top:1px">${q.item_count} Pos.</div>
       </div>
     </div>`).join('') : emptyRow('Keine offenen Angebote');
 
-  // ── Freigabe-Pipeline ──
+  // ── Freigabe ──
   const reviewHtml = d.inReview.length ? d.inReview.map(r => `
-    <div onclick="openProject(${r.project_id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1px solid rgba(245,166,35,.25);border-radius:6px;margin-bottom:6px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--amber)'" onmouseout="this.style.borderColor='rgba(245,166,35,.25)'">
-      <span style="font-size:15px">${itemIcon(r.item_type)}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-family:var(--mono);font-size:10px;color:var(--blue)">${r.item_number}</div>
-        <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:1px">${esc(r.project_number)} ${esc(r.project_name)}</div>
+    <div onclick="gotoPlmItem(${r.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="width:22px;height:22px;border-radius:var(--r-xs);background:var(--amber-soft);display:grid;place-items:center;flex-shrink:0">
+        <span style="font-size:11px">${itemIcon(r.item_type)}</span>
       </div>
-      <span class="status st-REV">rev${r.rev} · REV</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:1px;font-family:var(--mono)">${r.item_number} · ${esc(r.project_number)}</div>
+      </div>
+      <span class="status st-REV">rev${r.rev}</span>
     </div>`).join('') : emptyRow('Keine Items in Prüfung');
 
-  // ── Produktion (aktive Lieferschein-Items mit PLM-Link) ──
+  // ── Produktion ──
   const grouped = {};
   d.inProduction.forEach(x => {
     if (!grouped[x.delivery_id]) grouped[x.delivery_id] = { number: x.delivery_number, status: x.delivery_status, customer: x.customer_name, items: [] };
     grouped[x.delivery_id].items.push(x);
   });
   const prodHtml = Object.values(grouped).length ? Object.values(grouped).map(g => `
-    <div style="background:var(--bg2);border:1px solid var(--line);border-radius:6px;margin-bottom:8px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-bottom:1px solid var(--line)">
+    <div style="border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:6px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3)">
         <span class="status ${dstCls[g.status]||'st-DFT'}">${dstLabel[g.status]||g.status}</span>
-        <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${g.number}</span>
-        <span style="font-size:12px;color:var(--t2);flex:1">${esc(g.customer||'—')}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${g.number}</span>
+        <span style="font-size:11px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.customer||'—')}</span>
       </div>
       ${g.items.map(x => `
-        <div onclick="openProject(${x.project_id})" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-          <span style="font-size:13px">${itemIcon(x.item_type)}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-family:var(--mono);font-size:10px;color:var(--blue)">${x.item_number||'—'}</div>
-            <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.description)}</div>
-          </div>
-          <span style="font-size:11px;color:var(--t3);flex-shrink:0">${x.quantity} ${x.unit}</span>
+        <div onclick="openProject(${x.project_id})" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${x.item_number||'—'}</span>
+          <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(x.description)}</span>
+          <span style="font-size:11px;color:var(--t3);flex-shrink:0;font-family:var(--mono)">${x.quantity} ${x.unit}</span>
         </div>`).join('')}
-    </div>`).join('') : emptyRow('Keine aktive Produktion mit PLM-Verknüpfung');
+    </div>`).join('') : emptyRow('Keine aktive Produktion');
 
-  // ── Status-Verteilung ──
+  // ── PLM Status-Verteilung ──
   const total = s.assemblies + s.parts || 1;
-  const statusHtml = s.by_status.map(st => `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span class="status st-${st.status}" style="width:36px;text-align:center">${st.status}</span>
-      <div style="flex:1;height:4px;background:var(--line2);border-radius:2px">
-        <div style="width:${Math.round(st.count/total*100)}%;height:100%;background:${stColors[st.status]||'var(--t3)'};border-radius:2px"></div>
-      </div>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--t2);width:24px;text-align:right">${st.count}</span>
-    </div>`).join('');
+  const statusHtml = `
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${s.by_status.map(st => `
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="status st-${st.status}" style="width:34px;justify-content:center">${st.status}</span>
+          <div style="flex:1;height:3px;background:var(--line);border-radius:2px;overflow:hidden">
+            <div style="width:${Math.round(st.count/total*100)}%;height:100%;background:${stColors[st.status]||'var(--t3)'};border-radius:2px"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--t2);width:22px;text-align:right">${st.count}</span>
+        </div>`).join('')}
+      <div style="font-size:10px;color:var(--t3);margin-top:4px;text-align:right">${s.assemblies} Baugruppen · ${s.parts} Parts · ${s.projects} Projekte</div>
+    </div>`;
 
   // ── Lager-Warnungen ──
   const invLowHtml = invLow.length ? invLow.map(i => {
     const isCritical = i.stock_qty < i.min_qty;
-    const color = isCritical ? 'var(--red)' : 'var(--amber)';
-    const borderColor = isCritical ? 'rgba(241,120,120,.3)' : 'rgba(239,177,74,.3)';
-    return `<div onclick="gotoView('inventory');openInventoryDetail(${i.id})" style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid ${borderColor};border-radius:6px;margin-bottom:6px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${color}'" onmouseout="this.style.borderColor='${borderColor}'">
-      <div>
-        <div style="font-size:12px;font-weight:500">${esc(i.name)}${i.color?` <span style="color:var(--t3);font-weight:400">${esc(i.color)}</span>`:''}${i.material?` <span style="color:var(--t3);font-weight:400">${esc(i.material)}</span>`:''}</div>
+    const col = isCritical ? 'var(--red)' : 'var(--amber)';
+    return `<div onclick="gotoView('inventory');openInventoryDetail(${i.id})" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.name)}${i.color?` <span style="color:var(--t3);font-weight:400;font-size:11px">${esc(i.color)}</span>`:''}${i.material?` <span style="color:var(--t3);font-weight:400;font-size:11px">${esc(i.material)}</span>`:''}</div>
         <div style="font-size:10px;color:var(--t3);margin-top:1px">${esc(i.category)}</div>
       </div>
-      <div style="text-align:right;font-family:var(--mono);font-size:11px;color:${color};font-weight:600">${fmtN(i.stock_qty,2)} ${i.unit}</div>
-      <div style="text-align:right;font-family:var(--mono);font-size:10px;color:var(--t3)">Min: ${fmtN(i.min_qty,2)}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:var(--mono);font-size:12px;color:${col};font-weight:600">${fmtN(i.stock_qty,1)} <span style="font-size:10px;font-weight:400">${i.unit}</span></div>
+        <div style="font-size:10px;color:var(--t4);margin-top:1px">Min ${fmtN(i.min_qty,1)}</div>
+      </div>
     </div>`;
-  }).join('') : emptyRow('Alle Artikel über Mindestbestand ✓');
+  }).join('') : `<div style="display:flex;align-items:center;gap:8px;padding:10px;color:var(--green);font-size:12px">
+    <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
+    Alle Artikel über Mindestbestand
+  </div>`;
 
-  setLeftBody(`<div style="max-width:900px">
+  setLeftBody(`<div style="max-width:1100px;padding-bottom:24px">
+
     ${kpiHtml}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+      <!-- Spalte 1 -->
       <div>
-        ${section('📋 Offene Aufträge', ordersHtml)}
-        ${section('⏳ Warten auf Freigabe (REV)', reviewHtml)}
-        ${section('📊 PLM Status-Verteilung', statusHtml)}
+        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+          <div style="padding:12px 14px 8px">${sh('Offene Aufträge')}</div>
+          <div style="padding:0 4px 8px">${ordersHtml}</div>
+        </div>
+        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
+          <div style="padding:12px 14px 8px">${sh('Offene Angebote')}</div>
+          <div style="padding:0 4px 8px">${quotesHtml}</div>
+        </div>
       </div>
+
+      <!-- Spalte 2 -->
       <div>
-        ${section('📄 Offene Angebote', quotesHtml)}
-        ${section('📦 Lager – unter/auf Mindestbestand', invLowHtml)}
-        ${section('🏭 Aktive Produktion', prodHtml)}
+        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+          <div style="padding:12px 14px 8px">${sh('Lager — Warnungen')}</div>
+          <div style="padding:0 4px 8px">${invLowHtml}</div>
+        </div>
+        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
+          <div style="padding:12px 14px 8px">${sh('Aktive Produktion')}</div>
+          <div style="padding:8px 10px">${prodHtml}</div>
+        </div>
       </div>
+
+      <!-- Spalte 3 -->
+      <div>
+        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+          <div style="padding:12px 14px 8px">${sh('Freigabe-Pipeline')}</div>
+          <div style="padding:0 4px 8px">${reviewHtml}</div>
+        </div>
+        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
+          <div style="padding:12px 14px 8px">${sh('PLM Status')}</div>
+          <div style="padding:8px 14px 14px">${statusHtml}</div>
+        </div>
+      </div>
+
     </div>
   </div>`);
 }
