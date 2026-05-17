@@ -1725,8 +1725,20 @@ app.put('/api/deliveries/:id', (req, res) => {
   const { title, order_id, customer_id, customer_name_free, status, delivery_date, manufacture_date, notes } = req.body;
   run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,manufacture_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
     [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, manufacture_date||null, notes||'', req.params.id]);
+  if (status === 'DELIVERED') autoDeliverOrder(req.params.id);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [req.params.id]));
 });
+
+function autoDeliverOrder(deliveryId) {
+  const d = get('SELECT order_id FROM deliveries WHERE id=?', [deliveryId]);
+  if (!d?.order_id) return;
+  const order = get('SELECT status FROM orders WHERE id=?', [d.order_id]);
+  if (!order || order.status === 'DELIVERED' || order.status === 'INVOICED' || order.status === 'CANCELLED') return;
+  const counts = get(`SELECT COUNT(*) as total, SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END) as done FROM deliveries WHERE order_id=?`, [d.order_id]);
+  if (counts.total > 0 && counts.total === counts.done) {
+    run(`UPDATE orders SET status='DELIVERED', delivery_date=COALESCE(delivery_date,date('now')), updated_at=datetime('now') WHERE id=?`, [d.order_id]);
+  }
+}
 
 app.put('/api/deliveries/:id/status', (req, res) => {
   const { status } = req.body;
@@ -1735,10 +1747,12 @@ app.put('/api/deliveries/:id/status', (req, res) => {
     if (!existing?.delivery_date) {
       const today = new Date().toISOString().slice(0, 10);
       run(`UPDATE deliveries SET status=?,delivery_date=?,updated_at=datetime('now') WHERE id=?`, [status, today, req.params.id]);
+      autoDeliverOrder(req.params.id);
       return res.json({ success: true, delivery_date: today });
     }
   }
   run(`UPDATE deliveries SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
+  if (status === 'DELIVERED') autoDeliverOrder(req.params.id);
   res.json({ success: true });
 });
 
