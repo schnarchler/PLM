@@ -56,6 +56,15 @@ function fmtN(v, dec = 2) {
 function rnd5(v) { return Math.floor((parseFloat(v) || 0) * 20) / 20; }
 function fmtCHF(v) { return 'CHF ' + fmtN(rnd5(v)); }
 
+// ── ITEM TYPE ICONS ───────────────────────────────────────────
+const _SVG_ASM = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`;
+const _SVG_PRT = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><circle cx="12" cy="12" r="3"/></svg>`;
+const _SVG_DOC = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>`;
+function _itemSvg(t)   { return t==="asm" ? _SVG_ASM : t==="doc" ? _SVG_DOC : _SVG_PRT; }
+function _itemColor(t) { return t==="asm" ? "var(--blue)" : t==="doc" ? "var(--purple)" : "var(--teal)"; }
+function _itemBg(t)    { return t==="asm" ? "rgba(142,163,255,.12)" : t==="doc" ? "rgba(180,140,255,.12)" : "rgba(106,208,214,.12)"; }
+function _itemChip(t, sz=20) { return `<span style="width:${sz}px;height:${sz}px;border-radius:4px;background:${_itemBg(t)};color:${_itemColor(t)};display:inline-grid;place-items:center;flex-shrink:0">${_itemSvg(t)}</span>`; }
+
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
@@ -101,21 +110,28 @@ async function renderProjectsList() {
     setLeftBody(`<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">Noch keine Projekte</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openModal('projectModal')">Erstes Projekt anlegen</button></div></div>`);
     return;
   }
-  setLeftBody(`<div class="card-grid">${projects.map(p => `
-    <div class="card" onclick="openProject(${p.id})">
-      <div class="card-accent"></div>
-      <div class="card-num">${p.number}</div>
-      <div class="card-name">${esc(p.name)}</div>
-      <div class="card-meta">
-        ${p.customer ? `<span>👤 ${esc(p.customer)}</span>` : ''}
-        ${p.asm_count ? `<span>📦 ${p.asm_count} asm</span>` : ''}
-        ${p.prt_count ? `<span>🔩 ${p.prt_count} prt</span>` : ''}
-        ${p.doc_count ? `<span>📄 ${p.doc_count} doc</span>` : ''}
-        ${p.file_count ? `<span>📁 ${p.file_count} Dateien</span>` : '<span style="color:var(--t3)">0 Dateien</span>'}
+  const statChip = (val, label, color) => val
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:${color}"><span style="font-family:var(--mono);font-weight:600">${val}</span><span style="color:var(--t4)">${label}</span></span>`
+    : '';
+  setLeftBody(`<div style="display:flex;flex-direction:column;gap:6px;max-width:860px">${projects.map(p => `
+    <div onclick="openProject(${p.id})" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s" onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'">
+      <div style="width:38px;height:38px;border-radius:var(--r-sm);background:rgba(142,163,255,.1);border:1px solid rgba(142,163,255,.2);display:grid;place-items:center;flex-shrink:0">
+        <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue)">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
       </div>
-      <div class="card-foot">
-        <span style="font-size:11px;color:var(--t3)">${fmtDate(p.created_at)}</span>
-        <span style="font-size:11px;color:var(--t3)">→</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em">${esc(p.name)}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${p.number}</span>
+          ${p.customer ? `<span style="color:var(--t3)">${esc(p.customer)}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        ${statChip(p.asm_count, 'asm', 'var(--blue)')}
+        ${statChip(p.prt_count, 'prt', 'var(--teal)')}
+        ${statChip(p.doc_count, 'doc', 'var(--purple)')}
+        ${p.file_count ? `<span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}
+        <span style="font-size:10px;color:var(--t4);white-space:nowrap">${new Date(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span>
+        <span style="color:var(--t4);font-size:12px">›</span>
       </div>
     </div>`).join('')}</div>`);
 }
@@ -129,10 +145,10 @@ async function openProject(id) {
   document.getElementById('ni-projects').classList.add('active');
 
   setLeftHeader(
-    `<div class="breadcrumb"><span onclick="gotoView('projects')">Projekte</span><span class="sep">/</span><strong style="color:var(--t1)">${esc(p.name)}</strong><span class="chip" style="margin-left:4px">${p.number}</span></div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id}, null, 'asm')">+ Baugruppe</button>
-     <button class="btn btn-primary btn-sm" style="margin-left:4px" onclick="openItemModal(${p.id}, null, 'prt')">+ Part</button>
-     <button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="openItemModal(${p.id}, null, 'doc')">+ Dokument</button>`
+    `<div class="breadcrumb"><span onclick="gotoView('projects')">Projekte</span><span class="sep">/</span><strong>${esc(p.name)}</strong><span class="chip" style="margin-left:6px">${p.number}</span></div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'asm')">+ Baugruppe</button>
+     <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'prt')">+ Part</button>
+     <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'doc')">+ Dok</button>`
   );
 
   renderProjectTree(p);
@@ -177,15 +193,11 @@ function renderProjectTree(p) {
   const visibleRoots = filterOn ? rootItems.filter(i => !bomChildIds.has(i.id)) : rootItems;
   const hiddenCount = rootItems.length - visibleRoots.length;
 
-  const filterBtnStyle = filterOn
-    ? 'background:rgba(74,158,255,.18);color:var(--blue);border:1px solid rgba(74,158,255,.4)'
-    : 'background:var(--bg3);color:var(--t3);border:1px solid var(--line)';
-
   setLeftBody(`
-    <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--t3)">🧩 ${items.length} Items</span>
-      <button onclick="toggleBomFilter()" style="font-size:11px;padding:3px 9px;border-radius:var(--r);cursor:pointer;${filterBtnStyle}">
-        ${filterOn ? '● ' : '○ '}BOM-Kinder ausblenden${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">
+      <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${items.length} Items</span>
+      <button onclick="toggleBomFilter()" style="font-size:11px;padding:3px 9px;border-radius:var(--r-xs);cursor:pointer;font-family:var(--sans);border:1px solid ${filterOn?'rgba(142,163,255,.35)':'var(--line2)'};background:${filterOn?'rgba(142,163,255,.1)':'transparent'};color:${filterOn?'var(--blue)':'var(--t3)'}">
+        BOM-Kinder ${filterOn?'ausgeblendet':'sichtbar'}${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
       </button>
     </div>
     <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>`);
@@ -219,8 +231,9 @@ function _renderRootNodes(children, map, isRoot) {
 
 function _renderTreeNode(item, map, isRoot) {
   const rev = item.latest_revision;
-  const icon = item.item_type === 'asm' ? '📦' : item.item_type === 'doc' ? '📄' : '🔩';
-  const bomKids = (item.item_type === 'asm' && rev && rev.bom) ? rev.bom : [];
+  const isASM = item.item_type === 'asm';
+  const isDOC = item.item_type === 'doc';
+  const bomKids = (isASM && rev?.bom) ? rev.bom : [];
   const hasKids = bomKids.length > 0;
   const n = _nim(); const nid = `tn${n}`, tid = `tt${n}`;
   const childHtml = hasKids ? bomKids.map(b => {
@@ -229,11 +242,11 @@ function _renderTreeNode(item, map, isRoot) {
   }).join('') : '';
   return `<div class="tree-node">
     <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}>
-      <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')">${hasKids ? '▶' : ''}</span>
-      <span class="tree-icon">${icon}</span>
-      <span class="tree-num">${item.item_number}</span>
+      <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
+      ${_itemChip(item.item_type, 20)}
+      <span class="tree-num" style="font-size:10px">${item.item_number}</span>
       <span class="tree-name">${esc(item.name)}</span>
-      ${rev ? `<span class="status st-${rev.status} tree-rev">rev${rev.rev} · ${rev.status}</span>` : ''}
+      ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:9px">rev${rev.rev}</span>` : ''}
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" style="display:none">${childHtml}</div>` : ''}
   </div>`;
@@ -248,12 +261,14 @@ function togN(nid, tid) {
 }
 
 function openProjectDetail(p) {
-  document.getElementById('dp-title').innerHTML = `<strong>${p.number}</strong>&nbsp;${esc(p.name)}`;
+  const docCount = (p.documents||[]).length;
+  document.getElementById('dp-title').innerHTML =
+    `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-right:6px">${p.number}</span><strong>${esc(p.name)}</strong>`;
   document.getElementById('dp-tabs').innerHTML = `
-    <button class="tab active" onclick="switchTab(this,'pt-files')">Dateien / BOM</button>
-    <button class="tab" onclick="switchTab(this,'pt-docs')">Dokumente ${(p.documents||[]).length?`<span style="background:var(--blue);color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;margin-left:3px">${p.documents.length}</span>`:''}</button>
+    <button class="tab active" onclick="switchTab(this,'pt-files')">Struktur</button>
+    <button class="tab" onclick="switchTab(this,'pt-docs')">Dokumente${docCount?` <span style="background:var(--blue);color:var(--bg0);border-radius:8px;font-size:9px;font-family:var(--mono);padding:1px 5px;margin-left:3px">${docCount}</span>`:''}</button>
     <button class="tab" onclick="switchTab(this,'pt-info')">Info</button>
-    <button class="tab" onclick="switchTab(this,'pt-log')">Changelog</button>`;
+    <button class="tab" onclick="switchTab(this,'pt-log')">Log</button>`;
 
   // Build files/BOM overview using BOM-based hierarchy
   _nc = 0;
@@ -261,64 +276,83 @@ function openProjectDetail(p) {
   const dpMap = {};
   allItems.forEach(i => dpMap[i.id] = i);
 
-  function renderItemFiles(item, isRoot) {
+  function renderItemFiles(item, depth) {
     const rev = item.latest_revision;
-    const datasets = rev && rev.datasets ? rev.datasets : [];
-    const icon = item.item_type === 'asm' ? '📦' : item.item_type === 'doc' ? '📄' : '🔩';
-    const bomKids = (item.item_type === 'asm' && rev && rev.bom) ? rev.bom : [];
+    const datasets = rev?.datasets || [];
+    const isASM = item.item_type === 'asm', isDOC = item.item_type === 'doc';
+
+    const bomKids = (isASM && rev?.bom) ? rev.bom : [];
     const hasKids = bomKids.length > 0;
-    const n = _nim(); const nid = `dp${n}`, tid = `dt${n}`;
+    const n = _nim(); const nid = `dp${n}`;
     const childHtml = hasKids ? bomKids.map(b => {
       const ci = dpMap[b.child_item_id];
       if (!ci) return '';
-      const qty = (b.quantity && b.quantity !== 1) ? `<div style="padding:0 6px 4px 32px;font-size:10px;color:var(--t3)">Menge: ${b.quantity} ${b.unit||'Stk'}</div>` : '';
-      return renderItemFiles(ci, false) + qty;
+      const qtyBadge = (b.quantity && b.quantity !== 1) ? ` <span style="font-family:var(--mono);font-size:9px;color:var(--t4);background:var(--bg3);padding:1px 5px;border-radius:3px">×${b.quantity}</span>` : '';
+      return renderItemFiles(ci, depth + 1) + (qtyBadge ? `<div style="padding:0 0 2px ${28 + depth*16}px">${qtyBadge}</div>` : '');
     }).join('') : '';
-    return `<div style="margin-bottom:4px">
-      <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--bg3);border-radius:var(--r)">
-        <span class="tree-tog" onclick="togN('${nid}','${tid}')">${hasKids ? '▶' : ''}</span>
-        <span style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px;min-width:0" onclick="openItemDetail(${item.id})">
-          <span>${icon}</span>
-          <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
-          <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
-        </span>
-        ${rev ? `<span class="status st-${rev.status}" style="flex-shrink:0">rev${rev.rev}</span>` : ''}
+    return `<div>
+      <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s" onclick="openItemDetail(${item.id})" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        ${hasKids ? `<span onclick="event.stopPropagation();const e=document.getElementById('${nid}');const open=e.style.display!=='none';e.style.display=open?'none':'';this.style.transform=open?'':'rotate(90deg)'" style="color:var(--t4);font-size:9px;transition:transform .15s;flex-shrink:0;cursor:pointer">▶</span>` : '<span style="width:11px;flex-shrink:0"></span>'}
+        ${_itemChip(item.item_type, 18)}
+        <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
+        <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1)">${esc(item.name)}</span>
+        ${rev ? `<span class="status st-${rev.status}" style="font-size:9px;flex-shrink:0">rev${rev.rev}</span>` : ''}
       </div>
-      ${datasets.length ? `<div style="padding:3px 6px 3px 32px">
-        ${datasets.map(d => `<div class="ds-row" style="margin-bottom:3px">
-          <span class="ds-type ${dtClass(d.original_name,d.ds_type)}">${fileLabel(d.original_name,d.ds_type)}</span>
-          <div class="ds-info"><div class="ds-name">${esc(d.original_name)}</div></div>
-          <a href="/api/datasets/${d.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" title="Öffnen">&#x2197;</a>
-          <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
+      ${datasets.length ? `<div style="padding:2px 6px 4px ${28 + depth*16}px;display:flex;flex-direction:column;gap:2px">
+        ${datasets.map(d => `<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--bg2);border-radius:3px">
+          <span class="ds-type ${dtClass(d.original_name,d.ds_type)}" style="font-size:8.5px">${fileLabel(d.original_name,d.ds_type)}</span>
+          <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(d.original_name)}</span>
+          <a href="/api/datasets/${d.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" style="padding:3px" title="Öffnen">↗</a>
+          <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" style="padding:3px" title="Download" download>↓</a>
         </div>`).join('')}
       </div>` : ''}
-      ${hasKids ? `<div id="${nid}" class="tree-children" style="display:none">${childHtml}</div>` : ''}
+      ${hasKids ? `<div id="${nid}" style="padding-left:${14+depth*4}px;border-left:1px solid var(--line);margin-left:${14+depth*4}px">${childHtml}</div>` : ''}
     </div>`;
   }
 
   const roots = allItems.filter(i => !i.parent_id);
   const filesHtml = roots.length
-    ? roots.map(i => renderItemFiles(i, true)).join('')
-    : '<div style="color:var(--t3);font-size:12px;padding:8px">Keine Items im Projekt</div>';
+    ? roots.map(i => renderItemFiles(i, 0)).join('')
+    : '<div style="color:var(--t3);font-size:12px;padding:8px 0">Keine Items im Projekt</div>';
+
+  const asmCount = allItems.filter(i=>i.item_type==='asm').length;
+  const prtCount = allItems.filter(i=>i.item_type==='prt').length;
+  const docCount2 = allItems.filter(i=>i.item_type==='doc').length;
 
   document.getElementById('dp-body').innerHTML = `
     <div id="pt-files">
-      <div style="font-size:11px;color:var(--t3);margin-bottom:8px">Klick auf Item öffnet Detail-Ansicht · ↓ lädt Datei</div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)">
+        ${asmCount?`<span style="font-size:11px;color:var(--blue);font-family:var(--mono)">${asmCount} <span style="color:var(--t4);font-family:var(--sans)">asm</span></span>`:''}
+        ${prtCount?`<span style="font-size:11px;color:var(--teal);font-family:var(--mono)">${prtCount} <span style="color:var(--t4);font-family:var(--sans)">prt</span></span>`:''}
+        ${docCount2?`<span style="font-size:11px;color:var(--purple);font-family:var(--mono)">${docCount2} <span style="color:var(--t4);font-family:var(--sans)">doc</span></span>`:''}
+      </div>
       ${filesHtml}
     </div>
     <div id="pt-docs" style="display:none">
       ${renderProjectDocs(p)}
     </div>
     <div id="pt-info" style="display:none">
-      <div class="sep-label">Stammdaten</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><div class="ps-label">Nummer</div><div class="ps-val" style="font-family:var(--mono);color:var(--blue)">${p.number}</div></div>
-        <div><div class="ps-label">Kunde</div><div class="ps-val">${p.customer||'—'}</div></div>
-        <div style="grid-column:span 2"><div class="ps-label">Beschreibung</div><div class="ps-val" style="font-size:12px;color:var(--t2);white-space:pre-wrap">${p.description||'—'}</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
+          <div class="ps-label">Nummer</div>
+          <div style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-top:3px">${p.number}</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
+          <div class="ps-label">Kunde</div>
+          <div style="font-size:13px;color:var(--t1);margin-top:3px">${p.customer||'—'}</div>
+        </div>
+        ${p.description?`<div style="grid-column:span 2;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
+          <div class="ps-label">Beschreibung</div>
+          <div style="font-size:12px;color:var(--t2);margin-top:4px;white-space:pre-wrap;line-height:1.6">${esc(p.description)}</div>
+        </div>`:''}
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
+          <div class="ps-label">Angelegt</div>
+          <div style="font-size:12px;color:var(--t2);margin-top:3px">${fmtDate(p.created_at)}</div>
+        </div>
       </div>
-      <div style="margin-top:14px;display:flex;gap:6px">
-        <button class="btn btn-ghost btn-sm" onclick="editProject(${p.id})">✏️ Bearbeiten</button>
-        <button class="btn btn-red btn-sm" onclick="deleteProject(${p.id})">🗑 Löschen</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="editProject(${p.id})">Bearbeiten</button>
+        <button class="btn btn-red btn-sm" onclick="deleteProject(${p.id})">Löschen</button>
       </div>
     </div>
     <div id="pt-log" style="display:none">
@@ -422,11 +456,16 @@ function itemIsEditable(item) {
 function renderItemDetail(item, activeRevId) {
   const isASM = item.item_type === 'asm';
   const isDOC = item.item_type === 'doc';
-  const icon = isASM ? '📦' : isDOC ? '📄' : '🔩';
+  const typeLabel = isASM ? 'ASM' : isDOC ? 'DOC' : 'PRT';
+  const typeColor = isASM ? 'var(--blue)' : isDOC ? 'var(--purple)' : 'var(--teal)';
+  const typeBg    = isASM ? 'rgba(142,163,255,.12)' : isDOC ? 'rgba(180,140,255,.12)' : 'rgba(106,208,214,.12)';
   const editable = itemIsEditable(item);
-  const editBtn = editable ? ` <button class="btn btn-ghost btn-sm" style="margin-left:8px;font-size:10px;padding:3px 8px" onclick="openEditItemModal(${item.id})">Umbenennen</button>` : '';
-  const moveBtn = ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="openMoveItemModal(${item.id})">&#x21AA; Verschieben</button>`;
-  document.getElementById('dp-title').innerHTML = `${icon} <strong>${item.item_number}</strong> <span style="color:var(--t2)">${esc(item.name)}</span>${editBtn}${moveBtn}`;
+  document.getElementById('dp-title').innerHTML =
+    `<span style="font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
+    + `<span style="font-family:var(--mono);font-size:11px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
+    + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(item.name)}</strong>`
+    + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
@@ -446,49 +485,36 @@ function renderItemDetail(item, activeRevId) {
           : null;
         const allPriced = item.item_type === 'asm' && bom.length && bom.every(b => b.default_price != null);
         const bomHint = bomTotal != null && bomTotal > 0
-          ? `<span style="font-size:11px;color:var(--t3);display:flex;align-items:center;gap:5px">
-              BOM-Preis:
-              <strong style="color:var(--teal);font-family:var(--mono)">${fmtChf(bomTotal)}</strong>
-              ${!allPriced ? '<span title="Nicht alle Teile haben einen VP"style="color:var(--amber)">⚠ unvollständig</span>' : ''}
-              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:10px"
-                onclick="document.getElementById(\'item-price-field\').value=${bomTotal.toFixed(2)};document.getElementById(\'item-price-field\').dispatchEvent(new Event(\'blur\'))">
-                übernehmen
-              </button>
+          ? `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t3)">
+              BOM: <strong style="color:var(--teal);font-family:var(--mono)">${fmtChf(bomTotal)}</strong>
+              ${!allPriced ? '<span style="color:var(--amber);font-size:10px">⚠ unvollständig</span>' : ''}
+              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:10px" onclick="document.getElementById(\'item-price-field\').value=${bomTotal.toFixed(2)};document.getElementById(\'item-price-field\').dispatchEvent(new Event(\'blur\'))">übernehmen</button>
              </span>`
-          : (item.item_type === 'asm' && bom.length ? `<span style="font-size:11px;color:var(--t3)">BOM-Preis: <span style="color:var(--amber)">⚠ keine Preise hinterlegt</span></span>` : '');
-        return `<div style="margin-bottom:10px;font-size:12px;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-          ${item.source_url ? `<span>Quelle: <a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a></span>` : ''}
-          <span style="display:flex;align-items:center;gap:6px">
-            <span>Verkaufspreis:</span>
+          : (item.item_type === 'asm' && bom.length ? `<span style="font-size:11px;color:var(--amber)">BOM: ⚠ keine Preise</span>` : '');
+        return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 10px;background:var(--bg2);border-radius:var(--r-sm);margin-bottom:10px">
+          <span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t3)">
+            VP:
             <input id="item-price-field" type="number" step="0.01" min="0" placeholder="—"
               value="${item.default_price != null ? item.default_price : ''}"
-              style="width:90px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:3px 7px;font-size:12px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
-              class="no-spin"
-              onblur="saveItemPrice(${item.id},this)"
-              onkeydown="if(event.key==='Enter')this.blur()">
-            <span style="font-size:11px">CHF</span>
+              style="width:84px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:12px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
+              class="no-spin" onblur="saveItemPrice(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="color:var(--t4)">CHF</span>
           </span>
           ${bomHint}
-        </div>
-        ${item.item_type === 'asm' && bom.length ? `<div style="font-size:10px;color:var(--t3);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:10px 20px;line-height:1.7">
-          <span style="font-weight:600;color:var(--t2);flex-basis:100%">Legende BOM-Preis</span>
-          <span><strong style="color:var(--teal);font-family:var(--mono)">CHF X.XX</strong> — Summe aller Teile (Einzelpreis × Stückzahl) aus der aktiven Revision</span>
-          <span><button style="pointer-events:none;font-size:9px;padding:0 4px;border:1px solid var(--line2);border-radius:2px;background:var(--bg2);color:var(--t2)">übernehmen</button> — trägt den BOM-Preis direkt ins VP-Feld ein und speichert</span>
-          <span><span style="color:var(--amber)">⚠ unvollständig</span> — nicht bei allen Teilen ist ein VP hinterlegt (BOM-Preis ist deshalb zu tief)</span>
-          <span><span style="color:var(--amber)">⚠ keine Preise hinterlegt</span> — BOM enthält Teile, aber keins hat einen VP</span>
-        </div>` : ''}`;
+          ${item.source_url ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>` : ''}
+        </div>`;
       })()}
-      <!-- Rev strip -->
-      <div class="sep-label">Revisionen</div>
-      <div class="rev-strip">
+      <div class="sep-label" style="margin-top:4px">Revisionen</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;align-items:center">
         ${(item.revisions||[]).map(r => `
           <div class="rev-pill ${r.id === activeRevId ? 'active-rev' : ''}" onclick="switchRev(${item.id}, ${r.id})">
-            <span class="status st-${r.status}">rev${r.rev}</span>
-            <span style="color:var(--t2)">${r.status}</span>
+            <span class="status st-${r.status}" style="font-size:9px">rev${r.rev}</span>
+            <span style="color:var(--t3);font-size:10px">${r.status}</span>
           </div>`).join('')}
-        ${!isDOC ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},${isASM ? item.id : (item.parent_id||'null')},'prt')" style="margin-left:auto">+ Part</button>` : ''}
-        ${isASM ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Unter-ASM</button>` : ''}
-        ${!isDOC ? `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${item.project_id},null,'doc')">+ Dokument</button>` : ''}
+        <div style="margin-left:auto;display:flex;gap:4px">
+          ${!isDOC ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="openItemModal(${item.project_id},${isASM ? item.id : (item.parent_id||'null')},'prt')">+ Part</button>` : ''}
+          ${isASM ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Sub-ASM</button>` : ''}
+        </div>
       </div>
       ${rev ? renderRevDetail(rev, item) : '<div style="color:var(--t3)">Keine Revision</div>'}
     </div>
@@ -653,7 +679,7 @@ function renderRevDetail(rev, item) {
       ${(rev.bom||[]).length ? rev.bom.map(b => `
         <div class="bom-row">
           <span style="color:var(--t3);font-size:10px;width:24px">${b.position||'—'}</span>
-          <span>${b.item_type==='asm'?'📦':b.item_type==='doc'?'📄':'🔩'}</span>
+          <span>${_itemChip(b.item_type,16)}</span>
           <span class="bom-num">${b.item_number}</span>
           <span style="flex:1;font-size:12px">${esc(b.name)}</span>
           ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">rev${b.child_active_rev.rev}</span>` : ''}
@@ -795,7 +821,7 @@ async function renderDashboard() {
   const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
   const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
   const stColors = {DFT:'var(--blue)',REV:'var(--amber)',REL:'var(--green)',ECO:'var(--purple)',OBS:'var(--t3)'};
-  const itemIcon = t => t==='asm'?'📦':t==='doc'?'📄':'🔩';
+  const itemIcon = t => _itemChip(t, 18);
 
   const invCritical = invItems.filter(i => i.min_qty > 0 && i.stock_qty < i.min_qty);
   const invWarn     = invItems.filter(i => i.min_qty > 0 && i.stock_qty === i.min_qty);
@@ -1022,7 +1048,7 @@ async function renderChangelog() {
     return '·';
   };
   const typeColor = t => ({item:'var(--blue)',revision:'var(--teal)',project:'var(--amber)'}[t]||'var(--t3)');
-  const itemTypeIcon = t => t === 'asm' ? '📦' : t === 'prt' ? '🔩' : t === 'doc' ? '📄' : '';
+  const itemTypeIcon = t => _itemChip(t, 16);
 
   // Group by date
   const byDate = {};
@@ -1633,7 +1659,7 @@ function _renderProfitRows() {
       + (mc.machine > 0 ? `Mach. ${fmtN(mc.machine)}` : '') + `</span>` : '';
     return `<tr style="border-bottom:1px solid var(--line);cursor:pointer;${marginBg(i.margin)}" onclick="openProjectAndItem(${i.project_db_id},${i.id})" title="Im PLM öffnen">
       <td style="padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.project_number)}</td>
-      <td style="padding:5px 8px;font-size:11px;white-space:nowrap">${i.item_type==='asm'?'📦':'🔩'} ${esc(i.item_number)}</td>
+      <td style="padding:5px 8px;font-size:11px;white-space:nowrap">${_itemChip(i.item_type,16)} ${esc(i.item_number)}</td>
       <td style="padding:5px 8px;font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${cost != null ? `${fmtCHF(cost)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t3)">—</span>'}</td>
@@ -2795,7 +2821,7 @@ async function searchItemsForLine(q) {
     if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const rev = i.latest_revision;
-      const icon = i.item_type==='asm'?'📦':i.item_type==='doc'?'📄':'🔩';
+      const icon = _itemChip(i.item_type, 18);
       return `<div onclick="selectLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -2815,7 +2841,7 @@ function selectLinkedItem(item) {
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-plm-results').style.display = 'none';
   const sel = document.getElementById('li-plm-selected');
-  document.getElementById('li-plm-badge').textContent = (item.item_type==='asm'?'📦 ':'🔩 ') + item.item_number;
+  document.getElementById('li-plm-badge').textContent = item.item_number;
   document.getElementById('li-plm-name').textContent = item.name + ' · ' + item.project_name;
   sel.style.display = 'flex';
   if (!V('li-desc')) set('li-desc', item.item_number + ' – ' + item.name);
@@ -2868,7 +2894,7 @@ function openLineItemModal(parentType, parentId, itemId) {
       document.getElementById('li-unit').value = li.unit||'Stk';
       if (li.item_id && li.item_number) {
         set('li-linked-plm-id', li.item_id);
-        const icon = li.item_type==='asm'?'📦':li.item_type==='doc'?'📄':'🔩';
+        const icon = _itemChip(li.item_type, 18);
         document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
         document.getElementById('li-plm-name').textContent = li.description;
         document.getElementById('li-plm-selected').style.display = 'flex';
@@ -3272,7 +3298,7 @@ async function searchItemsForDim(q) {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
     if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
-      const icon = i.item_type==='asm'?'📦':i.item_type==='doc'?'📄':'🔩';
+      const icon = _itemChip(i.item_type, 18);
       return `<div onclick="selectDimLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -3290,7 +3316,7 @@ function selectDimLinkedItem(item) {
   set('dim-linked-plm-id', item.id);
   document.getElementById('dim-plm-search').value = '';
   document.getElementById('dim-plm-results').style.display = 'none';
-  const icon = item.item_type==='asm'?'📦':item.item_type==='doc'?'📄':'🔩';
+  const icon = _itemChip(item.item_type, 18);
   document.getElementById('dim-plm-badge').textContent = icon + ' ' + item.item_number;
   document.getElementById('dim-plm-name').textContent = item.name + ' · ' + item.project_name;
   document.getElementById('dim-plm-selected').style.display = 'flex';
@@ -3395,7 +3421,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
       document.getElementById('dim-unit').value = it.unit||'Stk';
       if (it.item_id && it.item_number) {
         set('dim-linked-plm-id', it.item_id);
-        const icon = it.item_type==='asm'?'📦':it.item_type==='doc'?'📄':'🔩';
+        const icon = _itemChip(it.item_type, 18);
         document.getElementById('dim-plm-badge').textContent = icon + ' ' + it.item_number;
         document.getElementById('dim-plm-name').textContent = it.description;
         document.getElementById('dim-plm-selected').style.display = 'flex';
@@ -4261,7 +4287,7 @@ function searchInvPlmItem(q) {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
     if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
-      const icon = i.item_type==='asm'?'📦':i.item_type==='doc'?'📄':'🔩';
+      const icon = _itemChip(i.item_type, 18);
       const mc = i.manufacturing_cost;
       const price = i.default_price ?? mc?.total ?? null;
       return `<div onclick="selectInvPlmItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
