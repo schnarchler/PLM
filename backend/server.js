@@ -1141,11 +1141,11 @@ app.get('/api/orders', (req, res) => {
 });
 
 app.post('/api/orders', (req, res) => {
-  const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, status } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextOrderNumber();
-  const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0]);
+  const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, status||'DRAFT']);
   res.json(get('SELECT * FROM orders WHERE id=?', [id]));
 });
 
@@ -1255,11 +1255,11 @@ app.get('/api/quotes', (req, res) => {
 });
 
 app.post('/api/quotes', (req, res) => {
-  const { customer_id, customer_name_free, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours } = req.body;
+  const { customer_id, customer_name_free, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, status } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextQuoteNumber();
-  const id = runGetId('INSERT INTO quotes (number,customer_id,customer_name_free,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, customer_name_free||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0]);
+  const id = runGetId('INSERT INTO quotes (number,customer_id,customer_name_free,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, customer_name_free||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
   res.json(get('SELECT * FROM quotes WHERE id=?', [id]));
 });
 
