@@ -1,16 +1,22 @@
-# PLM & ERP – 3D-Druck Produktionsverwaltung
+# PLM & ERP – Produktionsverwaltung
 
-Teamcenter-inspiriertes PLM- und ERP-System für 3D-Druck-Projekte.  
-Läuft lokal auf Windows – kein Internet, kein Cloud-Zwang.
+Teamcenter-inspiriertes PLM- und ERP-System.  
+Läuft lokal auf Linux/Windows – kein Internet, kein Cloud-Zwang.
 
 ---
 
-## Schnellstart (Windows)
+## Schnellstart
 
-Doppelklick auf **`START-PLM.bat`**  
-→ Browser öffnet sich automatisch auf `http://localhost:3000`
+**Linux:**
+```bash
+cd backend && npm install && node server.js
+```
 
-Beim ersten Start werden alle Node-Pakete automatisch installiert (`npm install`).
+**Windows:**  
+Doppelklick auf **`START-PLM.bat`**
+
+→ Browser öffnet sich auf `http://localhost:3000`  
+Beim ersten Start werden alle Node-Pakete automatisch installiert.
 
 ---
 
@@ -61,12 +67,13 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 - Projekte mit 4-stelliger Nummer (0001–9999)
 - Baugruppen (ASM), Parts (PRT) und Dokumente (DOC) mit sprechenden Nummern
 - Beliebige Hierarchietiefe (ASM in ASM)
-- Revisionsverwaltung A → B → C → … (alle alten Revisionen bleiben erhalten)
+- Revisionsverwaltung rev1, rev2, rev3, … (alle alten Revisionen bleiben erhalten)
 - Freigabe-Workflow: DFT → REV → REL → ECO → neue Rev
 - Stückliste (BOM) pro Revision mit Mengen und Einheiten
 - Dateien (Datasets) pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
-- Druckparameter pro Revision (Material, Infill, Temperatur, Düse …)
+- Konstruktions-/Entwicklungszeiten pro Bauteil und Revision erfassbar
+- Checkout/Check-in Funktion für CAD-Dateien (siehe unten)
 - Vollständige Änderungshistorie / Audit-Trail
 
 ### ERP
@@ -91,6 +98,75 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 - Zeigt angezeigten Namen (PLM) ↔ tatsächlichen Dateinamen auf der Festplatte
 - Als CSV exportierbar (Notfall-Referenz)
 - Speicherort der Dateien: `data/files/`
+
+---
+
+## Checkout / Check-in (CAD-Workflow mit Solid Edge)
+
+Der Checkout-Mechanismus kopiert CAD-Dateien aus dem PLM in einen lokalen Arbeitsordner, damit diese im CAD-Programm bearbeitet werden können. Nach der Bearbeitung werden die Dateien wieder in PLM importiert.
+
+### Solid Edge: Standardpfad setzen
+
+Damit neue Solid Edge-Dateien automatisch im Checkout-Ordner landen:
+
+**Tools → Options → File Locations**
+
+| Dateityp | Pfad setzen auf |
+|----------|----------------|
+| Parts (.par / .psm) | Checkout-Ordner (z.B. `/home/msu/PLM-Checkout`) |
+| Assemblies (.asm) | gleicher Pfad |
+| Drafts (.dft) | gleicher Pfad |
+
+Den Checkout-Pfad festlegen unter: **Einstellungen → System → Checkout-Ordner**
+
+### Checkout-Workflow
+
+```
+1. Bauteil im PLM auswählen → "Auschecken"
+   → Dateien werden in <checkout-pfad>/<item-nummer>/ kopiert
+   → Freigegebene Dateien (REL) sind schreibgeschützt
+
+2. Solid Edge öffnet Dateien aus dem Checkout-Ordner
+   → Verlinkungen in Baugruppen bleiben erhalten, da alle Teile
+     im gleichen Ordner liegen und der Pfad bei jedem Checkout
+     gleich bleibt (<item-nummer> ohne Zeitstempel)
+
+3. Nach der Bearbeitung → PLM → "Einchecken"
+   → Checkout-Ordner wird gelöscht
+   → Vorgang wird im Changelog festgehalten
+
+4. Neue Dateien werden automatisch erkannt
+   → Beim Öffnen der Checkout-Übersicht erkennt PLM neue Dateien
+     im Ordner, die noch nicht im System sind
+```
+
+### Neue Dateien aus Solid Edge importieren
+
+Wenn beim Bearbeiten in Solid Edge neue Dateien entstehen (z.B. neue Parts einer Baugruppe), erkennt PLM diese automatisch beim nächsten Öffnen der Checkout-Übersicht:
+
+**Datei im Checkout-Unterordner eines Bauteils** (z.B. `checkout/PRT-001/neues-teil.par`):
+→ Button "Zu Bauteil hinzufügen" → wird in die neueste offene Revision importiert
+
+**Datei direkt im Checkout-Hauptordner** (z.B. `checkout/neues-teil.par`):
+→ Button "Als neues Bauteil erfassen" → Projekt, Typ und Name angeben → neues Bauteil wird erstellt
+
+### Varianten (z.B. M3, M4, M5)
+
+Jede Variante wird als **separates Bauteil** mit eigenem Suffix erfasst:
+
+```
+BRACKET-001-M3    (eigene Revisionen, eigene Dateien)
+BRACKET-001-M4
+BRACKET-001-M5
+```
+
+Dies ist der sauberste Ansatz, da jede Variante eine eigene CAD-Datei hat und unabhängig freigegeben werden kann.
+
+### Baugruppen-Checkout (rekursiv)
+
+Beim Auschecken einer Baugruppe werden **alle untergeordneten Parts rekursiv** in denselben Ordner kopiert. Solid Edge findet die verlinkten Dateien über seinen Fallback-Suchmechanismus, da alle Dateien im gleichen Verzeichnis liegen.
+
+> **Hinweis:** Solid Edge verwendet standardmässig absolute Pfade. Da der Checkout-Ordner immer denselben Namen hat (keine Zeitstempel), bleibt der Pfad bei jedem Checkout identisch — Verknüpfungen müssen nicht neu gesetzt werden.
 
 ---
 
@@ -206,7 +282,9 @@ PLM/
 │       └── files/         ← hochgeladene Dateien (UUID-Namen)
 ├── frontend/
 │   └── public/
-│       └── index.html     ← Single-Page-App (alles in einer Datei)
+│       ├── index.html     ← HTML-Grundstruktur
+│       ├── app.js         ← Single-Page-App (Frontend-Logik)
+│       └── styles.css     ← Design-System (Dark Theme)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md
 ```

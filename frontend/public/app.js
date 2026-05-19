@@ -104,7 +104,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   gotoView('dashboard');
   loadStats();
   loadCheckouts();
-  setInterval(loadCheckouts, 10000);
   setupUploadDrag();
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
