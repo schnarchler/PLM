@@ -4207,8 +4207,14 @@ async function doCheckout(itemId) {
   }
 }
 
+// Registry: folder paths stored here, referenced by index in onclick (avoids path-escaping in HTML)
+let _coFolders = [];
+
+function _coOpen(i)      { openCheckoutFolder(_coFolders[i]); }
+function _coIn(i, btn)   { doCheckin(_coFolders[i], btn); }
+
 function _showCheckoutResult(r) {
-  const folderEsc = esc(r.folder).replace(/'/g, "\\'");
+  _coFolders = [r.folder];
   _showDynModal(`<div class="modal" style="max-width:520px">
     <div class="modal-head">
       <div class="modal-title"><span style="color:var(--green)">✓</span> Ausgecheckt — ${r.files.length} Dateien</div>
@@ -4233,10 +4239,10 @@ function _showCheckoutResult(r) {
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-red btn-sm" onclick="doCheckin('${folderEsc}',this)">⬆ Einchecken</button>
+      <button class="btn btn-red btn-sm" onclick="_coIn(0,this)">⬆ Einchecken</button>
       <div style="flex:1"></div>
       <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
-      <button class="btn btn-teal" onclick="openCheckoutFolder('${folderEsc}')">📂 Ordner öffnen</button>
+      <button class="btn btn-teal" onclick="_coOpen(0)">📂 Ordner öffnen</button>
     </div>
   </div>`);
 }
@@ -4250,18 +4256,17 @@ async function doCheckin(folder, btn) {
     await loadCheckouts();
     _hideDynModal();
     toast('Eingecheckt — Ordner gelöscht', 'ok');
-    // Refresh item detail button if visible
     if (state.item) renderItemDetail(state.item, state.activeRevId);
   } catch(e) {
     if (btn) { btn.innerHTML = orig; btn.disabled = false; }
-    toast('Fehler beim Einchecken', 'err');
+    toast('Fehler beim Einchecken: ' + (e.message||''), 'err');
   }
 }
 
 async function doCheckinAll() {
   if (!state.checkouts.length) return;
   if (!confirm(`Alle ${state.checkouts.length} Checkouts einchecken und Ordner löschen?`)) return;
-  for (const c of state.checkouts) {
+  for (const c of [...state.checkouts]) {
     try { await api('/api/checkout/checkin', 'POST', { folder: c.folder }); } catch {}
   }
   await loadCheckouts();
@@ -4275,9 +4280,7 @@ async function openCheckoutFolder(folder) {
     await api('/api/checkout/open', 'POST', { folder });
     toast('Ordner wird geöffnet…', 'ok');
   } catch(e) {
-    // Show path prominently so user can navigate manually
-    const msg = e.message || 'Fehler';
-    toast('Ordner öffnen fehlgeschlagen — Pfad in Zwischenablage kopiert', 'err');
+    toast('Ordner öffnen fehlgeschlagen — Pfad kopiert', 'err');
     try { navigator.clipboard.writeText(folder); } catch {}
   }
 }
@@ -4285,6 +4288,7 @@ async function openCheckoutFolder(folder) {
 async function showCheckoutList() {
   await loadCheckouts();
   const list = state.checkouts;
+  _coFolders = list.map(c => c.folder);
   const totalFiles = list.reduce((s, c) => s + (c.files?.length || 0), 0);
   _showDynModal(`<div class="modal" style="max-width:560px">
     <div class="modal-head">
@@ -4292,27 +4296,27 @@ async function showCheckoutList() {
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body" style="padding:12px 16px">
-      ${!list.length ? `<div style="color:var(--t3);font-size:12px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>` : `
-      <div style="display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto">
-        ${list.map(c => {
-          const f = c.folder.replace(/'/g, "\\'");
-          const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-          return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-              ${_itemChip(c.item_type,18)}
-              <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(c.item_number)}</span>
-              <span style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
-              <span style="font-size:10px;color:var(--t4);flex-shrink:0">${dt}</span>
-            </div>
-            <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;user-select:all" title="${esc(c.folder)}">${esc(c.folder)}</div>
-            <div style="font-size:11px;color:var(--t4);margin-bottom:6px">${c.files?.length || 0} Dateien${c.files?.some(f=>f.readonly) ? ' · <span style="color:var(--amber)">🔒 enthält schreibgeschützte</span>' : ''}</div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-ghost btn-sm" onclick="openCheckoutFolder('${f}')">📂 Öffnen</button>
-              <button class="btn btn-red btn-sm" onclick="doCheckin('${f}',this)">⬆ Einchecken</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`}
+      ${!list.length
+        ? `<div style="color:var(--t3);font-size:12px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>`
+        : `<div style="display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto">
+            ${list.map((c, i) => {
+              const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+              return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                  ${_itemChip(c.item_type,18)}
+                  <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(c.item_number)}</span>
+                  <span style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
+                  <span style="font-size:10px;color:var(--t4);flex-shrink:0">${dt}</span>
+                </div>
+                <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px;user-select:all;word-break:break-all">${esc(c.folder)}</div>
+                <div style="font-size:11px;color:var(--t4);margin-bottom:6px">${c.files?.length||0} Dateien${c.files?.some(f=>f.readonly)?' · <span style="color:var(--amber)">🔒 schreibgeschützte</span>':''}</div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-ghost btn-sm" onclick="_coOpen(${i})">📂 Öffnen</button>
+                  <button class="btn btn-red btn-sm" onclick="_coIn(${i},this)">⬆ Einchecken</button>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>`}
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>

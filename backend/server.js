@@ -1069,18 +1069,30 @@ function removeReadOnly(filePath) {
 
 function deleteFolderRecursive(dirPath) {
   if (!fs.existsSync(dirPath)) return;
-  // Remove read-only from all files first, then delete
-  for (const entry of fs.readdirSync(dirPath)) {
-    const full = path.join(dirPath, entry);
-    const stat = fs.statSync(full);
-    if (stat.isDirectory()) {
-      deleteFolderRecursive(full);
-    } else {
-      removeReadOnly(full);
-      fs.unlinkSync(full);
-    }
+  // Remove read-only from all files first (required before deletion)
+  function makeWritable(p) {
+    try {
+      const stat = fs.statSync(p);
+      if (stat.isDirectory()) {
+        fs.readdirSync(p).forEach(e => makeWritable(path.join(p, e)));
+      } else {
+        fs.chmodSync(p, 0o644);
+      }
+    } catch {}
   }
-  fs.rmdirSync(dirPath);
+  makeWritable(dirPath);
+  // Use rmSync (Node 14.14+) with fallback
+  try {
+    fs.rmSync(dirPath, { recursive: true, force: true });
+  } catch {
+    // Fallback for older Node
+    for (const entry of fs.readdirSync(dirPath)) {
+      const full = path.join(dirPath, entry);
+      if (fs.statSync(full).isDirectory()) deleteFolderRecursive(full);
+      else fs.unlinkSync(full);
+    }
+    fs.rmdirSync(dirPath);
+  }
 }
 
 app.post('/api/items/:id/checkout', (req, res) => {
