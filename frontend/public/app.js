@@ -57,13 +57,13 @@ function rnd5(v) { return Math.floor((parseFloat(v) || 0) * 20) / 20; }
 function fmtCHF(v) { return 'CHF ' + fmtN(rnd5(v)); }
 
 // ── ITEM TYPE ICONS ───────────────────────────────────────────
-const _SVG_ASM = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`;
-const _SVG_PRT = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><circle cx="12" cy="12" r="3"/></svg>`;
-const _SVG_DOC = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>`;
+const _SVG_ASM = '📦';
+const _SVG_PRT = '🔩';
+const _SVG_DOC = '📄';
 function _itemSvg(t)   { return t==="asm" ? _SVG_ASM : t==="doc" ? _SVG_DOC : _SVG_PRT; }
 function _itemColor(t) { return t==="asm" ? "var(--blue)" : t==="doc" ? "var(--purple)" : "var(--teal)"; }
 function _itemBg(t)    { return t==="asm" ? "rgba(142,163,255,.12)" : t==="doc" ? "rgba(180,140,255,.12)" : "rgba(106,208,214,.12)"; }
-function _itemChip(t, sz=20) { return `<span style="width:${sz}px;height:${sz}px;border-radius:4px;background:${_itemBg(t)};color:${_itemColor(t)};display:inline-grid;place-items:center;flex-shrink:0">${_itemSvg(t)}</span>`; }
+function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.75)}px;line-height:1;flex-shrink:0">${_itemSvg(t)}</span>`; }
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
