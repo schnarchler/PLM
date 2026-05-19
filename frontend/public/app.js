@@ -1238,6 +1238,19 @@ async function renderSettings() {
           <span id="st-datapath-msg" style="font-size:12px;color:var(--t3)"></span>
         </div>
 
+        <div class="sep-label" style="margin-top:20px">Checkout-Verzeichnis</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Ordner, in den ausgecheckte CAD-Dateien kopiert werden. Leer lassen für Standard: <code style="font-family:var(--mono)">[Datenverzeichnis]/checkout</code></div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Checkout-Pfad</label>
+            <input class="fi" id="st-checkout-dir" placeholder="z.B. /home/user/CAD-Checkout">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" onclick="saveCheckoutDir()">Pfad speichern</button>
+          <span id="st-checkout-msg" style="font-size:12px;color:var(--t3)"></span>
+        </div>
+
         <div class="sep-label" style="margin-top:24px">Datensicherung</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
         <div style="display:flex;gap:8px">
@@ -1272,6 +1285,18 @@ async function renderSettings() {
       `DB: <code style="user-select:all">${d.db_path}</code><br>Dateien: <code style="user-select:all">${d.files_dir}</code>`;
     document.getElementById('st-data-dir').value = d.data_dir;
   });
+  api('/api/settings').then(s => {
+    const el = document.getElementById('st-checkout-dir');
+    if (el) el.value = s.checkout_dir || '';
+  });
+}
+
+async function saveCheckoutDir() {
+  const val = document.getElementById('st-checkout-dir')?.value.trim() || '';
+  await api('/api/settings', 'PUT', { checkout_dir: val });
+  const msg = document.getElementById('st-checkout-msg');
+  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
+  state.settings = await api('/api/settings');
 }
 
 async function saveSettings() {
@@ -1280,7 +1305,7 @@ async function saveSettings() {
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
     'default_filament_price_kg','default_machine_cost_hr','hourly_rate',
-    'invoice_footer','quote_footer','receipt_footer','receipt_line_width'];
+    'invoice_footer','quote_footer','receipt_footer','receipt_line_width','checkout_dir'];
   const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes'];
   const body = {};
   keys.forEach(k => {
