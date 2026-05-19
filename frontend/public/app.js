@@ -472,6 +472,8 @@ function renderItemDetail(item, activeRevId) {
     <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>
     ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}`;
   document.getElementById('dp-tabs').innerHTML = tabs;
+  document.getElementById('dp-title').innerHTML +=
+    (!isDOC ? ` <button class="btn btn-teal btn-sm" style="font-size:10px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}')">⬇ Auschecken</button>` : '');
 
   const rev = item.revisions?.find(r => r.id === activeRevId) || item.revisions?.[0];
 
@@ -4088,6 +4090,158 @@ async function delItemTimeEntry(id) {
   if (!confirm('Eintrag löschen?')) return;
   await api(`/api/time-entries/${id}`, 'DELETE');
   loadItemTimeEntries(_teItemId);
+}
+
+// ── CHECKOUT ──────────────────────────────────────────────────
+const CHECKOUT_TYPES = [
+  { key: 'CAD',         label: 'CAD-Dateien',     hint: '.step, .stp, .par, .asm …' },
+  { key: 'GCODE',       label: 'G-Code',           hint: '.gcode, .nc …' },
+  { key: 'STL',         label: 'STL',              hint: '.stl' },
+  { key: 'PDF',         label: 'PDF',              hint: '.pdf' },
+  { key: 'IMAGE',       label: 'Bilder',           hint: '.png, .jpg …' },
+  { key: 'DOC',         label: 'Dokumente',        hint: '.docx, .txt …' },
+  { key: 'SPREADSHEET', label: 'Tabellen',         hint: '.xlsx, .csv …' },
+  { key: 'OTHER',       label: 'Sonstige',         hint: '' },
+];
+
+function openCheckoutModal(itemId, itemNumber, itemType) {
+  const isAsm = itemType === 'asm';
+  _showDynModal(`<div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <div class="modal-title">Auschecken — ${esc(itemNumber)}</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      ${isAsm ? `<div style="background:rgba(142,163,255,.08);border:1px solid rgba(142,163,255,.2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:14px;font-size:12px;color:var(--t2)">
+        Baugruppe: alle Parts aus der BOM werden rekursiv mitgeladen, damit die CAD-Verlinkungen bestehen bleiben.
+      </div>` : ''}
+      <div style="font-size:11px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dateitypen auswählen</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px">
+        ${CHECKOUT_TYPES.map(t => `
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--line3)'" onmouseout="this.style.borderColor='var(--line2)'">
+            <input type="checkbox" class="co-type" value="${t.key}" ${t.key==='CAD'?'checked':''} style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer;flex-shrink:0">
+            <div>
+              <div style="font-size:12px;font-weight:500">${t.label}</div>
+              ${t.hint?`<div style="font-size:10px;color:var(--t4);font-family:var(--mono)">${t.hint}</div>`:''}
+            </div>
+          </label>`).join('')}
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
+        <input type="checkbox" id="co-all" style="accent-color:var(--blue);width:14px;height:14px" onchange="document.querySelectorAll('.co-type').forEach(c=>c.checked=this.checked)">
+        <span style="font-size:12px;color:var(--t3)">Alle Typen auswählen</span>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-teal" onclick="doCheckout(${itemId})">⬇ Auschecken</button>
+    </div>
+  </div>`);
+}
+
+async function doCheckout(itemId) {
+  const types = [...document.querySelectorAll('.co-type:checked')].map(c => c.value);
+  if (!types.length) { toast('Mindestens einen Dateityp wählen', 'err'); return; }
+
+  const btn = document.querySelector('.modal-foot .btn-teal');
+  const orig = btn?.textContent;
+  if (btn) { btn.textContent = '⏳ Wird kopiert…'; btn.disabled = true; }
+
+  try {
+    const r = await api(`/api/items/${itemId}/checkout`, 'POST', { types });
+    _hideDynModal();
+    if (r.warning) { toast(r.warning, 'err'); return; }
+    _showCheckoutResult(r);
+  } catch(e) {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+    toast('Fehler beim Auschecken', 'err');
+  }
+}
+
+function _showCheckoutResult(r) {
+  const folderEsc = esc(r.folder).replace(/'/g, "\\'");
+  _showDynModal(`<div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <div class="modal-title"><span style="color:var(--green)">✓</span> Ausgecheckt — ${r.files.length} Dateien</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:12px">
+        <div style="font-size:10px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Ordner</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--t1);word-break:break-all;user-select:all">${esc(r.folder)}</div>
+      </div>
+      ${r.files.some(f=>f.readonly) ? `<div style="background:rgba(239,177,74,.08);border:1px solid rgba(239,177,74,.25);border-radius:var(--r-sm);padding:7px 10px;margin-bottom:10px;font-size:11px;color:var(--amber)">
+        🔒 Freigegebene Dateien (REL) sind schreibgeschützt kopiert worden.
+      </div>` : ''}
+      <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">
+        ${r.files.map(f => `
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--r-xs);background:var(--bg2)">
+            <span class="ds-type dt-${f.ds_type}" style="font-size:9px;flex-shrink:0">${f.ds_type}</span>
+            <span style="font-size:11px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+            <span style="font-size:10px;color:var(--t4);font-family:var(--mono);flex-shrink:0">${esc(f.item_number)}</span>
+            ${f.readonly ? `<span title="Schreibgeschützt (REL)" style="font-size:11px;color:var(--amber)">🔒</span>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-red btn-sm" onclick="doCheckin('${folderEsc}',this)">⬆ Einchecken</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
+      <button class="btn btn-teal" onclick="openCheckoutFolder('${folderEsc}')">📂 Ordner öffnen</button>
+    </div>
+  </div>`);
+}
+
+async function doCheckin(folder, btn) {
+  if (!confirm('Checkout-Ordner löschen? Alle darin enthaltenen Dateien werden entfernt.')) return;
+  const orig = btn?.textContent;
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  try {
+    await api('/api/checkout/checkin', 'POST', { folder });
+    _hideDynModal();
+    toast('Eingecheckt — Ordner gelöscht', 'ok');
+  } catch(e) {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+    toast('Fehler beim Einchecken', 'err');
+  }
+}
+
+async function openCheckoutFolder(folder) {
+  try {
+    await api('/api/checkout/open', 'POST', { folder });
+    toast('Ordner wird geöffnet', 'ok');
+  } catch(e) {
+    toast('Ordner konnte nicht geöffnet werden', 'err');
+  }
+}
+
+async function showCheckoutList() {
+  const list = await api('/api/checkout/list');
+  if (!list.length) { toast('Keine aktiven Checkouts', 'ok'); return; }
+  _showDynModal(`<div class="modal" style="max-width:540px">
+    <div class="modal-head">
+      <div class="modal-title">Aktive Checkouts</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:12px 16px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${list.map(c => `
+          <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              ${_itemChip(c.item_type,18)}
+              <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(c.item_number)}</span>
+              <span style="font-size:12px;font-weight:500;flex:1">${esc(c.item_name)}</span>
+              <span style="font-size:10px;color:var(--t4)">${new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.folder)}</div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="openCheckoutFolder('${esc(c.folder).replace(/'/g,"\\'")}')">📂 Öffnen</button>
+              <button class="btn btn-red btn-sm" onclick="doCheckin('${esc(c.folder).replace(/'/g,"\\'")}',this)">⬆ Einchecken</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button></div>
+  </div>`);
 }
 
 // ── LAGER / BESTAND ───────────────────────────────────────────
