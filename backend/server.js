@@ -1037,8 +1037,11 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
 });
 
 // ── CHECKOUT ──────────────────────────────────────────────────
-const CHECKOUT_DIR = path.join(DATA_DIR, 'checkout');
-fs.mkdirSync(CHECKOUT_DIR, { recursive: true });
+function getCheckoutDir() {
+  const row = get("SELECT value FROM settings WHERE key='checkout_dir'");
+  const dir = (row?.value || '').trim() || path.join(DATA_DIR, 'checkout');
+  return path.resolve(dir);
+}
 
 function collectCheckoutDatasets(itemId, types, visited = new Set()) {
   if (visited.has(itemId)) return [];
@@ -1081,71 +1084,86 @@ function deleteFolderRecursive(dirPath) {
 }
 
 app.post('/api/items/:id/checkout', (req, res) => {
-  const { types } = req.body;
-  const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  try {
+    const { types } = req.body;
+    const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
+    if (!item) return res.status(404).json({ error: 'Not found' });
 
-  const datasets = collectCheckoutDatasets(item.id, types && types.length ? types : null);
-  if (!datasets.length) return res.json({ folder: null, files: [], warning: 'Keine Dateien gefunden' });
+    const checkoutDir = getCheckoutDir();
+    fs.mkdirSync(checkoutDir, { recursive: true });
 
-  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const safe = item.item_number.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const folderName = `${safe}__${ts}`;
-  const outDir = path.join(CHECKOUT_DIR, folderName);
-  fs.mkdirSync(outDir, { recursive: true });
+    const datasets = collectCheckoutDatasets(item.id, types && types.length ? types : null);
+    if (!datasets.length) return res.json({ folder: null, files: [], warning: 'Keine Dateien gefunden — sind Dateien in den Revisionen hochgeladen?' });
 
-  const copied = [];
-  const usedNames = {};
-  for (const ds of datasets) {
-    const src = path.join(FILES_DIR, ds.filename);
-    if (!fs.existsSync(src)) continue;
-    let name = ds.original_name;
-    if (usedNames[name] !== undefined) {
-      usedNames[name]++;
-      const ext = path.extname(name);
-      name = `${path.basename(name, ext)}_${usedNames[name]}${ext}`;
-    } else {
-      usedNames[ds.original_name] = 0;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const safe = item.item_number.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const outDir = path.join(checkoutDir, `${safe}__${ts}`);
+    fs.mkdirSync(outDir, { recursive: true });
+
+    const copied = [];
+    const usedNames = {};
+    for (const ds of datasets) {
+      const src = path.join(FILES_DIR, ds.filename);
+      if (!fs.existsSync(src)) continue;
+      let name = ds.original_name;
+      if (usedNames[name] !== undefined) {
+        usedNames[name]++;
+        const ext = path.extname(name);
+        name = `${path.basename(name, ext)}_${usedNames[name]}${ext}`;
+      } else {
+        usedNames[ds.original_name] = 0;
+      }
+      const dest = path.join(outDir, name);
+      fs.copyFileSync(src, dest);
+      if (ds.rev_status === 'REL') { try { fs.chmodSync(dest, 0o444); } catch {} }
+      copied.push({ name, ds_type: ds.ds_type, item_number: ds.item_number, item_name: ds.item_name, readonly: ds.rev_status === 'REL' });
     }
-    const dest = path.join(outDir, name);
-    fs.copyFileSync(src, dest);
-    // Read-only for released revisions
-    if (ds.rev_status === 'REL') fs.chmodSync(dest, 0o444);
-    copied.push({ name, ds_type: ds.ds_type, item_number: ds.item_number, item_name: ds.item_name, readonly: ds.rev_status === 'REL' });
+
+    if (!copied.length) {
+      deleteFolderRecursive(outDir);
+      return res.json({ folder: null, files: [], warning: 'Keine Dateien vorhanden (Quelldateien fehlen im Datenverzeichnis)' });
+    }
+
+    fs.writeFileSync(path.join(outDir, '.checkout.json'), JSON.stringify({
+      item_id: item.id, item_number: item.item_number, item_name: item.name,
+      item_type: item.item_type, checked_out: new Date().toISOString(), files: copied
+    }, null, 2));
+
+    res.json({ folder: outDir, files: copied });
+  } catch (err) {
+    console.error('Checkout error:', err);
+    res.status(500).json({ error: 'Checkout fehlgeschlagen: ' + err.message });
   }
-
-  // Save checkout metadata
-  fs.writeFileSync(path.join(outDir, '.checkout.json'), JSON.stringify({
-    item_id: item.id, item_number: item.item_number, item_name: item.name,
-    item_type: item.item_type, checked_out: new Date().toISOString(), files: copied
-  }, null, 2));
-
-  res.json({ folder: outDir, files: copied });
 });
 
 app.get('/api/checkout/list', (req, res) => {
-  if (!fs.existsSync(CHECKOUT_DIR)) return res.json([]);
-  const entries = fs.readdirSync(CHECKOUT_DIR).map(name => {
-    const meta = path.join(CHECKOUT_DIR, name, '.checkout.json');
+  const checkoutDir = getCheckoutDir();
+  if (!fs.existsSync(checkoutDir)) return res.json([]);
+  const entries = fs.readdirSync(checkoutDir).map(name => {
+    const meta = path.join(checkoutDir, name, '.checkout.json');
     if (!fs.existsSync(meta)) return null;
     try {
       const m = JSON.parse(fs.readFileSync(meta, 'utf8'));
-      return { ...m, folder: path.join(CHECKOUT_DIR, name), folder_name: name };
+      return { ...m, folder: path.join(checkoutDir, name), folder_name: name };
     } catch { return null; }
   }).filter(Boolean);
   res.json(entries.sort((a, b) => b.checked_out.localeCompare(a.checked_out)));
 });
 
 app.post('/api/checkout/checkin', (req, res) => {
-  const { folder } = req.body;
-  if (!folder || !folder.startsWith(CHECKOUT_DIR)) return res.status(400).json({ error: 'Ungültiger Pfad' });
-  deleteFolderRecursive(folder);
-  res.json({ success: true });
+  try {
+    const { folder } = req.body;
+    if (!folder) return res.status(400).json({ error: 'Kein Ordner angegeben' });
+    deleteFolderRecursive(folder);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Einchecken fehlgeschlagen: ' + err.message });
+  }
 });
 
 app.post('/api/checkout/open', (req, res) => {
   const { folder } = req.body;
-  if (!folder || !folder.startsWith(CHECKOUT_DIR)) return res.status(400).json({ error: 'Ungültiger Pfad' });
+  if (!folder) return res.status(400).json({ error: 'Kein Ordner angegeben' });
   if (!fs.existsSync(folder)) return res.status(404).json({ error: 'Ordner nicht gefunden' });
   const { exec } = require('child_process');
   const cmd = process.platform === 'win32' ? `explorer "${folder}"`
