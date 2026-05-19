@@ -251,6 +251,7 @@ function _renderTreeNode(item, map, isRoot) {
   const rev = item.latest_revision;
   const isASM = item.item_type === 'asm';
   const isDOC = item.item_type === 'doc';
+  const co = state.checkouts.some(c => c.item_id === item.id);
   const bomKids = (isASM && rev?.bom) ? rev.bom : [];
   const hasKids = bomKids.length > 0;
   const n = _nim(); const nid = `tn${n}`, tid = `tt${n}`;
@@ -259,11 +260,13 @@ function _renderTreeNode(item, map, isRoot) {
     return ci ? _renderTreeNode(ci, map, false) : '';
   }).join('') : '';
   return `<div class="tree-node">
-    <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}>
+    <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}
+      style="${co ? 'background:rgba(106,208,214,.07);box-shadow:inset 2px 0 0 var(--teal);' : ''}">
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 20)}
       <span class="tree-num" style="font-size:10px">${item.item_number}</span>
       <span class="tree-name">${esc(item.name)}</span>
+      ${co ? `<span style="font-family:var(--mono);font-size:8px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
       ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:9px">rev${rev.rev}</span>` : ''}
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" style="display:none">${childHtml}</div>` : ''}
@@ -298,6 +301,7 @@ function openProjectDetail(p) {
     const rev = item.latest_revision;
     const datasets = rev?.datasets || [];
     const isASM = item.item_type === 'asm', isDOC = item.item_type === 'doc';
+    const co = state.checkouts.some(c => c.item_id === item.id);
 
     const bomKids = (isASM && rev?.bom) ? rev.bom : [];
     const hasKids = bomKids.length > 0;
@@ -309,11 +313,12 @@ function openProjectDetail(p) {
       return renderItemFiles(ci, depth + 1) + (qtyBadge ? `<div style="padding:0 0 2px ${28 + depth*16}px">${qtyBadge}</div>` : '');
     }).join('') : '';
     return `<div>
-      <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s" onclick="openItemDetail(${item.id})" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s;${co?'background:rgba(106,208,214,.07);box-shadow:inset 2px 0 0 var(--teal);':''}" onclick="openItemDetail(${item.id})" onmouseover="this.style.background='${co?'rgba(106,208,214,.12)':'var(--bg3)'}'" onmouseout="this.style.background='${co?'rgba(106,208,214,.07)':''}'" >
         ${hasKids ? `<span onclick="event.stopPropagation();const e=document.getElementById('${nid}');const open=e.style.display!=='none';e.style.display=open?'none':'';this.style.transform=open?'':'rotate(90deg)'" style="color:var(--t4);font-size:9px;transition:transform .15s;flex-shrink:0;cursor:pointer">▶</span>` : '<span style="width:11px;flex-shrink:0"></span>'}
         ${_itemChip(item.item_type, 18)}
         <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
         <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1)">${esc(item.name)}</span>
+        ${co ? `<span style="font-family:var(--mono);font-size:8px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
         ${rev ? `<span class="status st-${rev.status}" style="font-size:9px;flex-shrink:0">rev${rev.rev}</span>` : ''}
       </div>
       ${datasets.length ? `<div style="padding:2px 6px 4px ${28 + depth*16}px;display:flex;flex-direction:column;gap:2px">
