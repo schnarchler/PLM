@@ -1036,6 +1036,125 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
   res.json(get('SELECT * FROM datasets WHERE id=?', [id]));
 });
 
+// ── CHECKOUT ──────────────────────────────────────────────────
+const CHECKOUT_DIR = path.join(DATA_DIR, 'checkout');
+fs.mkdirSync(CHECKOUT_DIR, { recursive: true });
+
+function collectCheckoutDatasets(itemId, types, visited = new Set()) {
+  if (visited.has(itemId)) return [];
+  visited.add(itemId);
+  const item = get('SELECT * FROM items WHERE id=?', [itemId]);
+  if (!item) return [];
+  // Latest revision = highest rev number
+  const rev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1', [itemId]);
+  if (!rev) return [];
+  let datasets = all('SELECT * FROM datasets WHERE revision_id=?', [rev.id]);
+  if (types && types.length) datasets = datasets.filter(d => types.includes(d.ds_type));
+  const result = datasets.map(d => ({ ...d, item_number: item.item_number, item_name: item.name, rev_status: rev.status }));
+  if (item.item_type === 'asm') {
+    const children = all('SELECT child_item_id FROM bom WHERE parent_rev_id=?', [rev.id]);
+    for (const b of children) {
+      result.push(...collectCheckoutDatasets(b.child_item_id, types, visited));
+    }
+  }
+  return result;
+}
+
+function removeReadOnly(filePath) {
+  try { fs.chmodSync(filePath, 0o644); } catch {}
+}
+
+function deleteFolderRecursive(dirPath) {
+  if (!fs.existsSync(dirPath)) return;
+  // Remove read-only from all files first, then delete
+  for (const entry of fs.readdirSync(dirPath)) {
+    const full = path.join(dirPath, entry);
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) {
+      deleteFolderRecursive(full);
+    } else {
+      removeReadOnly(full);
+      fs.unlinkSync(full);
+    }
+  }
+  fs.rmdirSync(dirPath);
+}
+
+app.post('/api/items/:id/checkout', (req, res) => {
+  const { types } = req.body;
+  const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+
+  const datasets = collectCheckoutDatasets(item.id, types && types.length ? types : null);
+  if (!datasets.length) return res.json({ folder: null, files: [], warning: 'Keine Dateien gefunden' });
+
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const safe = item.item_number.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const folderName = `${safe}__${ts}`;
+  const outDir = path.join(CHECKOUT_DIR, folderName);
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const copied = [];
+  const usedNames = {};
+  for (const ds of datasets) {
+    const src = path.join(FILES_DIR, ds.filename);
+    if (!fs.existsSync(src)) continue;
+    let name = ds.original_name;
+    if (usedNames[name] !== undefined) {
+      usedNames[name]++;
+      const ext = path.extname(name);
+      name = `${path.basename(name, ext)}_${usedNames[name]}${ext}`;
+    } else {
+      usedNames[ds.original_name] = 0;
+    }
+    const dest = path.join(outDir, name);
+    fs.copyFileSync(src, dest);
+    // Read-only for released revisions
+    if (ds.rev_status === 'REL') fs.chmodSync(dest, 0o444);
+    copied.push({ name, ds_type: ds.ds_type, item_number: ds.item_number, item_name: ds.item_name, readonly: ds.rev_status === 'REL' });
+  }
+
+  // Save checkout metadata
+  fs.writeFileSync(path.join(outDir, '.checkout.json'), JSON.stringify({
+    item_id: item.id, item_number: item.item_number, item_name: item.name,
+    item_type: item.item_type, checked_out: new Date().toISOString(), files: copied
+  }, null, 2));
+
+  res.json({ folder: outDir, files: copied });
+});
+
+app.get('/api/checkout/list', (req, res) => {
+  if (!fs.existsSync(CHECKOUT_DIR)) return res.json([]);
+  const entries = fs.readdirSync(CHECKOUT_DIR).map(name => {
+    const meta = path.join(CHECKOUT_DIR, name, '.checkout.json');
+    if (!fs.existsSync(meta)) return null;
+    try {
+      const m = JSON.parse(fs.readFileSync(meta, 'utf8'));
+      return { ...m, folder: path.join(CHECKOUT_DIR, name), folder_name: name };
+    } catch { return null; }
+  }).filter(Boolean);
+  res.json(entries.sort((a, b) => b.checked_out.localeCompare(a.checked_out)));
+});
+
+app.post('/api/checkout/checkin', (req, res) => {
+  const { folder } = req.body;
+  if (!folder || !folder.startsWith(CHECKOUT_DIR)) return res.status(400).json({ error: 'Ungültiger Pfad' });
+  deleteFolderRecursive(folder);
+  res.json({ success: true });
+});
+
+app.post('/api/checkout/open', (req, res) => {
+  const { folder } = req.body;
+  if (!folder || !folder.startsWith(CHECKOUT_DIR)) return res.status(400).json({ error: 'Ungültiger Pfad' });
+  if (!fs.existsSync(folder)) return res.status(404).json({ error: 'Ordner nicht gefunden' });
+  const { exec } = require('child_process');
+  const cmd = process.platform === 'win32' ? `explorer "${folder}"`
+    : process.platform === 'darwin' ? `open "${folder}"`
+    : `xdg-open "${folder}"`;
+  exec(cmd);
+  res.json({ success: true });
+});
+
 app.get('/api/datasets/:id/download', (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
   if (!ds) return res.status(404).json({ error: 'Not found' });
