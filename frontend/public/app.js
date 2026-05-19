@@ -3087,7 +3087,26 @@ function toast(msg, type='ok') {
 
 // -- SHUTDOWN --------------------------------------------------
 async function shutdownServer() {
-  if (!confirm('Server wirklich beenden?')) return;
+  // Check for active checkouts first
+  await loadCheckouts();
+  if (state.checkouts.length > 0) {
+    const totalFiles = state.checkouts.reduce((s, c) => s + (c.files?.length || 0), 0);
+    const names = state.checkouts.map(c => `• ${c.item_number} – ${c.item_name}`).join('\n');
+    const checkin = confirm(
+      `⚠ Es sind noch ${state.checkouts.length} Checkout(s) aktiv (${totalFiles} Dateien):\n\n${names}\n\nVor dem Beenden einchecken (Ordner löschen)?`
+    );
+    if (checkin) {
+      for (const c of [...state.checkouts]) {
+        try { await api('/api/checkout/checkin', 'POST', { folder: c.folder }); } catch {}
+      }
+      await loadCheckouts();
+      toast('Alle Checkouts eingecheckt', 'ok');
+    } else {
+      if (!confirm('Trotzdem beenden ohne Einchecken?')) return;
+    }
+  } else {
+    if (!confirm('Server wirklich beenden?')) return;
+  }
   try { await fetch('/api/shutdown', { method: 'POST' }); } catch(e) {}
   // Tab schliessen
   window.open('', '_self').close();
