@@ -1141,6 +1141,8 @@ app.post('/api/items/:id/checkout', (req, res) => {
       item_type: item.item_type, checked_out: new Date().toISOString(), files: copied
     }, null, 2));
 
+    const typeLabels = types && types.length ? types.join(', ') : 'alle';
+    log('item', item.id, 'Ausgecheckt', `${copied.length} Dateien (${typeLabels}) → ${outDir}`);
     res.json({ folder: outDir, files: copied });
   } catch (err) {
     console.error('Checkout error:', err);
@@ -1166,7 +1168,14 @@ app.post('/api/checkout/checkin', (req, res) => {
   try {
     const { folder } = req.body;
     if (!folder) return res.status(400).json({ error: 'Kein Ordner angegeben' });
+    // Read metadata before deleting
+    let meta = null;
+    try {
+      const metaPath = path.join(folder, '.checkout.json');
+      if (fs.existsSync(metaPath)) meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    } catch {}
     deleteFolderRecursive(folder);
+    if (meta) log('item', meta.item_id, 'Eingecheckt', `${meta.files?.length || 0} Dateien aus ${folder}`);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Einchecken fehlgeschlagen: ' + err.message });
