@@ -46,7 +46,24 @@ async function setDocStatus(type, id, status, el) {
     toast('Status konnte nicht gespeichert werden', 'err');
   }
 }
-let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false };
+let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [] };
+
+async function loadCheckouts() {
+  try {
+    state.checkouts = await api('/api/checkout/list');
+    _updateCheckoutBadge();
+  } catch {}
+}
+function _updateCheckoutBadge() {
+  const total = state.checkouts.reduce((s, c) => s + (c.files?.length || 0), 0);
+  const btn = document.getElementById('tb-checkout-btn');
+  if (!btn) return;
+  btn.innerHTML = total > 0
+    ? `⬆ Checkouts <span style="background:var(--teal);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:9px;padding:1px 6px;margin-left:3px">${total}</span>`
+    : '⬆ Checkouts';
+  btn.style.color = total > 0 ? 'var(--teal)' : '';
+  btn.style.borderColor = total > 0 ? 'var(--teal-line)' : '';
+}
 
 function fmtN(v, dec = 2) {
   const n = parseFloat(v) || 0;
@@ -70,6 +87,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
   gotoView('dashboard');
   loadStats();
+  loadCheckouts();
   setupUploadDrag();
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
@@ -472,8 +490,13 @@ function renderItemDetail(item, activeRevId) {
     <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>
     ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}`;
   document.getElementById('dp-tabs').innerHTML = tabs;
-  document.getElementById('dp-title').innerHTML +=
-    (!isDOC ? ` <button class="btn btn-teal btn-sm" style="font-size:10px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}')">⬇ Auschecken</button>` : '');
+  if (!isDOC) {
+    const activeCheckout = state.checkouts.find(c => c.item_id === item.id);
+    const coBtn = activeCheckout
+      ? `<button class="btn btn-amber btn-sm" style="font-size:10px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="doCheckin('${activeCheckout.folder.replace(/'/g,"\\'")}',this)">⬆ Einchecken</button>`
+      : `<button class="btn btn-teal btn-sm" style="font-size:10px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}')">⬇ Auschecken</button>`;
+    document.getElementById('dp-title').innerHTML += coBtn;
+  }
 
   const rev = item.revisions?.find(r => r.id === activeRevId) || item.revisions?.[0];
 
@@ -4175,6 +4198,8 @@ async function doCheckout(itemId) {
     const r = await api(`/api/items/${itemId}/checkout`, 'POST', { types });
     _hideDynModal();
     if (r.warning) { toast(r.warning, 'err'); return; }
+    await loadCheckouts();
+    if (state.item) renderItemDetail(state.item, state.activeRevId);
     _showCheckoutResult(r);
   } catch(e) {
     if (btn) { btn.textContent = orig; btn.disabled = false; }
@@ -4218,54 +4243,81 @@ function _showCheckoutResult(r) {
 
 async function doCheckin(folder, btn) {
   if (!confirm('Checkout-Ordner löschen? Alle darin enthaltenen Dateien werden entfernt.')) return;
-  const orig = btn?.textContent;
-  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  const orig = btn?.innerHTML;
+  if (btn) { btn.innerHTML = '⏳…'; btn.disabled = true; }
   try {
     await api('/api/checkout/checkin', 'POST', { folder });
+    await loadCheckouts();
     _hideDynModal();
     toast('Eingecheckt — Ordner gelöscht', 'ok');
+    // Refresh item detail button if visible
+    if (state.item) renderItemDetail(state.item, state.activeRevId);
   } catch(e) {
-    if (btn) { btn.textContent = orig; btn.disabled = false; }
+    if (btn) { btn.innerHTML = orig; btn.disabled = false; }
     toast('Fehler beim Einchecken', 'err');
   }
+}
+
+async function doCheckinAll() {
+  if (!state.checkouts.length) return;
+  if (!confirm(`Alle ${state.checkouts.length} Checkouts einchecken und Ordner löschen?`)) return;
+  for (const c of state.checkouts) {
+    try { await api('/api/checkout/checkin', 'POST', { folder: c.folder }); } catch {}
+  }
+  await loadCheckouts();
+  _hideDynModal();
+  toast('Alle Checkouts eingecheckt', 'ok');
+  if (state.item) renderItemDetail(state.item, state.activeRevId);
 }
 
 async function openCheckoutFolder(folder) {
   try {
     await api('/api/checkout/open', 'POST', { folder });
-    toast('Ordner wird geöffnet', 'ok');
+    toast('Ordner wird geöffnet…', 'ok');
   } catch(e) {
-    toast('Ordner konnte nicht geöffnet werden', 'err');
+    // Show path prominently so user can navigate manually
+    const msg = e.message || 'Fehler';
+    toast('Ordner öffnen fehlgeschlagen — Pfad in Zwischenablage kopiert', 'err');
+    try { navigator.clipboard.writeText(folder); } catch {}
   }
 }
 
 async function showCheckoutList() {
-  const list = await api('/api/checkout/list');
-  if (!list.length) { toast('Keine aktiven Checkouts', 'ok'); return; }
-  _showDynModal(`<div class="modal" style="max-width:540px">
+  await loadCheckouts();
+  const list = state.checkouts;
+  const totalFiles = list.reduce((s, c) => s + (c.files?.length || 0), 0);
+  _showDynModal(`<div class="modal" style="max-width:560px">
     <div class="modal-head">
-      <div class="modal-title">Aktive Checkouts</div>
+      <div class="modal-title">Aktive Checkouts${list.length ? ` <span style="font-family:var(--mono);font-size:11px;color:var(--teal);font-weight:400">${list.length} Ordner · ${totalFiles} Dateien</span>` : ''}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body" style="padding:12px 16px">
-      <div style="display:flex;flex-direction:column;gap:6px">
-        ${list.map(c => `
-          <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      ${!list.length ? `<div style="color:var(--t3);font-size:12px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>` : `
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto">
+        ${list.map(c => {
+          const f = c.folder.replace(/'/g, "\\'");
+          const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+          return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
               ${_itemChip(c.item_type,18)}
               <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(c.item_number)}</span>
-              <span style="font-size:12px;font-weight:500;flex:1">${esc(c.item_name)}</span>
-              <span style="font-size:10px;color:var(--t4)">${new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+              <span style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
+              <span style="font-size:10px;color:var(--t4);flex-shrink:0">${dt}</span>
             </div>
-            <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.folder)}</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;user-select:all" title="${esc(c.folder)}">${esc(c.folder)}</div>
+            <div style="font-size:11px;color:var(--t4);margin-bottom:6px">${c.files?.length || 0} Dateien${c.files?.some(f=>f.readonly) ? ' · <span style="color:var(--amber)">🔒 enthält schreibgeschützte</span>' : ''}</div>
             <div style="display:flex;gap:6px">
-              <button class="btn btn-ghost btn-sm" onclick="openCheckoutFolder('${esc(c.folder).replace(/'/g,"\\'")}')">📂 Öffnen</button>
-              <button class="btn btn-red btn-sm" onclick="doCheckin('${esc(c.folder).replace(/'/g,"\\'")}',this)">⬆ Einchecken</button>
+              <button class="btn btn-ghost btn-sm" onclick="openCheckoutFolder('${f}')">📂 Öffnen</button>
+              <button class="btn btn-red btn-sm" onclick="doCheckin('${f}',this)">⬆ Einchecken</button>
             </div>
-          </div>`).join('')}
-      </div>
+          </div>`;
+        }).join('')}
+      </div>`}
     </div>
-    <div class="modal-foot"><button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
+      ${list.length ? `<button class="btn btn-red" onclick="doCheckinAll()">⬆ Alle einchecken (${list.length})</button>` : ''}
+    </div>
   </div>`);
 }
 

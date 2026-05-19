@@ -1164,12 +1164,16 @@ app.post('/api/checkout/checkin', (req, res) => {
 app.post('/api/checkout/open', (req, res) => {
   const { folder } = req.body;
   if (!folder) return res.status(400).json({ error: 'Kein Ordner angegeben' });
-  if (!fs.existsSync(folder)) return res.status(404).json({ error: 'Ordner nicht gefunden' });
+  if (!fs.existsSync(folder)) return res.status(404).json({ error: 'Ordner nicht gefunden: ' + folder });
   const { exec } = require('child_process');
+  // Pass DISPLAY so xdg-open can reach the desktop session
+  const env = { ...process.env, DISPLAY: process.env.DISPLAY || ':0' };
   const cmd = process.platform === 'win32' ? `explorer "${folder}"`
     : process.platform === 'darwin' ? `open "${folder}"`
     : `xdg-open "${folder}"`;
-  exec(cmd);
+  exec(cmd, { env }, (err) => {
+    if (err) console.error('xdg-open error:', err.message);
+  });
   res.json({ success: true });
 });
 
