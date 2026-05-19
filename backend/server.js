@@ -1107,9 +1107,8 @@ app.post('/api/items/:id/checkout', (req, res) => {
     const datasets = collectCheckoutDatasets(item.id, types && types.length ? types : null);
     if (!datasets.length) return res.json({ folder: null, files: [], warning: 'Keine Dateien gefunden — sind Dateien in den Revisionen hochgeladen?' });
 
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const safe = item.item_number.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const outDir = path.join(checkoutDir, `${safe}__${ts}`);
+    const outDir = path.join(checkoutDir, safe);
     fs.mkdirSync(outDir, { recursive: true });
 
     const copied = [];
