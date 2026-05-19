@@ -51,18 +51,34 @@ let state = { view: 'projects', projects: [], project: null, item: null, activeR
 async function loadCheckouts() {
   try {
     state.checkouts = await api('/api/checkout/list');
+    await _scanCheckoutFolder();
     _updateCheckoutBadge();
   } catch {}
 }
+
+let _scanResult = { item_files: [], root_files: [] };
+
+async function _scanCheckoutFolder() {
+  try {
+    _scanResult = await api('/api/checkout/scan');
+  } catch { _scanResult = { item_files: [], root_files: [] }; }
+}
+
+function _scanNewCount() {
+  return _scanResult.item_files.reduce((s, g) => s + g.new_files.length, 0) + _scanResult.root_files.length;
+}
+
 function _updateCheckoutBadge() {
   const total = state.checkouts.reduce((s, c) => s + (c.files?.length || 0), 0);
+  const newCount = _scanNewCount();
   const btn = document.getElementById('tb-checkout-btn');
   if (!btn) return;
-  btn.innerHTML = total > 0
-    ? `⬆ Checkouts <span style="background:var(--teal);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:9px;padding:1px 6px;margin-left:3px">${total}</span>`
-    : '⬆ Checkouts';
-  btn.style.color = total > 0 ? 'var(--teal)' : '';
-  btn.style.borderColor = total > 0 ? 'var(--teal-line)' : '';
+  let badges = '';
+  if (total > 0) badges += `<span style="background:var(--teal);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:9px;padding:1px 6px;margin-left:3px">${total}</span>`;
+  if (newCount > 0) badges += `<span style="background:var(--amber);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:9px;padding:1px 6px;margin-left:3px">+${newCount} neu</span>`;
+  btn.innerHTML = `⬆ Checkouts${badges}`;
+  btn.style.color = newCount > 0 ? 'var(--amber)' : total > 0 ? 'var(--teal)' : '';
+  btn.style.borderColor = newCount > 0 ? 'var(--amber-line)' : total > 0 ? 'var(--teal-line)' : '';
 }
 
 function fmtN(v, dec = 2) {
@@ -88,6 +104,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   gotoView('dashboard');
   loadStats();
   loadCheckouts();
+  setInterval(loadCheckouts, 10000);
   setupUploadDrag();
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
@@ -4317,39 +4334,139 @@ async function showCheckoutList() {
   const list = state.checkouts;
   _coFolders = list.map(c => c.folder);
   const totalFiles = list.reduce((s, c) => s + (c.files?.length || 0), 0);
-  _showDynModal(`<div class="modal" style="max-width:560px">
+  const newCount = _scanNewCount();
+
+  _showDynModal(`<div class="modal" style="max-width:580px">
     <div class="modal-head">
-      <div class="modal-title">Aktive Checkouts${list.length ? ` <span style="font-family:var(--mono);font-size:11px;color:var(--teal);font-weight:400">${list.length} Ordner · ${totalFiles} Dateien</span>` : ''}</div>
+      <div class="modal-title">Checkouts${list.length ? ` <span style="font-family:var(--mono);font-size:11px;color:var(--teal);font-weight:400">${list.length} aktiv · ${totalFiles} Dateien</span>` : ''}${newCount ? ` <span style="font-family:var(--mono);font-size:11px;color:var(--amber);font-weight:400">+${newCount} neu erkannt</span>` : ''}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
-    <div class="modal-body" style="padding:12px 16px">
-      ${!list.length
-        ? `<div style="color:var(--t3);font-size:12px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>`
-        : `<div style="display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto">
-            ${list.map((c, i) => {
-              const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-              return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-                  ${_itemChip(c.item_type,18)}
-                  <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(c.item_number)}</span>
-                  <span style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
-                  <span style="font-size:10px;color:var(--t4);flex-shrink:0">${dt}</span>
-                </div>
-                <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px;user-select:all;word-break:break-all">${esc(c.folder)}</div>
-                <div style="font-size:11px;color:var(--t4);margin-bottom:6px">${c.files?.length||0} Dateien${c.files?.some(f=>f.readonly)?' · <span style="color:var(--amber)">🔒 schreibgeschützte</span>':''}</div>
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-ghost btn-sm" onclick="_coOpen(${i})">📂 Öffnen</button>
-                  <button class="btn btn-red btn-sm" onclick="_coIn(${i},this)">⬆ Einchecken</button>
-                </div>
-              </div>`;
-            }).join('')}
-          </div>`}
+    <div class="modal-body" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px;max-height:520px;overflow-y:auto">
+
+      ${newCount ? `<div>
+        <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Neue Dateien erkannt</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${_scanResult.item_files.map((g, gi) => `
+            <div style="background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);padding:10px 12px">
+              <div style="font-size:12px;font-weight:500;margin-bottom:4px">
+                In <span style="font-family:var(--mono);color:var(--blue)">${esc(g.item_number)}</span> – ${esc(g.item_name)}
+              </div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px">${g.new_files.map(f=>`${esc(f.name)} <span style="color:var(--t4)">[${f.ds_type}]</span>`).join(' · ')}</div>
+              <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
+                onclick="importCheckoutFiles(${JSON.stringify(g).replace(/"/g,'&quot;')})">⬇ Zu Bauteil hinzufügen</button>
+            </div>`).join('')}
+          ${_scanResult.root_files.map((f, fi) => `
+            <div style="background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);padding:10px 12px">
+              <div style="font-size:12px;font-weight:500;margin-bottom:4px">
+                Neue Datei auf oberster Ebene: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span>
+                <span style="font-size:10px;color:var(--t4);margin-left:6px">[${f.ds_type}]</span>
+              </div>
+              <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
+                onclick="importNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ Als neues Bauteil erfassen</button>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      ${list.length ? `<div>
+        <div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Aktive Checkouts</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${list.map((c, i) => {
+            const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+            return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                ${_itemChip(c.item_type,18)}
+                <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(c.item_number)}</span>
+                <span style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
+                <span style="font-size:10px;color:var(--t4);flex-shrink:0">${dt}</span>
+              </div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px;user-select:all;word-break:break-all">${esc(c.folder)}</div>
+              <div style="font-size:11px;color:var(--t4);margin-bottom:6px">${c.files?.length||0} Dateien${c.files?.some(f=>f.readonly)?' · <span style="color:var(--amber)">🔒 schreibgeschützte</span>':''}</div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-ghost btn-sm" onclick="_coOpen(${i})">📂 Öffnen</button>
+                <button class="btn btn-red btn-sm" onclick="_coIn(${i},this)">⬆ Einchecken</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : (!newCount ? `<div style="color:var(--t3);font-size:12px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>` : '')}
+
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
       ${list.length ? `<button class="btn btn-red" onclick="doCheckinAll()">⬆ Alle einchecken (${list.length})</button>` : ''}
     </div>
   </div>`);
+}
+
+async function importCheckoutFiles(g) {
+  const files = g.new_files;
+  if (!confirm(`${files.length} Datei(en) zu "${g.item_number} – ${g.item_name}" hinzufügen?`)) return;
+  try {
+    const r = await api('/api/checkout/import', 'POST', { mode: 'item', item_id: g.item_id, folder: g.folder, files });
+    await loadCheckouts();
+    _showDynModal(null);
+    toast(`${r.count} Datei(en) zu Rev ${r.rev} hinzugefügt`, 'ok');
+    if (state.item?.id === g.item_id) renderItemDetail(state.item, state.activeRevId);
+    showCheckoutList();
+  } catch(e) { toast('Import fehlgeschlagen: ' + (e.message||''), 'err'); }
+}
+
+let _importProjects = [];
+async function importNewItem(f) {
+  _importProjects = await api('/api/projects').catch(() => []);
+  const extMap = { par:'prt', psm:'prt', asm:'asm', dft:'doc', pdf:'doc' };
+  const ext = f.name.split('.').pop().toLowerCase();
+  const suggestedType = extMap[ext] || 'prt';
+  const suggestedName = f.name.replace(/\.[^.]+$/, '');
+
+  _showDynModal(`<div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <div class="modal-title">Neues Bauteil erfassen</div>
+      <button class="btn btn-icon btn-ghost" onclick="showCheckoutList()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:12px;color:var(--t3)">Datei: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span></div>
+      <div>
+        <label style="font-size:11px;color:var(--t3);margin-bottom:4px;display:block">Projekt</label>
+        <select id="imp-project" class="input" style="width:100%">
+          ${_importProjects.map(p => `<option value="${p.id}">${esc(p.number)} – ${esc(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--t3);margin-bottom:4px;display:block">Typ</label>
+        <select id="imp-type" class="input" style="width:100%">
+          <option value="prt"${suggestedType==='prt'?' selected':''}>🔩 Part (prt)</option>
+          <option value="asm"${suggestedType==='asm'?' selected':''}>📦 Baugruppe (asm)</option>
+          <option value="doc"${suggestedType==='doc'?' selected':''}>📄 Dokument (doc)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--t3);margin-bottom:4px;display:block">Name</label>
+        <input id="imp-name" class="input" style="width:100%" value="${esc(suggestedName)}" placeholder="Bauteilname">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="showCheckoutList()">Zurück</button>
+      <button class="btn btn-primary" onclick="_doImportNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">Bauteil erstellen</button>
+    </div>
+  </div>`);
+}
+
+async function _doImportNewItem(f) {
+  const project_id = document.getElementById('imp-project')?.value;
+  const item_type  = document.getElementById('imp-type')?.value;
+  const name       = document.getElementById('imp-name')?.value?.trim();
+  if (!project_id || !item_type || !name) { toast('Alle Felder ausfüllen', 'err'); return; }
+  try {
+    const r = await api('/api/checkout/import', 'POST', {
+      mode: 'new',
+      new_item: { project_id, item_type, name, file_path: f.path, file_name: f.name, ds_type: f.ds_type }
+    });
+    await loadCheckouts();
+    toast(`Bauteil ${r.item_number} erstellt`, 'ok');
+    showCheckoutList();
+    if (state.project) { const p = await api(`/api/projects/${state.project.id}`); openProjectDetail(p); }
+  } catch(e) { toast('Fehler: ' + (e.message||''), 'err'); }
 }
 
 // ── LAGER / BESTAND ───────────────────────────────────────────

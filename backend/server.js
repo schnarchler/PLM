@@ -1149,6 +1149,125 @@ app.post('/api/items/:id/checkout', (req, res) => {
   }
 });
 
+app.get('/api/checkout/scan', (req, res) => {
+  try {
+    const checkoutDir = getCheckoutDir();
+    if (!fs.existsSync(checkoutDir)) return res.json({ item_files: [], root_files: [] });
+
+    const result = { item_files: [], root_files: [] };
+    const entries = fs.readdirSync(checkoutDir);
+
+    // Root-level files (not directories, not hidden)
+    for (const e of entries) {
+      const p = path.join(checkoutDir, e);
+      if (!e.startsWith('.') && fs.statSync(p).isFile()) {
+        result.root_files.push({ name: e, path: p, ds_type: guessType(e) });
+      }
+    }
+
+    // Subdirectory: detect new files not in .checkout.json
+    for (const e of entries) {
+      const dir = path.join(checkoutDir, e);
+      if (!fs.statSync(dir).isDirectory()) continue;
+      const metaPath = path.join(dir, '.checkout.json');
+      if (!fs.existsSync(metaPath)) continue;
+      let meta;
+      try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch { continue; }
+      const tracked = new Set((meta.files || []).map(f => f.name));
+      const newFiles = fs.readdirSync(dir)
+        .filter(f => !f.startsWith('.') && !tracked.has(f))
+        .filter(f => fs.statSync(path.join(dir, f)).isFile())
+        .map(f => ({ name: f, ds_type: guessType(f) }));
+      if (newFiles.length) {
+        result.item_files.push({
+          item_id: meta.item_id,
+          item_number: meta.item_number,
+          item_name: meta.item_name,
+          folder: dir,
+          new_files: newFiles
+        });
+      }
+    }
+
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Import new files from checkout folder into PLM
+app.post('/api/checkout/import', (req, res) => {
+  try {
+    const { mode, item_id, folder, files, new_item } = req.body;
+
+    if (mode === 'item') {
+      // Add files to existing item's latest non-REL revision
+      const item = get('SELECT * FROM items WHERE id=?', [item_id]);
+      if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
+      let rev = get("SELECT * FROM revisions WHERE item_id=? AND status != 'REL' ORDER BY id DESC LIMIT 1", [item_id]);
+      if (!rev) {
+        // All revisions are REL — create new revision
+        const lastRev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY id DESC LIMIT 1', [item_id]);
+        const nextRev = lastRev ? String(parseInt(lastRev.rev || '1') + 1) : '2';
+        const revId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [item_id, nextRev, 'DFT', 'Neue Revision durch Checkout-Import']);
+        rev = get('SELECT * FROM revisions WHERE id=?', [revId]);
+      }
+      const imported = [];
+      for (const f of files) {
+        const src = path.join(folder, f.name);
+        if (!fs.existsSync(src)) continue;
+        const ext = path.extname(f.name);
+        const storedName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+        fs.copyFileSync(src, path.join(FILES_DIR, storedName));
+        const stat = fs.statSync(src);
+        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
+          [rev.id, f.ds_type || guessType(f.name), storedName, f.name, stat.size, '1', 'Importiert aus Checkout']);
+        // Track in .checkout.json so it's not flagged again
+        const metaPath = path.join(folder, '.checkout.json');
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+          meta.files = [...(meta.files || []), { name: f.name, ds_type: f.ds_type }];
+          fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+        } catch {}
+        imported.push(f.name);
+      }
+      log('item', item_id, 'Importiert', `${imported.length} Dateien aus Checkout → Rev ${rev.rev}`);
+      res.json({ success: true, count: imported.length, rev: rev.rev });
+
+    } else if (mode === 'new') {
+      // Create new item in given project
+      const { project_id, item_type, name, file_path: filePath, file_name, ds_type } = new_item;
+      const project = get('SELECT * FROM projects WHERE id=?', [project_id]);
+      if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+
+      let item_number;
+      if (item_type === 'asm') {
+        item_number = project.number + '-asm-' + nextItemSeq(project.id, 'asm');
+      } else if (item_type === 'doc') {
+        item_number = project.number + '-doc-' + nextItemSeq(project.id, 'doc');
+      } else {
+        item_number = project.number + '-prt-' + nextPrtNumber(project.id, null);
+      }
+
+      const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description) VALUES (?,?,?,?,?,?)',
+        [project.id, null, item_type, item_number, name, '']);
+      const revId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, '1', 'DFT', 'Erstellt durch Checkout-Import']);
+
+      if (filePath && fs.existsSync(filePath)) {
+        const ext = path.extname(file_name);
+        const storedName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+        fs.copyFileSync(filePath, path.join(FILES_DIR, storedName));
+        const stat = fs.statSync(filePath);
+        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
+          [revId, ds_type || guessType(file_name), storedName, file_name, stat.size, '1', 'Importiert aus Checkout']);
+      }
+
+      log('item', itemId, 'Erstellt', `${item_type} ${item_number} via Checkout-Import`);
+      res.json({ success: true, item_number });
+    } else {
+      res.status(400).json({ error: 'Ungültiger Modus' });
+    }
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/checkout/list', (req, res) => {
   const checkoutDir = getCheckoutDir();
   if (!fs.existsSync(checkoutDir)) return res.json([]);
