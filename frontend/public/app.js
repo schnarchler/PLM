@@ -4223,6 +4223,7 @@ async function doCheckout(itemId) {
     _hideDynModal();
     if (r.warning) { toast(r.warning, 'err'); return; }
     await loadCheckouts();
+    if (state.project) renderProjectTree(state.project);
     if (state.item) renderItemDetail(state.item, state.activeRevId);
     _showCheckoutResult(r);
   } catch(e) {
@@ -4280,6 +4281,7 @@ async function doCheckin(folder, btn) {
     await loadCheckouts();
     _hideDynModal();
     toast('Eingecheckt — Ordner gelöscht', 'ok');
+    if (state.project) renderProjectTree(state.project);
     if (state.item) renderItemDetail(state.item, state.activeRevId);
   } catch(e) {
     if (btn) { btn.innerHTML = orig; btn.disabled = false; }
@@ -4296,6 +4298,7 @@ async function doCheckinAll() {
   await loadCheckouts();
   _hideDynModal();
   toast('Alle Checkouts eingecheckt', 'ok');
+  if (state.project) renderProjectTree(state.project);
   if (state.item) renderItemDetail(state.item, state.activeRevId);
 }
 
