@@ -3719,15 +3719,19 @@ async function saveDeliveryItem() {
     print_settings_json: settingsJson,
     notes: V('dim-notes')
   };
-  if (itemId) {
-    await api(`/api/delivery-items/${itemId}`,'PUT',body);
-    toast('Gespeichert','ok');
-  } else {
-    await api(`/api/deliveries/${deliveryId}/items`,'POST',body);
-    toast('Position hinzugefügt','ok');
+  try {
+    if (itemId) {
+      await api(`/api/delivery-items/${itemId}`,'PUT',body);
+      toast('Gespeichert','ok');
+    } else {
+      await api(`/api/deliveries/${deliveryId}/items`,'POST',body);
+      toast('Position hinzugefügt','ok');
+    }
+    closeModal('deliveryItemModal');
+    await renderDeliveries(); openDeliveryDetail(deliveryId);
+  } catch(e) {
+    closeModal('deliveryItemModal'); // immer schliessen damit UI nicht blockiert bleibt
   }
-  closeModal('deliveryItemModal');
-  await renderDeliveries(); openDeliveryDetail(deliveryId);
 }
 
 async function delDeliveryItem(itemId, deliveryId) {
