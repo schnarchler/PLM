@@ -209,7 +209,27 @@ async function refreshProjectTree() {
   renderProjectTree(p);
 }
 
+function _treeOpenIds() {
+  const open = new Set();
+  document.querySelectorAll('.tree-children').forEach(el => {
+    if (el.style.display !== 'none' && el.dataset.itemId) open.add(el.dataset.itemId);
+  });
+  return open;
+}
+
+function _treeRestoreOpen(openIds) {
+  if (!openIds.size) return;
+  document.querySelectorAll('.tree-children').forEach(el => {
+    if (el.dataset.itemId && openIds.has(el.dataset.itemId)) {
+      el.style.display = '';
+      const row = el.previousElementSibling;
+      if (row) { const tog = row.querySelector('.tree-tog'); if (tog) tog.textContent = '▼'; }
+    }
+  });
+}
+
 function renderProjectTree(p) {
+  const openIds = _treeOpenIds();
   const items = p.items || [];
   if (!items.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">🔩</div><div class="empty-text">Noch keine Items</div>
@@ -221,7 +241,6 @@ function renderProjectTree(p) {
     return;
   }
 
-  // compute which items are referenced in any BOM in this project
   const bomChildIds = new Set();
   items.forEach(item => (item.latest_revision?.bom || []).forEach(b => bomChildIds.add(b.child_item_id)));
 
@@ -238,6 +257,8 @@ function renderProjectTree(p) {
       </button>
     </div>
     <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>`);
+
+  _treeRestoreOpen(openIds);
 }
 
 function toggleBomFilter() {
@@ -288,7 +309,7 @@ function _renderTreeNode(item, map, isRoot) {
       ${co ? `<span style="font-family:var(--mono);font-size:8px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
       ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:9px">rev${rev.rev}</span>` : ''}
     </div>
-    ${hasKids ? `<div id="${nid}" class="tree-children" style="display:none">${childHtml}</div>` : ''}
+    ${hasKids ? `<div id="${nid}" class="tree-children" data-item-id="${item.id}" style="display:none">${childHtml}</div>` : ''}
   </div>`;
 }
 
