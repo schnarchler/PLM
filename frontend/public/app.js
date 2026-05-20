@@ -4645,10 +4645,16 @@ function _invRenderTable(items) {
              <td style="color:var(--t2);font-size:11px;${borderBottom}">${esc(i.material||'—')}</td>`
           : `<td style="color:var(--t2);font-size:11px">${esc(i.color||'—')}</td>
              <td style="color:var(--t2);font-size:11px">${esc(i.material||'—')}</td>`;
+        const planned = i.planned_qty || 0;
+        const avail = (i.stock_qty || 0) - planned;
+        const plannedTd = planned > 0
+          ? `<td style="font-family:var(--mono);font-size:11px;color:var(--amber);${isMulti&&!isLast?borderBottom:''}">${fmtN(planned,0)} ${i.unit}</td>`
+          : `<td style="font-family:var(--mono);font-size:11px;color:var(--t4);${isMulti&&!isLast?borderBottom:''}">—</td>`;
         return `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
           ${nameTd}
           ${colorTd}
           <td style="font-family:var(--mono);font-size:11px;color:${stockColor};font-weight:${state!=='ok'?600:400};${isMulti&&!isLast?borderBottom:''}">${fmtN(i.stock_qty,2)} ${i.unit}${stockIcon}</td>
+          ${plannedTd}
           <td style="font-family:var(--mono);font-size:11px;color:var(--t3);${isMulti&&!isLast?borderBottom:''}">${i.min_qty>0?fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
           <td style="display:flex;gap:4px;${isMulti&&!isLast?borderBottom:''}">
             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'in')">＋</button>
@@ -4664,7 +4670,7 @@ function _invRenderTable(items) {
   }).join('');
 
   setLeftBody(banner + `<div class="tbl-wrap"><table>
-    <thead><tr>${th('name','Artikel')}${th('color','Farbe')}${th('material','Material')}${th('stock_qty','Bestand')}${th('min_qty','Minimum')}<th></th></tr></thead>
+    <thead><tr>${th('name','Artikel')}${th('color','Farbe')}${th('material','Material')}${th('stock_qty','Bestand')}${th('planned_qty','Geplant')}${th('min_qty','Minimum')}<th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`);
 }
@@ -4875,36 +4881,90 @@ async function delInventoryItem(id) {
 async function openInventoryDeductModal(orderItemId, plmItemId, qty, orderId) {
   const invItems = await api(`/api/inventory?item_id=${plmItemId}`);
   if (!invItems.length) { toast('Kein Lagerartikel für dieses Teil verknüpft', 'err'); return; }
+
+  const first = invItems[0];
   const options = invItems.map(i => {
     const variantLabel = [i.color, i.material].filter(Boolean).join(' / ');
-    const label = esc(i.name) + (variantLabel ? ` (${esc(variantLabel)})` : '') + ` — Bestand: ${fmtN(i.stock_qty,2)} ${esc(i.unit)}`;
-    return `<option value="${i.id}" data-stock="${i.stock_qty}" data-unit="${esc(i.unit)}">${label}</option>`;
+    return `<option value="${i.id}" data-stock="${i.stock_qty}" data-planned="${i.planned_qty||0}" data-unit="${esc(i.unit)}">${esc(i.name)}${variantLabel ? ` (${esc(variantLabel)})` : ''} — ${fmtN(i.stock_qty,2)} ${esc(i.unit)}</option>`;
   }).join('');
-  _showDynModal(`<div class="modal" style="max-width:400px">
+
+  _showDynModal(`<div class="modal" style="max-width:420px">
     <div class="modal-head"><div class="modal-title">Lager abbuchen</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
       ${invItems.length > 1 ? `<div class="fg"><label class="fl">Lagerartikel</label>
-        <select id="ded-inv-id" class="fi">${options}</select></div>` : `<input type="hidden" id="ded-inv-id" value="${invItems[0].id}">`}
+        <select id="ded-inv-id" class="fi" onchange="_dedUpdateStock(this,${qty})">${options}</select></div>`
+        : `<input type="hidden" id="ded-inv-id" value="${first.id}">`}
+      <div id="ded-stock-info">${_dedStockHtmlInline(first, qty)}</div>
       <div class="fg"><label class="fl">Menge abbuchen</label>
-        <input id="ded-qty" type="number" min="0.01" step="0.01" class="fi" value="${qty}"></div>
+        <input id="ded-qty" type="number" min="0.01" step="0.01" class="fi" value="${qty}" oninput="_dedCheckQty(this)"></div>
       <div class="fg"><label class="fl">Referenz</label>
         <input id="ded-ref" class="fi" value="AUF-${orderId}" placeholder="Auftragsnr."></div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-amber" onclick="deductFromInventory()">Abbuchen</button>
+      <button class="btn btn-amber" id="ded-save" onclick="deductFromInventory()">Abbuchen</button>
     </div>
   </div>`);
+
+  _dedUpdateSaveBtn(first, qty);
+}
+
+function _dedUpdateSaveBtn(inv, qty) {
+  const btn = document.getElementById('ded-save');
+  if (!btn) return;
+  const enough = (inv.stock_qty || 0) >= qty;
+  btn.disabled = !enough;
+  btn.title = enough ? '' : `Nicht genug Bestand (${fmtN(inv.stock_qty,2)} ${inv.unit} vorhanden)`;
+}
+
+function _dedCheckQty(input) {
+  const qty = parseFloat(input.value) || 0;
+  const sel = document.getElementById('ded-inv-id');
+  const stock = parseFloat(sel?.dataset?.stock ?? sel?.options?.[sel.selectedIndex]?.dataset?.stock ?? 0);
+  const planned = parseFloat(sel?.dataset?.planned ?? sel?.options?.[sel.selectedIndex]?.dataset?.planned ?? 0);
+  const unit = sel?.options?.[sel.selectedIndex]?.dataset?.unit || '';
+  const inv = { stock_qty: stock, planned_qty: planned, unit };
+  document.getElementById('ded-stock-info').innerHTML = _dedStockHtmlInline(inv, qty);
+  _dedUpdateSaveBtn(inv, qty);
+}
+
+function _dedStockHtmlInline(inv, reqQty) {
+  const planned = inv.planned_qty || 0;
+  const avail = inv.stock_qty - planned;
+  const enough = inv.stock_qty >= reqQty;
+  const color = inv.stock_qty <= 0 ? 'var(--red)' : !enough ? 'var(--red)' : avail < reqQty ? 'var(--amber)' : 'var(--green)';
+  const bg = inv.stock_qty <= 0 || !enough ? 'var(--red-soft)' : avail < reqQty ? 'var(--amber-soft)' : 'var(--green-soft)';
+  const border = inv.stock_qty <= 0 || !enough ? 'var(--red-line)' : avail < reqQty ? 'var(--amber-line)' : 'var(--green-line)';
+  return `<div style="font-size:11px;padding:7px 10px;border-radius:var(--r-sm);background:${bg};border:1px solid ${border};color:${color}">
+    <b>Bestand: ${fmtN(inv.stock_qty,2)} ${inv.unit}</b>`
+    + (planned > 0 ? ` · ${fmtN(planned,0)} geplant · <b>Verfügbar: ${fmtN(avail,2)} ${inv.unit}</b>` : '')
+    + (!enough ? ` — <b>Zu wenig Bestand!</b>` : '')
+    + `</div>`;
+}
+
+function _dedUpdateStock(sel, qty) {
+  const opt = sel.options[sel.selectedIndex];
+  const inv = { stock_qty: parseFloat(opt.dataset.stock)||0, planned_qty: parseFloat(opt.dataset.planned)||0, unit: opt.dataset.unit||'' };
+  const qtyVal = parseFloat(document.getElementById('ded-qty')?.value) || qty;
+  document.getElementById('ded-stock-info').innerHTML = _dedStockHtmlInline(inv, qtyVal);
+  _dedUpdateSaveBtn(inv, qtyVal);
 }
 
 async function deductFromInventory() {
   const invIdEl = document.getElementById('ded-inv-id');
-  const invId = invIdEl.tagName === 'SELECT' ? invIdEl.value : invIdEl.value;
+  const invId = invIdEl.value;
   const qty = parseFloat(document.getElementById('ded-qty').value);
   const reference = document.getElementById('ded-ref').value.trim();
   if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
+  // Final server-side check
+  const fresh = await api(`/api/inventory/${invId}`).catch(() => null);
+  if (fresh && fresh.stock_qty < qty) {
+    toast(`Nicht genug Bestand — verfügbar: ${fmtN(fresh.stock_qty,2)} ${fresh.unit}`, 'err');
+    return;
+  }
   await api(`/api/inventory/${invId}/movement`, 'POST', { type: 'out', qty, reference, notes: 'Auftragsabgang' });
   _hideDynModal();
   toast('Abgebucht', 'ok');
+  renderInventory();
 }

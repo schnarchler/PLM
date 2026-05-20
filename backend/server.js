@@ -2455,7 +2455,11 @@ app.get('/api/inventory/stock-check', (req, res) => {
 
 app.get('/api/inventory', (req, res) => {
   const { item_id } = req.query;
-  const base = `SELECT ii.*, s.name as supplier_name, it.item_number as linked_item_number, it.name as linked_item_name
+  const base = `SELECT ii.*, s.name as supplier_name, it.item_number as linked_item_number, it.name as linked_item_name,
+    COALESCE((
+      SELECT SUM(oi.quantity) FROM order_items oi JOIN orders o ON oi.order_id=o.id
+      WHERE oi.item_id=ii.item_id AND ii.item_id IS NOT NULL AND o.status NOT IN ('DELIVERED','CANCELLED')
+    ), 0) as planned_qty
     FROM inventory_items ii
     LEFT JOIN suppliers s ON ii.supplier_id=s.id
     LEFT JOIN items it ON ii.item_id=it.id`;
