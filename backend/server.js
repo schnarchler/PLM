@@ -1947,6 +1947,18 @@ app.delete('/api/material-presets/:id', (req, res) => {
 });
 
 // -- SHUTDOWN --------------------------------------------------
+app.post('/api/launch-cad', (req, res) => {
+  const cadPath = get("SELECT value FROM settings WHERE key='cad_path'")?.value;
+  if (!cadPath) return res.status(400).json({ error: 'Kein CAD-Pfad konfiguriert' });
+  const { exec } = require('child_process');
+  const env = { ...process.env, DISPLAY: process.env.DISPLAY || ':0' };
+  const cmd = process.platform === 'win32' ? `"${cadPath}"` : `"${cadPath}"`;
+  exec(cmd, { env, detached: true }, (err) => {
+    if (err) console.error('CAD launch error:', err.message);
+  });
+  res.json({ success: true });
+});
+
 app.post('/api/shutdown', (req, res) => {
   res.json({ ok: true, message: 'Server wird beendet...' });
   setTimeout(() => {

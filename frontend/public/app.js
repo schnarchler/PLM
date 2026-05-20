@@ -102,6 +102,8 @@ function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
+  const cadBtn = document.getElementById('tb-cad-btn');
+  if (cadBtn) cadBtn.style.display = state.settings?.cad_path ? '' : 'none';
   gotoView('dashboard');
   loadStats();
   loadCheckouts();
@@ -1283,6 +1285,19 @@ async function renderSettings() {
           <span id="st-datapath-msg" style="font-size:12px;color:var(--t3)"></span>
         </div>
 
+        <div class="sep-label" style="margin-top:20px">CAD-Programm</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Pfad zur ausführbaren Datei des CAD-Programms. Wird über den CAD-Button in der Topbar gestartet.</div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">CAD-Pfad</label>
+            <input class="fi" id="st-cad-path" placeholder="z.B. /usr/bin/solidedge oder C:\\Program Files\\...">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" onclick="saveCadPath()">Pfad speichern</button>
+          <span id="st-cad-msg" style="font-size:12px;color:var(--t3)"></span>
+        </div>
+
         <div class="sep-label" style="margin-top:20px">Checkout-Verzeichnis</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Ordner, in den ausgecheckte CAD-Dateien kopiert werden. Leer lassen für Standard: <code style="font-family:var(--mono)">[Datenverzeichnis]/checkout</code></div>
         <div class="form-row">
@@ -1333,7 +1348,28 @@ async function renderSettings() {
   api('/api/settings').then(s => {
     const el = document.getElementById('st-checkout-dir');
     if (el) el.value = s.checkout_dir || '';
+    const ec = document.getElementById('st-cad-path');
+    if (ec) ec.value = s.cad_path || '';
   });
+}
+
+async function saveCadPath() {
+  const val = document.getElementById('st-cad-path')?.value.trim() || '';
+  await api('/api/settings', 'PUT', { cad_path: val });
+  const msg = document.getElementById('st-cad-msg');
+  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
+  state.settings = await api('/api/settings');
+  const btn = document.getElementById('tb-cad-btn');
+  if (btn) btn.style.display = val ? '' : 'none';
+}
+
+async function launchCad() {
+  const path = state.settings?.cad_path;
+  if (!path) { toast('Kein CAD-Pfad konfiguriert — bitte unter Einstellungen → System hinterlegen', 'err'); return; }
+  try {
+    await api('/api/launch-cad', 'POST');
+    toast('CAD wird gestartet…', 'ok');
+  } catch(e) { toast('CAD konnte nicht gestartet werden', 'err'); }
 }
 
 async function saveCheckoutDir() {
