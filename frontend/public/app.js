@@ -3173,36 +3173,87 @@ function toast(msg, type='ok') {
 
 // -- SHUTDOWN --------------------------------------------------
 async function shutdownServer() {
-  // Check for active checkouts first
   await loadCheckouts();
-  if (state.checkouts.length > 0) {
-    const totalFiles = state.checkouts.reduce((s, c) => s + (c.files?.length || 0), 0);
-    const names = state.checkouts.map(c => `• ${c.item_number} – ${c.item_name}`).join('\n');
-    const checkin = confirm(
-      `⚠ Es sind noch ${state.checkouts.length} Checkout(s) aktiv (${totalFiles} Dateien):\n\n${names}\n\nVor dem Beenden einchecken (Ordner löschen)?`
-    );
-    if (checkin) {
-      for (const c of [...state.checkouts]) {
-        try { await api('/api/checkout/checkin', 'POST', { folder: c.folder }); } catch {}
-      }
-      await loadCheckouts();
-      toast('Alle Checkouts eingecheckt', 'ok');
-    } else {
-      if (!confirm('Trotzdem beenden ohne Einchecken?')) return;
-    }
+  const checkouts = state.checkouts;
+  const totalFiles = checkouts.reduce((s, c) => s + (c.files?.length || 0), 0);
+  const newCount = _scanNewCount();
+  const newItemFiles = _scanResult.item_files;
+  const newRootFiles = _scanResult.root_files;
+
+  if (checkouts.length > 0) {
+    _showDynModal(`<div class="modal" style="max-width:460px">
+      <div class="modal-head">
+        <div class="modal-title" style="color:var(--amber)">⚠ Aktive Checkouts</div>
+      </div>
+      <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:13px;color:var(--t2)">${checkouts.length} Checkout(s) aktiv · ${totalFiles} Dateien</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${checkouts.map(c => `<div style="font-size:12px;font-family:var(--mono);color:var(--t3)">
+            ${_itemChip(c.item_type,14)} <span style="color:var(--blue)">${esc(c.item_number)}</span> – ${esc(c.item_name)}
+          </div>`).join('')}
+        </div>
+        <div style="font-size:12px;color:var(--t3);padding-top:4px">Vor dem Beenden einchecken (Checkout-Ordner werden gelöscht)?</div>
+      </div>
+      <div class="modal-foot" style="gap:6px">
+        <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+        <button class="btn btn-red" onclick="_doShutdown(false)">Beenden ohne Einchecken</button>
+        <button class="btn btn-primary" onclick="_doShutdown(true)">Einchecken & Beenden</button>
+      </div>
+    </div>`);
+  } else if (newCount > 0) {
+    const allFiles = [
+      ...newItemFiles.flatMap(g => g.new_files.map(f => `<span style="color:var(--blue);font-family:var(--mono)">${esc(g.item_number)}/</span>${esc(f.name)}`)),
+      ...newRootFiles.map(f => `<span style="color:var(--t3)">root/</span>${esc(f.name)}`)
+    ];
+    _showDynModal(`<div class="modal" style="max-width:460px">
+      <div class="modal-head">
+        <div class="modal-title" style="color:var(--amber)">⚠ Nicht erfasste Dateien</div>
+      </div>
+      <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:13px;color:var(--t2)">${newCount} Datei(en) im Checkout-Ordner noch nicht im PLM erfasst:</div>
+        <div style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto">
+          ${allFiles.map(f => `<div style="font-size:11px;color:var(--t3)">${f}</div>`).join('')}
+        </div>
+        <div style="font-size:12px;color:var(--t3)">Jetzt erfassen oder später?</div>
+      </div>
+      <div class="modal-foot" style="gap:6px">
+        <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+        <button class="btn btn-red" onclick="_doShutdown(false)">Trotzdem beenden</button>
+        <button class="btn btn-primary" onclick="_hideDynModal();showCheckoutList()">Jetzt erfassen</button>
+      </div>
+    </div>`);
   } else {
-    if (!confirm('Server wirklich beenden?')) return;
+    _showDynModal(`<div class="modal" style="max-width:360px">
+      <div class="modal-head">
+        <div class="modal-title">Server beenden</div>
+      </div>
+      <div class="modal-body" style="padding:14px 16px">
+        <div style="font-size:13px;color:var(--t2)">PLM-Server wirklich beenden?</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:6px">Die Weboberfläche ist danach nicht mehr erreichbar.</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+        <button class="btn btn-red" onclick="_doShutdown(false)">Beenden</button>
+      </div>
+    </div>`);
   }
-  try { await fetch('/api/shutdown', { method: 'POST' }); } catch(e) {}
-  // Tab schliessen
+}
+
+async function _doShutdown(checkinFirst) {
+  if (checkinFirst) {
+    for (const c of [...state.checkouts]) {
+      try { await api('/api/checkout/checkin', 'POST', { folder: c.folder }); } catch {}
+    }
+  }
+  _hideDynModal();
+  try { await fetch('/api/shutdown', { method: 'POST' }); } catch {}
   window.open('', '_self').close();
   window.close();
-  // Fallback: Tab konnte nicht geschlossen werden
   setTimeout(() => {
-    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0c10;color:#dde4f0;font-family:IBM Plex Mono,monospace;gap:16px">'
-      + '<div style="font-size:40px">&#9632;</div>'
-      + '<div style="font-size:18px;color:#4a9eff">PLM & ERP wurde beendet</div>'
-      + '<div style="font-size:13px;color:#4a5470">Dieser Tab kann jetzt geschlossen werden.</div>'
+    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0b0d;color:#ecedef;font-family:Manrope,sans-serif;gap:16px">'
+      + '<div style="font-size:36px;color:var(--t4)">■</div>'
+      + '<div style="font-size:17px;font-weight:600">PLM & ERP wurde beendet</div>'
+      + '<div style="font-size:12px;color:#4a5470">Dieser Tab kann geschlossen werden.</div>'
       + '</div>';
   }, 300);
 }
