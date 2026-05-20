@@ -308,6 +308,9 @@ thead th {
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
   background: var(--bg1);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 tbody tr { border-bottom: 1px solid var(--line); transition: background .12s var(--ease); cursor: pointer; }
 tbody tr:hover { background: var(--bg3); }
