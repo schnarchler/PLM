@@ -1781,12 +1781,30 @@ app.get('/api/profit-overview', (req, res) => {
     FROM items i JOIN projects p ON i.project_id=p.id
     WHERE i.item_type IN ('prt','asm')
     ORDER BY p.number, i.item_number`);
+
+  // Order revenue/qty per item (non-cancelled orders)
+  const orderStats = all(`
+    SELECT oi.item_id,
+      SUM(oi.quantity) as total_qty,
+      SUM(oi.quantity * COALESCE(oi.unit_price, i.default_price, 0)) as total_revenue
+    FROM order_items oi
+    JOIN orders o ON oi.order_id=o.id
+    JOIN items i ON oi.item_id=i.id
+    WHERE o.status NOT IN ('CANCELLED')
+    GROUP BY oi.item_id`);
+  const statsById = {};
+  orderStats.forEach(s => { statsById[s.item_id] = s; });
+
   items.forEach(i => {
     i.manufacturing_cost = calcItemCost(i.id);
     const cost = i.manufacturing_cost ? i.manufacturing_cost.total : null;
     const price = i.default_price;
     i.margin = (cost != null && price != null) ? price - cost : null;
     i.margin_pct = (i.margin != null && cost > 0) ? (i.margin / cost * 100) : null;
+    const s = statsById[i.id];
+    i.order_qty      = s ? (s.total_qty || 0) : 0;
+    i.order_revenue  = s ? (s.total_revenue || 0) : 0;
+    i.order_profit   = (s && cost != null) ? s.total_revenue - (cost * s.total_qty) : null;
   });
   res.json(items);
 });

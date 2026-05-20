@@ -1593,7 +1593,7 @@ function _exportProfitCsv() {
   const csvNum = v => v == null ? '' : String(v).replace('.', ',');
   const csvStr = s => '"' + String(s||'').replace(/"/g, '""') + '"';
   const lines = [
-    ['Projekt','Nummer','Typ','Name','Herst.-kosten (CHF)','Filament (CHF)','Maschine (CHF)','Verkaufspreis (CHF)','Marge (CHF)','Marge (%)'].join(';'),
+    ['Projekt','Nummer','Typ','Name','Herst.-kosten (CHF)','Filament (CHF)','Maschine (CHF)','Verkaufspreis (CHF)','Marge (CHF)','Marge (%)','Stk. verkauft','Umsatz (CHF)','Gewinn total (CHF)'].join(';'),
     ...rows.map(i => {
       const mc = i.manufacturing_cost;
       return [
@@ -1607,6 +1607,9 @@ function _exportProfitCsv() {
         csvNum(i.default_price != null ? i.default_price.toFixed(2) : null),
         csvNum(i.margin != null ? i.margin.toFixed(2) : null),
         csvNum(i.margin_pct != null ? i.margin_pct.toFixed(1) : null),
+        csvNum(i.order_qty || 0),
+        csvNum(i.order_revenue != null ? i.order_revenue.toFixed(2) : null),
+        csvNum(i.order_profit != null ? i.order_profit.toFixed(2) : null),
       ].join(';');
     })
   ];
@@ -1698,13 +1701,16 @@ function _renderProfitRows() {
   });
 
   const val = i => ({
-    project:  i.project_number,
-    number:   i.item_number,
-    name:     i.name,
-    cost:     i.manufacturing_cost ? i.manufacturing_cost.total : -Infinity,
-    price:    i.default_price ?? -Infinity,
-    margin:   i.margin ?? -Infinity,
-    margin_pct: i.margin_pct ?? -Infinity,
+    project:      i.project_number,
+    number:       i.item_number,
+    name:         i.name,
+    cost:         i.manufacturing_cost ? i.manufacturing_cost.total : -Infinity,
+    price:        i.default_price ?? -Infinity,
+    margin:       i.margin ?? -Infinity,
+    margin_pct:   i.margin_pct ?? -Infinity,
+    order_qty:    i.order_qty ?? -Infinity,
+    order_revenue:i.order_revenue ?? -Infinity,
+    order_profit: i.order_profit ?? -Infinity,
   })[sort] ?? '';
 
   rows.sort((a, b) => {
@@ -1720,7 +1726,8 @@ function _renderProfitRows() {
   document.getElementById('profit-thead').innerHTML =
     th('Projekt','project') + th('Nummer','number') + th('Name','name') +
     th('Herst.-kosten','cost','right') + th('Verkaufspreis','price','right') +
-    th('Marge','margin','right') + th('%','margin_pct','right');
+    th('Marge','margin','right') + th('%','margin_pct','right') +
+    th('Stk. verkauft','order_qty','right') + th('Umsatz','order_revenue','right') + th('Gewinn total','order_profit','right');
 
   document.getElementById('profit-tbody').innerHTML = rows.length ? rows.map(i => {
     const mc = i.manufacturing_cost;
@@ -1729,14 +1736,18 @@ function _renderProfitRows() {
       + (mc.filament > 0 ? `Fil. ${fmtN(mc.filament)}` : '')
       + (mc.filament > 0 && mc.machine > 0 ? ' + ' : '')
       + (mc.machine > 0 ? `Mach. ${fmtN(mc.machine)}` : '') + `</span>` : '';
+    const opColor = i.order_profit == null ? 'var(--t3)' : i.order_profit < 0 ? 'var(--red)' : i.order_profit === 0 ? 'var(--t3)' : 'var(--green)';
     return `<tr style="border-bottom:1px solid var(--line);cursor:pointer;${marginBg(i.margin)}" onclick="openProjectAndItem(${i.project_db_id},${i.id})" title="Im PLM öffnen">
       <td style="padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.project_number)}</td>
       <td style="padding:5px 8px;font-size:11px;white-space:nowrap">${_itemChip(i.item_type,16)} ${esc(i.item_number)}</td>
-      <td style="padding:5px 8px;font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
+      <td style="padding:5px 8px;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${cost != null ? `${fmtCHF(cost)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t3)">—</span>'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:${marginColor(i.margin)}">${i.margin != null ? fmtCHF(i.margin) : '—'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:${marginColor(i.margin)}">${i.margin_pct != null ? i.margin_pct.toFixed(0)+'%' : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_qty ? fmtN(i.order_qty, 0) : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_revenue ? fmtCHF(i.order_revenue) : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:${i.order_profit != null ? 600 : 400};color:${opColor}">${i.order_profit != null ? fmtCHF(i.order_profit) : '—'}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Einträge</td></tr>';
 }
