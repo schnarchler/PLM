@@ -3539,10 +3539,6 @@ async function _showDimStockInfo(itemId) {
       + (s.planned_qty > 0 ? ` · ${fmtN(s.planned_qty, 0)} geplant (offene Aufträge)` : '')
       + ` · <b style="color:${color}">Verfügbar: ${fmtN(avail, 0)} ${s.unit}</b>`
       + (s.stock_qty <= 0 ? ' — <b>Kein Bestand!</b>' : '');
-    // Block save if stock is 0
-    const saveBtn = document.getElementById('dim-save');
-    if (saveBtn) saveBtn.disabled = s.stock_qty <= 0;
-    if (s.stock_qty <= 0 && saveBtn) saveBtn.title = 'Kein Lagerbestand vorhanden';
   } catch { el.style.display = 'none'; }
 }
 
@@ -3577,8 +3573,6 @@ function clearDimLinkedItem() {
   document.getElementById('dim-plm-search').value = '';
   const el = document.getElementById('dim-stock-info');
   if (el) el.style.display = 'none';
-  const saveBtn = document.getElementById('dim-save');
-  if (saveBtn) { saveBtn.disabled = false; saveBtn.title = ''; }
 }
 
 // ── DELIVERY CRUD ─────────────────────────────────────────────
@@ -3642,7 +3636,6 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   document.getElementById('dim-plm-search').value = '';
   document.getElementById('dim-plm-selected').style.display = 'none';
   const _si = document.getElementById('dim-stock-info'); if (_si) _si.style.display = 'none';
-  const _sb = document.getElementById('dim-save'); if (_sb) { _sb.disabled = false; _sb.title = ''; }
   document.getElementById('dim-3mf-status').textContent = '';
   document.getElementById('dim-3mf-preview').style.display = 'none';
   document.getElementById('dim-3mf-preview').innerHTML = '';
