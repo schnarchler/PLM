@@ -292,8 +292,16 @@
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Kunde</label>
-          <select class="fs" id="om-customer" onchange="onCustChange('om')"><option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option></select>
+          <div style="position:relative">
+            <input class="fi" id="om-customer-search" placeholder="Name oder Nummer suchen…" oninput="searchCustomerForOrder(this.value)" autocomplete="off">
+            <div id="om-customer-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:200px;overflow-y:auto"></div>
+          </div>
+          <input type="hidden" id="om-customer">
           <input class="fi" id="om-customer-free" placeholder="Kundenname (Freitext)" style="display:none;margin-top:4px">
+          <div id="om-customer-selected" style="display:none;margin-top:4px;font-size:11px;color:var(--t3);display:flex;align-items:center;gap:6px">
+            <span id="om-customer-name" style="color:var(--t2)"></span>
+            <button type="button" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 6px" onclick="clearOrderCustomer()">✕</button>
+          </div>
         </div>
         <div class="fg"><label class="fl">Status</label>
           <select class="fs" id="om-status">
@@ -408,7 +416,7 @@
         <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="li-desc" placeholder="Leistungsbeschreibung oder Bezeichnung"></div>
       </div>
       <div class="form-row cols3">
-        <div class="fg"><label class="fl">Menge</label><input class="fi" id="li-qty" type="number" value="1" min="0.001" step="0.001"></div>
+        <div class="fg"><label class="fl">Menge</label><input class="fi" id="li-qty" type="number" value="1" min="0.001" step="1"></div>
         <div class="fg"><label class="fl">Einheit</label>
           <select class="fs" id="li-unit"><option>Stk</option><option>h</option><option>m</option><option>mm</option><option>g</option><option>kg</option><option>Set</option><option>Pauschal</option></select>
         </div>
@@ -619,13 +627,14 @@
             <input class="fi" id="dim-plm-search" placeholder="Teilenummer oder Name suchen…" oninput="searchItemsForDim(this.value)" autocomplete="off">
             <div id="dim-plm-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:180px;overflow-y:auto"></div>
           </div>
+          <div id="dim-stock-info" style="display:none;margin-top:6px;font-size:11px;padding:6px 10px;border-radius:var(--r-sm);border:1px solid var(--line2)"></div>
         </div>
       </div>
       <div class="form-row">
         <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="dim-desc" placeholder="Bezeichnung des Bauteils"></div>
       </div>
       <div class="form-row cols3">
-        <div class="fg"><label class="fl">Menge</label><input class="fi" id="dim-qty" type="number" value="1" min="0.001" step="0.001"></div>
+        <div class="fg"><label class="fl">Menge</label><input class="fi" id="dim-qty" type="number" value="1" min="0.001" step="1"></div>
         <div class="fg"><label class="fl">Einheit</label>
           <select class="fs" id="dim-unit"><option>Stk</option><option>Set</option><option>m</option><option>g</option><option>kg</option></select>
         </div>

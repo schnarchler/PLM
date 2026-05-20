@@ -2437,6 +2437,22 @@ app.delete('/api/suppliers/:id', (req, res) => {
 // ==============================================================
 // INVENTORY
 // ==============================================================
+// Stock check for a PLM item: returns linked inventory item + planned qty in open orders
+app.get('/api/inventory/stock-check', (req, res) => {
+  const { item_id } = req.query;
+  if (!item_id) return res.json(null);
+  const inv = get(`SELECT ii.* FROM inventory_items ii WHERE ii.item_id=? LIMIT 1`, [parseInt(item_id)]);
+  if (!inv) return res.json(null);
+  // Planned = sum of quantities in orders that are not DELIVERED or CANCELLED
+  const planned = get(`
+    SELECT COALESCE(SUM(oi.quantity),0) as qty
+    FROM order_items oi
+    JOIN orders o ON oi.order_id=o.id
+    WHERE oi.item_id=? AND o.status NOT IN ('DELIVERED','CANCELLED')
+  `, [parseInt(item_id)]);
+  res.json({ ...inv, planned_qty: planned?.qty || 0 });
+});
+
 app.get('/api/inventory', (req, res) => {
   const { item_id } = req.query;
   const base = `SELECT ii.*, s.name as supplier_name, it.item_number as linked_item_number, it.name as linked_item_name

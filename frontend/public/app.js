@@ -2586,7 +2586,71 @@ function setCustFields(pfx, customer_id, customer_name_free) {
     if (inp) { inp.style.display = 'none'; inp.value = ''; }
   }
 }
+let _omCustTimer = null;
+async function searchCustomerForOrder(q) {
+  clearTimeout(_omCustTimer);
+  const res = document.getElementById('om-customer-results');
+  const sel = document.getElementById('om-customer-selected');
+  if (sel) sel.style.display = 'none';
+  if (!q || q.length < 1) { res.style.display = 'none'; return; }
+  _omCustTimer = setTimeout(async () => {
+    const all = state.customers || [];
+    const ql = q.toLowerCase();
+    const matches = all.filter(c => c.name.toLowerCase().includes(ql) || (c.number||'').toLowerCase().includes(ql));
+    if (!matches.length) {
+      res.innerHTML = `<div style="padding:9px 12px;font-size:12px;color:var(--t3)">Keine Treffer</div>`
+        + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:12px;border-top:1px solid var(--line)"
+            onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+            ✏ "${esc(q)}" als Freitext verwenden</div>`;
+    } else {
+      res.innerHTML = matches.map(c =>
+        `<div onclick="selectOrderCustomer(${c.id},'${esc(c.number)} ${esc(c.name)}')"
+          style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+          onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${c.number}</span>
+          <span style="font-size:12px;flex:1">${esc(c.name)}</span>
+        </div>`).join('')
+        + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:12px;color:var(--t3);border-top:1px solid var(--line)"
+            onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+            ✏ "${esc(q)}" als Freitext verwenden</div>`;
+    }
+    res.style.display = 'block';
+  }, 150);
+}
+function selectOrderCustomer(id, label) {
+  document.getElementById('om-customer').value = id;
+  document.getElementById('om-customer-free').style.display = 'none';
+  document.getElementById('om-customer-search').value = '';
+  document.getElementById('om-customer-results').style.display = 'none';
+  const sel = document.getElementById('om-customer-selected');
+  document.getElementById('om-customer-name').textContent = label;
+  sel.style.display = 'flex';
+}
+function selectOrderCustomerFree(name) {
+  document.getElementById('om-customer').value = '__free__';
+  document.getElementById('om-customer-free').value = name;
+  document.getElementById('om-customer-free').style.display = '';
+  document.getElementById('om-customer-search').value = '';
+  document.getElementById('om-customer-results').style.display = 'none';
+  const sel = document.getElementById('om-customer-selected');
+  document.getElementById('om-customer-name').textContent = '✏ ' + name;
+  sel.style.display = 'flex';
+}
+function clearOrderCustomer() {
+  document.getElementById('om-customer').value = '';
+  document.getElementById('om-customer-free').style.display = 'none';
+  document.getElementById('om-customer-free').value = '';
+  document.getElementById('om-customer-search').value = '';
+  document.getElementById('om-customer-results').style.display = 'none';
+  const sel = document.getElementById('om-customer-selected');
+  if (sel) sel.style.display = 'none';
+}
 function getCustBody(pfx) {
+  if (pfx === 'om') {
+    const val = document.getElementById('om-customer').value;
+    if (val === '__free__') return { customer_id: null, customer_name_free: document.getElementById('om-customer-free').value.trim() || null };
+    return { customer_id: val || null, customer_name_free: null };
+  }
   const sel = document.getElementById(pfx+'-customer');
   if (sel.value === '__free__') {
     return { customer_id: null, customer_name_free: document.getElementById(pfx+'-customer-free').value.trim() || null };
@@ -2597,11 +2661,17 @@ function getCustBody(pfx) {
 async function openOrderModal(id) {
   editingOrderId=id||null;
   const customers=await api('/api/customers'); state.customers=customers;
-  const sel=document.getElementById('om-customer');
-  sel.innerHTML='<option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option>'+customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
+  clearOrderCustomer();
   if (id) {
     const o=await api(`/api/orders/${id}`);
-    set('om-title-f',o.title); setCustFields('om',o.customer_id,o.customer_name_free); document.getElementById('om-status').value=o.status;
+    set('om-title-f',o.title);
+    if (o.customer_id) {
+      const c = customers.find(x => x.id === o.customer_id);
+      if (c) selectOrderCustomer(c.id, c.number + ' ' + c.name);
+    } else if (o.customer_name_free) {
+      selectOrderCustomerFree(o.customer_name_free);
+    }
+    document.getElementById('om-status').value=o.status;
     set('om-date',o.order_date||''); set('om-delivery',o.delivery_date||''); set('om-notes',o.notes||'');
     set('om-tax',o.tax_rate??''); set('om-disc',o.discount_pct??0); set('om-terms',o.payment_terms||'');
     document.getElementById('om-include-tax').checked = !!o.include_tax;
@@ -3402,6 +3472,29 @@ async function searchItemsForDim(q) {
   }, 200);
 }
 
+async function _showDimStockInfo(itemId) {
+  const el = document.getElementById('dim-stock-info');
+  if (!el) return;
+  try {
+    const s = await api('/api/inventory/stock-check?item_id=' + itemId);
+    if (!s) { el.style.display = 'none'; return; }
+    const avail = (s.stock_qty || 0) - (s.planned_qty || 0);
+    const color = s.stock_qty <= 0 ? 'var(--red)' : avail <= 0 ? 'var(--amber)' : 'var(--green)';
+    el.style.display = 'block';
+    el.style.background = s.stock_qty <= 0 ? 'var(--red-soft)' : avail <= 0 ? 'var(--amber-soft)' : 'var(--green-soft)';
+    el.style.borderColor = s.stock_qty <= 0 ? 'var(--red-line)' : avail <= 0 ? 'var(--amber-line)' : 'var(--green-line)';
+    el.style.color = color;
+    el.innerHTML = `<b>Lager: ${fmtN(s.stock_qty, 0)} ${s.unit}</b>`
+      + (s.planned_qty > 0 ? ` · ${fmtN(s.planned_qty, 0)} geplant (offene Aufträge)` : '')
+      + ` · <b style="color:${color}">Verfügbar: ${fmtN(avail, 0)} ${s.unit}</b>`
+      + (s.stock_qty <= 0 ? ' — <b>Kein Bestand!</b>' : '');
+    // Block save if stock is 0
+    const saveBtn = document.getElementById('dim-save');
+    if (saveBtn) saveBtn.disabled = s.stock_qty <= 0;
+    if (s.stock_qty <= 0 && saveBtn) saveBtn.title = 'Kein Lagerbestand vorhanden';
+  } catch { el.style.display = 'none'; }
+}
+
 function selectDimLinkedItem(item) {
   set('dim-linked-plm-id', item.id);
   document.getElementById('dim-plm-search').value = '';
@@ -3410,6 +3503,7 @@ function selectDimLinkedItem(item) {
   document.getElementById('dim-plm-badge').textContent = icon + ' ' + item.item_number;
   document.getElementById('dim-plm-name').textContent = item.name + ' · ' + item.project_name;
   document.getElementById('dim-plm-selected').style.display = 'flex';
+  _showDimStockInfo(item.id);
   if (!V('dim-desc')) set('dim-desc', item.item_number + ' – ' + item.name);
   if (item.default_price != null && !V('dim-price')) set('dim-price', item.default_price);
   // Auto-fill manual print parameters from linked item's print settings
@@ -3430,6 +3524,10 @@ function clearDimLinkedItem() {
   set('dim-linked-plm-id', '');
   document.getElementById('dim-plm-selected').style.display = 'none';
   document.getElementById('dim-plm-search').value = '';
+  const el = document.getElementById('dim-stock-info');
+  if (el) el.style.display = 'none';
+  const saveBtn = document.getElementById('dim-save');
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.title = ''; }
 }
 
 // ── DELIVERY CRUD ─────────────────────────────────────────────
@@ -3492,6 +3590,8 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   document.getElementById('dim-plm-results').style.display = 'none';
   document.getElementById('dim-plm-search').value = '';
   document.getElementById('dim-plm-selected').style.display = 'none';
+  const _si = document.getElementById('dim-stock-info'); if (_si) _si.style.display = 'none';
+  const _sb = document.getElementById('dim-save'); if (_sb) { _sb.disabled = false; _sb.title = ''; }
   document.getElementById('dim-3mf-status').textContent = '';
   document.getElementById('dim-3mf-preview').style.display = 'none';
   document.getElementById('dim-3mf-preview').innerHTML = '';
@@ -3515,6 +3615,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
         document.getElementById('dim-plm-badge').textContent = icon + ' ' + it.item_number;
         document.getElementById('dim-plm-name').textContent = it.description;
         document.getElementById('dim-plm-selected').style.display = 'flex';
+        _showDimStockInfo(it.item_id);
       }
       if (it.print_settings_json) {
         set('dim-settings-json', it.print_settings_json);
