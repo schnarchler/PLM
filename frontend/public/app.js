@@ -17,7 +17,8 @@ async function setDocStatus(type, id, status, el) {
   const prevValue = el.value;
   const prevClass = el.className;
   try {
-    const r = await api(`/api/${type}s/${id}/status`, 'PUT', { status });
+    const endpoint = type === 'delivery' ? 'deliveries' : type + 's';
+    const r = await api(`/api/${endpoint}/${id}/status`, 'PUT', { status });
     const m = type==='order' ? ORDER_ST_MAP : type==='quote' ? QUOTE_ST_MAP : DELIVERY_ST_MAP;
     el.className = 'status-sel ' + (m[status]||'');
 
