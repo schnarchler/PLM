@@ -4713,12 +4713,17 @@ async function renderInventory() {
 function _invRenderTable(items) {
   const { col, dir } = _invSort;
   // Always sort by name first so variants stay together, then by selected col within same name
+  const cmp = (a, b) => String(a||'').localeCompare(String(b||''), undefined, {sensitivity:'base'});
   const sorted = [...items].sort((a, b) => {
-    const nameCmp = String(a.name||'').localeCompare(String(b.name||''), undefined, {sensitivity:'base'});
+    const nameCmp = cmp(a.name, b.name);
     if (nameCmp !== 0) return col === 'name' ? nameCmp * dir : nameCmp;
-    const av = a[col] ?? '', bv = b[col] ?? '';
-    if (col === 'stock_qty' || col === 'min_qty') return ((parseFloat(av)||0) - (parseFloat(bv)||0)) * dir;
-    return String(av).localeCompare(String(bv), undefined, {sensitivity:'base'}) * dir;
+    const colorCmp = cmp(a.color, b.color);
+    if (colorCmp !== 0) return col === 'color' ? colorCmp * dir : colorCmp;
+    const matCmp = cmp(a.material, b.material);
+    if (matCmp !== 0) return col === 'material' ? matCmp * dir : matCmp;
+    if (col === 'stock_qty' || col === 'min_qty' || col === 'planned_qty')
+      return ((parseFloat(a[col])||0) - (parseFloat(b[col])||0)) * dir;
+    return cmp(a[col], b[col]) * dir;
   });
   const byCategory = {};
   sorted.forEach(i => { (byCategory[i.category] = byCategory[i.category]||[]).push(i); });
