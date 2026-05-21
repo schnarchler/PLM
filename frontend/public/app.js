@@ -2444,16 +2444,23 @@ async function _loadDelTab() {
   // Released items
   const itemsEl = document.getElementById('st-del-items');
   if (itemsEl) {
-    const relItems = await api('/api/items-released').catch(()=>[]);
-    itemsEl.innerHTML = relItems.length
-      ? relItems.map(i => `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
-          ${_itemChip(i.item_type,15)}
-          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(i.item_number)}</span>
-          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
-          <span style="font-size:10px;color:var(--t3)">${esc(i.project_number||'')}</span>
-          <button class="btn btn-red btn-sm" onclick="_forceDelItem(${i.id},'${esc(i.item_number)}')">Löschen</button>
-        </div>`).join('')
-      : '<div style="font-size:12px;color:var(--t3)">Keine freigegebenen Items</div>';
+    itemsEl.innerHTML = '<div style="font-size:12px;color:var(--t3)">Lädt…</div>';
+    let relItems = [], loadErr = false;
+    try { relItems = await api('/api/items-released'); }
+    catch(e) { loadErr = true; }
+    if (loadErr) {
+      itemsEl.innerHTML = '<div style="font-size:12px;color:var(--amber)">⚠ Endpunkt nicht verfügbar — Server neu starten</div>';
+    } else {
+      itemsEl.innerHTML = relItems.length
+        ? relItems.map(i => `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+            ${_itemChip(i.item_type,15)}
+            <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(i.item_number)}</span>
+            <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
+            <span style="font-size:10px;color:var(--t3)">${esc(i.project_number||'')}</span>
+            <button class="btn btn-red btn-sm" onclick="_forceDelItem(${i.id},'${esc(i.item_number)}')">Löschen</button>
+          </div>`).join('')
+        : '<div style="font-size:12px;color:var(--t3)">Keine freigegebenen Items</div>';
+    }
   }
 
   const pelEl = document.getElementById('st-del-projects');
