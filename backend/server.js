@@ -2100,6 +2100,17 @@ app.post('/api/shutdown', (req, res) => {
   }, 500);
 });
 
+// Launcher-Seite: öffnet PLM per window.open() damit window.close() funktioniert
+app.get('/launcher', (req, res) => {
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PLM starten…</title>
+  <style>body{background:#0a0b0d;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#4a5470}</style>
+  </head><body><div>PLM & ERP wird gestartet…</div>
+  <script>
+    var w = window.open('/', '_blank', 'width='+screen.availWidth+',height='+screen.availHeight+',left=0,top=0');
+    if(w) { window.close(); } else { window.location.href = '/'; }
+  <\/script></body></html>`);
+});
+
 // ==============================================================
 // 3MF PARSE
 // ==============================================================
