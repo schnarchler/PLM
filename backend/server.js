@@ -460,11 +460,7 @@ function migrateOnce(key, fn) {
 }
 
 // -- HELPERS ----------------------------------------------------
-function nextRev(current) {
-  if (!current) return '1';
-  const n = parseInt(current);
-  return String(isNaN(n) ? 1 : n + 1);
-}
+function nextRev(current) { return nextRevLabel(current); }
 
 function nextCounter(key) {
   db.run('UPDATE counters SET value=value+1 WHERE key=?', [key]);
@@ -474,11 +470,28 @@ function nextCounter(key) {
   return row.value;
 }
 
-function nextProjectNumber() { return String(nextCounter('project')).padStart(4, '0'); }
-function nextCustomerNumber() { return 'KD-' + String(nextCounter('customer')).padStart(4, '0'); }
-function nextOrderNumber() { return 'AUF-' + new Date().getFullYear() + '-' + String(nextCounter('order')).padStart(4, '0'); }
-function nextQuoteNumber() { return 'ANG-' + new Date().getFullYear() + '-' + String(nextCounter('quote')).padStart(4, '0'); }
-function nextDeliveryNumber() { return 'LS-' + new Date().getFullYear() + '-' + String(nextCounter('delivery')).padStart(4, '0'); }
+function padN(n, key, def) { return String(n).padStart(parseInt(getSetting(key, String(def)))||def, '0'); }
+function nextProjectNumber() { return padN(nextCounter('project'), 'pad_project', 4); }
+function getSetting(key, def='') { return get('SELECT value FROM settings WHERE key=?', [key])?.value ?? def; }
+function nextCustomerNumber() {
+  const pre = getSetting('prefix_customer','KD');
+  return pre + '-' + padN(nextCounter('customer'), 'pad_customer', 4);
+}
+function nextOrderNumber() {
+  const pre = getSetting('prefix_order','AUF');
+  const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
+  return pre + '-' + yr + padN(nextCounter('order'), 'pad_order', 4);
+}
+function nextQuoteNumber() {
+  const pre = getSetting('prefix_quote','ANG');
+  const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
+  return pre + '-' + yr + padN(nextCounter('quote'), 'pad_quote', 4);
+}
+function nextDeliveryNumber() {
+  const pre = getSetting('prefix_delivery','LS');
+  const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
+  return pre + '-' + yr + padN(nextCounter('delivery'), 'pad_delivery', 4);
+}
 function nextSupplierNumber() { return 'LF-' + String(nextCounter('supplier')).padStart(4, '0'); }
 
 function parseIni(content) {
@@ -656,21 +669,49 @@ function log(type, id, action, details) {
   saveDb();
 }
 
+function itemSep()          { return getSetting('num_sep','-'); }
+function segAsm()           { return getSetting('seg_asm','asm'); }
+function segPrt()           { return getSetting('seg_prt','prt'); }
+function segDoc()           { return getSetting('seg_doc','doc'); }
+function itemPad(type)      {
+  if (type==='asm') return parseInt(getSetting('pad_asm','3'))||3;
+  if (type==='doc') return parseInt(getSetting('pad_doc','3'))||3;
+  return parseInt(getSetting('pad_prt','3'))||3;
+}
+function nextRevLabel(current) {
+  const fmt = getSetting('rev_format','num');
+  if (fmt === 'letter') {
+    if (!current) return 'A';
+    const code = current.charCodeAt(0);
+    return code >= 65 && code < 90 ? String.fromCharCode(code+1) : current; // A-Y → next letter
+  }
+  const n = parseInt(current);
+  return String(isNaN(n) ? 1 : n + 1);
+}
+function firstRevLabel() {
+  return getSetting('rev_format','num') === 'letter' ? 'A' : '1';
+}
+
 function nextItemSeq(projectId, type) {
+  const seg = type === 'asm' ? segAsm() : type === 'doc' ? segDoc() : segPrt();
+  const sep = itemSep(); const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   const rows = all('SELECT item_number FROM items WHERE project_id=? AND item_type=?', [projectId, type]);
-  const re = new RegExp('-' + type + '-(\\d+)$');
+  const re = new RegExp(esc(sep) + esc(seg) + esc(sep) + '(\\d+)$');
   const nums = rows.map(r => { const m = r.item_number.match(re); return m ? parseInt(m[1]) : 0; });
-  return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+  return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(itemPad(type), '0');
 }
 function nextPrtNumber(projectId, asmNum) {
+  const sep = itemSep(); const sa = segAsm(); const sp = segPrt();
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   let rows;
   if (asmNum) {
-    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='prt' AND item_number LIKE ?", [projectId, `%-asm-${asmNum}-prt-%`]);
+    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='prt' AND item_number LIKE ?", [projectId, `%${sep}${sa}${sep}${asmNum}${sep}${sp}${sep}%`]);
   } else {
-    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='prt' AND item_number NOT LIKE '%-asm-%-prt-%'", [projectId]);
+    rows = all("SELECT item_number FROM items WHERE project_id=? AND item_type='prt' AND item_number NOT LIKE ?", [projectId, `%${sep}${sa}${sep}%${sep}${sp}${sep}%`]);
   }
-  const nums = rows.map(r => { const m = r.item_number.match(/-prt-(\d+)$/); return m ? parseInt(m[1]) : 0; });
-  return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+  const re = new RegExp(esc(sep) + esc(sp) + esc(sep) + '(\\d+)$');
+  const nums = rows.map(r => { const m = r.item_number.match(re); return m ? parseInt(m[1]) : 0; });
+  return String((nums.length ? Math.max(...nums) : 0) + 1).padStart(itemPad('prt'), '0');
 }
 
 
@@ -828,25 +869,25 @@ app.post('/api/projects/:projectId/items', (req, res) => {
 
   let item_number;
   if (item_type === 'asm') {
-    item_number = project.number + '-asm-' + nextItemSeq(project.id, 'asm');
+    item_number = project.number + itemSep() + segAsm() + itemSep() + nextItemSeq(project.id, 'asm');
   } else if (item_type === 'doc') {
-    item_number = project.number + '-doc-' + nextItemSeq(project.id, 'doc');
+    item_number = project.number + itemSep() + segDoc() + itemSep() + nextItemSeq(project.id, 'doc');
   } else {
     if (parent_id) {
       const parent = get('SELECT * FROM items WHERE id=?', [parent_id]);
       const asmMatch = parent ? parent.item_number.match(/-asm-(\d+)/) : null;
       const asmNum = asmMatch ? asmMatch[1] : null;
       item_number = asmNum
-        ? project.number + '-asm-' + asmNum + '-prt-' + nextPrtNumber(project.id, asmNum)
-        : project.number + '-prt-' + nextPrtNumber(project.id, null);
+        ? project.number + itemSep() + segAsm() + itemSep() + asmNum + itemSep() + segPrt() + itemSep() + nextPrtNumber(project.id, asmNum)
+        : project.number + itemSep() + segPrt() + itemSep() + nextPrtNumber(project.id, null);
     } else {
-      item_number = project.number + '-prt-' + nextPrtNumber(project.id, null);
+      item_number = project.number + itemSep() + segPrt() + itemSep() + nextPrtNumber(project.id, null);
     }
   }
 
   const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price) VALUES (?,?,?,?,?,?,?,?)',
     [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null]);
-  run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, '1', 'DFT', 'Initial revision']);
+  run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Initial revision']);
   log('item', itemId, 'Created', item_type + ' ' + item_number + ' rev1');
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
 });
@@ -874,19 +915,19 @@ app.put('/api/items/:id/move', (req, res) => {
     if (!it) return;
     let newNum;
     if (it.item_type === 'asm') {
-      newNum = targetProject.number + '-asm-' + nextItemSeq(targetProject.id, 'asm');
+      newNum = targetProject.number + itemSep() + segAsm() + itemSep() + nextItemSeq(targetProject.id, 'asm');
     } else if (it.item_type === 'doc') {
-      newNum = targetProject.number + '-doc-' + nextItemSeq(targetProject.id, 'doc');
+      newNum = targetProject.number + itemSep() + segDoc() + itemSep() + nextItemSeq(targetProject.id, 'doc');
     } else {
       if (newParentId) {
         const np = get('SELECT * FROM items WHERE id=?', [newParentId]);
         const asmMatch = np ? np.item_number.match(/-asm-(\d+)/) : null;
         const asmNum = asmMatch ? asmMatch[1] : null;
         newNum = asmNum
-          ? targetProject.number + '-asm-' + asmNum + '-prt-' + nextPrtNumber(targetProject.id, asmNum)
-          : targetProject.number + '-prt-' + nextPrtNumber(targetProject.id, null);
+          ? targetProject.number + itemSep() + segAsm() + itemSep() + asmNum + itemSep() + segPrt() + itemSep() + nextPrtNumber(targetProject.id, asmNum)
+          : targetProject.number + itemSep() + segPrt() + itemSep() + nextPrtNumber(targetProject.id, null);
       } else {
-        newNum = targetProject.number + '-prt-' + nextPrtNumber(targetProject.id, null);
+        newNum = targetProject.number + itemSep() + segPrt() + itemSep() + nextPrtNumber(targetProject.id, null);
       }
     }
     run('UPDATE items SET project_id=?,parent_id=?,item_number=? WHERE id=?',
@@ -1243,16 +1284,16 @@ app.post('/api/checkout/import', (req, res) => {
 
       let item_number;
       if (item_type === 'asm') {
-        item_number = project.number + '-asm-' + nextItemSeq(project.id, 'asm');
+        item_number = project.number + itemSep() + segAsm() + itemSep() + nextItemSeq(project.id, 'asm');
       } else if (item_type === 'doc') {
-        item_number = project.number + '-doc-' + nextItemSeq(project.id, 'doc');
+        item_number = project.number + itemSep() + segDoc() + itemSep() + nextItemSeq(project.id, 'doc');
       } else {
-        item_number = project.number + '-prt-' + nextPrtNumber(project.id, null);
+        item_number = project.number + itemSep() + segPrt() + itemSep() + nextPrtNumber(project.id, null);
       }
 
       const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description) VALUES (?,?,?,?,?,?)',
         [project.id, null, item_type, item_number, name, '']);
-      const revId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, '1', 'DFT', 'Erstellt durch Checkout-Import']);
+      const revId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Erstellt durch Checkout-Import']);
 
       if (filePath && fs.existsSync(filePath)) {
         const ext = path.extname(file_name);
@@ -1872,6 +1913,19 @@ app.get('/api/projects/:id/items-for-bom', (req, res) => {
 // ==============================================================
 // SETTINGS
 // ==============================================================
+app.get('/api/counters', (req, res) => {
+  res.json(Object.fromEntries(all('SELECT key, value FROM counters').map(r => [r.key, r.value])));
+});
+
+app.put('/api/counters', (req, res) => {
+  Object.entries(req.body).forEach(([k, v]) => {
+    const n = parseInt(v);
+    if (!isNaN(n) && n >= 0) db.run('UPDATE counters SET value=? WHERE key=?', [n, k]);
+  });
+  saveDb();
+  res.json(Object.fromEntries(all('SELECT key, value FROM counters').map(r => [r.key, r.value])));
+});
+
 app.get('/api/settings', (req, res) => {
   res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
 });
