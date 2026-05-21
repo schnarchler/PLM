@@ -2129,6 +2129,112 @@ app.post('/api/parse-3mf', uploadMem.single('file'), (req, res) => {
   res.json({ settings: result.settings, source: result.source });
 });
 
+// STEP BOM parser
+function parseStepBom(text) {
+  const dataMatch = text.match(/DATA;\s*([\s\S]*?)\s*ENDSEC;/i);
+  const dataSection = dataMatch ? dataMatch[1] : text;
+
+  // Split into entity statements, respecting strings (avoid splitting on ; inside 'string')
+  const statements = [];
+  let buf = '', inStr = false;
+  for (const ch of dataSection) {
+    if (ch === "'") inStr = !inStr;
+    buf += ch;
+    if (ch === ';' && !inStr) { statements.push(buf.trim()); buf = ''; }
+  }
+
+  // Parse #id = TYPE(raw)
+  const entities = {};
+  for (const s of statements) {
+    const m = s.match(/^#(\d+)\s*=\s*([A-Z_]+)\s*\(([\s\S]*)\)\s*;?$/);
+    if (m) entities[m[1]] = { type: m[2], raw: m[3] };
+  }
+
+  const getRefs  = raw => [...raw.matchAll(/#(\d+)/g)].map(m => m[1]);
+  const getFirst = raw => { const m = raw.match(/'([^']*)'/); return m ? m[1] : ''; };
+
+  // PRODUCT id -> name
+  const productName = {};
+  for (const [id, e] of Object.entries(entities))
+    if (e.type === 'PRODUCT') productName[id] = getFirst(e.raw) || `Part_${id}`;
+
+  // PRODUCT_DEFINITION -> PRODUCT (follow formation chain)
+  const pdToProduct = {};
+  for (const [id, e] of Object.entries(entities)) {
+    if (e.type !== 'PRODUCT_DEFINITION') continue;
+    let cur = getRefs(e.raw)[0];
+    for (let i = 0; i < 5 && cur; i++) {
+      const en = entities[cur];
+      if (!en) break;
+      if (en.type === 'PRODUCT') { pdToProduct[id] = cur; break; }
+      if (en.type.startsWith('PRODUCT_DEFINITION_FORMATION')) cur = getRefs(en.raw)[0];
+      else break;
+    }
+  }
+
+  // NEXT_ASSEMBLY_USAGE_OCCURENCE -> parent/child PD pairs
+  const childMap = {}, childPDs = new Set();
+  for (const e of Object.values(entities)) {
+    if (e.type !== 'NEXT_ASSEMBLY_USAGE_OCCURENCE') continue;
+    const refs = getRefs(e.raw);
+    if (refs.length < 2) continue;
+    const [par, ch] = refs;
+    if (!childMap[par]) childMap[par] = new Map();
+    childMap[par].set(ch, (childMap[par].get(ch) || 0) + 1);
+    childPDs.add(ch);
+  }
+
+  const rootPDs = Object.keys(childMap).filter(pd => !childPDs.has(pd));
+  if (!rootPDs.length) return null;
+
+  function buildNode(pd, depth = 0) {
+    if (depth > 30) return null;
+    const name = pdToProduct[pd] ? (productName[pdToProduct[pd]] || `Part_${pdToProduct[pd]}`) : `PD_${pd}`;
+    const node = { name, children: [] };
+    if (childMap[pd]) {
+      for (const [childPd, qty] of childMap[pd]) {
+        const child = buildNode(childPd, depth + 1);
+        if (child) { child.qty = qty; node.children.push(child); }
+      }
+    }
+    return node;
+  }
+
+  const roots = rootPDs.map(pd => buildNode(pd)).filter(Boolean);
+  return roots.length === 1 ? roots[0] : { name: 'Assembly', qty: 1, children: roots };
+}
+
+app.post('/api/parse-step-bom', uploadMem.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  if (!['.stp', '.step'].includes(ext)) return res.status(400).json({ error: 'Nur .stp / .step Dateien erlaubt' });
+  try {
+    const tree = parseStepBom(req.file.buffer.toString('utf8'));
+    if (!tree) return res.status(422).json({ error: 'Keine Baugruppenstruktur gefunden. Ist die Datei eine Baugruppe?' });
+    res.json(tree);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/revisions/:revId/bom-bulk', (req, res) => {
+  const { entries } = req.body;
+  if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: 'Keine Einträge' });
+  const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.revId]);
+  if (!rev) return res.status(404).json({ error: 'Revision nicht gefunden' });
+  try {
+    let pos = (get('SELECT MAX(position) as m FROM bom WHERE parent_rev_id=?', [req.params.revId])?.m || 0) + 1;
+    let count = 0;
+    for (const e of entries) {
+      try {
+        run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position) VALUES (?,?,?,?,?)',
+          [req.params.revId, e.child_item_id, e.quantity || 1, e.unit || 'pcs', pos++]);
+        count++;
+      } catch {} // skip duplicates
+    }
+    log('revision', req.params.revId, 'BOM Import', `${count} Einträge aus STEP importiert`);
+    res.json({ success: true, count });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==============================================================
 // DELIVERIES (LIEFERSCHEINE / PRODUKTIONSBLÄTTER)
 // ==============================================================
