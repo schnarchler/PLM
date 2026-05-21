@@ -214,7 +214,7 @@ Bei mehreren Positionen erscheinen oben zwei Sammelbuttons:
 
 **Bon-Beispiel (Vollbeleg):**
 ```
-  Michael Stucki
+  Firmenname
   13.05.2026  14:23
   Kunde Name
 ────────────────────
