@@ -978,6 +978,44 @@ async function renderDashboard() {
       <span class="status st-REV">rev${r.rev}</span>
     </div>`).join('') : emptyRow('Keine Items in Prüfung');
 
+  // ── Fällige Lieferscheine ──
+  const today = new Date().toISOString().slice(0,10);
+  const dueSoon = d.dueSoon || [];
+  const dueSoonHtml = dueSoon.length ? dueSoon.map(ls => {
+    const daysLeft = Math.round((new Date(ls.delivery_date) - new Date(today)) / 86400000);
+    const urgent = daysLeft <= 3;
+    const color = daysLeft < 0 ? 'var(--red)' : urgent ? 'var(--amber)' : 'var(--t2)';
+    const label = daysLeft < 0 ? `${Math.abs(daysLeft)}d überfällig` : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
+    return `<div onclick="gotoView('deliveries');openDeliveryDetail(${ls.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ls.title)}</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:1px">${ls.number} · ${esc(ls.customer_name||'—')}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color}">${label}</div>
+        <div style="font-size:10px;color:var(--t4)">${ls.delivery_date}</div>
+      </div>
+    </div>`;
+  }).join('') : emptyRow('Keine Lieferscheine fällig in 14 Tagen');
+
+  // ── Ablaufende Angebote ──
+  const quotesExpiring = d.quotesExpiring || [];
+  const quotesExpHtml = quotesExpiring.length ? quotesExpiring.map(q => {
+    const daysLeft = Math.round((new Date(q.valid_until) - new Date(today)) / 86400000);
+    const color = daysLeft < 0 ? 'var(--red)' : daysLeft <= 3 ? 'var(--amber)' : 'var(--t3)';
+    const label = daysLeft < 0 ? 'Abgelaufen' : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
+    return `<div onclick="gotoView('quotes');openQuoteDetail(${q.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color}">${label}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtCHF(q.total||0)}</div>
+      </div>
+    </div>`;
+  }).join('') : emptyRow('Keine Angebote laufen in 14 Tagen ab');
+
   // ── Produktion ──
   const grouped = {};
   d.inProduction.forEach(x => {
@@ -1054,18 +1092,26 @@ async function renderDashboard() {
 
       <!-- Spalte 2 -->
       <div>
-        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
-          <div style="padding:12px 14px 8px">${sh('Lager — Warnungen')}</div>
-          <div style="padding:0 4px 8px">${invLowHtml}</div>
+        <div style="background:var(--bg1);border:1px solid ${dueSoon.length ? 'var(--amber-line)' : 'var(--line)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+          <div style="padding:12px 14px 8px">${sh('Fällige Lieferscheine'+(dueSoon.length?` <span style="color:var(--amber)">${dueSoon.length}</span>`:''))}</div>
+          <div style="padding:0 4px 8px">${dueSoonHtml}</div>
+        </div>
+        <div style="background:var(--bg1);border:1px solid ${quotesExpiring.length ? 'var(--red-line)' : 'var(--line)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+          <div style="padding:12px 14px 8px">${sh('Ablaufende Angebote'+(quotesExpiring.length?` <span style="color:var(--red)">${quotesExpiring.length}</span>`:''))}</div>
+          <div style="padding:0 4px 8px">${quotesExpHtml}</div>
         </div>
         <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
-          <div style="padding:12px 14px 8px">${sh('Aktive Produktion')}</div>
-          <div style="padding:8px 10px">${prodHtml}</div>
+          <div style="padding:12px 14px 8px">${sh('Lager — Warnungen')}</div>
+          <div style="padding:0 4px 8px">${invLowHtml}</div>
         </div>
       </div>
 
       <!-- Spalte 3 -->
       <div>
+        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+          <div style="padding:12px 14px 8px">${sh('Aktive Produktion')}</div>
+          <div style="padding:8px 10px">${prodHtml}</div>
+        </div>
         <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
           <div style="padding:12px 14px 8px">${sh('Freigabe-Pipeline')}</div>
           <div style="padding:0 4px 8px">${reviewHtml}</div>
@@ -2241,11 +2287,53 @@ async function onSearch(q) {
     const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
     const fmtSz = b => !b?'—':b<1024?b+'B':b<1048576?(b/1024).toFixed(0)+'KB':(b/1048576).toFixed(1)+'MB';
     const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMG:'🖼',DOC:'📄'}[t]||'📎');
-    const html = `
-      ${r.projects.length ? `<div class="sep-label">Projekte</div><div class="card-grid">${r.projects.map(p=>`
+    const ostL = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
+    const ostC = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
+    const qstL = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
+    const qstC = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
+    const dstL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+    const dstC = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
+
+    const section = (label, count) => `<div class="sep-label" style="margin-top:16px">${label}${count?` <span style="color:var(--t4);font-weight:400">(${count})</span>`:''}</div>`;
+    const noHits = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer für „${esc(q)}"</div></div>`;
+    const total = (r.projects?.length||0)+(r.items?.length||0)+(r.datasets?.length||0)+(r.orders?.length||0)+(r.quotes?.length||0)+(r.customers?.length||0)+(r.deliveries?.length||0);
+
+    const html = total ? `
+      ${r.orders?.length ? section('Aufträge', r.orders.length) + `<div class="tbl-wrap"><table>
+        <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Lieferdatum</th></tr></thead>
+        <tbody>${r.orders.map(o=>`<tr style="cursor:pointer" onclick="gotoView('orders');openOrderDetail(${o.id})">
+          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(o.number)}</td>
+          <td>${esc(o.title)}</td><td style="color:var(--t3)">${esc(o.customer_name||'—')}</td>
+          <td><span class="status ${ostC[o.status]||''}">${ostL[o.status]||o.status}</span></td>
+          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${o.delivery_date||'—'}</td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
+      ${r.quotes?.length ? section('Angebote', r.quotes.length) + `<div class="tbl-wrap"><table>
+        <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Gültig bis</th></tr></thead>
+        <tbody>${r.quotes.map(q=>`<tr style="cursor:pointer" onclick="gotoView('quotes');openQuoteDetail(${q.id})">
+          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(q.number)}</td>
+          <td>${esc(q.title)}</td><td style="color:var(--t3)">${esc(q.customer_name||'—')}</td>
+          <td><span class="status ${qstC[q.status]||''}">${qstL[q.status]||q.status}</span></td>
+          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${q.valid_until||'—'}</td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
+      ${r.deliveries?.length ? section('Lieferscheine', r.deliveries.length) + `<div class="tbl-wrap"><table>
+        <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Datum</th></tr></thead>
+        <tbody>${r.deliveries.map(d=>`<tr style="cursor:pointer" onclick="gotoView('deliveries');openDeliveryDetail(${d.id})">
+          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(d.number)}</td>
+          <td>${esc(d.title)}</td><td style="color:var(--t3)">${esc(d.customer_name||'—')}</td>
+          <td><span class="status ${dstC[d.status]||''}">${dstL[d.status]||d.status}</span></td>
+          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.delivery_date||'—'}</td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
+      ${r.customers?.length ? section('Kunden', r.customers.length) + `<div class="tbl-wrap"><table>
+        <thead><tr><th>Nr.</th><th>Name</th><th>E-Mail</th><th>Ort</th></tr></thead>
+        <tbody>${r.customers.map(c=>`<tr style="cursor:pointer" onclick="gotoView('customers');openCustomerDetail(${c.id})">
+          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(c.number)}</td>
+          <td>${esc(c.name)}</td><td style="color:var(--t3)">${esc(c.email||'—')}</td>
+          <td style="color:var(--t3)">${esc(c.city||'—')}</td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
+      ${r.projects?.length ? section('Projekte', r.projects.length) + `<div class="card-grid">${r.projects.map(p=>`
         <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>
         <div class="card-num">${p.number}</div><div class="card-name">${esc(p.name)}</div></div>`).join('')}</div>` : ''}
-      ${r.items?.length ? `<div class="sep-label" style="margin-top:14px">Items</div><div class="tbl-wrap"><table>
+      ${r.items?.length ? section('PLM Items', r.items.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nummer</th><th>Name</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
         <tbody>${r.items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
           <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</td>
@@ -2253,20 +2341,18 @@ async function onSearch(q) {
           <td style="font-family:var(--mono);font-size:10px">${i.latest_revision?.rev||'—'}</td>
           <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.datasets?.length ? `<div class="sep-label" style="margin-top:14px">Dateien</div><div class="tbl-wrap"><table>
+      ${r.datasets?.length ? section('Dateien', r.datasets.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Datei</th><th>Item</th><th>Projekt</th><th>Rev</th><th>Grösse</th><th></th></tr></thead>
-        <tbody>${r.datasets.map(d=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${d.project_id},${d.item_id})" title="Item öffnen">
+        <tbody>${r.datasets.map(d=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${d.project_id},${d.item_id})">
           <td><span style="margin-right:5px">${dsIcon(d.ds_type)}</span>${esc(d.original_name)}</td>
           <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${d.item_number}</td>
           <td style="color:var(--t3)">${d.project_name}</td>
           <td style="font-family:var(--mono);font-size:10px">${d.rev||'—'}</td>
           <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtSz(d.file_size)}</td>
-          <td style="display:flex;gap:4px" onclick="event.stopPropagation()">
-            <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
-          </td>
+          <td onclick="event.stopPropagation()"><a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a></td>
         </tr>`).join('')}</tbody></table></div>` : ''}
-      ${!r.projects.length&&!r.items?.length&&!r.datasets?.length?`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer für "${esc(q)}"</div></div>`:''}`;
-    setLeftBody(html);
+    ` : noHits;
+    setLeftBody(`<div style="padding-bottom:20px">${html}</div>`);
   }, 300);
 }
 

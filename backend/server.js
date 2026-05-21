@@ -1737,8 +1737,35 @@ app.get('/api/dashboard', (req, res) => {
     WHERE d.status != 'DELIVERED' AND di.item_id IS NOT NULL
     ORDER BY d.id DESC LIMIT 20`);
 
+  const today = new Date().toISOString().slice(0, 10);
+  const in14 = new Date(Date.now() + 14*86400000).toISOString().slice(0, 10);
+
+  // Deliveries due within 14 days (not yet delivered)
+  const dueSoon = all(`
+    SELECT d.id, d.number, d.title, d.status, d.delivery_date,
+      COALESCE(c.name, d.customer_name_free) as customer_name,
+      COUNT(di.id) as item_count
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id=c.id
+    LEFT JOIN delivery_items di ON di.delivery_id=d.id
+    WHERE d.status != 'DELIVERED' AND d.delivery_date IS NOT NULL
+      AND d.delivery_date <= ? AND d.delivery_date >= date(?,'-3 days')
+    GROUP BY d.id ORDER BY d.delivery_date ASC`, [in14, today]);
+
+  // Quotes expiring within 14 days
+  const quotesExpiring = all(`
+    SELECT q.id, q.number, q.title, q.status, q.valid_until,
+      COALESCE(c.name, q.customer_name_free) as customer_name,
+      SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount_pct,0)/100.0)) as total
+    FROM quotes q
+    LEFT JOIN customers c ON q.customer_id=c.id
+    LEFT JOIN quote_items qi ON qi.quote_id=q.id
+    WHERE q.status IN ('DRAFT','SENT') AND q.valid_until IS NOT NULL AND q.valid_until <= ?
+    GROUP BY q.id ORDER BY q.valid_until ASC`, [in14]);
+
   res.json({ openOrders, openQuotes, inReview, recentDeliveries, inProduction,
-    revenueMonth: revMonth?.total || 0, revenueTotal: revTotal?.total || 0 });
+    revenueMonth: revMonth?.total || 0, revenueTotal: revTotal?.total || 0,
+    dueSoon, quotesExpiring });
 });
 
 // ==============================================================
@@ -1766,19 +1793,41 @@ app.get('/api/stats', (req, res) => {
 
 app.get('/api/search', (req, res) => {
   const q = '%' + (req.query.q || '') + '%';
+
   const items = all('SELECT i.*,p.name as project_name,p.number as project_number FROM items i JOIN projects p ON i.project_id=p.id WHERE i.item_number LIKE ? OR i.name LIKE ? OR i.description LIKE ? ORDER BY i.id DESC LIMIT 30', [q,q,q]);
   items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
-  const projects = all('SELECT * FROM projects WHERE number LIKE ? OR name LIKE ? OR description LIKE ? LIMIT 10', [q,q,q]);
-  const datasets = all(`SELECT d.id, d.original_name, d.filename, d.ds_type, d.file_size, d.notes,
-    r.rev, i.item_number, i.name as item_name, i.id as item_id, i.project_id,
+
+  const projects = all('SELECT * FROM projects WHERE number LIKE ? OR name LIKE ? OR description LIKE ? OR customer LIKE ? LIMIT 10', [q,q,q,q]);
+
+  const datasets = all(`SELECT d.id, d.original_name, d.ds_type, d.file_size,
+    r.rev, i.item_number, i.id as item_id, i.project_id,
     p.number as project_number, p.name as project_name
-    FROM datasets d
-    JOIN revisions r ON d.revision_id = r.id
-    JOIN items i ON r.item_id = i.id
-    JOIN projects p ON i.project_id = p.id
-    WHERE d.original_name LIKE ? OR d.notes LIKE ?
-    ORDER BY d.id DESC LIMIT 20`, [q, q]);
-  res.json({ items, projects, datasets });
+    FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id JOIN projects p ON i.project_id=p.id
+    WHERE d.original_name LIKE ? OR d.notes LIKE ? ORDER BY d.id DESC LIMIT 20`, [q, q]);
+
+  const orders = all(`SELECT o.id, o.number, o.title, o.status, o.order_date, o.delivery_date,
+    COALESCE(c.name, o.customer_name_free) as customer_name
+    FROM orders o LEFT JOIN customers c ON o.customer_id=c.id
+    WHERE o.number LIKE ? OR o.title LIKE ? OR COALESCE(c.name,o.customer_name_free,'') LIKE ?
+    ORDER BY o.id DESC LIMIT 15`, [q,q,q]);
+
+  const quotes = all(`SELECT q.id, q.number, q.title, q.status, q.quote_date, q.valid_until,
+    COALESCE(c.name, q.customer_name_free) as customer_name
+    FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id
+    WHERE q.number LIKE ? OR q.title LIKE ? OR COALESCE(c.name,q.customer_name_free,'') LIKE ?
+    ORDER BY q.id DESC LIMIT 15`, [q,q,q]);
+
+  const customers = all(`SELECT id, number, name, email, city, phone FROM customers
+    WHERE number LIKE ? OR name LIKE ? OR email LIKE ? OR city LIKE ?
+    ORDER BY id DESC LIMIT 10`, [q,q,q,q]);
+
+  const deliveries = all(`SELECT d.id, d.number, d.title, d.status, d.delivery_date,
+    COALESCE(c.name, d.customer_name_free) as customer_name
+    FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id
+    WHERE d.number LIKE ? OR d.title LIKE ? OR COALESCE(c.name,d.customer_name_free,'') LIKE ?
+    ORDER BY d.id DESC LIMIT 10`, [q,q,q]);
+
+  res.json({ items, projects, datasets, orders, quotes, customers, deliveries });
 });
 
 app.get('/api/changelog', (req, res) => {
