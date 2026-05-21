@@ -100,13 +100,94 @@ function _itemBg(t)    { return t==="asm" ? "rgba(142,163,255,.12)" : t==="doc" 
 function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.75)}px;line-height:1;flex-shrink:0">${_itemSvg(t)}</span>`; }
 
 // ── INIT ──────────────────────────────────────────────────────
+// ── RECENTLY VIEWED ───────────────────────────────────────────
+const _MAX_RECENT = 8;
+let _recentItems = JSON.parse(localStorage.getItem('plm_recent') || '[]');
+
+function _trackRecent(type, id, label, sub) {
+  _recentItems = _recentItems.filter(r => !(r.type === type && r.id === id));
+  _recentItems.unshift({ type, id, label, sub, ts: Date.now() });
+  if (_recentItems.length > _MAX_RECENT) _recentItems = _recentItems.slice(0, _MAX_RECENT);
+  localStorage.setItem('plm_recent', JSON.stringify(_recentItems));
+  _renderRecent();
+}
+
+function _renderRecent() {
+  const el = document.getElementById('nav-recent');
+  if (!el) return;
+  if (!_recentItems.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = _recentItems.map(r => {
+    const icon = r.type === 'order' ? '📋' : r.type === 'quote' ? '📄' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : '🔩';
+    return `<button class="nav-item" style="font-size:11px;padding:4px 12px 4px 16px;gap:6px" onclick="_openRecent(${JSON.stringify(r).replace(/"/g,'&quot;')})">
+      <span style="font-size:12px;flex-shrink:0">${icon}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${esc(r.label)}</span>
+      ${r.sub ? `<span style="font-size:9px;color:var(--t4);flex-shrink:0;font-family:var(--mono)">${esc(r.sub)}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
+function _openRecent(r) {
+  if (r.type === 'order') { gotoView('orders'); openOrderDetail(r.id); }
+  else if (r.type === 'quote') { gotoView('quotes'); openQuoteDetail(r.id); }
+  else if (r.type === 'delivery') { gotoView('deliveries'); openDeliveryDetail(r.id); }
+  else if (r.type === 'customer') { gotoView('customers'); openCustomerDetail(r.id); }
+  else if (r.type === 'project') { gotoView('projects'); openProject(r.id); }
+  else if (r.type === 'item') { gotoPlmItem(r.id); }
+}
+
+// ── KEYBOARD SHORTCUTS ────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Ctrl+K / Cmd+K → focus search
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const s = document.getElementById('globalSearch');
+    if (s) { s.focus(); s.select(); }
+    return;
+  }
+  // Escape → close modal or detail panel
+  if (e.key === 'Escape') {
+    const dyn = document.getElementById('dynModal');
+    if (dyn) { _hideDynModal(); return; }
+    const openModal = document.querySelector('.overlay.open');
+    if (openModal) { openModal.classList.remove('open'); return; }
+    const detail = document.getElementById('detail-panel');
+    if (detail && !detail.classList.contains('hidden')) { closeDetail(); return; }
+  }
+});
+
+// ── BROWSER HISTORY ───────────────────────────────────────────
+let _historyBlocked = false;
+
+function _pushHistory(state) {
+  if (_historyBlocked) return;
+  history.pushState(state, '');
+}
+
+window.addEventListener('popstate', e => {
+  if (!e.state) { gotoView('dashboard'); return; }
+  _historyBlocked = true;
+  const s = e.state;
+  if (s.view) gotoView(s.view).then(() => {
+    if (s.detailType === 'order') openOrderDetail(s.detailId);
+    else if (s.detailType === 'quote') openQuoteDetail(s.detailId);
+    else if (s.detailType === 'delivery') openDeliveryDetail(s.detailId);
+    else if (s.detailType === 'customer') openCustomerDetail(s.detailId);
+    else if (s.detailType === 'project') openProject(s.detailId);
+    else if (s.detailType === 'item') gotoPlmItem(s.detailId);
+  }).finally(() => { _historyBlocked = false; });
+  else _historyBlocked = false;
+});
+
 window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
   const cadBtn = document.getElementById('tb-cad-btn');
   if (cadBtn) cadBtn.style.display = state.settings?.cad_path ? '' : 'none';
+  history.replaceState({ view: 'dashboard' }, '');
   gotoView('dashboard');
   loadStats();
   loadCheckouts();
+  _renderRecent();
   setupUploadDrag();
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
@@ -123,6 +204,7 @@ async function gotoView(v) {
   const ni = document.getElementById('ni-' + v);
   if (ni) ni.classList.add('active');
   closeDetail();
+  _pushHistory({ view: v });
 
   if (v === 'projects') await renderProjectsList();
   else if (v === 'dashboard') await renderDashboard();
@@ -180,6 +262,8 @@ async function openProject(id) {
   state.item = null;
   if (state.filterBomChildren === undefined) state.filterBomChildren = true;
   document.getElementById('ni-projects').classList.add('active');
+  _trackRecent('project', p.id, p.name, p.number);
+  _pushHistory({ view: 'projects', detailType: 'project', detailId: p.id });
 
   setLeftHeader(
     `<div class="breadcrumb"><span onclick="gotoView('projects')">Projekte</span><span class="sep">/</span><strong>${esc(p.name)}</strong><span class="chip" style="margin-left:6px">${p.number}</span></div>`,
@@ -1986,6 +2070,8 @@ function _render_customerRows() {
 
 async function openCustomerDetail(id) {
   const c = await api(`/api/customers/${id}`);
+  _trackRecent('customer', c.id, c.name, c.number);
+  _pushHistory({ view: 'customers', detailType: 'customer', detailId: c.id });
   const ostLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
   const ostCls   = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
   const qstLabel = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
@@ -2198,6 +2284,8 @@ async function openOrderDetail(id) {
     api(`/api/time-entries?order_id=${id}`)
   ]);
   const rec = (state.orders||[]).find(x=>x.id===id); if (rec) Object.assign(rec, o);
+  _trackRecent('order', o.id, o.title, o.number);
+  _pushHistory({ view: 'orders', detailType: 'order', detailId: o.id });
   document.getElementById('dp-title').innerHTML = `<strong>${o.number}</strong>&nbsp;${esc(o.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'od-pos')">Positionen</button>
@@ -3216,6 +3304,8 @@ function _render_quoteRows() {
 async function openQuoteDetail(id) {
   const q = await api(`/api/quotes/${id}`);
   const rec = (state.quotes||[]).find(x=>x.id===id); if (rec) Object.assign(rec, q);
+  _trackRecent('quote', q.id, q.title, q.number);
+  _pushHistory({ view: 'quotes', detailType: 'quote', detailId: q.id });
   document.getElementById('dp-title').innerHTML = `<strong>${q.number}</strong>&nbsp;${esc(q.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'qd-pos')">Positionen</button>
@@ -3767,6 +3857,8 @@ function _render_deliveryRows() {
 
 async function openDeliveryDetail(id) {
   const d = await api(`/api/deliveries/${id}`);
+  _trackRecent('delivery', d.id, d.title, d.number);
+  _pushHistory({ view: 'deliveries', detailType: 'delivery', detailId: d.id });
   document.getElementById('dp-title').innerHTML = `<strong>${d.number}</strong>&nbsp;${esc(d.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'dd-pos')">Positionen</button>
