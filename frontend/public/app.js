@@ -75,8 +75,8 @@ function _updateCheckoutBadge() {
   const btn = document.getElementById('tb-checkout-btn');
   if (!btn) return;
   let badges = '';
-  if (total > 0) badges += `<span style="background:var(--teal);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:9px;padding:1px 6px;margin-left:3px">${total}</span>`;
-  if (newCount > 0) badges += `<span style="background:var(--amber);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:9px;padding:1px 6px;margin-left:3px">+${newCount} neu</span>`;
+  if (total > 0) badges += `<span style="background:var(--teal);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:11px;padding:1px 6px;margin-left:3px">${total}</span>`;
+  if (newCount > 0) badges += `<span style="background:var(--amber);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:11px;padding:1px 6px;margin-left:3px">+${newCount} neu</span>`;
   btn.innerHTML = `⬆ Checkouts${badges}`;
   btn.style.color = newCount > 0 ? 'var(--amber)' : total > 0 ? 'var(--teal)' : '';
   btn.style.borderColor = newCount > 0 ? 'var(--amber-line)' : total > 0 ? 'var(--teal-line)' : '';
@@ -108,7 +108,7 @@ function _classColor(cls) {
 function _classChip(cls) {
   if (!cls) return '';
   const [color, bg] = _classColor(cls);
-  return `<span style="font-family:var(--mono);font-size:8px;padding:1px 5px;border-radius:3px;background:${bg};color:${color};flex-shrink:0">${esc(cls)}</span>`;
+  return `<span style="font-family:var(--mono);font-size:11px;padding:1px 5px;border-radius:3px;background:${bg};color:${color};flex-shrink:0">${esc(cls)}</span>`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -131,10 +131,10 @@ function _renderRecent() {
   el.style.display = '';
   el.innerHTML = _recentItems.map(r => {
     const icon = r.type === 'order' ? '📋' : r.type === 'quote' ? '📄' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : r.itemType ? _itemSvg(r.itemType) : '🔩';
-    return `<button class="nav-item" style="font-size:11px;padding:4px 12px 4px 16px;gap:6px" onclick="_openRecent(${JSON.stringify(r).replace(/"/g,'&quot;')})">
-      <span style="font-size:12px;flex-shrink:0">${icon}</span>
+    return `<button class="nav-item" style="font-size:13px;padding:4px 12px 4px 16px;gap:6px" onclick="_openRecent(${JSON.stringify(r).replace(/"/g,'&quot;')})">
+      <span style="font-size:13px;flex-shrink:0">${icon}</span>
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${esc(r.label)}</span>
-      ${r.sub ? `<span style="font-size:9px;color:var(--t4);flex-shrink:0;font-family:var(--mono)">${esc(r.sub)}</span>` : ''}
+      ${r.sub ? `<span style="font-size:11px;color:var(--t4);flex-shrink:0;font-family:var(--mono)">${esc(r.sub)}</span>` : ''}
     </button>`;
   }).join('');
 }
@@ -242,17 +242,17 @@ async function renderProjectsList() {
     return;
   }
   const statChip = (val, label, color) => val
-    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:${color}"><span style="font-family:var(--mono);font-weight:600">${val}</span><span style="color:var(--t4)">${label}</span></span>`
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:${color}"><span style="font-family:var(--mono);font-weight:600">${val}</span><span style="color:var(--t4)">${label}</span></span>`
     : '';
   setLeftBody(`<div style="display:flex;flex-direction:column;gap:6px;max-width:860px">${projects.map(p => `
     <div onclick="openProject(${p.id})" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s" onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'">
       <div style="width:38px;height:38px;border-radius:var(--r-sm);background:rgba(142,163,255,.1);border:1px solid rgba(142,163,255,.2);display:grid;place-items:center;flex-shrink:0">
-        <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue)">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue)">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em">${esc(p.name)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${p.number}</span>
+        <div style="font-size:13px;color:var(--t3);margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${p.number}</span>
           ${p.customer ? `<span style="color:var(--t3)">${esc(p.customer)}</span>` : ''}
         </div>
       </div>
@@ -260,9 +260,9 @@ async function renderProjectsList() {
         ${statChip(p.asm_count, 'asm', 'var(--blue)')}
         ${statChip(p.prt_count, 'prt', 'var(--teal)')}
         ${statChip(p.doc_count, 'doc', 'var(--purple)')}
-        ${p.file_count ? `<span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}
-        <span style="font-size:10px;color:var(--t4);white-space:nowrap">${new Date(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span>
-        <span style="color:var(--t4);font-size:12px">›</span>
+        ${p.file_count ? `<span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}
+        <span style="font-size:13px;color:var(--t4);white-space:nowrap">${new Date(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span>
+        <span style="color:var(--t4);font-size:13px">›</span>
       </div>
     </div>`).join('')}</div>`);
 }
@@ -346,8 +346,8 @@ function renderProjectTree(p) {
 
   setLeftBody(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">
-      <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${items.length} Items</span>
-      <button onclick="toggleBomFilter()" style="font-size:11px;padding:3px 9px;border-radius:var(--r-xs);cursor:pointer;font-family:var(--sans);border:1px solid ${filterOn?'rgba(142,163,255,.35)':'var(--line2)'};background:${filterOn?'rgba(142,163,255,.1)':'transparent'};color:${filterOn?'var(--blue)':'var(--t3)'}">
+      <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${items.length} Items</span>
+      <button onclick="toggleBomFilter()" style="font-size:13px;padding:3px 9px;border-radius:var(--r-xs);cursor:pointer;font-family:var(--sans);border:1px solid ${filterOn?'rgba(142,163,255,.35)':'var(--line2)'};background:${filterOn?'rgba(142,163,255,.1)':'transparent'};color:${filterOn?'var(--blue)':'var(--t3)'}">
         BOM-Kinder ${filterOn?'ausgeblendet':'sichtbar'}${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
       </button>
     </div>
@@ -399,11 +399,11 @@ function _renderTreeNode(item, map, isRoot) {
       style="${co ? 'background:rgba(106,208,214,.07);box-shadow:inset 2px 0 0 var(--teal);' : ''}">
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 20)}
-      <span class="tree-num" style="font-size:10px">${item.item_number}</span>
+      <span class="tree-num" style="font-size:13px">${item.item_number}</span>
       <span class="tree-name">${esc(item.name)}</span>
       ${item.classification ? _classChip(item.classification) : ''}
-      ${co ? `<span style="font-family:var(--mono);font-size:8px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
-      ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:9px">rev${rev.rev}</span>` : ''}
+      ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
+      ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:11px">rev${rev.rev}</span>` : ''}
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" data-item-id="${item.id}" style="display:none">${childHtml}</div>` : ''}
   </div>`;
@@ -420,11 +420,11 @@ function togN(nid, tid) {
 function openProjectDetail(p) {
   const docCount = (p.documents||[]).length;
   document.getElementById('dp-title').innerHTML =
-    `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-right:6px">${p.number}</span><strong>${esc(p.name)}</strong>`;
+    `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-right:6px">${p.number}</span><strong>${esc(p.name)}</strong>`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'pt-info')">Info</button>
     <button class="tab" onclick="switchTab(this,'pt-files')">Struktur</button>
-    <button class="tab" onclick="switchTab(this,'pt-docs')">Dokumente${docCount?` <span style="background:var(--blue);color:var(--bg0);border-radius:8px;font-size:9px;font-family:var(--mono);padding:1px 5px;margin-left:3px">${docCount}</span>`:''}</button>
+    <button class="tab" onclick="switchTab(this,'pt-docs')">Dokumente${docCount?` <span style="background:var(--blue);color:var(--bg0);border-radius:8px;font-size:11px;font-family:var(--mono);padding:1px 5px;margin-left:3px">${docCount}</span>`:''}</button>
     <button class="tab" onclick="switchTab(this,'pt-log')">Log</button>`;
 
   // Build files/BOM overview using BOM-based hierarchy
@@ -445,22 +445,22 @@ function openProjectDetail(p) {
     const childHtml = hasKids ? bomKids.map(b => {
       const ci = dpMap[b.child_item_id];
       if (!ci) return '';
-      const qtyBadge = (b.quantity && b.quantity !== 1) ? ` <span style="font-family:var(--mono);font-size:9px;color:var(--t4);background:var(--bg3);padding:1px 5px;border-radius:3px">×${b.quantity}</span>` : '';
+      const qtyBadge = (b.quantity && b.quantity !== 1) ? ` <span style="font-family:var(--mono);font-size:11px;color:var(--t4);background:var(--bg3);padding:1px 5px;border-radius:3px">×${b.quantity}</span>` : '';
       return renderItemFiles(ci, depth + 1) + (qtyBadge ? `<div style="padding:0 0 2px ${28 + depth*16}px">${qtyBadge}</div>` : '');
     }).join('') : '';
     return `<div>
       <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s;${co?'background:rgba(106,208,214,.07);box-shadow:inset 2px 0 0 var(--teal);':''}" onclick="openItemDetail(${item.id})" onmouseover="this.style.background='${co?'rgba(106,208,214,.12)':'var(--bg3)'}'" onmouseout="this.style.background='${co?'rgba(106,208,214,.07)':''}'" >
-        ${hasKids ? `<span onclick="event.stopPropagation();const e=document.getElementById('${nid}');const open=e.style.display!=='none';e.style.display=open?'none':'';this.style.transform=open?'':'rotate(90deg)'" style="color:var(--t4);font-size:9px;transition:transform .15s;flex-shrink:0;cursor:pointer">▶</span>` : '<span style="width:11px;flex-shrink:0"></span>'}
+        ${hasKids ? `<span onclick="event.stopPropagation();const e=document.getElementById('${nid}');const open=e.style.display!=='none';e.style.display=open?'none':'';this.style.transform=open?'':'rotate(90deg)'" style="color:var(--t4);font-size:11px;transition:transform .15s;flex-shrink:0;cursor:pointer">▶</span>` : '<span style="width:11px;flex-shrink:0"></span>'}
         ${_itemChip(item.item_type, 18)}
-        <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
-        <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1)">${esc(item.name)}</span>
-        ${co ? `<span style="font-family:var(--mono);font-size:8px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
-        ${rev ? `<span class="status st-${rev.status}" style="font-size:9px;flex-shrink:0">rev${rev.rev}</span>` : ''}
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
+        <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1)">${esc(item.name)}</span>
+        ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
+        ${rev ? `<span class="status st-${rev.status}" style="font-size:11px;flex-shrink:0">rev${rev.rev}</span>` : ''}
       </div>
       ${datasets.length ? `<div style="padding:2px 6px 4px ${28 + depth*16}px;display:flex;flex-direction:column;gap:2px">
         ${datasets.map(d => `<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--bg2);border-radius:3px">
-          <span class="ds-type ${dtClass(d.original_name,d.ds_type)}" style="font-size:8.5px">${fileLabel(d.original_name,d.ds_type)}</span>
-          <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(d.original_name)}</span>
+          <span class="ds-type ${dtClass(d.original_name,d.ds_type)}" style="font-size:11px">${fileLabel(d.original_name,d.ds_type)}</span>
+          <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(d.original_name)}</span>
           <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" style="padding:3px" title="Download" download>↓</a>
         </div>`).join('')}
       </div>` : ''}
@@ -471,7 +471,7 @@ function openProjectDetail(p) {
   const roots = allItems.filter(i => !i.parent_id);
   const filesHtml = roots.length
     ? roots.map(i => renderItemFiles(i, 0)).join('')
-    : '<div style="color:var(--t3);font-size:12px;padding:8px 0">Keine Items im Projekt</div>';
+    : '<div style="color:var(--t3);font-size:13px;padding:8px 0">Keine Items im Projekt</div>';
 
   const asmCount = allItems.filter(i=>i.item_type==='asm').length;
   const prtCount = allItems.filter(i=>i.item_type==='prt').length;
@@ -480,9 +480,9 @@ function openProjectDetail(p) {
   document.getElementById('dp-body').innerHTML = `
     <div id="pt-files" style="display:none">
       <div style="display:flex;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)">
-        ${asmCount?`<span style="font-size:11px;color:var(--blue);font-family:var(--mono)">${asmCount} <span style="color:var(--t4);font-family:var(--sans)">asm</span></span>`:''}
-        ${prtCount?`<span style="font-size:11px;color:var(--teal);font-family:var(--mono)">${prtCount} <span style="color:var(--t4);font-family:var(--sans)">prt</span></span>`:''}
-        ${docCount2?`<span style="font-size:11px;color:var(--purple);font-family:var(--mono)">${docCount2} <span style="color:var(--t4);font-family:var(--sans)">doc</span></span>`:''}
+        ${asmCount?`<span style="font-size:13px;color:var(--blue);font-family:var(--mono)">${asmCount} <span style="color:var(--t4);font-family:var(--sans)">asm</span></span>`:''}
+        ${prtCount?`<span style="font-size:13px;color:var(--teal);font-family:var(--mono)">${prtCount} <span style="color:var(--t4);font-family:var(--sans)">prt</span></span>`:''}
+        ${docCount2?`<span style="font-size:13px;color:var(--purple);font-family:var(--mono)">${docCount2} <span style="color:var(--t4);font-family:var(--sans)">doc</span></span>`:''}
       </div>
       ${filesHtml}
     </div>
@@ -493,19 +493,19 @@ function openProjectDetail(p) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
         <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Nummer</div>
-          <div style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-top:3px">${p.number}</div>
+          <div style="font-family:var(--mono);font-size:14px;color:var(--blue);margin-top:3px">${p.number}</div>
         </div>
         <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Kunde</div>
-          <div style="font-size:13px;color:var(--t1);margin-top:3px">${p.customer||'—'}</div>
+          <div style="font-size:14px;color:var(--t1);margin-top:3px">${p.customer||'—'}</div>
         </div>
         ${p.description?`<div style="grid-column:span 2;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Beschreibung</div>
-          <div style="font-size:12px;color:var(--t2);margin-top:4px;white-space:pre-wrap;line-height:1.6">${esc(p.description)}</div>
+          <div style="font-size:13px;color:var(--t2);margin-top:4px;white-space:pre-wrap;line-height:1.6">${esc(p.description)}</div>
         </div>`:''}
         <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Angelegt</div>
-          <div style="font-size:12px;color:var(--t2);margin-top:3px">${fmtDate(p.created_at)}</div>
+          <div style="font-size:13px;color:var(--t2);margin-top:3px">${fmtDate(p.created_at)}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px">
@@ -517,7 +517,7 @@ function openProjectDetail(p) {
       ${(p.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
         <div><div class="cl-action">${cl.action}</div><div class="cl-detail">${cl.details||''}</div></div>
-        <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:12px">Leer</div>'}
+        <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>'}
     </div>`;
   showDetail();
 }
@@ -546,7 +546,7 @@ function renderProjectDocs(p) {
         <input type="file" multiple style="display:none" onchange="uploadDocs(this,${p.id})">
       </label>
     </div>
-    ${rows || '<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Dokumente</div>'}`;
+    ${rows || '<div style="color:var(--t3);font-size:13px;padding:8px 0">Noch keine Dokumente</div>'}`;
 }
 
 async function uploadDocs(input, projectId) {
@@ -620,12 +620,12 @@ function renderItemDetail(item, activeRevId) {
   const typeBg    = isASM ? 'rgba(142,163,255,.12)' : isDOC ? 'rgba(180,140,255,.12)' : 'rgba(106,208,214,.12)';
   const editable = itemIsEditable(item);
   document.getElementById('dp-title').innerHTML =
-    `<span style="font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
-    + `<span style="font-family:var(--mono);font-size:11px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
+    `<span style="font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
+    + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(item.name)}</strong>`
     + (item.classification ? ' ' + _classChip(item.classification) : '')
-    + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`;
+    + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
@@ -636,8 +636,8 @@ function renderItemDetail(item, activeRevId) {
   if (!isDOC) {
     const activeCheckout = state.checkouts.find(c => c.item_id === item.id);
     const coBtn = activeCheckout
-      ? `<button class="btn btn-amber btn-sm" style="font-size:10px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="doCheckin('${activeCheckout.folder.replace(/'/g,"\\'")}',this)">⬆ Einchecken</button>`
-      : `<button class="btn btn-teal btn-sm" style="font-size:10px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}')">⬇ Auschecken</button>`;
+      ? `<button class="btn btn-amber btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="doCheckin('${activeCheckout.folder.replace(/'/g,"\\'")}',this)">⬆ Einchecken</button>`
+      : `<button class="btn btn-teal btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}')">⬇ Auschecken</button>`;
     document.getElementById('dp-title').innerHTML += coBtn;
   }
 
@@ -653,35 +653,35 @@ function renderItemDetail(item, activeRevId) {
           : null;
         const allPriced = item.item_type === 'asm' && bom.length && bom.every(b => b.default_price != null);
         const bomHint = bomTotal != null && bomTotal > 0
-          ? `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t3)">
+          ? `<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
               BOM: <strong style="color:var(--teal);font-family:var(--mono)">${fmtChf(bomTotal)}</strong>
-              ${!allPriced ? '<span style="color:var(--amber);font-size:10px">⚠ unvollständig</span>' : ''}
-              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:10px" onclick="document.getElementById(\'item-price-field\').value=${bomTotal.toFixed(2)};document.getElementById(\'item-price-field\').dispatchEvent(new Event(\'blur\'))">übernehmen</button>
+              ${!allPriced ? '<span style="color:var(--amber);font-size:13px">⚠ unvollständig</span>' : ''}
+              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:13px" onclick="document.getElementById(\'item-price-field\').value=${bomTotal.toFixed(2)};document.getElementById(\'item-price-field\').dispatchEvent(new Event(\'blur\'))">übernehmen</button>
              </span>`
-          : (item.item_type === 'asm' && bom.length ? `<span style="font-size:11px;color:var(--amber)">BOM: ⚠ keine Preise</span>` : '');
+          : (item.item_type === 'asm' && bom.length ? `<span style="font-size:13px;color:var(--amber)">BOM: ⚠ keine Preise</span>` : '');
         return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 10px;background:var(--bg2);border-radius:var(--r-sm);margin-bottom:10px">
-          <span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--t3)">
+          <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
             VP:
             <input id="item-price-field" type="number" step="0.01" min="0" placeholder="—"
               value="${item.default_price != null ? item.default_price : ''}"
-              style="width:84px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:12px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
+              style="width:84px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:13px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
               class="no-spin" onblur="saveItemPrice(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
             <span style="color:var(--t4)">CHF</span>
           </span>
           ${bomHint}
-          ${item.source_url ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>` : ''}
+          ${item.source_url ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>` : ''}
         </div>`;
       })()}
       <div class="sep-label" style="margin-top:4px">Revisionen</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;align-items:center">
         ${(item.revisions||[]).map(r => `
           <div class="rev-pill ${r.id === activeRevId ? 'active-rev' : ''}" onclick="switchRev(${item.id}, ${r.id})">
-            <span class="status st-${r.status}" style="font-size:9px">rev${r.rev}</span>
-            <span style="color:var(--t3);font-size:10px">${r.status}</span>
+            <span class="status st-${r.status}" style="font-size:11px">rev${r.rev}</span>
+            <span style="color:var(--t3);font-size:13px">${r.status}</span>
           </div>`).join('')}
         <div style="margin-left:auto;display:flex;gap:4px">
-          ${!isDOC ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="openItemModal(${item.project_id},${isASM ? item.id : (item.parent_id||'null')},'prt')">+ Part</button>` : ''}
-          ${isASM ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Sub-ASM</button>` : ''}
+          ${!isDOC ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px" onclick="openItemModal(${item.project_id},${isASM ? item.id : (item.parent_id||'null')},'prt')">+ Part</button>` : ''}
+          ${isASM ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Sub-ASM</button>` : ''}
         </div>
       </div>
       ${rev ? renderRevDetail(rev, item) : '<div style="color:var(--t3)">Keine Revision</div>'}
@@ -690,13 +690,13 @@ function renderItemDetail(item, activeRevId) {
       ${(item.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
         <div><div class="cl-action">${cl.action}</div><div class="cl-detail">${cl.details||''}</div></div>
-        <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:12px">Leer</div>'}
+        <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>'}
     </div>
     ${!isDOC ? `<div id="it-time" style="display:none">
-      <div id="item-time-list"><div style="color:var(--t3);font-size:12px;padding:8px 0">Wird geladen…</div></div>
+      <div id="item-time-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
     </div>` : ''}
     <div id="it-whereused" style="display:none">
-      <div id="it-whereused-list"><div style="color:var(--t3);font-size:12px;padding:8px 0">Wird geladen…</div></div>
+      <div id="it-whereused-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
     </div>`;
   setTimeout(() => {
     document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
@@ -834,7 +834,7 @@ function renderRevDetail(rev, item) {
   return `
     <!-- Rev info -->
     <div class="sep-label">rev${rev.rev} – Details</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:13px">
       <div><div class="ps-label">Status</div><span class="status st-${rev.status}">${rev.status}</span></div>
       <div><div class="ps-label">Erstellt</div>${fmtDate(rev.created_at)}</div>
       ${rev.released_at ? `<div><div class="ps-label">Freigegeben</div>${fmtDate(rev.released_at)}</div>` : ''}
@@ -849,15 +849,15 @@ function renderRevDetail(rev, item) {
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
       ${(rev.bom||[]).length ? rev.bom.map(b => `
         <div class="bom-row">
-          <span style="color:var(--t3);font-size:10px;width:24px">${b.position||'—'}</span>
+          <span style="color:var(--t3);font-size:13px;width:24px">${b.position||'—'}</span>
           <span>${_itemChip(b.item_type,16)}</span>
           <span class="bom-num">${b.item_number}</span>
-          <span style="flex:1;font-size:12px">${esc(b.name)}</span>
+          <span style="flex:1;font-size:13px">${esc(b.name)}</span>
           ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">rev${b.child_active_rev.rev}</span>` : ''}
           <span class="bom-qty">${b.quantity} ${b.unit}</span>
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBom(${b.id},${item.id},${rev.id})">✕</button>`}
         </div>`).join('')
-        : '<div style="padding:12px;color:var(--t3);font-size:12px;text-align:center">Noch keine Positionen</div>'}
+        : '<div style="padding:12px;color:var(--t3);font-size:13px;text-align:center">Noch keine Positionen</div>'}
     </div>
     ${locked ? '' : `<button class="btn btn-ghost btn-sm" onclick="openBomModal(${rev.id},${item.project_id})">+ Position hinzufügen</button>`}
     ` : ''}
@@ -867,19 +867,19 @@ function renderRevDetail(rev, item) {
       if (!stls.length) return '';
       const fUrl = API+'/api/datasets/'+stls[0].id+'/download';
       const sel = stls.length > 1
-        ? '<select style="margin-left:auto;font-size:11px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('+rev.id+', this.value)">'
+        ? '<select style="margin-left:auto;font-size:13px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('+rev.id+', this.value)">'
           + stls.map(d => '<option value="'+API+'/api/datasets/'+d.id+'/download">'+esc(d.original_name)+'</option>').join('')+'</select>'
         : '';
       return '<div class="sep-label" style="margin-top:12px">3D Vorschau'+sel+'</div>'
         +'<div style="position:relative;width:100%;height:220px;border-radius:var(--r);overflow:hidden;margin-bottom:10px">'
         +'<canvas id="stl-c-'+rev.id+'" data-stl-url="'+fUrl+'" style="width:100%;height:100%;display:block;cursor:grab"></canvas>'
-        +'<div id="stl-load-'+rev.id+'" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--t3);font-size:12px;pointer-events:none">Lade…</div>'
+        +'<div id="stl-load-'+rev.id+'" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--t3);font-size:13px;pointer-events:none">Lade…</div>'
         +'</div>';
     })()}
 
     <!-- Datasets -->
     <div class="sep-label" style="margin-top:12px">Dateien (Datasets)
-      ${locked ? '<span style="font-size:10px;color:var(--t3);margin-left:auto;font-family:var(--mono)">&#128274; Gesperrt ('+rev.status+')</span>'
+      ${locked ? '<span style="font-size:13px;color:var(--t3);margin-left:auto;font-family:var(--mono)">&#128274; Gesperrt ('+rev.status+')</span>'
                : '<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openUploadModal('+rev.id+',\''+item.item_number+'\',\''+rev.rev+'\')">+ Datei</button>'}
     </div>
     <div id="ds-list-${rev.id}">
@@ -910,28 +910,28 @@ function renderRevDetail(rev, item) {
       const mach = (ps.print_duration||0)*(ps.printer_cost_hr||0);
       const total = mat+mach;
       return '<div class="cost-result" style="margin-top:8px">'
-        +'<div style="font-size:10px;font-family:var(--mono);color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Kostenrechnung</div>'
+        +'<div style="font-size:13px;font-family:var(--mono);color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Kostenrechnung</div>'
         +(mat?'<div class="cost-row"><span>Materialkosten</span><span>'+fmtN(mat)+' CHF</span></div>':'')
         +(mach?'<div class="cost-row"><span>Maschinenkosten</span><span>'+fmtN(mach)+' CHF</span></div>':'')
         +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">'
-        +'<span style="font-size:11px;color:var(--t3)">Gesamt</span>'
+        +'<span style="font-size:13px;color:var(--t3)">Gesamt</span>'
         +'<span class="cost-total">'+fmtN(total)+' CHF</span></div></div>';
     })() : ''}
-    ` : `<div style="color:var(--t3);font-size:12px">Noch keine Druckparameter hinterlegt.</div>`}
+    ` : `<div style="color:var(--t3);font-size:13px">Noch keine Druckparameter hinterlegt.</div>`}
     ` : ''}
 
     <!-- Workflow -->
     <div class="wf-strip" style="margin-top:16px">
       <div class="wf-label">Freigabe-Workflow</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${wfBtns || '<span style="color:var(--t3);font-size:11px">Keine weiteren Aktionen möglich</span>'}
+        ${wfBtns || '<span style="color:var(--t3);font-size:13px">Keine weiteren Aktionen möglich</span>'}
       </div>
     </div>
 
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px">
       ${itemIsEditable(item)
         ? `<button class="btn btn-red btn-sm" onclick="deleteItem(${item.id})">🗑 Item löschen</button>`
-        : `<span style="font-size:11px;color:var(--t3);font-family:var(--mono)">🔒 Löschen nur unter Einstellungen → Admin</span>`}
+        : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Löschen nur unter Einstellungen → Admin</span>`}
     </div>`;
 }
 
@@ -951,7 +951,7 @@ function dtClass(originalName, dsType) {
 }
 
 function renderDatasets(datasets, revId, locked) {
-  if (!datasets.length) return `<div style="color:var(--t3);font-size:12px">Noch keine Dateien angehängt.</div>`;
+  if (!datasets.length) return `<div style="color:var(--t3);font-size:13px">Noch keine Dateien angehängt.</div>`;
   const groups = {};
   datasets.forEach(d => { (groups[d.ds_type] = groups[d.ds_type]||[]).push(d); });
   return Object.entries(groups).map(([type, files]) =>
@@ -981,9 +981,9 @@ async function switchRev(itemId, revId) {
 // ── DASHBOARD ─────────────────────────────────────────────────
 async function renderDashboard() {
   const today = new Date().toLocaleDateString('de-CH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  setLeftHeader('Dashboard', `<span style="font-size:11px;color:var(--t3);font-family:var(--mono)">${today}</span><button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="renderDashboard()">↺</button>`);
+  setLeftHeader('Dashboard', `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">${today}</span><button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="renderDashboard()">↺</button>`);
   closeDetail();
-  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:12px">Lade…</div></div>`);
+  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
   const [s, d, invItems] = await Promise.all([api('/api/stats'), api('/api/dashboard'), api('/api/inventory')]);
 
   const ostCls   = {DRAFT:'st-DFT',CONFIRMED:'st-REL',DELIVERED:'st-REV',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
@@ -1003,12 +1003,12 @@ async function renderDashboard() {
   // ── KPI tiles ──
   const kpiTile = (label, value, sub, accent, click) => `
     <div onclick="${click||''}" style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:${click?'pointer':'default'};transition:border-color .15s" onmouseover="this.style.borderColor='var(--line3)'" onmouseout="this.style.borderColor='var(--line)'">
-      <div style="font-size:11px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
         <span style="width:6px;height:6px;border-radius:50%;background:${accent};flex-shrink:0;display:inline-block"></span>
         ${label}
       </div>
       <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--t1);line-height:1;letter-spacing:-0.02em">${value}</div>
-      ${sub ? `<div style="font-size:11px;color:var(--t3);margin-top:6px">${sub}</div>` : ''}
+      ${sub ? `<div style="font-size:13px;color:var(--t3);margin-top:6px">${sub}</div>` : ''}
     </div>`;
 
   const confirmedOrders = d.openOrders.filter(o => o.status === 'CONFIRMED').length;
@@ -1021,12 +1021,12 @@ async function renderDashboard() {
   const kpiHtml = `
     <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:24px">
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px">
-        <div style="font-size:11px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
+        <div style="font-size:13px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
           <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
           Umsatz
         </div>
         <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--t1);line-height:1;letter-spacing:-0.02em">${fmtCHF(d.revenueMonth||0)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:6px">diesen Monat · <span style="color:var(--t2)">${fmtCHF(d.revenueTotal||0)} gesamt</span></div>
+        <div style="font-size:13px;color:var(--t3);margin-top:6px">diesen Monat · <span style="color:var(--t2)">${fmtCHF(d.revenueTotal||0)} gesamt</span></div>
       </div>
       ${kpiTile('Aufträge', d.openOrders.length, confirmedOrders + ' bestätigt', 'var(--blue)', "gotoView('orders')")}
       ${kpiTile('Angebote', d.openQuotes.length, sentQuotes + ' versendet', 'var(--teal)', "gotoView('quotes')")}
@@ -1036,20 +1036,20 @@ async function renderDashboard() {
     </div>`;
 
   // ── Section header ──
-  const sh = label => `<div style="font-family:var(--mono);font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--t4);font-weight:500;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:8px">${label}</div>`;
-  const emptyRow = msg => `<div style="color:var(--t3);font-size:12px;padding:10px 0">${msg}</div>`;
+  const sh = label => `<div style="font-family:var(--mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--t4);font-weight:500;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:8px">${label}</div>`;
+  const emptyRow = msg => `<div style="color:var(--t3);font-size:13px;padding:10px 0">${msg}</div>`;
 
   // ── Aufträge ──
   const ordersHtml = d.openOrders.length ? d.openOrders.map(o => `
     <div onclick="gotoView('orders')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <span class="status ${ostCls[o.status]||'st-DFT'}" style="flex-shrink:0">${ostLabel[o.status]||o.status}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.title)}</div>
-        <div style="font-size:10.5px;color:var(--t3);margin-top:1px">${o.number} · ${esc(o.customer_name||'—')}${o.delivery_date?' · '+o.delivery_date.slice(0,10):''}</div>
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.title)}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px">${o.number} · ${esc(o.customer_name||'—')}${o.delivery_date?' · '+o.delivery_date.slice(0,10):''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:11.5px;color:var(--t1)">${fmtCHF(o.total||0)}</div>
-        <div style="font-size:10px;color:var(--t4);margin-top:1px">${o.item_count} Pos.</div>
+        <div style="font-family:var(--mono);font-size:13px;color:var(--t1)">${fmtCHF(o.total||0)}</div>
+        <div style="font-size:13px;color:var(--t4);margin-top:1px">${o.item_count} Pos.</div>
       </div>
     </div>`).join('') : emptyRow('Keine offenen Aufträge');
 
@@ -1058,12 +1058,12 @@ async function renderDashboard() {
     <div onclick="gotoView('quotes')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <span class="status ${qstCls[q.status]||'st-DFT'}" style="flex-shrink:0">${qstLabel[q.status]||q.status}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
-        <div style="font-size:10.5px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}${q.valid_until?' · bis '+q.valid_until.slice(0,10):''}</div>
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}${q.valid_until?' · bis '+q.valid_until.slice(0,10):''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:11.5px;color:var(--t1)">${fmtCHF(q.total||0)}</div>
-        <div style="font-size:10px;color:var(--t4);margin-top:1px">${q.item_count} Pos.</div>
+        <div style="font-family:var(--mono);font-size:13px;color:var(--t1)">${fmtCHF(q.total||0)}</div>
+        <div style="font-size:13px;color:var(--t4);margin-top:1px">${q.item_count} Pos.</div>
       </div>
     </div>`).join('') : emptyRow('Keine offenen Angebote');
 
@@ -1071,11 +1071,11 @@ async function renderDashboard() {
   const reviewHtml = d.inReview.length ? d.inReview.map(r => `
     <div onclick="gotoPlmItem(${r.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="width:22px;height:22px;border-radius:var(--r-xs);background:var(--amber-soft);display:grid;place-items:center;flex-shrink:0">
-        <span style="font-size:11px">${itemIcon(r.item_type)}</span>
+        <span style="font-size:13px">${itemIcon(r.item_type)}</span>
       </div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:1px;font-family:var(--mono)">${r.item_number} · ${esc(r.project_number)}</div>
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px;font-family:var(--mono)">${r.item_number} · ${esc(r.project_number)}</div>
       </div>
       <span class="status st-REV">rev${r.rev}</span>
     </div>`).join('') : emptyRow('Keine Items in Prüfung');
@@ -1090,12 +1090,12 @@ async function renderDashboard() {
     const label = daysLeft < 0 ? `${Math.abs(daysLeft)}d überfällig` : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
     return `<div onclick="gotoView('deliveries');openDeliveryDetail(${ls.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ls.title)}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:1px">${ls.number} · ${esc(ls.customer_name||'—')}</div>
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ls.title)}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px">${ls.number} · ${esc(ls.customer_name||'—')}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color}">${label}</div>
-        <div style="font-size:10px;color:var(--t4)">${ls.delivery_date}</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${label}</div>
+        <div style="font-size:13px;color:var(--t4)">${ls.delivery_date}</div>
       </div>
     </div>`;
   }).join('') : emptyRow('Keine Lieferscheine fällig in 14 Tagen');
@@ -1108,12 +1108,12 @@ async function renderDashboard() {
     const label = daysLeft < 0 ? 'Abgelaufen' : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
     return `<div onclick="gotoView('quotes');openQuoteDetail(${q.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}</div>
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color}">${label}</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtCHF(q.total||0)}</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${label}</div>
+        <div style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtCHF(q.total||0)}</div>
       </div>
     </div>`;
   }).join('') : emptyRow('Keine Angebote laufen in 14 Tagen ab');
@@ -1128,14 +1128,14 @@ async function renderDashboard() {
     <div style="border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:6px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3)">
         <span class="status ${dstCls[g.status]||'st-DFT'}">${dstLabel[g.status]||g.status}</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${g.number}</span>
-        <span style="font-size:11px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.customer||'—')}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${g.number}</span>
+        <span style="font-size:13px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.customer||'—')}</span>
       </div>
       ${g.items.map(x => `
         <div onclick="openProject(${x.project_id})" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-          <span style="font-family:var(--mono);font-size:10px;color:var(--blue);flex-shrink:0">${x.item_number||'—'}</span>
-          <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(x.description)}</span>
-          <span style="font-size:11px;color:var(--t3);flex-shrink:0;font-family:var(--mono)">${x.quantity} ${x.unit}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${x.item_number||'—'}</span>
+          <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(x.description)}</span>
+          <span style="font-size:13px;color:var(--t3);flex-shrink:0;font-family:var(--mono)">${x.quantity} ${x.unit}</span>
         </div>`).join('')}
     </div>`).join('') : emptyRow('Keine aktive Produktion');
 
@@ -1149,9 +1149,9 @@ async function renderDashboard() {
           <div style="flex:1;height:3px;background:var(--line);border-radius:2px;overflow:hidden">
             <div style="width:${Math.round(st.count/total*100)}%;height:100%;background:${stColors[st.status]||'var(--t3)'};border-radius:2px"></div>
           </div>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--t2);width:22px;text-align:right">${st.count}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--t2);width:22px;text-align:right">${st.count}</span>
         </div>`).join('')}
-      <div style="font-size:10px;color:var(--t3);margin-top:4px;text-align:right">${s.assemblies} Baugruppen · ${s.parts} Parts · ${s.projects} Projekte</div>
+      <div style="font-size:13px;color:var(--t3);margin-top:4px;text-align:right">${s.assemblies} Baugruppen · ${s.parts} Parts · ${s.projects} Projekte</div>
     </div>`;
 
   // ── Lager-Warnungen ──
@@ -1161,15 +1161,15 @@ async function renderDashboard() {
     return `<div onclick="gotoView('inventory');openInventoryDetail(${i.id})" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.name)}${i.color?` <span style="color:var(--t3);font-weight:400;font-size:11px">${esc(i.color)}</span>`:''}${i.material?` <span style="color:var(--t3);font-weight:400;font-size:11px">${esc(i.material)}</span>`:''}</div>
-        <div style="font-size:10px;color:var(--t3);margin-top:1px">${esc(i.category)}</div>
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.name)}${i.color?` <span style="color:var(--t3);font-weight:400;font-size:13px">${esc(i.color)}</span>`:''}${i.material?` <span style="color:var(--t3);font-weight:400;font-size:13px">${esc(i.material)}</span>`:''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px">${esc(i.category)}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:12px;color:${col};font-weight:600">${fmtN(i.stock_qty,1)} <span style="font-size:10px;font-weight:400">${i.unit}</span></div>
-        <div style="font-size:10px;color:var(--t4);margin-top:1px">Min ${fmtN(i.min_qty,1)}</div>
+        <div style="font-family:var(--mono);font-size:13px;color:${col};font-weight:600">${fmtN(i.stock_qty,1)} <span style="font-size:13px;font-weight:400">${i.unit}</span></div>
+        <div style="font-size:13px;color:var(--t4);margin-top:1px">Min ${fmtN(i.min_qty,1)}</div>
       </div>
     </div>`;
-  }).join('') : `<div style="display:flex;align-items:center;gap:8px;padding:10px;color:var(--green);font-size:12px">
+  }).join('') : `<div style="display:flex;align-items:center;gap:8px;padding:10px;color:var(--green);font-size:13px">
     <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
     Alle Artikel über Mindestbestand
   </div>`;
@@ -1277,19 +1277,19 @@ async function renderChangelog() {
 
   const html = Object.entries(byDate).map(([date, entries]) => `
     <div style="margin-bottom:18px">
-      <div style="font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--line);margin-bottom:6px">${date}</div>
+      <div style="font-family:var(--mono);font-size:13px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--line);margin-bottom:6px">${date}</div>
       ${entries.map(r => `
         <div style="display:flex;gap:10px;padding:7px 6px;border-radius:var(--r);transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-          <div style="width:18px;text-align:center;flex-shrink:0;font-size:13px;margin-top:1px">${actionIcon(r.action)}</div>
+          <div style="width:18px;text-align:center;flex-shrink:0;font-size:14px;margin-top:1px">${actionIcon(r.action)}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:12px;font-weight:500">${esc(r.action)}</span>
-              ${r.ref ? `<span style="font-family:var(--mono);font-size:10px;color:var(--blue);cursor:pointer" onclick="${r.project_id?'openProject('+r.project_id+')':''}">${itemTypeIcon(r.item_type)} ${esc(r.ref)}</span>` : ''}
+              <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>
+              ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${r.project_id?'openProject('+r.project_id+')':''}">${itemTypeIcon(r.item_type)} ${esc(r.ref)}</span>` : ''}
             </div>
-            ${r.details ? `<div style="font-size:11px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${esc(r.details)}</div>` : ''}
-            ${r.label ? `<div style="font-size:11px;color:var(--t2);margin-top:1px">${esc(r.label)}</div>` : ''}
+            ${r.details ? `<div style="font-size:13px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${esc(r.details)}</div>` : ''}
+            ${r.label ? `<div style="font-size:13px;color:var(--t2);margin-top:1px">${esc(r.label)}</div>` : ''}
           </div>
-          <div style="font-family:var(--mono);font-size:9px;color:var(--t3);flex-shrink:0;white-space:nowrap;margin-top:2px">${r.created_at ? new Date(r.created_at).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--t3);flex-shrink:0;white-space:nowrap;margin-top:2px">${r.created_at ? new Date(r.created_at).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
         </div>`).join('')}
     </div>`).join('');
 
@@ -1311,18 +1311,18 @@ async function renderSettings() {
   const ft = (id, label, val, ph='') =>
     `<div class="fg"><label class="fl">${label}</label><textarea class="ft" id="st-${id}" rows="2" placeholder="${ph}">${esc(val||'')}</textarea></div>`;
   const fck = (id, label, val) =>
-    `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--t2)"><input type="checkbox" id="st-${id}" ${val !== '0' ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">${label}</label>`;
+    `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)"><input type="checkbox" id="st-${id}" ${val !== '0' ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">${label}</label>`;
 
   setLeftBody(`
     <div style="max-width:720px">
       <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px">
-        <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Firma</button>
-        <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kalkulation</button>
-        <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kassabon</button>
-        <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
-        <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
-        <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
-        <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
+        <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Firma</button>
+        <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kalkulation</button>
+        <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kassabon</button>
+        <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
+        <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
+        <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
+        <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
       </div>
 
       <!-- TAB: Firma -->
@@ -1444,7 +1444,7 @@ async function renderSettings() {
       <!-- TAB: PLM -->
       <div class="st-tab-pane" data-tab="plm" hidden>
         <div class="sep-label" style="margin-top:0">Klassifizierungen</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:12px">Verfügbare Klassifizierungen für Bauteile, Baugruppen und Dokumente. Reihenfolge per Drag &amp; Drop ändern.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:12px">Verfügbare Klassifizierungen für Bauteile, Baugruppen und Dokumente. Reihenfolge per Drag &amp; Drop ändern.</div>
         <div id="st-class-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
         <div style="display:flex;gap:8px;align-items:center">
           <input class="fi" id="st-class-new" placeholder="Neue Klassifizierung…" style="max-width:240px" onkeydown="if(event.key==='Enter')_addClass()">
@@ -1452,14 +1452,14 @@ async function renderSettings() {
         </div>
         <div style="margin-top:16px">
           <button class="btn btn-primary btn-sm" onclick="_saveClassifications()">Speichern</button>
-          <span id="st-class-msg" style="font-size:12px;color:var(--t3);margin-left:8px"></span>
+          <span id="st-class-msg" style="font-size:13px;color:var(--t3);margin-left:8px"></span>
         </div>
       </div>
 
       <!-- TAB: Daten -->
       <div class="st-tab-pane" data-tab="daten" hidden>
         <div class="sep-label" style="margin-top:0">Datenpfad</div>
-        <div id="st-datapath-info" style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt aktuelle Pfade…</div>
+        <div id="st-datapath-info" style="font-size:13px;color:var(--t3);margin-bottom:10px">Lädt aktuelle Pfade…</div>
         <div class="form-row">
           <div class="fg">
             <label class="fl">Datenverzeichnis (Datenbank + Dateien)</label>
@@ -1468,11 +1468,11 @@ async function renderSettings() {
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
           <button class="btn btn-ghost btn-sm" onclick="saveDataPath()">Pfad speichern</button>
-          <span id="st-datapath-msg" style="font-size:12px;color:var(--t3)"></span>
+          <span id="st-datapath-msg" style="font-size:13px;color:var(--t3)"></span>
         </div>
 
         <div class="sep-label" style="margin-top:20px">CAD-Programm</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Pfad zur ausführbaren Datei des CAD-Programms. Wird über den CAD-Button in der Topbar gestartet.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Pfad zur ausführbaren Datei des CAD-Programms. Wird über den CAD-Button in der Topbar gestartet.</div>
         <div class="form-row">
           <div class="fg">
             <label class="fl">CAD-Pfad</label>
@@ -1481,11 +1481,11 @@ async function renderSettings() {
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
           <button class="btn btn-ghost btn-sm" onclick="saveCadPath()">Pfad speichern</button>
-          <span id="st-cad-msg" style="font-size:12px;color:var(--t3)"></span>
+          <span id="st-cad-msg" style="font-size:13px;color:var(--t3)"></span>
         </div>
 
         <div class="sep-label" style="margin-top:20px">Checkout-Verzeichnis</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Ordner, in den ausgecheckte CAD-Dateien kopiert werden. Leer lassen für Standard: <code style="font-family:var(--mono)">[Datenverzeichnis]/checkout</code></div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Ordner, in den ausgecheckte CAD-Dateien kopiert werden. Leer lassen für Standard: <code style="font-family:var(--mono)">[Datenverzeichnis]/checkout</code></div>
         <div class="form-row">
           <div class="fg">
             <label class="fl">Checkout-Pfad</label>
@@ -1494,17 +1494,17 @@ async function renderSettings() {
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
           <button class="btn btn-ghost btn-sm" onclick="saveCheckoutDir()">Pfad speichern</button>
-          <span id="st-checkout-msg" style="font-size:12px;color:var(--t3)"></span>
+          <span id="st-checkout-msg" style="font-size:13px;color:var(--t3)"></span>
         </div>
 
         <div class="sep-label" style="margin-top:24px">Datensicherung</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
         <div style="display:flex;gap:8px">
           <a class="btn btn-ghost" href="/api/export" download>&#x1F4E6; Gesamtexport herunterladen</a>
         </div>
 
         <div class="sep-label" style="margin-top:24px">Datei-Index</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Übersicht aller gespeicherten Dateien mit angezeigtem Namen und tatsächlichem Dateinamen auf der Festplatte (Notfall-Referenz).</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Übersicht aller gespeicherten Dateien mit angezeigtem Namen und tatsächlichem Dateinamen auf der Festplatte (Notfall-Referenz).</div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost" onclick="gotoView('fileindex')">&#x1F4C2; Datei-Index öffnen</button>
         </div>
@@ -1512,33 +1512,33 @@ async function renderSettings() {
 
       <!-- TAB: Admin -->
       <div class="st-tab-pane" data-tab="loeschen" hidden>
-        <div style="background:var(--red-soft);border:1px solid var(--red-line);border-radius:var(--r);padding:10px 14px;margin-bottom:20px;font-size:12px;color:var(--red)">
+        <div style="background:var(--red-soft);border:1px solid var(--red-line);border-radius:var(--r);padding:10px 14px;margin-bottom:20px;font-size:13px;color:var(--red)">
           ⚠ Änderungen hier können bestehende Daten und Nummernkreise dauerhaft beschädigen. Nur vornehmen wenn du weisst was du tust.
         </div>
 
         <div class="sep-label" style="margin-top:0;color:var(--red)">Datensätze löschen</div>
         <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px">
-          <button class="adm-del-tab active" data-deltab="teile"    onclick="_admDelTab('teile')"    style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:12px;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-1px;font-weight:600">Teile</button>
-          <button class="adm-del-tab"        data-deltab="projekte" onclick="_admDelTab('projekte')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:12px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Projekte</button>
-          <button class="adm-del-tab"        data-deltab="auftraege" onclick="_admDelTab('auftraege')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:12px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Aufträge</button>
+          <button class="adm-del-tab active" data-deltab="teile"    onclick="_admDelTab('teile')"    style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-1px;font-weight:600">Teile</button>
+          <button class="adm-del-tab"        data-deltab="projekte" onclick="_admDelTab('projekte')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Projekte</button>
+          <button class="adm-del-tab"        data-deltab="auftraege" onclick="_admDelTab('auftraege')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Aufträge</button>
         </div>
         <div id="adm-del-teile">
-          <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Freigegebene (REL/OBS) Bauteile, Baugruppen und Dokumente</div>
+          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Freigegebene (REL/OBS) Bauteile, Baugruppen und Dokumente</div>
           <div id="st-del-items" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
         <div id="adm-del-projekte" style="display:none">
-          <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Projekte mit Inhalten (Items, Dateien)</div>
+          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Projekte mit Inhalten (Items, Dateien)</div>
           <div id="st-del-projects" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
         <div id="adm-del-auftraege" style="display:none">
-          <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Aufträge (nicht Entwurf)</div>
+          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Aufträge (nicht Entwurf)</div>
           <div id="st-del-orders" style="display:flex;flex-direction:column;gap:4px"></div>
-          <div style="font-size:12px;color:var(--t3);margin:10px 0 6px">Angebote (nicht Entwurf)</div>
+          <div style="font-size:13px;color:var(--t3);margin:10px 0 6px">Angebote (nicht Entwurf)</div>
           <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
 
         <div class="sep-label" style="margin-top:28px">Nummernpräfixe</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:12px">Präfixe für neu erstellte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:12px">Präfixe für neu erstellte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.</div>
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-prefix-order" placeholder="AUF"></div>
           <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-prefix-quote" placeholder="ANG"></div>
@@ -1554,7 +1554,7 @@ async function renderSettings() {
           <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-pad-customer" type="number" min="1" max="8" placeholder="4"></div>
           <div class="fg"><label class="fl">Projekte</label><input class="fi" id="adm-pad-project" type="number" min="1" max="8" placeholder="4"></div>
           <div class="fg" style="display:flex;align-items:center;gap:10px;padding-top:20px">
-            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--t2)">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)">
               <input type="checkbox" id="adm-num-yearly" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
               Jahreszahl in Nummer
             </label>
@@ -1562,7 +1562,7 @@ async function renderSettings() {
         </div>
 
         <div class="sep-label" style="margin-top:20px">Struktur Item-Nummern</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Gilt nur für <b>neu erstellte</b> Items. Bestehende Nummern werden nicht geändert.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Gilt nur für <b>neu erstellte</b> Items. Bestehende Nummern werden nicht geändert.</div>
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Trennzeichen</label><input class="fi" id="adm-num-sep" placeholder="-" maxlength="3"></div>
           <div class="fg"><label class="fl">Stellen Baugruppe</label><input class="fi" id="adm-pad-asm" type="number" min="1" max="6" placeholder="3"></div>
@@ -1583,7 +1583,7 @@ async function renderSettings() {
           </div>
         </div>
 
-        <div style="font-size:11px;color:var(--t3);margin-top:14px;font-family:var(--mono);line-height:2;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px" id="adm-preview"></div>
+        <div style="font-size:13px;color:var(--t3);margin-top:14px;font-family:var(--mono);line-height:2;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px" id="adm-preview"></div>
 
         <div style="margin-top:16px">
           <button class="btn btn-red" onclick="saveAdminSettings()">⚠ Admin-Einstellungen speichern</button>
@@ -1707,28 +1707,28 @@ function _renderPrinterList() {
   el.innerHTML = state.printers.length ? state.printers.map(p => `
     <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);margin-bottom:4px">
       <span style="flex:1;font-weight:500">${esc(p.name)}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--t3)">${p.cost_per_hour} CHF/h</span>
+      <span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${p.cost_per_hour} CHF/h</span>
       <button class="btn btn-icon btn-ghost btn-sm" onclick="editPrinter(${p.id},'${esc(p.name)}',${p.cost_per_hour})">✏️</button>
       <button class="btn btn-icon btn-red btn-sm" onclick="delPrinter(${p.id})">✕</button>
-    </div>`).join('') : '<div style="color:var(--t3);font-size:12px;padding:4px 0">Noch keine Drucker hinterlegt.</div>';
+    </div>`).join('') : '<div style="color:var(--t3);font-size:13px;padding:4px 0">Noch keine Drucker hinterlegt.</div>';
 }
 function _renderNozzleList() {
   const el = document.getElementById('st-nozzles-list'); if (!el) return;
   el.innerHTML = state.nozzles.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">` +
-    state.nozzles.map(n => `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px">
+    state.nozzles.map(n => `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:13px">
       <span>${n.size} mm</span>
-      <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;width:14px;height:14px;font-size:10px" onclick="delNozzle(${n.id})">✕</button>
-    </div>`).join('') + '</div>' : '<div style="color:var(--t3);font-size:12px;padding:4px 0">Noch keine Düsen hinterlegt.</div>';
+      <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;width:14px;height:14px;font-size:13px" onclick="delNozzle(${n.id})">✕</button>
+    </div>`).join('') + '</div>' : '<div style="color:var(--t3);font-size:13px;padding:4px 0">Noch keine Düsen hinterlegt.</div>';
 }
 function _renderMatList() {
   const el = document.getElementById('st-mats-list'); if (!el) return;
   el.innerHTML = state.materialPresets.length ? state.materialPresets.map(m => `
     <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);margin-bottom:4px">
       <span style="font-weight:500;min-width:60px">${esc(m.name)}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--t3)">${[m.print_temp&&m.print_temp+'°C',m.bed_temp&&'Bett '+m.bed_temp+'°C',m.nozzle&&m.nozzle+' mm',m.filament_price_kg&&m.filament_price_kg+' CHF/kg'].filter(Boolean).join(' · ')}</span>
+      <span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${[m.print_temp&&m.print_temp+'°C',m.bed_temp&&'Bett '+m.bed_temp+'°C',m.nozzle&&m.nozzle+' mm',m.filament_price_kg&&m.filament_price_kg+' CHF/kg'].filter(Boolean).join(' · ')}</span>
       <button class="btn btn-icon btn-ghost btn-sm" style="margin-left:auto" onclick="editMaterialPreset(${m.id})">✏️</button>
       <button class="btn btn-icon btn-red btn-sm" onclick="delMaterialPreset(${m.id})">✕</button>
-    </div>`).join('') : '<div style="color:var(--t3);font-size:12px;padding:4px 0">Noch keine Vorlagen hinterlegt.</div>';
+    </div>`).join('') : '<div style="color:var(--t3);font-size:13px;padding:4px 0">Noch keine Vorlagen hinterlegt.</div>';
 }
 async function addPrinter() {
   const name = document.getElementById('st-pr-name').value.trim();
@@ -1811,36 +1811,36 @@ async function renderFileIndex() {
 
   const dsRows = datasets.map(f => `
     <tr>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(f.project_number)}</td>
-      <td style="font-size:11px">${esc(f.item_number||'—')}</td>
-      <td style="font-size:11px;color:var(--t2)">${esc(f.revision||'')}</td>
-      <td style="font-size:11px;font-weight:500">${esc(f.original_name)}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${esc(f.filename)}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3);text-align:right">${fmtSize(f.file_size)}</td>
-      <td style="font-size:10px;color:var(--t3)">${(f.uploaded_at||'').slice(0,10)}</td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(f.project_number)}</td>
+      <td style="font-size:13px">${esc(f.item_number||'—')}</td>
+      <td style="font-size:13px;color:var(--t2)">${esc(f.revision||'')}</td>
+      <td style="font-size:13px;font-weight:500">${esc(f.original_name)}</td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${esc(f.filename)}</td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--t3);text-align:right">${fmtSize(f.file_size)}</td>
+      <td style="font-size:13px;color:var(--t3)">${(f.uploaded_at||'').slice(0,10)}</td>
     </tr>`).join('');
 
   const docRows = documents.map(f => `
     <tr>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(f.project_number)}</td>
-      <td style="font-size:11px;color:var(--t3)" colspan="2">Projektdokument</td>
-      <td style="font-size:11px;font-weight:500">${esc(f.original_name)}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${esc(f.filename)}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--t3);text-align:right">${fmtSize(f.file_size)}</td>
-      <td style="font-size:10px;color:var(--t3)">${(f.uploaded_at||'').slice(0,10)}</td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(f.project_number)}</td>
+      <td style="font-size:13px;color:var(--t3)" colspan="2">Projektdokument</td>
+      <td style="font-size:13px;font-weight:500">${esc(f.original_name)}</td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${esc(f.filename)}</td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--t3);text-align:right">${fmtSize(f.file_size)}</td>
+      <td style="font-size:13px;color:var(--t3)">${(f.uploaded_at||'').slice(0,10)}</td>
     </tr>`).join('');
 
   const total = datasets.length + documents.length;
   const totalBytes = [...datasets,...documents].reduce((s,f) => s + (f.file_size||0), 0);
 
   setLeftBody(`<div style="padding:4px 0;max-width:1200px">
-    <div style="font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.6">
+    <div style="font-size:13px;color:var(--t3);margin-bottom:16px;line-height:1.6">
       Alle gespeicherten Dateien mit ihrem <strong>angezeigten Namen</strong> und dem <strong>tatsächlichen Dateinamen</strong> auf der Festplatte.<br>
       Speicherort: <code style="font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px">data/files/</code>
       &nbsp;·&nbsp; ${total} Dateien &nbsp;·&nbsp; ${fmtSize(totalBytes)} gesamt
     </div>
 
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead>
         <tr style="border-bottom:2px solid var(--line)">
           <th style="text-align:left;padding:6px 8px;color:var(--t3);font-weight:600;white-space:nowrap">Projekt</th>
@@ -1946,43 +1946,43 @@ async function renderProfitOverview() {
   setLeftBody(`<div style="padding:4px 0;max-width:1100px">
     <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
       <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:120px">
-        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Teile gesamt</div>
+        <div style="font-size:13px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Teile gesamt</div>
         <div style="font-size:20px;font-weight:600">${_profitData.length}</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:120px">
-        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Mit Herst.-kosten</div>
+        <div style="font-size:13px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Mit Herst.-kosten</div>
         <div style="font-size:20px;font-weight:600">${withCost.length}</div>
       </div>
       <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:150px">
-        <div style="font-size:10px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Gesamtmarge</div>
+        <div style="font-size:13px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Gesamtmarge</div>
         <div style="font-size:20px;font-weight:600;color:${marginColor(totalMargin)}">${withBoth.length ? fmtCHF(totalMargin) : '—'}</div>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <input class="fi" id="profit-search" placeholder="Suche: Nummer, Name, Projekt …"
         oninput="_profitState.text=this.value;_renderProfitRows()"
-        style="max-width:280px;font-size:12px;padding:5px 10px">
+        style="max-width:280px;font-size:13px;padding:5px 10px">
       <select class="fs" id="profit-margin-filter" onchange="_profitState.margin=this.value;_renderProfitRows()"
-        style="max-width:180px;font-size:12px;padding:5px 8px">
+        style="max-width:180px;font-size:13px;padding:5px 8px">
         <option value="">Alle Marge</option>
         <option value="pos">Positiv</option>
         <option value="neg">Negativ</option>
         <option value="missing">Unvollständig</option>
       </select>
       <select class="fs" id="profit-type-filter" onchange="_profitState.type=this.value;_renderProfitRows()"
-        style="max-width:160px;font-size:12px;padding:5px 8px">
+        style="max-width:160px;font-size:13px;padding:5px 8px">
         <option value="">Alle Typen</option>
         <option value="prt">🔩 Parts</option>
         <option value="asm">📦 Baugruppen</option>
       </select>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead>
         <tr style="border-bottom:2px solid var(--line)" id="profit-thead"></tr>
       </thead>
       <tbody id="profit-tbody"></tbody>
     </table>
-    <div style="margin-top:10px;font-size:11px;color:var(--t3)">
+    <div style="margin-top:10px;font-size:13px;color:var(--t3)">
       Herstellungskosten = Filamentkosten (g × CHF/kg) + Maschinenkosten (h × CHF/h) aus den Druckparametern der letzten Revision.
     </div>
   </div>`);
@@ -2043,22 +2043,22 @@ function _renderProfitRows() {
   document.getElementById('profit-tbody').innerHTML = rows.length ? rows.map(i => {
     const mc = i.manufacturing_cost;
     const cost = mc ? mc.total : null;
-    const costDetail = mc ? `<span style="font-size:10px;color:var(--t3)">`
+    const costDetail = mc ? `<span style="font-size:13px;color:var(--t3)">`
       + (mc.filament > 0 ? `Fil. ${fmtN(mc.filament)}` : '')
       + (mc.filament > 0 && mc.machine > 0 ? ' + ' : '')
       + (mc.machine > 0 ? `Mach. ${fmtN(mc.machine)}` : '') + `</span>` : '';
     const opColor = i.order_profit == null ? 'var(--t3)' : i.order_profit < 0 ? 'var(--red)' : i.order_profit === 0 ? 'var(--t3)' : 'var(--green)';
     return `<tr style="border-bottom:1px solid var(--line);cursor:pointer;${marginBg(i.margin)}" onclick="openProjectAndItem(${i.project_db_id},${i.id})" title="Im PLM öffnen">
-      <td style="padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.project_number)}</td>
-      <td style="padding:5px 8px;font-size:11px;white-space:nowrap">${_itemChip(i.item_type,16)} ${esc(i.item_number)}</td>
-      <td style="padding:5px 8px;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${cost != null ? `${fmtCHF(cost)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t3)">—</span>'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;color:${marginColor(i.margin)}">${i.margin != null ? fmtCHF(i.margin) : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:${marginColor(i.margin)}">${i.margin_pct != null ? i.margin_pct.toFixed(0)+'%' : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_qty ? fmtN(i.order_qty, 0) : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_revenue ? fmtCHF(i.order_revenue) : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:${i.order_profit != null ? 600 : 400};color:${opColor}">${i.order_profit != null ? fmtCHF(i.order_profit) : '—'}</td>
+      <td style="padding:5px 8px;font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.project_number)}</td>
+      <td style="padding:5px 8px;font-size:13px;white-space:nowrap">${_itemChip(i.item_type,16)} ${esc(i.item_number)}</td>
+      <td style="padding:5px 8px;font-size:13px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${cost != null ? `${fmtCHF(cost)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t3)">—</span>'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:${marginColor(i.margin)}">${i.margin != null ? fmtCHF(i.margin) : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${marginColor(i.margin)}">${i.margin_pct != null ? i.margin_pct.toFixed(0)+'%' : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_qty ? fmtN(i.order_qty, 0) : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_revenue ? fmtCHF(i.order_revenue) : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:${i.order_profit != null ? 600 : 400};color:${opColor}">${i.order_profit != null ? fmtCHF(i.order_profit) : '—'}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Einträge</td></tr>';
 }
@@ -2094,11 +2094,11 @@ function _render_customerRows() {
   const el = document.getElementById('_customer-tbody');
   if (!el) return;
   el.innerHTML = rows.map(c=>`<tr onclick="openCustomerDetail(${c.id})">
-    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${c.number}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${c.number}</td>
     <td style="font-weight:500">${esc(c.name)}</td>
     <td style="color:var(--t2)">${c.email||'—'}</td>
     <td style="color:var(--t2)">${c.phone||'—'}</td>
-    <td style="color:var(--t3);font-size:11px">${[c.street,c.postal_code&&c.city?c.postal_code+' '+c.city:'',c.country].filter(Boolean).join(', ')||'—'}</td>
+    <td style="color:var(--t3);font-size:13px">${[c.street,c.postal_code&&c.city?c.postal_code+' '+c.city:'',c.country].filter(Boolean).join(', ')||'—'}</td>
     <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delCustomer(${c.id})">✕</button></td>
   </tr>`).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
@@ -2114,18 +2114,18 @@ async function openCustomerDetail(id) {
   const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
   const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
   const fmtChfD  = v => v != null ? fmtCHF(parseFloat(v)) : '—';
-  const empty    = msg => `<div style="color:var(--t3);font-size:12px;padding:6px 0">${msg}</div>`;
+  const empty    = msg => `<div style="color:var(--t3);font-size:13px;padding:6px 0">${msg}</div>`;
 
   const orderRevTotal  = c.orders.reduce((s,o)  => s + (o.total||0), 0);
   const delivRevTotal  = c.deliveries.reduce((s,d) => s + (d.total||0), 0);
 
   document.getElementById('dp-title').innerHTML =
-    `👤 <strong>${esc(c.name)}</strong> <span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:6px">${c.number}</span>`;
+    `👤 <strong>${esc(c.name)}</strong> <span style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-left:6px">${c.number}</span>`;
 
   document.getElementById('dp-tabs').innerHTML = `
-    <button class="tab active" onclick="switchTab(this,'cd-orders')">Aufträge <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:10px;padding:1px 6px;margin-left:3px">${c.orders.length}</span></button>
-    <button class="tab" onclick="switchTab(this,'cd-quotes')">Angebote <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:10px;padding:1px 6px;margin-left:3px">${c.quotes.length}</span></button>
-    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Lieferungen <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:10px;padding:1px 6px;margin-left:3px">${c.deliveries.length}</span></button>
+    <button class="tab active" onclick="switchTab(this,'cd-orders')">Aufträge <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.orders.length}</span></button>
+    <button class="tab" onclick="switchTab(this,'cd-quotes')">Angebote <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.quotes.length}</span></button>
+    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Lieferungen <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.deliveries.length}</span></button>
     <button class="tab" onclick="switchTab(this,'cd-info')">Stammdaten</button>`;
 
   const orderRows = c.orders.length ? c.orders.map(o => `
@@ -2133,11 +2133,11 @@ async function openCustomerDetail(id) {
       <span class="status ${ostCls[o.status]||'st-DFT'}">${ostLabel[o.status]||o.status}</span>
       <div>
         <div style="font-weight:500">${esc(o.title)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">${o.number}${o.order_date?' · '+o.order_date.slice(0,10):''}${o.delivery_date?' · 📅 '+o.delivery_date.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:2px">${o.number}${o.order_date?' · '+o.order_date.slice(0,10):''}${o.delivery_date?' · 📅 '+o.delivery_date.slice(0,10):''}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-family:var(--mono);font-size:12px">${fmtChfD(o.total)}</div>
-        <div style="font-size:10px;color:var(--t3)">${o.item_count} Pos.</div>
+        <div style="font-family:var(--mono);font-size:13px">${fmtChfD(o.total)}</div>
+        <div style="font-size:13px;color:var(--t3)">${o.item_count} Pos.</div>
       </div>
     </div>`).join('') : empty('Keine Aufträge');
 
@@ -2146,11 +2146,11 @@ async function openCustomerDetail(id) {
       <span class="status ${qstCls[q.status]||'st-DFT'}">${qstLabel[q.status]||q.status}</span>
       <div>
         <div style="font-weight:500">${esc(q.title)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">${q.number}${q.quote_date?' · '+q.quote_date.slice(0,10):''}${q.valid_until?' · gültig bis '+q.valid_until.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:2px">${q.number}${q.quote_date?' · '+q.quote_date.slice(0,10):''}${q.valid_until?' · gültig bis '+q.valid_until.slice(0,10):''}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-family:var(--mono);font-size:12px">${fmtChfD(q.total)}</div>
-        <div style="font-size:10px;color:var(--t3)">${q.item_count} Pos.</div>
+        <div style="font-family:var(--mono);font-size:13px">${fmtChfD(q.total)}</div>
+        <div style="font-size:13px;color:var(--t3)">${q.item_count} Pos.</div>
       </div>
     </div>`).join('') : empty('Keine Angebote');
 
@@ -2159,17 +2159,17 @@ async function openCustomerDetail(id) {
       <span class="status ${dstCls[d.status]||'st-DFT'}">${dstLabel[d.status]||d.status}</span>
       <div>
         <div style="font-weight:500">${esc(d.title)}</div>
-        <div style="font-size:11px;color:var(--t3);margin-top:2px">${d.number}${d.order_number?' · Auftrag '+d.order_number:''}${d.delivery_date?' · '+d.delivery_date.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:2px">${d.number}${d.order_number?' · Auftrag '+d.order_number:''}${d.delivery_date?' · '+d.delivery_date.slice(0,10):''}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-family:var(--mono);font-size:12px">${fmtChfD(d.total)}</div>
-        <div style="font-size:10px;color:var(--t3)">${d.item_count} Pos.</div>
+        <div style="font-family:var(--mono);font-size:13px">${fmtChfD(d.total)}</div>
+        <div style="font-size:13px;color:var(--t3)">${d.item_count} Pos.</div>
       </div>
     </div>`).join('') : empty('Keine Lieferungen');
 
   document.getElementById('dp-body').innerHTML = `
     <div id="cd-orders">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:11px;color:var(--t3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:13px;color:var(--t3)">
         <span>${c.orders.length} Aufträge</span>
         <span style="font-family:var(--mono);color:var(--t1)">Total ${fmtChfD(orderRevTotal)}</span>
       </div>
@@ -2179,14 +2179,14 @@ async function openCustomerDetail(id) {
       ${quoteRows}
     </div>
     <div id="cd-deliveries" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:11px;color:var(--t3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:13px;color:var(--t3)">
         <span>${c.deliveries.length} Lieferungen</span>
         <span style="font-family:var(--mono);color:var(--t1)">Total ${fmtChfD(delivRevTotal)}</span>
       </div>
       ${delivRows}
     </div>
     <div id="cd-info" style="display:none;padding:14px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px;margin-bottom:14px">
         ${c.email?`<div><div class="ps-label">E-Mail</div><div class="ps-val"><a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a></div></div>`:''}
         ${c.phone?`<div><div class="ps-label">Telefon</div><div class="ps-val">${esc(c.phone)}</div></div>`:''}
         ${c.street?`<div style="grid-column:span 2"><div class="ps-label">Adresse</div><div class="ps-val">${esc(c.street)}, ${c.postal_code||''} ${c.city||''}, ${c.country||''}</div></div>`:''}
@@ -2244,13 +2244,13 @@ function _render_orderRows() {
   const el = document.getElementById('_order-tbody');
   if (!el) return;
   el.innerHTML = rows.map(o=>`<tr onclick="openOrderDetail(${o.id})">
-    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${o.number}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${o.number}</td>
     <td style="font-weight:500">${esc(o.title)}</td>
     <td style="color:var(--t2)">${o.customer_name||'—'}</td>
-    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(o.items||[]).length}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${(o.items||[]).length}</td>
     <td>${_stSel('order',o.id,o.status)}</td>
-    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${o.order_date||'—'}</td>
-    <td style="font-family:var(--mono);font-size:11px;text-align:right;color:var(--green)">${o.computed_total != null ? fmtChf(o.computed_total) : '—'}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${o.order_date||'—'}</td>
+    <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--green)">${o.computed_total != null ? fmtChf(o.computed_total) : '—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${o.id},'invoice')" title="Rechnung PDF">&#128196;</button>
       ${o.status==='DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delOrder(${o.id})">&#x2715;</button>` : ''}
@@ -2270,22 +2270,22 @@ function _renderBillableTimeSection(timeEntries, taxRate, discountPct, includeTa
   const tax = includeTax ? grandNet * taxRate / 100 : 0;
   const grandTotal = grandNet + tax;
   return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
-    <div style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Arbeitszeit (verrechenbar)</div>
+    <div style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px">Arbeitszeit (verrechenbar)</div>
     <table style="width:100%"><tbody>
       ${billable.map(e => {
         const cost = e.hours * hourlyRate;
         return `<tr style="border-bottom:1px solid var(--line)">
           <td style="padding:6px 8px;width:28px"></td>
-          <td style="padding:6px 8px;font-size:12px">${esc(e.description||'Arbeitszeit')}
-            <div style="font-size:10px;color:var(--t3)">${e.date||''}</div></td>
-          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtN(e.hours,2)} h</td>
-          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtCHF(hourlyRate)}/h</td>
-          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:11px">${fmtCHF(cost)}</td>
+          <td style="padding:6px 8px;font-size:13px">${esc(e.description||'Arbeitszeit')}
+            <div style="font-size:13px;color:var(--t3)">${e.date||''}</div></td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtN(e.hours,2)} h</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtCHF(hourlyRate)}/h</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px">${fmtCHF(cost)}</td>
           <td style="padding:6px 8px"></td>
         </tr>`;
       }).join('')}
     </tbody></table>
-    <div style="padding:10px 12px;border-top:1px solid var(--line);font-size:12px">
+    <div style="padding:10px 12px;border-top:1px solid var(--line);font-size:13px">
       <div style="display:flex;justify-content:flex-end;gap:24px">
         <div style="text-align:right">
           <div style="color:var(--t3)">Positionen: <span style="font-family:var(--mono)">${fmtCHF(netItems)}</span></div>
@@ -2336,12 +2336,12 @@ async function openOrderDetail(id) {
     </div>
     <div id="od-info" style="display:none">
       <div class="sep-label">Auftragsdaten</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('order',id,o.status)}</div>
         <div><div class="ps-label">Kunde</div>${o.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${o.order_date||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div><span id="od-delivery-date">${o.delivery_date||'—'}</span></div>
-        <div><div class="ps-label">MwSt.</div>${o.tax_rate??0} % ${o.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
+        <div><div class="ps-label">MwSt.</div>${o.tax_rate??0} % ${o.include_tax?'<span style="color:var(--green);font-size:13px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:13px">(ohne)</span>'}</div>
         ${(o.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${o.discount_pct} %</div>`:''}
         ${o.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(o.payment_terms)}</div>`:''}
         ${o.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(o.notes)}</span></div>`:''}
@@ -2355,7 +2355,7 @@ async function openOrderDetail(id) {
       </div>
     </div>
     <div id="od-time" style="display:none">
-      <div id="time-entries-list"><div style="color:var(--t3);font-size:12px">Wird geladen…</div></div>
+      <div id="time-entries-list"><div style="color:var(--t3);font-size:13px">Wird geladen…</div></div>
     </div>`;
   showDetail();
 }
@@ -2369,14 +2369,14 @@ async function orderToDelivery(orderId) {
     <div class="modal-head"><div class="modal-title">Lieferschein erstellen</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
-      <div style="font-size:12px;color:var(--t2)">Alle Positionen des Auftrags werden übernommen.</div>
+      <div style="font-size:13px;color:var(--t2)">Alle Positionen des Auftrags werden übernommen.</div>
       ${billable.length ? `<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r)">
         <input type="checkbox" id="dtd-include-time" checked style="width:15px;height:15px;margin-top:1px;cursor:pointer;accent-color:var(--blue);flex-shrink:0">
         <div>
-          <div style="font-size:12px;font-weight:500;color:var(--t1)">Verrechenbare Zeiten übernehmen</div>
-          <div style="font-size:11px;color:var(--t3);margin-top:2px">${billable.length} Einträge · ${fmtN(billableH,2)} h${hourlyRate>0?' · '+fmtCHF(billableH*hourlyRate):''}</div>
+          <div style="font-size:13px;font-weight:500;color:var(--t1)">Verrechenbare Zeiten übernehmen</div>
+          <div style="font-size:13px;color:var(--t3);margin-top:2px">${billable.length} Einträge · ${fmtN(billableH,2)} h${hourlyRate>0?' · '+fmtCHF(billableH*hourlyRate):''}</div>
         </div>
-      </label>` : `<div style="font-size:11px;color:var(--t3);padding:8px 0">Keine verrechenbaren Zeiteinträge vorhanden.</div>`}
+      </label>` : `<div style="font-size:13px;color:var(--t3);padding:8px 0">Keine verrechenbaren Zeiteinträge vorhanden.</div>`}
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -2402,11 +2402,11 @@ function renderSearchView() {
   const chips = classes.map(c => {
     const [color, bg] = _classColor(c);
     return `<span onclick="document.getElementById('globalSearch').value='${esc(c)}';onSearch('${esc(c)}')"
-      style="font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color.replace(')',',0.3)').replace('var(','rgba(')};transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c)}</span>`;
+      style="font-family:var(--mono);font-size:13px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color.replace(')',',0.3)').replace('var(','rgba(')};transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c)}</span>`;
   }).join('');
   setLeftBody(`
     <div style="padding:12px 0 8px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
-      <span style="font-size:11px;color:var(--t4);align-self:center;margin-right:4px">Klasse:</span>
+      <span style="font-size:13px;color:var(--t4);align-self:center;margin-right:4px">Klasse:</span>
       ${chips}
     </div>
     <div id="search-results"><div style="padding:20px;text-align:center;color:var(--t3)">Suchbegriff oben eingeben …</div></div>`);
@@ -2436,31 +2436,31 @@ async function onSearch(q) {
       ${r.orders?.length ? section('Aufträge', r.orders.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Lieferdatum</th></tr></thead>
         <tbody>${r.orders.map(o=>`<tr style="cursor:pointer" onclick="gotoView('orders');openOrderDetail(${o.id})">
-          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(o.number)}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(o.number)}</td>
           <td>${esc(o.title)}</td><td style="color:var(--t3)">${esc(o.customer_name||'—')}</td>
           <td><span class="status ${ostC[o.status]||''}">${ostL[o.status]||o.status}</span></td>
-          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${o.delivery_date||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${o.delivery_date||'—'}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.quotes?.length ? section('Angebote', r.quotes.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Gültig bis</th></tr></thead>
         <tbody>${r.quotes.map(q=>`<tr style="cursor:pointer" onclick="gotoView('quotes');openQuoteDetail(${q.id})">
-          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(q.number)}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(q.number)}</td>
           <td>${esc(q.title)}</td><td style="color:var(--t3)">${esc(q.customer_name||'—')}</td>
           <td><span class="status ${qstC[q.status]||''}">${qstL[q.status]||q.status}</span></td>
-          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${q.valid_until||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${q.valid_until||'—'}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.deliveries?.length ? section('Lieferscheine', r.deliveries.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Datum</th></tr></thead>
         <tbody>${r.deliveries.map(d=>`<tr style="cursor:pointer" onclick="gotoView('deliveries');openDeliveryDetail(${d.id})">
-          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(d.number)}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</td>
           <td>${esc(d.title)}</td><td style="color:var(--t3)">${esc(d.customer_name||'—')}</td>
           <td><span class="status ${dstC[d.status]||''}">${dstL[d.status]||d.status}</span></td>
-          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.delivery_date||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.delivery_date||'—'}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.customers?.length ? section('Kunden', r.customers.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Name</th><th>E-Mail</th><th>Ort</th></tr></thead>
         <tbody>${r.customers.map(c=>`<tr style="cursor:pointer" onclick="gotoView('customers');openCustomerDetail(${c.id})">
-          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(c.number)}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(c.number)}</td>
           <td>${esc(c.name)}</td><td style="color:var(--t3)">${esc(c.email||'—')}</td>
           <td style="color:var(--t3)">${esc(c.city||'—')}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
@@ -2470,21 +2470,21 @@ async function onSearch(q) {
       ${r.items?.length ? section('PLM Items', r.items.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nummer</th><th>Name</th><th>Klasse</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
         <tbody>${r.items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
-          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</td>
           <td>${esc(i.name)}</td>
           <td>${i.classification ? _classChip(i.classification) : '<span style="color:var(--t4)">—</span>'}</td>
           <td style="color:var(--t3)">${i.project_name}</td>
-          <td style="font-family:var(--mono);font-size:10px">${i.latest_revision?.rev||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px">${i.latest_revision?.rev||'—'}</td>
           <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.datasets?.length ? section('Dateien', r.datasets.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Datei</th><th>Item</th><th>Projekt</th><th>Rev</th><th>Grösse</th><th></th></tr></thead>
         <tbody>${r.datasets.map(d=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${d.project_id},${d.item_id})">
           <td><span style="margin-right:5px">${dsIcon(d.ds_type)}</span>${esc(d.original_name)}</td>
-          <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${d.item_number}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${d.item_number}</td>
           <td style="color:var(--t3)">${d.project_name}</td>
-          <td style="font-family:var(--mono);font-size:10px">${d.rev||'—'}</td>
-          <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtSz(d.file_size)}</td>
+          <td style="font-family:var(--mono);font-size:13px">${d.rev||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtSz(d.file_size)}</td>
           <td onclick="event.stopPropagation()"><a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a></td>
         </tr>`).join('')}</tbody></table></div>` : ''}
     ` : noHits;
@@ -2578,7 +2578,7 @@ function _admPreview() {
 async function saveAdminSettings() {
   _showDynModal(`<div class="modal" style="max-width:420px">
     <div class="modal-head"><div class="modal-title" style="color:var(--red)">⚠ Admin-Einstellungen speichern</div></div>
-    <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2)">
+    <div class="modal-body" style="padding:14px 16px;font-size:14px;color:var(--t2)">
       Änderungen an Präfixen und Nummernformat gelten nur für <b>neu erstellte</b> Datensätze.<br><br>
       Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.<br><br>
       Wirklich speichern?
@@ -2659,8 +2659,8 @@ function _renderClassList(list) {
       <input type="color" class="cls-color" value="${col}" title="Farbe wählen"
         style="width:28px;height:28px;padding:2px;border:1px solid var(--line);border-radius:4px;background:var(--bg3);cursor:pointer;flex-shrink:0"
         oninput="_onClassColorChange()">
-      <span class="cls-preview" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:3px;background:${bg};color:${col};flex-shrink:0">${esc(c.name)}</span>
-      <input class="fi cls-name" value="${esc(c.name)}" style="flex:1;font-size:12px;padding:3px 7px;height:28px" oninput="_onClassNameInput(this)">
+      <span class="cls-preview" style="font-family:var(--mono);font-size:13px;padding:2px 8px;border-radius:3px;background:${bg};color:${col};flex-shrink:0">${esc(c.name)}</span>
+      <input class="fi cls-name" value="${esc(c.name)}" style="flex:1;font-size:13px;padding:3px 7px;height:28px" oninput="_onClassNameInput(this)">
       <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})">✕</button>
     </div>`;
   }).join('');
@@ -2789,22 +2789,22 @@ async function _loadDelTab() {
   // Released items
   const itemsEl = document.getElementById('st-del-items');
   if (itemsEl) {
-    itemsEl.innerHTML = '<div style="font-size:12px;color:var(--t3)">Lädt…</div>';
+    itemsEl.innerHTML = '<div style="font-size:13px;color:var(--t3)">Lädt…</div>';
     let relItems = [], loadErr = false;
     try { relItems = await api('/api/items-released'); }
     catch(e) { loadErr = true; }
     if (loadErr) {
-      itemsEl.innerHTML = '<div style="font-size:12px;color:var(--amber)">⚠ Endpunkt nicht verfügbar — Server neu starten</div>';
+      itemsEl.innerHTML = '<div style="font-size:13px;color:var(--amber)">⚠ Endpunkt nicht verfügbar — Server neu starten</div>';
     } else {
       itemsEl.innerHTML = relItems.length
         ? relItems.map(i => `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
             ${_itemChip(i.item_type,15)}
-            <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(i.item_number)}</span>
-            <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
-            <span style="font-size:10px;color:var(--t3)">${esc(i.project_number||'')}</span>
+            <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
+            <span style="font-size:13px;color:var(--t3)">${esc(i.project_number||'')}</span>
             <button class="btn btn-red btn-sm" onclick="_forceDelItem(${i.id},'${esc(i.item_number)}')">Löschen</button>
           </div>`).join('')
-        : '<div style="font-size:12px;color:var(--t3)">Keine freigegebenen Items</div>';
+        : '<div style="font-size:13px;color:var(--t3)">Keine freigegebenen Items</div>';
     }
   }
 
@@ -2813,12 +2813,12 @@ async function _loadDelTab() {
     const withContent = projects.filter(p => p.item_count > 0);
     pelEl.innerHTML = withContent.length
       ? withContent.map(p => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
-          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(p.number)}</span>
-          <span style="flex:1;font-size:12px">${esc(p.name)}</span>
-          <span style="font-size:11px;color:var(--t3)">${p.item_count} Items</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(p.number)}</span>
+          <span style="flex:1;font-size:13px">${esc(p.name)}</span>
+          <span style="font-size:13px;color:var(--t3)">${p.item_count} Items</span>
           <button class="btn btn-red btn-sm" onclick="_forceDeleteProject(${p.id},'${esc(p.name)}')">Löschen</button>
         </div>`).join('')
-      : '<div style="font-size:12px;color:var(--t3)">Keine Projekte mit Inhalten</div>';
+      : '<div style="font-size:13px;color:var(--t3)">Keine Projekte mit Inhalten</div>';
   }
 
   const ordEl = document.getElementById('st-del-orders');
@@ -2826,12 +2826,12 @@ async function _loadDelTab() {
     const locked = orders.filter(o => o.status !== 'DRAFT');
     ordEl.innerHTML = locked.length
       ? locked.map(o => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
-          <span class="status st-${ORDER_ST_MAP[o.status]?.replace('st-','')}" style="font-size:10px">${ORDER_ST_LABEL[o.status]||o.status}</span>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(o.number)}</span>
-          <span style="flex:1;font-size:12px">${esc(o.title)}</span>
+          <span class="status st-${ORDER_ST_MAP[o.status]?.replace('st-','')}" style="font-size:13px">${ORDER_ST_LABEL[o.status]||o.status}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(o.number)}</span>
+          <span style="flex:1;font-size:13px">${esc(o.title)}</span>
           <button class="btn btn-red btn-sm" onclick="_forceDelOrder(${o.id},'${esc(o.number)}')">Löschen</button>
         </div>`).join('')
-      : '<div style="font-size:12px;color:var(--t3)">Keine gesperrten Aufträge</div>';
+      : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Aufträge</div>';
   }
 
   const quoEl = document.getElementById('st-del-quotes');
@@ -2839,11 +2839,11 @@ async function _loadDelTab() {
     const locked = quotes.filter(q => q.status !== 'DRAFT');
     quoEl.innerHTML = locked.length
       ? locked.map(q => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
-          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(q.number)}</span>
-          <span style="flex:1;font-size:12px">${esc(q.title)}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(q.number)}</span>
+          <span style="flex:1;font-size:13px">${esc(q.title)}</span>
           <button class="btn btn-red btn-sm" onclick="_forceDelQuote(${q.id},'${esc(q.number)}')">Löschen</button>
         </div>`).join('')
-      : '<div style="font-size:12px;color:var(--t3)">Keine gesperrten Angebote</div>';
+      : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Angebote</div>';
   }
 }
 
@@ -2884,9 +2884,9 @@ async function openMoveItemModal(itemId) {
       <button class="btn btn-icon btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="font-size:13px;color:var(--t2);margin-bottom:14px">
+      <div style="font-size:14px;color:var(--t2);margin-bottom:14px">
         <strong style="color:var(--t1)">${esc(item.name)}</strong> in ein anderes Projekt verschieben.<br>
-        <span style="font-size:12px;color:var(--t3);margin-top:4px;display:block">Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items (Kinder) werden mitgenommen.</span>
+        <span style="font-size:13px;color:var(--t3);margin-top:4px;display:block">Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items (Kinder) werden mitgenommen.</span>
       </div>
       <div class="fg">
         <label class="fl">Zielprojekt</label>
@@ -3057,12 +3057,12 @@ function handleFiles(files) {
   document.getElementById('upPreview').innerHTML = upFiles.map((f,i) => {
     const newName = itemNumber ? buildUploadName(f.name, itemNumber, rev, i) : f.name;
     const renamed = itemNumber && newName !== f.name;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-top:5px;font-size:12px">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-top:5px;font-size:13px">
       &#x1F4C4; <div style="flex:1;min-width:0">
-        ${renamed ? `<div style="color:var(--t3);text-decoration:line-through;font-size:10px">${esc(f.name)}</div>` : ''}
+        ${renamed ? `<div style="color:var(--t3);text-decoration:line-through;font-size:13px">${esc(f.name)}</div>` : ''}
         <div style="color:${renamed?'var(--teal)':'var(--t1)'}">${esc(newName)}</div>
       </div>
-      <span style="color:var(--t3);font-size:10px;flex-shrink:0">${fmtSize(f.size)}</span>
+      <span style="color:var(--t3);font-size:13px;flex-shrink:0">${fmtSize(f.size)}</span>
     </div>`;
   }).join('');
 }
@@ -3325,8 +3325,8 @@ async function searchCustomerForOrder(q) {
     const ql = q.toLowerCase();
     const matches = all.filter(c => c.name.toLowerCase().includes(ql) || (c.number||'').toLowerCase().includes(ql));
     if (!matches.length) {
-      res.innerHTML = `<div style="padding:9px 12px;font-size:12px;color:var(--t3)">Keine Treffer</div>`
-        + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:12px;border-top:1px solid var(--line)"
+      res.innerHTML = `<div style="padding:9px 12px;font-size:13px;color:var(--t3)">Keine Treffer</div>`
+        + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:13px;border-top:1px solid var(--line)"
             onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
             ✏ "${esc(q)}" als Freitext verwenden</div>`;
     } else {
@@ -3334,10 +3334,10 @@ async function searchCustomerForOrder(q) {
         `<div onclick="selectOrderCustomer(${c.id},'${esc(c.number)} ${esc(c.name)}')"
           style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
           onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-          <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${c.number}</span>
-          <span style="font-size:12px;flex:1">${esc(c.name)}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${c.number}</span>
+          <span style="font-size:13px;flex:1">${esc(c.name)}</span>
         </div>`).join('')
-        + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:12px;color:var(--t3);border-top:1px solid var(--line)"
+        + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:13px;color:var(--t3);border-top:1px solid var(--line)"
             onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
             ✏ "${esc(q)}" als Freitext verwenden</div>`;
     }
@@ -3466,12 +3466,12 @@ function _render_quoteRows() {
   const el = document.getElementById('_quote-tbody');
   if (!el) return;
   el.innerHTML = rows.map(q=>`<tr onclick="openQuoteDetail(${q.id})">
-    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${q.number}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${q.number}</td>
     <td style="font-weight:500">${esc(q.title)}</td>
     <td style="color:var(--t2)">${q.customer_name||'—'}</td>
-    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${(q.items||[]).length}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${(q.items||[]).length}</td>
     <td>${_stSel('quote',q.id,q.status)}</td>
-    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${q.valid_until||'—'}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${q.valid_until||'—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${q.id},'quote')" title="Angebot PDF">&#128196;</button>
       ${q.status==='DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delQuote(${q.id})">&#x2715;</button>` : ''}
@@ -3499,18 +3499,18 @@ async function openQuoteDetail(id) {
     const grandNet = q.include_hours ? net + hoursCost : net;
     const tax = q.include_tax ? grandNet * (q.tax_rate||0) / 100 : 0;
     const grandTotal = grandNet + tax;
-    return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:12px">
+    return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:13px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-weight:600;color:var(--t2)">Arbeitszeit</span>
-        <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="openQuoteModal(${id})">✏️ Ändern</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:13px" onclick="openQuoteModal(${id})">✏️ Ändern</button>
       </div>
       <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
         <span style="color:var(--t3)">${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h</span>
         <span style="font-family:var(--mono);font-weight:600;color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>
-        <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${q.include_hours?'rgba(91,211,138,.12)':'var(--bg2)'};color:${q.include_hours?'var(--green)':'var(--t3)'}">${q.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
+        <span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${q.include_hours?'rgba(91,211,138,.12)':'var(--bg2)'};color:${q.include_hours?'var(--green)':'var(--t3)'}">${q.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
       </div>
       ${q.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
-        <div style="text-align:right;font-size:12px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
+        <div style="text-align:right;font-size:13px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
           <span style="font-family:var(--mono);font-weight:700;font-size:14px;color:var(--green);margin-left:8px">${fmtCHF(grandTotal)}</span>
         </div>
       </div>` : ''}
@@ -3524,13 +3524,13 @@ async function openQuoteDetail(id) {
     </div>
     <div id="qd-info" style="display:none">
       <div class="sep-label">Angebotsdaten</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('quote',id,q.status)}</div>
         <div><div class="ps-label">Kunde</div>${q.customer_name||'—'}</div>
         <div><div class="ps-label">Datum</div>${q.quote_date||'—'}</div>
         <div><div class="ps-label">Gültig bis</div>${q.valid_until||'—'}</div>
-        <div><div class="ps-label">MwSt.</div>${q.tax_rate??0} % ${q.include_tax?'<span style="color:var(--green);font-size:10px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:10px">(ohne)</span>'}</div>
-        ${estHours>0?`<div><div class="ps-label">Arbeitszeit</div>${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h = <span style="font-family:var(--mono);color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>${q.include_hours?' <span style="color:var(--green);font-size:10px">(eingerechnet)</span>':' <span style="color:var(--t3);font-size:10px">(nicht eingerechnet)</span>'}</div>`:''}
+        <div><div class="ps-label">MwSt.</div>${q.tax_rate??0} % ${q.include_tax?'<span style="color:var(--green);font-size:13px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:13px">(ohne)</span>'}</div>
+        ${estHours>0?`<div><div class="ps-label">Arbeitszeit</div>${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h = <span style="font-family:var(--mono);color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>${q.include_hours?' <span style="color:var(--green);font-size:13px">(eingerechnet)</span>':' <span style="color:var(--t3);font-size:13px">(nicht eingerechnet)</span>'}</div>`:''}
         ${(q.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${q.discount_pct} %</div>`:''}
         ${q.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(q.payment_terms)}</div>`:''}
         ${q.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(q.notes)}</span></div>`:''}
@@ -3624,15 +3624,15 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
   const total = net + tax;
   const hasLineDiscount = items.some(i=>(i.discount_pct||0)>0);
   const showDiscount = hasLineDiscount || discountPct > 0;
-  if (!items.length) return `<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Positionen</div>`;
+  if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">Noch keine Positionen</div>`;
   return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
     <table style="width:100%">
       <thead><tr>
-        <th style="text-align:left;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line)">Beschreibung</th>
-        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Menge</th>
-        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Preis</th>
-        ${showDiscount?`<th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Rab.</th>`:''}
-        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:9px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Total</th>
+        <th style="text-align:left;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line)">Beschreibung</th>
+        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Menge</th>
+        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Preis</th>
+        ${showDiscount?`<th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Rab.</th>`:''}
+        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Total</th>
         <th style="border-bottom:1px solid var(--line)"></th>
       </tr></thead>
       <tbody>
@@ -3643,33 +3643,33 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
           const costTotal = mc ? mc.total * i.quantity : null;
           const margin = (costTotal != null) ? lineTotal - costTotal : null;
           const marginColor = margin == null ? '' : margin < 0 ? 'color:var(--red)' : margin < lineTotal * 0.15 ? 'color:var(--yellow)' : 'color:var(--green)';
-          const costHint = mc ? `<div style="font-size:10px;margin-top:2px;color:var(--t3)">Herst.: ${fmtChf(mc.total)}${mc.from_bom?' <span style="color:var(--teal)">(BOM)</span>':''}${i.quantity>1?` × ${i.quantity} = ${fmtChf(costTotal)}`:''}
+          const costHint = mc ? `<div style="font-size:13px;margin-top:2px;color:var(--t3)">Herst.: ${fmtChf(mc.total)}${mc.from_bom?' <span style="color:var(--teal)">(BOM)</span>':''}${i.quantity>1?` × ${i.quantity} = ${fmtChf(costTotal)}`:''}
             <span style="margin-left:6px;${marginColor}">Marge ${fmtChf(margin)}</span></div>` : '';
           return `<tr style="border-bottom:1px solid var(--line)" onclick="openLineItemModal('${parentType}',${parentId},${i.id})">
             <td style="padding:3px 4px;width:28px" onclick="event.stopPropagation()">
               <div style="display:flex;flex-direction:column;gap:1px">
-                <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:14px;font-size:9px;opacity:${isFirst?0.2:1}" ${isFirst?'disabled':''} onclick="moveLineItem('${parentType}',${i.id},${parentId},'up')">▲</button>
-                <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:14px;font-size:9px;opacity:${isLast?0.2:1}" ${isLast?'disabled':''} onclick="moveLineItem('${parentType}',${i.id},${parentId},'down')">▼</button>
+                <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:14px;font-size:11px;opacity:${isFirst?0.2:1}" ${isFirst?'disabled':''} onclick="moveLineItem('${parentType}',${i.id},${parentId},'up')">▲</button>
+                <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:14px;font-size:11px;opacity:${isLast?0.2:1}" ${isLast?'disabled':''} onclick="moveLineItem('${parentType}',${i.id},${parentId},'down')">▼</button>
               </div>
             </td>
-            <td style="padding:7px 8px;font-size:12px;cursor:pointer">
+            <td style="padding:7px 8px;font-size:13px;cursor:pointer">
               ${esc(i.description)}
-              ${i.notes?`<div style="font-size:10px;color:var(--t3)">${esc(i.notes)}</div>`:''}
+              ${i.notes?`<div style="font-size:13px;color:var(--t3)">${esc(i.notes)}</div>`:''}
               ${costHint}
             </td>
-            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${i.quantity} ${i.unit}</td>
-            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtChf(i.unit_price)}</td>
-            ${showDiscount?`<td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--amber)">${i.discount_pct||0}%</td>`:''}
-            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:11px">${fmtChf(lineTotal)}</td>
+            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${i.quantity} ${i.unit}</td>
+            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtChf(i.unit_price)}</td>
+            ${showDiscount?`<td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:var(--amber)">${i.discount_pct||0}%</td>`:''}
+            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px">${fmtChf(lineTotal)}</td>
             <td style="padding:7px 8px;white-space:nowrap">
-              ${parentType==='order'&&i.item_id?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;margin-right:2px" onclick="event.stopPropagation();openInventoryDeductModal(${i.id},${i.item_id},${i.quantity},'${parentId}')">📦</button>`:''}
+              ${parentType==='order'&&i.item_id?`<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 6px;margin-right:2px" onclick="event.stopPropagation();openInventoryDeductModal(${i.id},${i.item_id},${i.quantity},'${parentId}')">📦</button>`:''}
               <button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delLineItem('${parentType}',${i.id},${parentId})">✕</button>
             </td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>
-    <div style="padding:10px 12px;border-top:1px solid var(--line);font-size:12px">
+    <div style="padding:10px 12px;border-top:1px solid var(--line);font-size:13px">
       <div style="display:flex;justify-content:flex-end;gap:24px">
         <div style="text-align:right">
           ${discountPct>0?`<div style="color:var(--t3)">Zwischentotal: <span style="font-family:var(--mono)">${fmtChf(subtotal)}</span></div>
@@ -3690,7 +3690,7 @@ async function searchItemsForLine(q) {
   if (!q || q.length < 1) { res.style.display='none'; return; }
   _liSearchTimer = setTimeout(async () => {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
-    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const rev = i.latest_revision;
       const icon = _itemChip(i.item_type, 18);
@@ -3698,9 +3698,9 @@ async function searchItemsForLine(q) {
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${icon}</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</span>
-        <span style="flex:1;font-size:12px">${esc(i.name)}</span>
-        <span style="font-size:10px;color:var(--t3)">${i.project_name}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        <span style="font-size:13px;color:var(--t3)">${i.project_name}</span>
         ${rev?`<span class="status st-${rev.status}" style="margin-left:4px">rev${rev.rev}</span>`:''}
       </div>`;
     }).join('');
@@ -3730,7 +3730,7 @@ function selectLinkedItem(item) {
     const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
     const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
     hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>${fmtCHF(mc.total)}</strong>`
-      + (mc.from_bom ? ` <span style="color:var(--teal);font-size:10px">(aus BOM)</span>` : parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
+      + (mc.from_bom ? ` <span style="color:var(--teal);font-size:13px">(aus BOM)</span>` : parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
       + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge ${fmtCHF(margin)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
     hint.style.display = 'block';
   } else {
@@ -3917,13 +3917,13 @@ async function shutdownServer() {
         <div class="modal-title" style="color:var(--amber)">⚠ Aktive Checkouts</div>
       </div>
       <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:13px;color:var(--t2)">${checkouts.length} Checkout(s) aktiv · ${totalFiles} Dateien</div>
+        <div style="font-size:14px;color:var(--t2)">${checkouts.length} Checkout(s) aktiv · ${totalFiles} Dateien</div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          ${checkouts.map(c => `<div style="font-size:12px;font-family:var(--mono);color:var(--t3)">
+          ${checkouts.map(c => `<div style="font-size:13px;font-family:var(--mono);color:var(--t3)">
             ${_itemChip(c.item_type,14)} <span style="color:var(--blue)">${esc(c.item_number)}</span> – ${esc(c.item_name)}
           </div>`).join('')}
         </div>
-        <div style="font-size:12px;color:var(--t3);padding-top:4px">Vor dem Beenden einchecken (Checkout-Ordner werden gelöscht)?</div>
+        <div style="font-size:13px;color:var(--t3);padding-top:4px">Vor dem Beenden einchecken (Checkout-Ordner werden gelöscht)?</div>
       </div>
       <div class="modal-foot" style="gap:6px">
         <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -3941,11 +3941,11 @@ async function shutdownServer() {
         <div class="modal-title" style="color:var(--amber)">⚠ Nicht erfasste Dateien</div>
       </div>
       <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:13px;color:var(--t2)">${newCount} Datei(en) im Checkout-Ordner noch nicht im PLM erfasst:</div>
+        <div style="font-size:14px;color:var(--t2)">${newCount} Datei(en) im Checkout-Ordner noch nicht im PLM erfasst:</div>
         <div style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto">
-          ${allFiles.map(f => `<div style="font-size:11px;color:var(--t3)">${f}</div>`).join('')}
+          ${allFiles.map(f => `<div style="font-size:13px;color:var(--t3)">${f}</div>`).join('')}
         </div>
-        <div style="font-size:12px;color:var(--t3)">Jetzt erfassen oder später?</div>
+        <div style="font-size:13px;color:var(--t3)">Jetzt erfassen oder später?</div>
       </div>
       <div class="modal-foot" style="gap:6px">
         <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -3959,8 +3959,8 @@ async function shutdownServer() {
         <div class="modal-title">Server beenden</div>
       </div>
       <div class="modal-body" style="padding:14px 16px">
-        <div style="font-size:13px;color:var(--t2)">PLM-Server wirklich beenden?</div>
-        <div style="font-size:12px;color:var(--t3);margin-top:6px">Die Weboberfläche ist danach nicht mehr erreichbar.</div>
+        <div style="font-size:14px;color:var(--t2)">PLM-Server wirklich beenden?</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:6px">Die Weboberfläche ist danach nicht mehr erreichbar.</div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -3982,8 +3982,8 @@ async function _doShutdown(checkinFirst) {
   document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0b0d;color:#ecedef;font-family:Manrope,sans-serif;gap:16px">
     <div style="font-size:36px;color:#4a5470">■</div>
     <div style="font-size:17px;font-weight:600">PLM & ERP wurde beendet</div>
-    <div style="font-size:12px;color:#4a5470;margin-bottom:8px">Der Server wurde gestoppt.</div>
-    <button onclick="window.close()" style="background:#1d2029;border:1px solid #2a2d3a;color:#ecedef;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;font-family:Manrope,sans-serif">✕ Tab schliessen</button>
+    <div style="font-size:13px;color:#4a5470;margin-bottom:8px">Der Server wurde gestoppt.</div>
+    <button onclick="window.close()" style="background:#1d2029;border:1px solid #2a2d3a;color:#ecedef;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:14px;font-family:Manrope,sans-serif">✕ Tab schliessen</button>
   </div>`;
   // Tab schliessen versuchen (funktioniert wenn Tab per Skript geöffnet wurde)
   setTimeout(() => window.close(), 600);
@@ -4020,12 +4020,12 @@ function _render_deliveryRows() {
   const el = document.getElementById('_delivery-tbody');
   if (!el) return;
   el.innerHTML = rows.map(d => `<tr onclick="openDeliveryDetail(${d.id})">
-    <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${d.number}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${d.number}</td>
     <td style="font-weight:500">${esc(d.title)}</td>
     <td style="color:var(--t2)">${d.customer_name||'—'}</td>
-    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.item_count||0}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.item_count||0}</td>
     <td>${_stSel('delivery',d.id,d.status)}</td>
-    <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${d.delivery_date||'—'}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.delivery_date||'—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Druckansicht">&#128196;</button>
       <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>
@@ -4048,7 +4048,7 @@ async function openDeliveryDetail(id) {
     </div>
     <div id="dd-info" style="display:none">
       <div class="sep-label">Lieferscheindaten</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('delivery',id,d.status)}</div>
         <div><div class="ps-label">Kunde</div>${d.customer_name||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div>${d.delivery_date||'—'}</div>
@@ -4066,7 +4066,7 @@ async function openDeliveryDetail(id) {
 }
 
 function renderDeliveryItems(items, deliveryId) {
-  if (!items.length) return `<div style="color:var(--t3);font-size:12px;padding:8px 0">Noch keine Positionen</div>`;
+  if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">Noch keine Positionen</div>`;
   const allBtn = items.length > 1 ? `<div style="display:flex;gap:6px;margin-bottom:8px">
     <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">🖶 Alle kurz</button>
     <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'full')">🖶 Alle mit Parametern</button>
@@ -4077,13 +4077,13 @@ function renderDeliveryItems(items, deliveryId) {
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:${item.print_settings?'1px solid var(--line)':'none'}">
         <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">
-          <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:9px;opacity:${isFirst?0.2:1}" ${isFirst?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'up')">▲</button>
-          <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:9px;opacity:${isLast?0.2:1}" ${isLast?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'down')">▼</button>
+          <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:11px;opacity:${isFirst?0.2:1}" ${isFirst?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'up')">▲</button>
+          <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:11px;opacity:${isLast?0.2:1}" ${isLast?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'down')">▼</button>
         </div>
-        ${item.item_number?`<span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${item.item_number}</span>`:''}
-        <span style="font-size:12px;font-weight:500;flex:1">${esc(item.description)}</span>
-        <span style="font-family:var(--mono);font-size:11px;color:var(--t2)">${item.quantity} ${item.unit}</span>
-        ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmtCHF(parseFloat(item.unit_price))}</span>`:''}
+        ${item.item_number?`<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${item.item_number}</span>`:''}
+        <span style="font-size:13px;font-weight:500;flex:1">${esc(item.description)}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${item.unit}</span>
+        ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">${fmtCHF(parseFloat(item.unit_price))}</span>`:''}
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="Kurzbeleg">🖶</button>
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'full')" title="Vollbeleg mit Parametern">🖶≡</button>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="openDeliveryItemModal(${deliveryId},${item.id})" title="Bearbeiten">✏</button>
@@ -4157,13 +4157,13 @@ function renderSettingsPreview(s) {
       const v = getFirstVal(s[k]);
       if (!v) return '';
       return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:5px 7px">
-        <div style="font-family:var(--mono);font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${label}</div>
-        <div style="font-size:11px;font-weight:500;color:var(--t1)">${esc(v)}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${label}</div>
+        <div style="font-size:13px;font-weight:500;color:var(--t1)">${esc(v)}</div>
       </div>`;
     }).filter(Boolean).join('');
     if (!cells) return '';
     return `<div style="margin-bottom:8px">
-      <div style="font-family:var(--mono);font-size:9px;color:${g.color};letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">${g.label}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:${g.color};letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">${g.label}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${cells}</div>
     </div>`;
   }).filter(Boolean).join('');
@@ -4186,17 +4186,17 @@ function renderSettingsPreview(s) {
         const val = getFirstVal(v) || String(v).split(';')[0].trim();
         if (!val || SKIP_VALS.has(val.toLowerCase()) || val.includes('\n') || val.length > 40) return '';
         return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:5px 7px">
-          <div style="font-family:var(--mono);font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${esc(k.replace(/_/g,' '))}</div>
-          <div style="font-size:11px;font-weight:500;color:var(--t1)">${esc(val)}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${esc(k.replace(/_/g,' '))}</div>
+          <div style="font-size:13px;font-weight:500;color:var(--t1)">${esc(val)}</div>
         </div>`;
       }).filter(Boolean).join('');
     return extraCells ? `<div style="margin-bottom:8px">
-      <div style="font-family:var(--mono);font-size:9px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Parameter</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Parameter</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${extraCells}</div>
     </div>` : '';
   })();
 
-  return groups + extras || '<div style="font-size:11px;color:var(--t3)">Keine Settings geladen</div>';
+  return groups + extras || '<div style="font-size:13px;color:var(--t3)">Keine Settings geladen</div>';
 }
 
 // ── 3MF UPLOAD HANDLING ───────────────────────────────────────
@@ -4240,16 +4240,16 @@ async function searchItemsForDim(q) {
   if (!q || q.length < 1) { res.style.display='none'; return; }
   _dimSearchTimer = setTimeout(async () => {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
-    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const icon = _itemChip(i.item_type, 18);
       return `<div onclick="selectDimLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${icon}</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</span>
-        <span style="flex:1;font-size:12px">${esc(i.name)}</span>
-        <span style="font-size:10px;color:var(--t3)">${i.project_name}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        <span style="font-size:13px;color:var(--t3)">${i.project_name}</span>
       </div>`;
     }).join('');
     res.style.display = 'block';
@@ -4525,8 +4525,8 @@ async function generateDoc(id, type) {
   const rows = (d.positions||[]).map(p => {
     const lineTotal = p.quantity * p.unit_price * (1 - (p.discount_pct||0)/100);
     let html = '<tr style="border-bottom:1px solid #e5e7eb">'
-      +'<td style="padding:8px 6px">'+escHtml(p.description)+(p.item_number?' <span style="font-size:10px;color:#6b7280">['+p.item_number+']</span>':'')
-      +(p.notes?'<br><span style="font-size:10px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
+      +'<td style="padding:8px 6px">'+escHtml(p.description)+(p.item_number?' <span style="font-size:13px;color:#6b7280">['+p.item_number+']</span>':'')
+      +(p.notes?'<br><span style="font-size:13px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+p.unit+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtP(p.unit_price)+'</td>'
       +(hasDiscount?(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>'):'')
@@ -4535,8 +4535,8 @@ async function generateDoc(id, type) {
     if (p.sub_items && p.sub_items.length) {
       html += p.sub_items.map(s =>
         '<tr style="background:#f9fafb">'
-        +'<td style="padding:4px 6px 4px 22px;color:#6b7280;font-size:11px">↳ '+(s.item_type==='asm'?'📦':s.item_type==='doc'?'📄':'🔩')+' '+escHtml(s.item_number)+' – '+escHtml(s.name)+'</td>'
-        +'<td style="padding:4px 6px;text-align:right;font-size:11px;color:#6b7280">'+s.quantity+' '+s.unit+'</td>'
+        +'<td style="padding:4px 6px 4px 22px;color:#6b7280;font-size:13px">↳ '+(s.item_type==='asm'?'📦':s.item_type==='doc'?'📄':'🔩')+' '+escHtml(s.item_number)+' – '+escHtml(s.name)+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;font-size:13px;color:#6b7280">'+s.quantity+' '+s.unit+'</td>'
         +'<td style="padding:4px 6px"></td>'
         +(hasDiscount?'<td style="padding:4px 6px"></td>':'')
         +'<td style="padding:4px 6px"></td>'
@@ -4553,7 +4553,7 @@ async function generateDoc(id, type) {
     const hrs = parseFloat(t.hours) || 0;
     const cost = hrs * hourlyRate;
     return '<tr style="border-bottom:1px solid #e5e7eb">'
-      +'<td style="padding:8px 6px">'+(t.description||'Arbeitszeit')+(t.date?' <span style="font-size:10px;color:#9ca3af">['+t.date+']</span>':'')+'</td>'
+      +'<td style="padding:8px 6px">'+(t.description||'Arbeitszeit')+(t.date?' <span style="font-size:13px;color:#9ca3af">['+t.date+']</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtN(hrs,2)+' h</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtP(hourlyRate)+'/h</td>'
       +(hasDiscount?'<td style="padding:8px 6px"></td>':'')
@@ -4568,22 +4568,22 @@ async function generateDoc(id, type) {
 <html lang="de-CH">
 <head><meta charset="UTF-8"><title>${docLabel} ${d.number}</title>
 <style>
-  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:40px}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#1f2937;margin:0;padding:40px}
   .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px}
   .company-name{font-size:22px;font-weight:700;color:${color};letter-spacing:-0.5px}
-  .company-detail{font-size:11px;color:#6b7280;margin-top:2px;line-height:1.6}
+  .company-detail{font-size:13px;color:#6b7280;margin-top:2px;line-height:1.6}
   .doc-label{font-size:28px;font-weight:700;color:#111827;margin-bottom:4px}
-  .meta{color:#6b7280;font-size:12px;line-height:1.7}
+  .meta{color:#6b7280;font-size:13px;line-height:1.7}
   .addr-block{margin:30px 0;display:flex;gap:60px}
-  .addr-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:4px}
+  .addr-label{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:4px}
   table{width:100%;border-collapse:collapse;margin:20px 0}
   thead{background:#f9fafb}
-  thead th{text-align:left;padding:10px 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;border-bottom:2px solid #e5e7eb}
+  thead th{text-align:left;padding:10px 6px;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;border-bottom:2px solid #e5e7eb}
   .totals{margin-left:auto;width:300px;margin-top:10px}
-  .total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #f3f4f6}
+  .total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:14px;border-bottom:1px solid #f3f4f6}
   .total-gross{display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:700;border-top:2px solid ${color};margin-top:4px;color:${color}}
-  .footer{margin-top:50px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af}
-  .badge{display:inline-block;background:#dbeafe;color:${color};font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600}
+  .footer{margin-top:50px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#9ca3af}
+  .badge{display:inline-block;background:#dbeafe;color:${color};font-size:13px;padding:2px 8px;border-radius:20px;font-weight:600}
   @media print{body{padding:20px}}
 </style>
 </head>
@@ -4615,7 +4615,7 @@ async function generateDoc(id, type) {
   ${d.customer_name ? `<div>
     <div class="addr-label">${isQuote ? 'Angebotsempfänger' : 'Rechnungsempfänger'}</div>
     <div style="font-weight:600;font-size:14px">${escHtml(d.customer_name)}</div>
-    ${d.customer_number ? '<div style="font-size:11px;color:#6b7280">'+d.customer_number+'</div>' : ''}
+    ${d.customer_number ? '<div style="font-size:13px;color:#6b7280">'+d.customer_number+'</div>' : ''}
     <div style="margin-top:4px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
     ${d.customer_email ? '<div style="margin-top:4px;color:#6b7280">'+escHtml(d.customer_email)+'</div>' : ''}
   </div>` : `<div><div class="addr-label">${isQuote ? 'Angebotsempfänger' : 'Rechnungsempfänger'}</div><div style="color:#9ca3af">Kein Kunde zugewiesen</div></div>`}
@@ -4623,7 +4623,7 @@ async function generateDoc(id, type) {
     <div class="addr-label">${isQuote ? 'Betreff' : 'Auftrag'}</div>
     <div style="font-weight:600">${escHtml(d.title)}</div>
     <div style="margin-top:4px"><span class="badge">${d.status}</span></div>
-    ${d.notes ? '<div style="margin-top:6px;font-size:12px;color:#6b7280">'+escHtml(d.notes)+'</div>' : ''}
+    ${d.notes ? '<div style="margin-top:6px;font-size:13px;color:#6b7280">'+escHtml(d.notes)+'</div>' : ''}
   </div>
 </div>
 
@@ -4671,8 +4671,8 @@ function showPrinterError(msg) {
   banner.innerHTML = `<div style="display:flex;align-items:flex-start;gap:10px">
     <span style="color:var(--red);font-size:16px;flex-shrink:0">🖶</span>
     <div style="flex:1;min-width:0">
-      <div style="font-weight:600;color:var(--red);margin-bottom:4px;font-size:12px">Drucker nicht erreichbar</div>
-      <div style="font-size:11px;color:var(--t2);font-family:var(--mono);white-space:pre-wrap;word-break:break-word">${esc(String(msg))}</div>
+      <div style="font-weight:600;color:var(--red);margin-bottom:4px;font-size:13px">Drucker nicht erreichbar</div>
+      <div style="font-size:13px;color:var(--t2);font-family:var(--mono);white-space:pre-wrap;word-break:break-word">${esc(String(msg))}</div>
     </div>
     <button onclick="document.getElementById('printer-err-banner').remove()" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0;flex-shrink:0;line-height:1">✕</button>
   </div>`;
@@ -4756,7 +4756,7 @@ const SETTINGS_GROUPS_PDF = [
 ];
 
 function renderSettingsTablePdf(s) {
-  if (!s) return '<p style="color:#9ca3af;font-size:12px">Keine Druckeinstellungen hinterlegt.</p>';
+  if (!s) return '<p style="color:#9ca3af;font-size:13px">Keine Druckeinstellungen hinterlegt.</p>';
   return SETTINGS_GROUPS_PDF.map(g => {
     const rows = g.keys.map(([k, label]) => {
       const raw = s[k];
@@ -4769,7 +4769,7 @@ function renderSettingsTablePdf(s) {
     }).filter(Boolean).join('');
     if (!rows) return '';
     return `<div style="margin-bottom:12px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1d4ed8;margin-bottom:4px">${g.label}</div>
+      <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1d4ed8;margin-bottom:4px">${g.label}</div>
       <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:4px">${rows}</table>
     </div>`;
   }).filter(Boolean).join('');
@@ -4795,14 +4795,14 @@ async function generateDeliveryDoc(id) {
     const hasSettings = !!item.print_settings;
     return `<div style="page-break-inside:avoid;margin-bottom:24px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
       <div style="background:#1e40af;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px">
-        <span style="background:rgba(255,255,255,.2);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${idx+1}</span>
-        ${item.item_number?`<span style="font-family:monospace;font-size:11px;opacity:.8">${escHtml(item.item_number)}</span>`:''}
+        <span style="background:rgba(255,255,255,.2);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${idx+1}</span>
+        ${item.item_number?`<span style="font-family:monospace;font-size:13px;opacity:.8">${escHtml(item.item_number)}</span>`:''}
         <span style="font-weight:600;font-size:14px;flex:1">${escHtml(item.description)}</span>
-        <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:12px">${item.quantity} ${item.unit}</span>
+        <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${item.unit}</span>
       </div>
-      ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:12px;color:#374151;border-bottom:1px solid #dbeafe">Notiz: ${escHtml(item.notes)}</div>`:''}
+      ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:13px;color:#374151;border-bottom:1px solid #dbeafe">Notiz: ${escHtml(item.notes)}</div>`:''}
       <div style="padding:12px 14px">
-        ${hasSettings ? renderSettingsTablePdf(item.print_settings) : '<p style="color:#9ca3af;font-size:12px;margin:0">Keine 3MF-Druckeinstellungen hinterlegt.</p>'}
+        ${hasSettings ? renderSettingsTablePdf(item.print_settings) : '<p style="color:#9ca3af;font-size:13px;margin:0">Keine 3MF-Druckeinstellungen hinterlegt.</p>'}
       </div>
     </div>`;
   }).join('');
@@ -4811,16 +4811,16 @@ async function generateDeliveryDoc(id) {
 <html lang="de-CH">
 <head><meta charset="UTF-8"><title>Lieferschein ${escHtml(d.number)}</title>
 <style>
-  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:32px}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#1f2937;margin:0;padding:32px}
   .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #1d4ed8}
   .company-name{font-size:20px;font-weight:700;color:#1d4ed8}
   .doc-label{font-size:26px;font-weight:700;color:#111827;margin-bottom:4px}
-  .meta{color:#6b7280;font-size:12px;line-height:1.7}
+  .meta{color:#6b7280;font-size:13px;line-height:1.7}
   .addr-block{display:flex;gap:48px;margin:20px 0 24px}
-  .addr-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:3px}
-  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+  .addr-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:3px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:13px;font-weight:600}
   .sign-row{display:flex;gap:40px;margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb}
-  .sign-box{flex:1;border-bottom:1px solid #9ca3af;padding-bottom:2px;font-size:11px;color:#6b7280;height:40px;display:flex;align-items:flex-end}
+  .sign-box{flex:1;border-bottom:1px solid #9ca3af;padding-bottom:2px;font-size:13px;color:#6b7280;height:40px;display:flex;align-items:flex-end}
   @media print{body{padding:16px}.header{margin-bottom:20px}}
 </style>
 </head>
@@ -4828,7 +4828,7 @@ async function generateDeliveryDoc(id) {
 <div class="header">
   <div>
     <div class="company-name">${escHtml(s.company_name||'')}</div>
-    <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.6">
+    <div style="font-size:13px;color:#6b7280;margin-top:2px;line-height:1.6">
       ${companyLines.map(l=>escHtml(l)).join('<br>')}
       ${s.company_phone?' · '+escHtml(s.company_phone):''}
       ${s.company_email?' · '+escHtml(s.company_email):''}
@@ -4836,7 +4836,7 @@ async function generateDeliveryDoc(id) {
   </div>
   <div style="text-align:right">
     <div class="doc-label">Lieferschein</div>
-    <div style="font-family:monospace;font-size:13px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
+    <div style="font-family:monospace;font-size:14px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
     <div class="meta">
       Erstellt: ${today}<br>
       ${d.delivery_date?'Lieferdatum: '+d.delivery_date+'<br>':''}
@@ -4851,28 +4851,28 @@ async function generateDeliveryDoc(id) {
   ${d.customer_name?`<div>
     <div class="addr-label">Empfänger</div>
     <div style="font-weight:600;font-size:14px">${escHtml(d.customer_name)}</div>
-    ${d.customer_number?'<div style="font-size:11px;color:#6b7280">'+escHtml(d.customer_number)+'</div>':''}
+    ${d.customer_number?'<div style="font-size:13px;color:#6b7280">'+escHtml(d.customer_number)+'</div>':''}
     <div style="margin-top:3px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
     ${d.customer_email?'<div style="margin-top:3px;color:#6b7280">'+escHtml(d.customer_email)+'</div>':''}
   </div>`:`<div><div class="addr-label">Empfänger</div><div style="color:#9ca3af">—</div></div>`}
   <div>
     <div class="addr-label">Auftrag / Betreff</div>
     <div style="font-weight:600">${escHtml(d.title)}</div>
-    ${d.notes?`<div style="margin-top:4px;font-size:12px;color:#6b7280">${escHtml(d.notes)}</div>`:''}
+    ${d.notes?`<div style="margin-top:4px;font-size:13px;color:#6b7280">${escHtml(d.notes)}</div>`:''}
   </div>
 </div>
 
-<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:12px">${(d.items||[]).length} Position(en)</div>
+<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:12px">${(d.items||[]).length} Position(en)</div>
 
 ${itemsHtml || '<p style="color:#9ca3af">Keine Positionen</p>'}
 
 <div class="sign-row">
-  <div style="flex:1"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">Übergabe durch</div><div class="sign-box"></div></div>
-  <div style="flex:1"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">Empfang bestätigt</div><div class="sign-box"></div></div>
-  <div style="flex:1"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">Datum</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">Übergabe durch</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">Empfang bestätigt</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">Datum</div><div class="sign-box"></div></div>
 </div>
 
-<div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:10px;color:#d1d5db;text-align:right">${today}</div>
+<div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:13px;color:#d1d5db;text-align:right">${today}</div>
 <script>window.onload = () => window.print();<\/script>
 </body></html>`;
 
@@ -4904,24 +4904,24 @@ async function loadTimeEntries(orderId) {
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <div class="sep-label" style="margin:0;flex:1">Zeiterfassung</div>
-      <span style="font-size:11px;color:var(--t3)">Total: <strong style="color:var(--t1)">${fmtN(totalH,2)} h</strong></span>
-      ${billableH>0&&hourlyRate>0?`<span style="font-size:11px;color:var(--green)">verrechenbar: <strong>${fmtN(billableH,2)} h = ${fmtCHF(billableH*hourlyRate)}</strong></span>`:''}
+      <span style="font-size:13px;color:var(--t3)">Total: <strong style="color:var(--t1)">${fmtN(totalH,2)} h</strong></span>
+      ${billableH>0&&hourlyRate>0?`<span style="font-size:13px;color:var(--green)">verrechenbar: <strong>${fmtN(billableH,2)} h = ${fmtCHF(billableH*hourlyRate)}</strong></span>`:''}
       <button class="btn btn-primary btn-sm" onclick="openTimeModal()">+ Eintrag</button>
     </div>
     ${entries.length ? `<div class="tbl-wrap"><table>
       <thead><tr><th>Datum</th><th>Stunden</th><th>Beschreibung</th><th>Verrechnen</th><th></th></tr></thead>
       <tbody>${entries.map(e => `<tr>
-        <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${e.date||'—'}</td>
-        <td style="font-family:var(--mono);font-size:11px;font-weight:600">${fmtN(e.hours,2)} h</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${e.date||'—'}</td>
+        <td style="font-family:var(--mono);font-size:13px;font-weight:600">${fmtN(e.hours,2)} h</td>
         <td style="color:var(--t2)">${esc(e.description||'')}</td>
-        <td style="text-align:center"><span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(91,211,138,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
+        <td style="text-align:center"><span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(91,211,138,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
         <td style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm btn-icon" onclick="openTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
           <button class="btn btn-red btn-sm btn-icon" onclick="delTimeEntry(${e.id})">✕</button>
         </td>
       </tr>`).join('')}</tbody>
     </table></div>`
-    : '<div style="color:var(--t3);font-size:12px;padding:12px 0">Noch keine Zeiteinträge</div>'}`;
+    : '<div style="color:var(--t3);font-size:13px;padding:12px 0">Noch keine Zeiteinträge</div>'}`;
 }
 
 function _showDynModal(html) {
@@ -4947,7 +4947,7 @@ function openTimeModal(entry) {
         <input id="te-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}"></div>
       <div class="fg"><label class="fl">Beschreibung</label>
         <input id="te-desc" type="text" class="fi" placeholder="Konstruktion, Montage …" value="${esc(e.description||'')}"></div>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;padding:6px 0;border-top:1px solid var(--line)">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;padding:6px 0;border-top:1px solid var(--line)">
         <input type="checkbox" id="te-billable" ${e.billable?'checked':''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
         <span style="color:var(--t2)">Zeit verrechnen</span>
         ${hourlyRate>0?`<span style="color:var(--t3);margin-left:4px">(${fmtCHF(hourlyRate)}/h)</span>`:''}
@@ -4996,18 +4996,18 @@ async function loadWhereUsed(itemId) {
   if (!el) return;
   const rows = await api(`/api/items/${itemId}/where-used`).catch(() => []);
   if (!rows.length) {
-    el.innerHTML = '<div style="color:var(--t3);font-size:12px;padding:8px 0">Dieses Teil wird in keiner Baugruppe verwendet.</div>';
+    el.innerHTML = '<div style="color:var(--t3);font-size:13px;padding:8px 0">Dieses Teil wird in keiner Baugruppe verwendet.</div>';
     return;
   }
   el.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px">
     ${rows.map(r => `
       <div onclick="openProjectAndItem(${r.project_id},${r.id})" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
         ${_itemChip(r.item_type, 16)}
-        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(r.item_number)}</span>
-        <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(r.item_number)}</span>
+        <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</span>
         ${_classChip(r.classification)}
-        <span class="status st-${r.status}" style="font-size:9px">rev${r.rev}</span>
-        <span style="font-size:10px;color:var(--t4);font-family:var(--mono)">${esc(r.project_number)}</span>
+        <span class="status st-${r.status}" style="font-size:11px">rev${r.rev}</span>
+        <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(r.project_number)}</span>
       </div>`).join('')}
   </div>`;
 }
@@ -5020,7 +5020,7 @@ async function loadItemTimeEntries(itemId) {
   const totalH = entries.reduce((s, e) => s + (parseFloat(e.hours)||0), 0);
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:11px;color:var(--t3)">${entries.length ? `${entries.length} Einträge · ${fmtN(totalH,2)} h gesamt` : 'Noch keine Einträge'}</span>
+      <span style="font-size:13px;color:var(--t3)">${entries.length ? `${entries.length} Einträge · ${fmtN(totalH,2)} h gesamt` : 'Noch keine Einträge'}</span>
       <button class="btn btn-primary btn-sm" onclick="openItemTimeModal()">+ Eintrag</button>
     </div>
     ${entries.length ? `<div class="tbl-wrap"><table>
@@ -5029,9 +5029,9 @@ async function loadItemTimeEntries(itemId) {
       </tr></thead>
       <tbody>
         ${entries.map(e => `<tr>
-          <td style="font-family:var(--mono);font-size:11px">${e.date||'—'}</td>
-          <td style="font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtN(parseFloat(e.hours)||0,2)} h</td>
-          <td style="font-size:12px;color:var(--t2)">${esc(e.description||'—')}</td>
+          <td style="font-family:var(--mono);font-size:13px">${e.date||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtN(parseFloat(e.hours)||0,2)} h</td>
+          <td style="font-size:13px;color:var(--t2)">${esc(e.description||'—')}</td>
           <td style="white-space:nowrap">
             <button class="btn btn-ghost btn-sm btn-icon" onclick="openItemTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
             <button class="btn btn-red btn-sm btn-icon" onclick="delItemTimeEntry(${e.id})">✕</button>
@@ -5103,23 +5103,23 @@ function openCheckoutModal(itemId, itemNumber, itemType) {
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body">
-      ${isAsm ? `<div style="background:rgba(142,163,255,.08);border:1px solid rgba(142,163,255,.2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:14px;font-size:12px;color:var(--t2)">
+      ${isAsm ? `<div style="background:rgba(142,163,255,.08);border:1px solid rgba(142,163,255,.2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:14px;font-size:13px;color:var(--t2)">
         Baugruppe: alle Parts aus der BOM werden rekursiv mitgeladen, damit die CAD-Verlinkungen bestehen bleiben.
       </div>` : ''}
-      <div style="font-size:11px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dateitypen auswählen</div>
+      <div style="font-size:13px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dateitypen auswählen</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px">
         ${CHECKOUT_TYPES.map(t => `
           <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--line3)'" onmouseout="this.style.borderColor='var(--line2)'">
             <input type="checkbox" class="co-type" value="${t.key}" ${t.key==='CAD'?'checked':''} style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer;flex-shrink:0">
             <div>
-              <div style="font-size:12px;font-weight:500">${t.label}</div>
-              ${t.hint?`<div style="font-size:10px;color:var(--t4);font-family:var(--mono)">${t.hint}</div>`:''}
+              <div style="font-size:13px;font-weight:500">${t.label}</div>
+              ${t.hint?`<div style="font-size:13px;color:var(--t4);font-family:var(--mono)">${t.hint}</div>`:''}
             </div>
           </label>`).join('')}
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
         <input type="checkbox" id="co-all" style="accent-color:var(--blue);width:14px;height:14px" onchange="document.querySelectorAll('.co-type').forEach(c=>c.checked=this.checked)">
-        <span style="font-size:12px;color:var(--t3)">Alle Typen auswählen</span>
+        <span style="font-size:13px;color:var(--t3)">Alle Typen auswählen</span>
       </label>
     </div>
     <div class="modal-foot">
@@ -5166,19 +5166,19 @@ function _showCheckoutResult(r) {
     </div>
     <div class="modal-body">
       <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:12px">
-        <div style="font-size:10px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Ordner</div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--t1);word-break:break-all;user-select:all">${esc(r.folder)}</div>
+        <div style="font-size:13px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Ordner</div>
+        <div style="font-family:var(--mono);font-size:13px;color:var(--t1);word-break:break-all;user-select:all">${esc(r.folder)}</div>
       </div>
-      ${r.files.some(f=>f.readonly) ? `<div style="background:rgba(239,177,74,.08);border:1px solid rgba(239,177,74,.25);border-radius:var(--r-sm);padding:7px 10px;margin-bottom:10px;font-size:11px;color:var(--amber)">
+      ${r.files.some(f=>f.readonly) ? `<div style="background:rgba(239,177,74,.08);border:1px solid rgba(239,177,74,.25);border-radius:var(--r-sm);padding:7px 10px;margin-bottom:10px;font-size:13px;color:var(--amber)">
         🔒 Freigegebene Dateien (REL) sind schreibgeschützt kopiert worden.
       </div>` : ''}
       <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">
         ${r.files.map(f => `
           <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--r-xs);background:var(--bg2)">
-            <span class="ds-type dt-${f.ds_type}" style="font-size:9px;flex-shrink:0">${f.ds_type}</span>
-            <span style="font-size:11px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
-            <span style="font-size:10px;color:var(--t4);font-family:var(--mono);flex-shrink:0">${esc(f.item_number)}</span>
-            ${f.readonly ? `<span title="Schreibgeschützt (REL)" style="font-size:11px;color:var(--amber)">🔒</span>` : ''}
+            <span class="ds-type dt-${f.ds_type}" style="font-size:11px;flex-shrink:0">${f.ds_type}</span>
+            <span style="font-size:13px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+            <span style="font-size:13px;color:var(--t4);font-family:var(--mono);flex-shrink:0">${esc(f.item_number)}</span>
+            ${f.readonly ? `<span title="Schreibgeschützt (REL)" style="font-size:13px;color:var(--amber)">🔒</span>` : ''}
           </div>`).join('')}
       </div>
     </div>
@@ -5240,28 +5240,28 @@ async function showCheckoutList() {
 
   _showDynModal(`<div class="modal" style="max-width:580px">
     <div class="modal-head">
-      <div class="modal-title">Checkouts${list.length ? ` <span style="font-family:var(--mono);font-size:11px;color:var(--teal);font-weight:400">${list.length} aktiv · ${totalFiles} Dateien</span>` : ''}${newCount ? ` <span style="font-family:var(--mono);font-size:11px;color:var(--amber);font-weight:400">+${newCount} neu erkannt</span>` : ''}</div>
+      <div class="modal-title">Checkouts${list.length ? ` <span style="font-family:var(--mono);font-size:13px;color:var(--teal);font-weight:400">${list.length} aktiv · ${totalFiles} Dateien</span>` : ''}${newCount ? ` <span style="font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:400">+${newCount} neu erkannt</span>` : ''}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px;max-height:520px;overflow-y:auto">
 
       ${newCount ? `<div>
-        <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Neue Dateien erkannt</div>
+        <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Neue Dateien erkannt</div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${_scanResult.item_files.map((g, gi) => `
             <div style="background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);padding:10px 12px">
-              <div style="font-size:12px;font-weight:500;margin-bottom:4px">
+              <div style="font-size:13px;font-weight:500;margin-bottom:4px">
                 In <span style="font-family:var(--mono);color:var(--blue)">${esc(g.item_number)}</span> – ${esc(g.item_name)}
               </div>
-              <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px">${g.new_files.map(f=>`${esc(f.name)} <span style="color:var(--t4)">[${f.ds_type}]</span>`).join(' · ')}</div>
+              <div style="font-family:var(--mono);font-size:13px;color:var(--t3);margin-bottom:6px">${g.new_files.map(f=>`${esc(f.name)} <span style="color:var(--t4)">[${f.ds_type}]</span>`).join(' · ')}</div>
               <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
                 onclick="importCheckoutFiles(${JSON.stringify(g).replace(/"/g,'&quot;')})">⬇ Zu Bauteil hinzufügen</button>
             </div>`).join('')}
           ${_scanResult.root_files.map((f, fi) => `
             <div style="background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);padding:10px 12px">
-              <div style="font-size:12px;font-weight:500;margin-bottom:4px">
+              <div style="font-size:13px;font-weight:500;margin-bottom:4px">
                 Neue Datei auf oberster Ebene: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span>
-                <span style="font-size:10px;color:var(--t4);margin-left:6px">[${f.ds_type}]</span>
+                <span style="font-size:13px;color:var(--t4);margin-left:6px">[${f.ds_type}]</span>
               </div>
               <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
                 onclick="importNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ Als neues Bauteil erfassen</button>
@@ -5270,19 +5270,19 @@ async function showCheckoutList() {
       </div>` : ''}
 
       ${list.length ? `<div>
-        <div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Aktive Checkouts</div>
+        <div style="font-size:13px;font-weight:600;color:var(--t3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Aktive Checkouts</div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${list.map((c, i) => {
             const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
             return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
                 ${_itemChip(c.item_type,18)}
-                <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(c.item_number)}</span>
-                <span style="font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
-                <span style="font-size:10px;color:var(--t4);flex-shrink:0">${dt}</span>
+                <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(c.item_number)}</span>
+                <span style="font-size:13px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
+                <span style="font-size:13px;color:var(--t4);flex-shrink:0">${dt}</span>
               </div>
-              <div style="font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:6px;user-select:all;word-break:break-all">${esc(c.folder)}</div>
-              <div style="font-size:11px;color:var(--t4);margin-bottom:6px">${c.files?.length||0} Dateien${c.files?.some(f=>f.readonly)?' · <span style="color:var(--amber)">🔒 schreibgeschützte</span>':''}</div>
+              <div style="font-family:var(--mono);font-size:13px;color:var(--t3);margin-bottom:6px;user-select:all;word-break:break-all">${esc(c.folder)}</div>
+              <div style="font-size:13px;color:var(--t4);margin-bottom:6px">${c.files?.length||0} Dateien${c.files?.some(f=>f.readonly)?' · <span style="color:var(--amber)">🔒 schreibgeschützte</span>':''}</div>
               <div style="display:flex;gap:6px">
                 <button class="btn btn-ghost btn-sm" onclick="_coOpen(${i})">📂 Öffnen</button>
                 <button class="btn btn-red btn-sm" onclick="_coIn(${i},this)">⬆ Einchecken</button>
@@ -5290,7 +5290,7 @@ async function showCheckoutList() {
             </div>`;
           }).join('')}
         </div>
-      </div>` : (!newCount ? `<div style="color:var(--t3);font-size:12px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>` : '')}
+      </div>` : (!newCount ? `<div style="color:var(--t3);font-size:13px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>` : '')}
 
     </div>
     <div class="modal-foot">
@@ -5327,15 +5327,15 @@ async function importNewItem(f) {
       <button class="btn btn-icon btn-ghost" onclick="showCheckoutList()">✕</button>
     </div>
     <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:12px">
-      <div style="font-size:12px;color:var(--t3)">Datei: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span></div>
+      <div style="font-size:13px;color:var(--t3)">Datei: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span></div>
       <div>
-        <label style="font-size:11px;color:var(--t3);margin-bottom:4px;display:block">Projekt</label>
+        <label style="font-size:13px;color:var(--t3);margin-bottom:4px;display:block">Projekt</label>
         <select id="imp-project" class="input" style="width:100%">
           ${_importProjects.map(p => `<option value="${p.id}">${esc(p.number)} – ${esc(p.name)}</option>`).join('')}
         </select>
       </div>
       <div>
-        <label style="font-size:11px;color:var(--t3);margin-bottom:4px;display:block">Typ</label>
+        <label style="font-size:13px;color:var(--t3);margin-bottom:4px;display:block">Typ</label>
         <select id="imp-type" class="input" style="width:100%">
           <option value="prt"${suggestedType==='prt'?' selected':''}>🔩 Part (prt)</option>
           <option value="asm"${suggestedType==='asm'?' selected':''}>📦 Baugruppe (asm)</option>
@@ -5343,7 +5343,7 @@ async function importNewItem(f) {
         </select>
       </div>
       <div>
-        <label style="font-size:11px;color:var(--t3);margin-bottom:4px;display:block">Name</label>
+        <label style="font-size:13px;color:var(--t3);margin-bottom:4px;display:block">Name</label>
         <input id="imp-name" class="input" style="width:100%" value="${esc(suggestedName)}" placeholder="Bauteilname">
       </div>
     </div>
@@ -5415,7 +5415,7 @@ function _invRenderTable(items) {
 
   const critical = items.filter(i => _invStockState(i) === 'critical').length;
   const warn = items.filter(i => _invStockState(i) === 'warn').length;
-  const banner = (critical || warn) ? `<div style="background:rgba(241,120,120,.10);border:1px solid rgba(241,120,120,.30);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:12px">
+  const banner = (critical || warn) ? `<div style="background:rgba(241,120,120,.10);border:1px solid rgba(241,120,120,.30);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:13px;display:flex;gap:12px">
     ${critical?`<span style="color:var(--red)">● ${critical} unter Mindestbestand</span>`:''}
     ${warn?`<span style="color:var(--amber)">● ${warn} auf Mindestbestand</span>`:''}
   </div>` : '';
@@ -5444,25 +5444,25 @@ function _invRenderTable(items) {
         const stockIcon = state==='critical'?' ⚠':'';
         const borderBottom = isMulti && !isLast ? 'border-bottom:1px solid var(--bg3)' : '';
         const nameTd = isFirst
-          ? `<td style="font-weight:500;vertical-align:top;padding-top:8px" rowspan="${group.items.length}">${esc(i.name)}${isMulti?` <span style="font-size:9px;color:var(--t3);font-weight:400">${group.items.length}×</span>`:''}</td>`
+          ? `<td style="font-weight:500;vertical-align:top;padding-top:8px" rowspan="${group.items.length}">${esc(i.name)}${isMulti?` <span style="font-size:11px;color:var(--t3);font-weight:400">${group.items.length}×</span>`:''}</td>`
           : '';
         const variantLabel = [i.color, i.material].filter(Boolean);
         const colorTd = isMulti
-          ? `<td style="color:var(--t2);font-size:11px;${borderBottom}">${esc(i.color||'—')}</td>
-             <td style="color:var(--t2);font-size:11px;${borderBottom}">${esc(i.material||'—')}</td>`
-          : `<td style="color:var(--t2);font-size:11px">${esc(i.color||'—')}</td>
-             <td style="color:var(--t2);font-size:11px">${esc(i.material||'—')}</td>`;
+          ? `<td style="color:var(--t2);font-size:13px;${borderBottom}">${esc(i.color||'—')}</td>
+             <td style="color:var(--t2);font-size:13px;${borderBottom}">${esc(i.material||'—')}</td>`
+          : `<td style="color:var(--t2);font-size:13px">${esc(i.color||'—')}</td>
+             <td style="color:var(--t2);font-size:13px">${esc(i.material||'—')}</td>`;
         const planned = i.planned_qty || 0;
         const avail = (i.stock_qty || 0) - planned;
         const plannedTd = planned > 0
-          ? `<td style="font-family:var(--mono);font-size:11px;color:var(--amber);${isMulti&&!isLast?borderBottom:''}">${fmtN(planned,0)} ${i.unit}</td>`
-          : `<td style="font-family:var(--mono);font-size:11px;color:var(--t4);${isMulti&&!isLast?borderBottom:''}">—</td>`;
+          ? `<td style="font-family:var(--mono);font-size:13px;color:var(--amber);${isMulti&&!isLast?borderBottom:''}">${fmtN(planned,0)} ${i.unit}</td>`
+          : `<td style="font-family:var(--mono);font-size:13px;color:var(--t4);${isMulti&&!isLast?borderBottom:''}">—</td>`;
         return `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
           ${nameTd}
           ${colorTd}
-          <td style="font-family:var(--mono);font-size:11px;color:${stockColor};font-weight:${state!=='ok'?600:400};${isMulti&&!isLast?borderBottom:''}">${fmtN(i.stock_qty,2)} ${i.unit}${stockIcon}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:${stockColor};font-weight:${state!=='ok'?600:400};${isMulti&&!isLast?borderBottom:''}">${fmtN(i.stock_qty,2)} ${i.unit}${stockIcon}</td>
           ${plannedTd}
-          <td style="font-family:var(--mono);font-size:11px;color:var(--t3);${isMulti&&!isLast?borderBottom:''}">${i.min_qty>0?fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3);${isMulti&&!isLast?borderBottom:''}">${i.min_qty>0?fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
           <td style="display:flex;gap:4px;${isMulti&&!isLast?borderBottom:''}">
             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'in')">＋</button>
             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'out')">－</button>
@@ -5472,7 +5472,7 @@ function _invRenderTable(items) {
       }).join('');
     }).join('');
 
-    return `<tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${cat}</td></tr>
+    return `<tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${cat}</td></tr>
     ${itemRows}`;
   }).join('');
 
@@ -5497,7 +5497,7 @@ async function openInventoryDetail(id) {
   document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'inv-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="inv-info">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Kategorie</div>${item.category}</div>
         ${item.color?`<div><div class="ps-label">Farbe</div>${esc(item.color)}</div>`:''}
         ${item.material?`<div><div class="ps-label">Material</div>${esc(item.material)}</div>`:''}
@@ -5505,7 +5505,7 @@ async function openInventoryDetail(id) {
         <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+item.unit:'—'}</div>
         ${item.price_per_unit!=null?`<div><div class="ps-label">Preis / Einheit</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
         ${item.linked_item_number?`<div style="grid-column:span 2"><div class="ps-label">PLM-Teil</div>
-          <span style="font-family:var(--mono);font-size:10px;color:var(--blue);cursor:pointer" onclick="gotoPlmItem(${item.item_id})">${esc(item.linked_item_number)} – ${esc(item.linked_item_name||'')}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="gotoPlmItem(${item.item_id})">${esc(item.linked_item_number)} – ${esc(item.linked_item_name||'')}</span>
         </div>`:''}
         ${item.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(item.notes)}</span></div>`:''}
       </div>
@@ -5519,13 +5519,13 @@ async function openInventoryDetail(id) {
       ${item.movements?.length ? `<div class="tbl-wrap"><table>
         <thead><tr><th>Datum</th><th>Typ</th><th>Menge</th><th>Referenz</th><th>Notiz</th></tr></thead>
         <tbody>${item.movements.map(m => `<tr>
-          <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${(m.created_at||'').slice(0,16).replace('T',' ')}</td>
-          <td><span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(91,211,138,.15)':'rgba(241,120,120,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
-          <td style="font-family:var(--mono);font-size:11px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
-          <td style="color:var(--t3);font-size:11px">${esc(m.reference||'—')}</td>
-          <td style="color:var(--t3);font-size:11px">${esc(m.notes||'')}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${(m.created_at||'').slice(0,16).replace('T',' ')}</td>
+          <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(91,211,138,.15)':'rgba(241,120,120,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
+          <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
+          <td style="color:var(--t3);font-size:13px">${esc(m.reference||'—')}</td>
+          <td style="color:var(--t3);font-size:13px">${esc(m.notes||'')}</td>
         </tr>`).join('')}</tbody>
-      </table></div>` : '<div style="color:var(--t3);font-size:12px">Noch keine Bewegungen</div>'}
+      </table></div>` : '<div style="color:var(--t3);font-size:13px">Noch keine Bewegungen</div>'}
     </div>`;
   showDetail();
 }
@@ -5577,7 +5577,7 @@ function searchInvPlmItem(q) {
   if (!q || q.length < 1) { res.style.display='none'; return; }
   _invPlmTimer = setTimeout(async () => {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
-    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const icon = _itemChip(i.item_type, 18);
       const mc = i.manufacturing_cost;
@@ -5586,10 +5586,10 @@ function searchInvPlmItem(q) {
         style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${icon}</span>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(i.item_number)}</span>
-        <span style="flex:1;font-size:12px">${esc(i.name)}</span>
-        ${price!=null?`<span style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtCHF(price)}</span>`:''}
-        <span style="font-size:10px;color:var(--t3)">${esc(i.project_name)}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        ${price!=null?`<span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtCHF(price)}</span>`:''}
+        <span style="font-size:13px;color:var(--t3)">${esc(i.project_name)}</span>
       </div>`;
     }).join('');
     res.style.display = 'block';
@@ -5743,7 +5743,7 @@ function _dedStockHtmlInline(inv, reqQty) {
   const color = inv.stock_qty <= 0 ? 'var(--red)' : !enough ? 'var(--red)' : avail < reqQty ? 'var(--amber)' : 'var(--green)';
   const bg = inv.stock_qty <= 0 || !enough ? 'var(--red-soft)' : avail < reqQty ? 'var(--amber-soft)' : 'var(--green-soft)';
   const border = inv.stock_qty <= 0 || !enough ? 'var(--red-line)' : avail < reqQty ? 'var(--amber-line)' : 'var(--green-line)';
-  return `<div style="font-size:11px;padding:7px 10px;border-radius:var(--r-sm);background:${bg};border:1px solid ${border};color:${color}">
+  return `<div style="font-size:13px;padding:7px 10px;border-radius:var(--r-sm);background:${bg};border:1px solid ${border};color:${color}">
     <b>Bestand: ${fmtN(inv.stock_qty,2)} ${inv.unit}</b>`
     + (planned > 0 ? ` · ${fmtN(planned,0)} geplant · <b>Verfügbar: ${fmtN(avail,2)} ${inv.unit}</b>` : '')
     + (!enough ? ` — <b>Zu wenig Bestand!</b>` : '')
