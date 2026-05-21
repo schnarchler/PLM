@@ -3952,20 +3952,9 @@ async function _doShutdown(checkinFirst) {
   }
   _hideDynModal();
   try { await fetch('/api/shutdown', { method: 'POST' }); } catch {}
-  // History leeren damit window.close() nicht geblockt wird
-  history.replaceState(null, '', window.location.href);
-  const closeAttempt = () => { window.close(); };
-  closeAttempt();
-  setTimeout(() => {
-    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0b0d;color:#ecedef;font-family:Manrope,sans-serif;gap:16px">'
-      + '<div style="font-size:36px;color:var(--t4)">■</div>'
-      + '<div style="font-size:17px;font-weight:600">PLM & ERP wurde beendet</div>'
-      + '<div style="font-size:12px;color:#4a5470;margin-bottom:8px">Der Server wurde gestoppt.</div>'
-      + '<button onclick="window.close()" style="background:#1d2029;border:1px solid #2a2d3a;color:#ecedef;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;font-family:Manrope,sans-serif">✕ Tab schliessen</button>'
-      + '</div>';
-    // Letzter Versuch nach dem DOM-Reset
-    setTimeout(window.close, 100);
-  }, 300);
+  // Zu einer Data-URI navigieren die sich selbst schliesst —
+  // funktioniert auch wenn der Tab mehrere History-Einträge hat
+  window.location.href = "data:text/html,<html><body style='background:#0a0b0d'><script>window.close();setTimeout(function(){document.body.innerHTML='<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0b0d;color:#ecedef;font-family:sans-serif;gap:16px\"><div style=\"font-size:36px\">■</div><div style=\"font-size:17px;font-weight:600\">PLM & ERP wurde beendet</div><div style=\"font-size:12px;color:#4a5470\">Tab kann geschlossen werden.</div></div>'},200)<\/script></body></html>";
 }
 
 // ── DELIVERIES ────────────────────────────────────────────────
