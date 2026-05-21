@@ -365,7 +365,6 @@ function openProjectDetail(p) {
         ${datasets.map(d => `<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--bg2);border-radius:3px">
           <span class="ds-type ${dtClass(d.original_name,d.ds_type)}" style="font-size:8.5px">${fileLabel(d.original_name,d.ds_type)}</span>
           <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(d.original_name)}</span>
-          <a href="/api/datasets/${d.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" style="padding:3px" title="Öffnen">↗</a>
           <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" style="padding:3px" title="Download" download>↓</a>
         </div>`).join('')}
       </div>` : ''}
@@ -860,7 +859,6 @@ function renderDatasets(datasets, revId, locked) {
             <div class="ds-name">${esc(f.original_name)}</div>
             <div class="ds-meta">v${f.version} · ${fmtSize(f.file_size)} · ${fmtDate(f.uploaded_at)}${f.notes?' · '+esc(f.notes):''}</div>
           </div>
-          <a href="${API}/api/datasets/${f.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" title="Öffnen">&#x2197;</a>
           <a href="${API}/api/datasets/${f.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="openEditDatasetModal(${f.id},'${esc(f.original_name)}','${esc(f.notes||'')}')" title="Info bearbeiten">✏️</button>`}
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delDataset(${f.id},${revId})" title="Loeschen">&#x2715;</button>`}
@@ -2173,7 +2171,6 @@ async function onSearch(q) {
           <td style="font-family:var(--mono);font-size:10px">${d.rev||'—'}</td>
           <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${fmtSz(d.file_size)}</td>
           <td style="display:flex;gap:4px" onclick="event.stopPropagation()">
-            <a href="/api/datasets/${d.id}/view" target="_blank" class="btn btn-icon btn-ghost btn-sm" title="Öffnen">&#x2197;</a>
             <a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
           </td>
         </tr>`).join('')}</tbody></table></div>` : ''}
