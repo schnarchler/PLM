@@ -1803,12 +1803,16 @@ app.get('/api/changelog', (req, res) => {
 });
 
 app.get('/api/items-released', (req, res) => {
-  const items = all(`SELECT i.id, i.item_number, i.name, i.item_type,
-    p.number as project_number
-    FROM items i JOIN projects p ON i.project_id=p.id
-    WHERE EXISTS (SELECT 1 FROM revisions r WHERE r.item_id=i.id AND r.status IN ('REL','OBS'))
-    ORDER BY p.number, i.item_number`);
-  res.json(items);
+  try {
+    const items = all(`
+      SELECT DISTINCT i.id, i.item_number, i.name, i.item_type, p.number as project_number
+      FROM items i
+      JOIN projects p ON i.project_id = p.id
+      JOIN revisions r ON r.item_id = i.id
+      WHERE r.status IN ('REL','OBS')
+      ORDER BY p.number, i.item_number`);
+    res.json(items);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/items-all', (req, res) => {
