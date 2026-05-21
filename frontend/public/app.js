@@ -979,10 +979,10 @@ async function renderDashboard() {
     </div>`).join('') : emptyRow('Keine Items in Prüfung');
 
   // ── Fällige Lieferscheine ──
-  const today = new Date().toISOString().slice(0,10);
+  const todayIso = new Date().toISOString().slice(0,10);
   const dueSoon = d.dueSoon || [];
   const dueSoonHtml = dueSoon.length ? dueSoon.map(ls => {
-    const daysLeft = Math.round((new Date(ls.delivery_date) - new Date(today)) / 86400000);
+    const daysLeft = Math.round((new Date(ls.delivery_date) - new Date(todayIso)) / 86400000);
     const urgent = daysLeft <= 3;
     const color = daysLeft < 0 ? 'var(--red)' : urgent ? 'var(--amber)' : 'var(--t2)';
     const label = daysLeft < 0 ? `${Math.abs(daysLeft)}d überfällig` : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
@@ -1001,7 +1001,7 @@ async function renderDashboard() {
   // ── Ablaufende Angebote ──
   const quotesExpiring = d.quotesExpiring || [];
   const quotesExpHtml = quotesExpiring.length ? quotesExpiring.map(q => {
-    const daysLeft = Math.round((new Date(q.valid_until) - new Date(today)) / 86400000);
+    const daysLeft = Math.round((new Date(q.valid_until) - new Date(todayIso)) / 86400000);
     const color = daysLeft < 0 ? 'var(--red)' : daysLeft <= 3 ? 'var(--amber)' : 'var(--t3)';
     const label = daysLeft < 0 ? 'Abgelaufen' : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
     return `<div onclick="gotoView('quotes');openQuoteDetail(${q.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
