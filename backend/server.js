@@ -426,6 +426,7 @@ async function initDb() {
   )`);
   migrate('ALTER TABLE time_entries ADD COLUMN billable INTEGER DEFAULT 0');
   migrate('ALTER TABLE time_entries ADD COLUMN item_id INTEGER REFERENCES items(id)');
+  migrate('ALTER TABLE items ADD COLUMN classification TEXT DEFAULT NULL');
 
   db.run(`CREATE TABLE IF NOT EXISTS applied_migrations (key TEXT PRIMARY KEY)`);
 
@@ -893,11 +894,24 @@ app.post('/api/projects/:projectId/items', (req, res) => {
 });
 
 app.put('/api/items/:id', (req, res) => {
-  const { name, description, source_url, default_price } = req.body;
-  run('UPDATE items SET name=?,description=?,source_url=?,default_price=? WHERE id=?',
-    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, req.params.id]);
+  const { name, description, source_url, default_price, classification } = req.body;
+  run('UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=? WHERE id=?',
+    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, classification||null, req.params.id]);
   log('item', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
+});
+
+app.get('/api/items/:id/where-used', (req, res) => {
+  const rows = all(`
+    SELECT DISTINCT i.id, i.item_number, i.name, i.item_type, i.classification,
+      r.rev, r.status, p.id as project_id, p.number as project_number, p.name as project_name
+    FROM bom b
+    JOIN revisions r ON b.parent_rev_id = r.id
+    JOIN items i ON r.item_id = i.id
+    JOIN projects p ON i.project_id = p.id
+    WHERE b.child_item_id = ?
+    ORDER BY p.number, i.item_number`, [req.params.id]);
+  res.json(rows);
 });
 
 app.put('/api/items/:id/move', (req, res) => {
