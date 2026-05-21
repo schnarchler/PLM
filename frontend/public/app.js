@@ -1344,18 +1344,70 @@ async function renderSettings() {
         </div>
       </div>
 
-      <!-- TAB: Löschen -->
+      <!-- TAB: Admin -->
       <div class="st-tab-pane" data-tab="loeschen" hidden>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:16px">Hier können Datensätze endgültig gelöscht werden, die im normalen Bereich gesperrt sind.</div>
+        <div style="background:var(--red-soft);border:1px solid var(--red-line);border-radius:var(--r);padding:10px 14px;margin-bottom:20px;font-size:12px;color:var(--red)">
+          ⚠ Änderungen hier können bestehende Daten und Nummernkreise dauerhaft beschädigen. Nur vornehmen wenn du weisst was du tust.
+        </div>
 
-        <div class="sep-label" style="margin-top:0;color:var(--red)">Projekte</div>
+        <div class="sep-label" style="margin-top:0;color:var(--red)">Datensätze löschen</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Projekte mit Inhalten (Items, Dateien) können nur hier gelöscht werden.</div>
         <div id="st-del-projects" style="display:flex;flex-direction:column;gap:6px"></div>
-
-        <div class="sep-label" style="margin-top:20px;color:var(--red)">Aufträge & Angebote</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Aufträge und Angebote die nicht im Entwurf-Status sind.</div>
+        <div style="font-size:12px;color:var(--t3);margin:12px 0 10px">Aufträge und Angebote die nicht im Entwurf-Status sind.</div>
         <div id="st-del-orders" style="display:flex;flex-direction:column;gap:6px"></div>
         <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
+
+        <div class="sep-label" style="margin-top:28px">Nummernpräfixe</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:12px">Präfixe für neu erstellte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.</div>
+        <div class="form-row cols2">
+          <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-prefix-order" placeholder="AUF"></div>
+          <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-prefix-quote" placeholder="ANG"></div>
+          <div class="fg"><label class="fl">Lieferscheine</label><input class="fi" id="adm-prefix-delivery" placeholder="LS"></div>
+          <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-prefix-customer" placeholder="KD"></div>
+        </div>
+
+        <div class="sep-label" style="margin-top:20px">Stellen Geschäftsnummern</div>
+        <div class="form-row cols2">
+          <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-pad-order" type="number" min="1" max="8" placeholder="4"></div>
+          <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-pad-quote" type="number" min="1" max="8" placeholder="4"></div>
+          <div class="fg"><label class="fl">Lieferscheine</label><input class="fi" id="adm-pad-delivery" type="number" min="1" max="8" placeholder="4"></div>
+          <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-pad-customer" type="number" min="1" max="8" placeholder="4"></div>
+          <div class="fg"><label class="fl">Projekte</label><input class="fi" id="adm-pad-project" type="number" min="1" max="8" placeholder="4"></div>
+          <div class="fg" style="display:flex;align-items:center;gap:10px;padding-top:20px">
+            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:var(--t2)">
+              <input type="checkbox" id="adm-num-yearly" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
+              Jahreszahl in Nummer
+            </label>
+          </div>
+        </div>
+
+        <div class="sep-label" style="margin-top:20px">Struktur Item-Nummern</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Gilt nur für <b>neu erstellte</b> Items. Bestehende Nummern werden nicht geändert.</div>
+        <div class="form-row cols2">
+          <div class="fg"><label class="fl">Trennzeichen</label><input class="fi" id="adm-num-sep" placeholder="-" maxlength="3"></div>
+          <div class="fg"><label class="fl">Stellen Baugruppe</label><input class="fi" id="adm-pad-asm" type="number" min="1" max="6" placeholder="3"></div>
+          <div class="fg"><label class="fl">Stellen Part</label><input class="fi" id="adm-pad-prt" type="number" min="1" max="6" placeholder="3"></div>
+          <div class="fg"><label class="fl">Stellen Dokument</label><input class="fi" id="adm-pad-doc" type="number" min="1" max="6" placeholder="3"></div>
+          <div class="fg"><label class="fl">Baugruppen-Kürzel</label><input class="fi" id="adm-seg-asm" placeholder="asm" maxlength="10"></div>
+          <div class="fg"><label class="fl">Part-Kürzel</label><input class="fi" id="adm-seg-prt" placeholder="prt" maxlength="10"></div>
+          <div class="fg"><label class="fl">Dokument-Kürzel</label><input class="fi" id="adm-seg-doc" placeholder="doc" maxlength="10"></div>
+        </div>
+
+        <div class="sep-label" style="margin-top:20px">Revisionen</div>
+        <div class="form-row">
+          <div class="fg"><label class="fl">Format</label>
+            <select class="fs" id="adm-rev-format">
+              <option value="num">Numerisch (1, 2, 3 …)</option>
+              <option value="letter">Buchstaben (A, B, C …)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:var(--t3);margin-top:14px;font-family:var(--mono);line-height:2;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px" id="adm-preview"></div>
+
+        <div style="margin-top:16px">
+          <button class="btn btn-red" onclick="saveAdminSettings()">⚠ Admin-Einstellungen speichern</button>
+        </div>
       </div>
 
     </div>`);
@@ -2242,10 +2294,122 @@ async function _forceDeleteProject(id, name) {
   _loadDelTab();
 }
 
+function _admPreview() {
+  const g = id => document.getElementById(id)?.value || '';
+  const pre  = g('adm-prefix-order') || 'AUF';
+  const padO = parseInt(g('adm-pad-order'))   || 4;
+  const padP = parseInt(g('adm-pad-project')) || 4;
+  const padA = parseInt(g('adm-pad-asm'))     || 3;
+  const padT = parseInt(g('adm-pad-prt'))     || 3;
+  const padD = parseInt(g('adm-pad-doc'))     || 3;
+  const yr   = document.getElementById('adm-num-yearly')?.checked ? new Date().getFullYear()+'-' : '';
+  const sep  = g('adm-num-sep') || '-';
+  const sa   = g('adm-seg-asm') || 'asm';
+  const sp   = g('adm-seg-prt') || 'prt';
+  const sd   = g('adm-seg-doc') || 'doc';
+  const revFmt = g('adm-rev-format') || 'num';
+  const rev1 = revFmt === 'letter' ? 'A' : '1';
+  const rev2 = revFmt === 'letter' ? 'B' : '2';
+  const proj = '1'.padStart(padP, '0');
+  const el = document.getElementById('adm-preview');
+  if (!el) return;
+  el.innerHTML =
+    `<span style="color:var(--t4)">Auftrag: </span>${pre}-${yr}${'1'.padStart(padO,'0')}\n` +
+    `<span style="color:var(--t4)">Projekt: </span>${proj}\n` +
+    `<span style="color:var(--t4)">Baugruppe: </span>${proj}${sep}${sa}${sep}${'1'.padStart(padA,'0')}\n` +
+    `<span style="color:var(--t4)">Part in BG: </span>${proj}${sep}${sa}${sep}${'1'.padStart(padA,'0')}${sep}${sp}${sep}${'1'.padStart(padT,'0')}\n` +
+    `<span style="color:var(--t4)">Dokument: </span>${proj}${sep}${sd}${sep}${'1'.padStart(padD,'0')}\n` +
+    `<span style="color:var(--t4)">Revision: </span>rev${rev1} → rev${rev2}`;
+}
+
+async function saveAdminSettings() {
+  _showDynModal(`<div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title" style="color:var(--red)">⚠ Admin-Einstellungen speichern</div></div>
+    <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2)">
+      Änderungen an Präfixen und Nummernformat gelten nur für <b>neu erstellte</b> Datensätze.<br><br>
+      Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.<br><br>
+      Wirklich speichern?
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-red" onclick="_doSaveAdminSettings()">Ja, speichern</button>
+    </div>
+  </div>`);
+}
+
+async function _doSaveAdminSettings() {
+  _hideDynModal();
+  const gv = id => document.getElementById(id)?.value?.trim() || '';
+  const gi = (id, def) => String(parseInt(document.getElementById(id)?.value)||def);
+  const settings = {
+    prefix_order:    gv('adm-prefix-order')    || 'AUF',
+    prefix_quote:    gv('adm-prefix-quote')    || 'ANG',
+    prefix_delivery: gv('adm-prefix-delivery') || 'LS',
+    prefix_customer: gv('adm-prefix-customer') || 'KD',
+    pad_order:       gi('adm-pad-order',    4),
+    pad_quote:       gi('adm-pad-quote',    4),
+    pad_delivery:    gi('adm-pad-delivery', 4),
+    pad_customer:    gi('adm-pad-customer', 4),
+    pad_project:     gi('adm-pad-project',  4),
+    num_yearly:      document.getElementById('adm-num-yearly')?.checked ? '1' : '0',
+    num_sep:         gv('adm-num-sep')  || '-',
+    seg_asm:         gv('adm-seg-asm')  || 'asm',
+    seg_prt:         gv('adm-seg-prt')  || 'prt',
+    seg_doc:         gv('adm-seg-doc')  || 'doc',
+    pad_asm:         gi('adm-pad-asm',  3),
+    pad_prt:         gi('adm-pad-prt',  3),
+    pad_doc:         gi('adm-pad-doc',  3),
+    rev_format:      gv('adm-rev-format') || 'num',
+  };
+  await api('/api/settings', 'PUT', settings);
+  state.settings = await api('/api/settings');
+  toast('Admin-Einstellungen gespeichert', 'ok');
+}
+
 async function _loadDelTab() {
-  const [projects, orders, quotes] = await Promise.all([
-    api('/api/projects'), api('/api/orders'), api('/api/quotes')
+  const [projects, orders, quotes, settings, counters] = await Promise.all([
+    api('/api/projects').catch(()=>[]),
+    api('/api/orders').catch(()=>[]),
+    api('/api/quotes').catch(()=>[]),
+    api('/api/settings').catch(()=>({})),
+    api('/api/counters').catch(()=>({}))
   ]);
+
+  // Fill admin settings fields
+  const fv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  fv('adm-prefix-order',    settings.prefix_order    || 'AUF');
+  fv('adm-prefix-quote',    settings.prefix_quote    || 'ANG');
+  fv('adm-prefix-delivery', settings.prefix_delivery || 'LS');
+  fv('adm-prefix-customer', settings.prefix_customer || 'KD');
+  fv('adm-pad-order',       settings.pad_order       || '4');
+  fv('adm-pad-quote',       settings.pad_quote       || '4');
+  fv('adm-pad-delivery',    settings.pad_delivery    || '4');
+  fv('adm-pad-customer',    settings.pad_customer    || '4');
+  fv('adm-pad-project',     settings.pad_project     || '4');
+  fv('adm-seg-asm',         settings.seg_asm         || 'asm');
+  fv('adm-seg-prt',         settings.seg_prt         || 'prt');
+  fv('adm-seg-doc',         settings.seg_doc         || 'doc');
+  fv('adm-num-sep',         settings.num_sep         || '-');
+  fv('adm-pad-asm',         settings.pad_asm         || '3');
+  fv('adm-pad-prt',         settings.pad_prt         || '3');
+  fv('adm-pad-doc',         settings.pad_doc         || '3');
+  const yrEl = document.getElementById('adm-num-yearly');
+  if (yrEl) yrEl.checked = (settings.num_yearly ?? '1') !== '0';
+  const revFmtEl = document.getElementById('adm-rev-format');
+  if (revFmtEl) revFmtEl.value = settings.rev_format || 'num';
+
+  const previewIds = ['adm-prefix-order','adm-pad-order','adm-pad-project','adm-num-yearly',
+    'adm-seg-asm','adm-seg-prt','adm-seg-doc','adm-num-sep',
+    'adm-pad-asm','adm-pad-prt','adm-pad-doc','adm-rev-format'];
+  previewIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.dataset.admListener) {
+      el.dataset.admListener = '1';
+      el.addEventListener('input', _admPreview);
+      el.addEventListener('change', _admPreview);
+    }
+  });
+  _admPreview();
 
   const pelEl = document.getElementById('st-del-projects');
   if (pelEl) {
