@@ -76,6 +76,7 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 - **Klassifizierung** – farbige Chips (z.B. Normteil, Kaufteil, Eigenentwicklung), konfigurierbar unter Einstellungen → PLM
 - **Where-Used** – zeigt in welchen Baugruppen ein Bauteil verbaut ist
 - **Kalkulation** – Gesamtumsatz und Gewinn pro Bauteil aus verknüpften Aufträgen
+- **BOM-Import aus STEP** – Stückliste automatisch aus Solid Edge STEP-Export einlesen (Einzel-Teile werden per Namensabgleich zugeordnet)
 - Checkout/Check-in Funktion für CAD-Dateien (siehe unten)
 - Vollständige Änderungshistorie / Audit-Trail
 
@@ -112,7 +113,7 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 ### Einstellungen / Admin
 - **Firma** – Name, Adresse, Bankverbindung, Logo
 - **PLM** – Klassifizierungsliste (Name + Farbe, per Drag&Drop sortierbar)
-- **System** – Checkout-Ordner, CAD-Programm-Pfad, Backup/Export
+- **Daten** – Schriftgrösse (serverseitig gespeichert), Checkout-Ordner, CAD-Programm-Pfad, Backup/Export
 - **Admin** – Nummerierungsstruktur (Präfixe, Stellen, Revisionsformat), Datensätze löschen
 
 ### Datei-Index

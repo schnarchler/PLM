@@ -8,7 +8,7 @@
 2. [Programmstart](#2-programmstart)
 3. [Oberfläche](#3-oberfläche)
 4. [Dashboard](#4-dashboard)
-5. [PLM — Projekte & Bauteile](#5-plm--projekte--bauteile)
+5. [PLM — Projekte & Bauteile](#5-plm--projekte--bauteile) *(inkl. BOM-Import aus STEP)*
 6. [Freigabe-Workflow](#6-freigabe-workflow)
 7. [Checkout / Check-in](#7-checkout--check-in)
 8. [ERP — Aufträge & Angebote](#8-erp--aufträge--angebote)
@@ -189,6 +189,27 @@ In der aktiven Revision eines ASM-Bauteils:
 - **+ Position** → Bauteil aus dem Projekt suchen und Menge angeben
 - Positionen können per Pfeilen umsortiert werden
 - Freigegebene (REL) Revisionen sind gesperrt — keine BOM-Änderungen möglich
+
+### 5.9 BOM aus STEP-Datei importieren
+
+Die Stückliste einer Baugruppe kann automatisch aus einer Solid Edge STEP-Datei übernommen werden, ohne jede Position von Hand einzutragen.
+
+**Vorgehen in Solid Edge:**
+1. Baugruppe öffnen
+2. **Datei → Exportieren → STEP AP214** (oder AP242)
+3. Datei speichern (z.B. `baugruppe.stp`)
+
+**Vorgehen in PLM:**
+1. Baugruppe im PLM öffnen → Tab **Revisionen**
+2. Unten im BOM-Bereich: **📐 BOM aus STEP**
+3. Exportierte `.stp`-Datei auswählen → **📤 Analysieren**
+4. PLM zeigt eine Tabelle mit allen gefundenen Teilen:
+   - **✓** = automatisch einem bestehenden PLM-Bauteil zugeordnet (Namensübereinstimmung)
+   - **?** = im Dropdown manuell zuordnen oder „überspringen" wählen
+   - Menge kann angepasst werden
+5. **✓ BOM übernehmen** → alle ausgewählten Positionen werden in die Stückliste eingetragen
+
+> Sub-Baugruppen werden als `[ASM · n]` markiert. Für diese kann der Import separat wiederholt werden, nachdem die entsprechende ASM im PLM geöffnet wurde.
 
 ---
 
@@ -453,6 +474,7 @@ Drucker, Düsen und Materialprofile für die automatische Vorausfüllung der Dru
 - **Speichern** nicht vergessen
 
 ### Daten
+- **Darstellung** — Schriftgrösse der Benutzeroberfläche (Klein bis Sehr gross), wird serverseitig gespeichert und gilt auf allen Geräten/Browsern
 - **Datenpfad** — wo Datenbank und Dateien gespeichert werden
 - **CAD-Programm** — Pfad zum CAD-Programm (für den CAD-Button in der Topbar)
 - **Checkout-Verzeichnis** — wo ausgecheckte CAD-Dateien abgelegt werden

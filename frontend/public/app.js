@@ -874,7 +874,11 @@ function renderRevDetail(rev, item) {
         </div>`).join('')
         : '<div style="padding:12px;color:var(--t3);font-size:13px;text-align:center">Noch keine Positionen</div>'}
     </div>
-    ${locked ? '' : `<button class="btn btn-ghost btn-sm" onclick="openBomModal(${rev.id},${item.project_id})">+ Position hinzufügen</button>`}
+    ${locked ? '' : `
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="openBomModal(${rev.id},${item.project_id})">+ Position hinzufügen</button>
+        <button class="btn btn-ghost btn-sm" onclick="openStepBomImport(${rev.id},${item.project_id})">📐 BOM aus STEP</button>
+      </div>`}
     ` : ''}
 
     ${(() => {
@@ -3162,6 +3166,97 @@ async function delBom(bomId, itemId, revId) {
   await api(`/api/bom/${bomId}`,'DELETE');
   toast('Position entfernt','ok');
   if (state.item) await switchRev(itemId, revId);
+  refreshProjectTree();
+}
+
+function openStepBomImport(revId, projectId) {
+  _showDynModal(`
+    <div class="modal-head"><div class="modal-title">📐 BOM aus STEP-Datei importieren</div></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:14px">
+        Baugruppe in Solid Edge als STEP exportieren (<em>Datei → Exportieren → STEP AP214/AP242</em>)
+        und hier hochladen. PLM liest die Bauteilstruktur automatisch aus.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="step-file-in" accept=".stp,.step"
+          style="flex:1;font-size:13px;color:var(--t2);background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 8px">
+        <button class="btn btn-primary btn-sm" onclick="doParseStep(${revId},${projectId})">📤 Analysieren</button>
+      </div>
+      <div id="step-result" style="margin-top:16px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" id="step-import-btn" style="display:none"
+        onclick="doStepBomImport(${revId})">✓ BOM übernehmen</button>
+    </div>`);
+}
+
+async function doParseStep(revId, projectId) {
+  const input = document.getElementById('step-file-in');
+  if (!input?.files?.length) return toast('Bitte STEP-Datei auswählen', 'err');
+  const el = document.getElementById('step-result');
+  el.innerHTML = '<div style="color:var(--t3);font-size:13px">Analysiere …</div>';
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  let tree;
+  try {
+    const r = await fetch('/api/parse-step-bom', { method: 'POST', body: fd });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+    tree = await r.json();
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-size:13px">⚠ ${esc(e.message)}</div>`;
+    return;
+  }
+  const children = tree.children || [];
+  if (!children.length) {
+    el.innerHTML = '<div style="color:var(--amber);font-size:13px">⚠ Keine Unterbauteile gefunden — ist das eine Baugruppe?</div>';
+    return;
+  }
+  const items = await api(`/api/projects/${projectId}/items-for-bom`);
+  window._stepChildren = children;
+  const rows = children.map((c, i) => {
+    const match = items.find(it => it.name.toLowerCase() === c.name.toLowerCase());
+    return `<tr>
+      <td style="font-size:13px">
+        ${esc(c.name)}
+        ${c.children?.length ? `<span style="font-size:11px;color:var(--teal);margin-left:4px">[ASM · ${c.children.length}]</span>` : ''}
+      </td>
+      <td><input type="number" id="sq-${i}" value="${c.qty||1}" min="0.001" step="1"
+        style="width:58px;font-size:13px;background:var(--bg2);color:var(--t1);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 5px"></td>
+      <td>
+        <select id="sm-${i}" style="font-size:13px;background:var(--bg2);color:var(--t1);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px 6px;width:100%">
+          <option value="">— überspringen —</option>
+          ${items.map(it => `<option value="${it.id}" ${it.id===match?.id?'selected':''}>${it.item_number} · ${esc(it.name)}</option>`).join('')}
+        </select>
+      </td>
+      <td style="font-size:13px;width:20px">${match ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--t4)">?</span>'}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="sep-label" style="margin-top:0">${children.length} Position${children.length!==1?'en':''} in „${esc(tree.name)}"</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>STEP-Name</th><th>Menge</th><th>PLM-Bauteil</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div style="font-size:11px;color:var(--t4);margin-top:6px">
+      ✓ automatisch erkannt · ? bitte manuell zuordnen · „überspringen" = nicht importieren
+    </div>`;
+  document.getElementById('step-import-btn').style.display = '';
+}
+
+async function doStepBomImport(revId) {
+  const children = window._stepChildren || [];
+  const entries = [];
+  for (let i = 0; i < children.length; i++) {
+    const id = document.getElementById(`sm-${i}`)?.value;
+    const qty = parseFloat(document.getElementById(`sq-${i}`)?.value) || 1;
+    if (id) entries.push({ child_item_id: parseInt(id), quantity: qty, unit: 'pcs' });
+  }
+  if (!entries.length) return toast('Keine Zuordnungen ausgewählt', 'err');
+  const r = await api(`/api/revisions/${revId}/bom-bulk`, 'POST', { entries });
+  toast(`${r.count} Position${r.count!==1?'en':''} in BOM übernommen`, 'ok');
+  _hideDynModal();
+  if (state.item) await switchRev(state.item.id, revId);
   refreshProjectTree();
 }
 
