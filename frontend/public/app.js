@@ -414,7 +414,7 @@ function openProjectDetail(p) {
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-ghost btn-sm" onclick="editProject(${p.id})">Bearbeiten</button>
-        <button class="btn btn-red btn-sm" onclick="deleteProject(${p.id})">Löschen</button>
+        ${!(p.items && p.items.length) ? `<button class="btn btn-red btn-sm" onclick="deleteProject(${p.id})">Löschen</button>` : ''}
       </div>
     </div>
     <div id="pt-log" style="display:none">
@@ -1171,6 +1171,7 @@ async function renderSettings() {
         <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kassabon</button>
         <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
         <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
+        <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
       </div>
 
       <!-- TAB: Firma -->
@@ -1343,6 +1344,20 @@ async function renderSettings() {
         </div>
       </div>
 
+      <!-- TAB: Löschen -->
+      <div class="st-tab-pane" data-tab="loeschen" hidden>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:16px">Hier können Datensätze endgültig gelöscht werden, die im normalen Bereich gesperrt sind.</div>
+
+        <div class="sep-label" style="margin-top:0;color:var(--red)">Projekte</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Projekte mit Inhalten (Items, Dateien) können nur hier gelöscht werden.</div>
+        <div id="st-del-projects" style="display:flex;flex-direction:column;gap:6px"></div>
+
+        <div class="sep-label" style="margin-top:20px;color:var(--red)">Aufträge & Angebote</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Aufträge und Angebote die nicht im Entwurf-Status sind.</div>
+        <div id="st-del-orders" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
+      </div>
+
     </div>`);
 
   // active tab styling
@@ -1351,12 +1366,20 @@ async function renderSettings() {
     b.addEventListener('mouseleave', () => { if (!b.classList.contains('active')) b.style.color = 'var(--t2)'; });
   });
   const styleActiveTabs = () => document.querySelectorAll('.st-tab-btn').forEach(b => {
-    b.style.color = b.classList.contains('active') ? 'var(--blue)' : 'var(--t2)';
-    b.style.borderBottomColor = b.classList.contains('active') ? 'var(--blue)' : 'transparent';
+    const isLoeschen = b.dataset.tab === 'loeschen';
+    const activeColor = isLoeschen ? 'var(--red)' : 'var(--blue)';
+    const inactiveColor = isLoeschen ? 'var(--red)' : 'var(--t2)';
+    b.style.color = b.classList.contains('active') ? activeColor : inactiveColor;
+    b.style.borderBottomColor = b.classList.contains('active') ? activeColor : 'transparent';
     b.style.fontWeight = b.classList.contains('active') ? '600' : '400';
   });
   styleActiveTabs();
-  document.querySelectorAll('.st-tab-btn').forEach(b => b.addEventListener('click', styleActiveTabs));
+  document.querySelectorAll('.st-tab-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      styleActiveTabs();
+      if (b.dataset.tab === 'loeschen') _loadDelTab();
+    });
+  });
 
   loadAndRenderPrinterConfig();
   api('/api/data-path').then(d => {
@@ -1995,7 +2018,7 @@ function _render_orderRows() {
     <td style="font-family:var(--mono);font-size:11px;text-align:right;color:var(--green)">${o.computed_total != null ? fmtChf(o.computed_total) : '—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${o.id},'invoice')" title="Rechnung PDF">&#128196;</button>
-      <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delOrder(${o.id})">&#x2715;</button>
+      ${o.status==='DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delOrder(${o.id})">&#x2715;</button>` : ''}
     </td>
   </tr>`).join('') || '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
@@ -2091,7 +2114,7 @@ async function openOrderDetail(id) {
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Klonen</button>
         <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🚚 Lieferschein erstellen</button>
-        <button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>
+        ${o.status==='DRAFT' ? `<button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>` : ''}
       </div>
     </div>
     <div id="od-time" style="display:none">
@@ -2206,9 +2229,73 @@ async function editProject(id) {
 }
 
 async function deleteProject(id) {
-  if (!confirm('Projekt und ALLE Inhalte löschen?')) return;
+  const p = await api(`/api/projects/${id}`);
+  if (!confirm(`Projekt "${p.name}" löschen?`)) return;
   await api(`/api/projects/${id}`,'DELETE');
   toast('Projekt gelöscht','ok'); closeDetail(); gotoView('projects'); loadStats();
+}
+
+async function _forceDeleteProject(id, name) {
+  if (!confirm(`Projekt "${name}" und ALLE Inhalte unwiderruflich löschen?`)) return;
+  await api(`/api/projects/${id}`,'DELETE');
+  toast('Projekt gelöscht','ok'); closeDetail(); gotoView('projects'); loadStats();
+  _loadDelTab();
+}
+
+async function _loadDelTab() {
+  const [projects, orders, quotes] = await Promise.all([
+    api('/api/projects'), api('/api/orders'), api('/api/quotes')
+  ]);
+
+  const pelEl = document.getElementById('st-del-projects');
+  if (pelEl) {
+    const withContent = projects.filter(p => p.item_count > 0);
+    pelEl.innerHTML = withContent.length
+      ? withContent.map(p => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(p.number)}</span>
+          <span style="flex:1;font-size:12px">${esc(p.name)}</span>
+          <span style="font-size:11px;color:var(--t3)">${p.item_count} Items</span>
+          <button class="btn btn-red btn-sm" onclick="_forceDeleteProject(${p.id},'${esc(p.name)}')">Löschen</button>
+        </div>`).join('')
+      : '<div style="font-size:12px;color:var(--t3)">Keine Projekte mit Inhalten</div>';
+  }
+
+  const ordEl = document.getElementById('st-del-orders');
+  if (ordEl) {
+    const locked = orders.filter(o => o.status !== 'DRAFT');
+    ordEl.innerHTML = locked.length
+      ? locked.map(o => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+          <span class="status st-${ORDER_ST_MAP[o.status]?.replace('st-','')}" style="font-size:10px">${ORDER_ST_LABEL[o.status]||o.status}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(o.number)}</span>
+          <span style="flex:1;font-size:12px">${esc(o.title)}</span>
+          <button class="btn btn-red btn-sm" onclick="_forceDelOrder(${o.id},'${esc(o.number)}')">Löschen</button>
+        </div>`).join('')
+      : '<div style="font-size:12px;color:var(--t3)">Keine gesperrten Aufträge</div>';
+  }
+
+  const quoEl = document.getElementById('st-del-quotes');
+  if (quoEl) {
+    const locked = quotes.filter(q => q.status !== 'DRAFT');
+    quoEl.innerHTML = locked.length
+      ? locked.map(q => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(q.number)}</span>
+          <span style="flex:1;font-size:12px">${esc(q.title)}</span>
+          <button class="btn btn-red btn-sm" onclick="_forceDelQuote(${q.id},'${esc(q.number)}')">Löschen</button>
+        </div>`).join('')
+      : '<div style="font-size:12px;color:var(--t3)">Keine gesperrten Angebote</div>';
+  }
+}
+
+async function _forceDelOrder(id, number) {
+  if (!confirm(`Auftrag ${number} unwiderruflich löschen?`)) return;
+  await api(`/api/orders/${id}`,'DELETE');
+  toast('Auftrag gelöscht','ok'); _loadDelTab(); loadStats();
+}
+
+async function _forceDelQuote(id, number) {
+  if (!confirm(`Angebot ${number} unwiderruflich löschen?`)) return;
+  await api(`/api/quotes/${id}`,'DELETE');
+  toast('Angebot gelöscht','ok'); _loadDelTab(); loadStats();
 }
 
 // ── ITEM MOVE ─────────────────────────────────────────────────
@@ -2773,7 +2860,8 @@ async function saveOrder() {
 }
 
 async function delOrder(id) {
-  if(!confirm('Auftrag löschen?')) return;
+  const o = state.orders.find(x => x.id === id) || await api(`/api/orders/${id}`);
+  if(!confirm(`Auftrag ${o.number} löschen?`)) return;
   await api(`/api/orders/${id}`,'DELETE'); toast('Gelöscht','ok'); closeDetail(); renderOrders(); loadStats();
 }
 
@@ -2812,7 +2900,7 @@ function _render_quoteRows() {
     <td style="font-family:var(--mono);font-size:10px;color:var(--t3)">${q.valid_until||'—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${q.id},'quote')" title="Angebot PDF">&#128196;</button>
-      <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delQuote(${q.id})">&#x2715;</button>
+      ${q.status==='DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delQuote(${q.id})">&#x2715;</button>` : ''}
     </td>
   </tr>`).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
@@ -2875,7 +2963,7 @@ async function openQuoteDetail(id) {
         <button class="btn btn-ghost btn-sm" onclick="openQuoteModal(${id})">✏️ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'quote')">&#128196; Angebot PDF</button>
         ${q.status !== 'ACCEPTED' ? `<button class="btn btn-green btn-sm" onclick="convertQuoteToOrder(${id})">➜ In Auftrag umwandeln</button>` : ''}
-        <button class="btn btn-red btn-sm" onclick="delQuote(${id})">🗑 Löschen</button>
+        ${q.status==='DRAFT' ? `<button class="btn btn-red btn-sm" onclick="delQuote(${id})">🗑 Löschen</button>` : ''}
       </div>
     </div>`;
   showDetail();
@@ -2938,7 +3026,8 @@ async function saveQuote() {
 }
 
 async function delQuote(id) {
-  if(!confirm('Angebot löschen?')) return;
+  const q = state.quotes.find(x => x.id === id) || await api(`/api/quotes/${id}`);
+  if(!confirm(`Angebot ${q.number} löschen?`)) return;
   await api(`/api/quotes/${id}`,'DELETE'); toast('Gelöscht','ok'); closeDetail(); renderQuotes(); loadStats();
 }
 
