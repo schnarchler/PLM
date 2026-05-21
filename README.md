@@ -113,7 +113,7 @@ Damit neue Solid Edge-Dateien automatisch im Checkout-Ordner landen:
 
 | Dateityp | Pfad setzen auf |
 |----------|----------------|
-| Parts (.par / .psm) | Checkout-Ordner (z.B. `/home/msu/PLM-Checkout`) |
+| Parts (.par / .psm) | Checkout-Ordner (z.B. `/home/user/PLM-Checkout`) |
 | Assemblies (.asm) | gleicher Pfad |
 | Drafts (.dft) | gleicher Pfad |
 
@@ -214,7 +214,7 @@ Bei mehreren Positionen erscheinen oben zwei Sammelbuttons:
 
 **Bon-Beispiel (Vollbeleg):**
 ```
-  Michael Stucki
+  Firmenname
   13.05.2026  14:23
   Kunde Name
 ────────────────────
