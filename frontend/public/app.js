@@ -326,9 +326,9 @@ function openProjectDetail(p) {
   document.getElementById('dp-title').innerHTML =
     `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-right:6px">${p.number}</span><strong>${esc(p.name)}</strong>`;
   document.getElementById('dp-tabs').innerHTML = `
-    <button class="tab active" onclick="switchTab(this,'pt-files')">Struktur</button>
+    <button class="tab active" onclick="switchTab(this,'pt-info')">Info</button>
+    <button class="tab" onclick="switchTab(this,'pt-files')">Struktur</button>
     <button class="tab" onclick="switchTab(this,'pt-docs')">Dokumente${docCount?` <span style="background:var(--blue);color:var(--bg0);border-radius:8px;font-size:9px;font-family:var(--mono);padding:1px 5px;margin-left:3px">${docCount}</span>`:''}</button>
-    <button class="tab" onclick="switchTab(this,'pt-info')">Info</button>
     <button class="tab" onclick="switchTab(this,'pt-log')">Log</button>`;
 
   // Build files/BOM overview using BOM-based hierarchy
@@ -383,7 +383,7 @@ function openProjectDetail(p) {
   const docCount2 = allItems.filter(i=>i.item_type==='doc').length;
 
   document.getElementById('dp-body').innerHTML = `
-    <div id="pt-files">
+    <div id="pt-files" style="display:none">
       <div style="display:flex;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)">
         ${asmCount?`<span style="font-size:11px;color:var(--blue);font-family:var(--mono)">${asmCount} <span style="color:var(--t4);font-family:var(--sans)">asm</span></span>`:''}
         ${prtCount?`<span style="font-size:11px;color:var(--teal);font-family:var(--mono)">${prtCount} <span style="color:var(--t4);font-family:var(--sans)">prt</span></span>`:''}
@@ -394,7 +394,7 @@ function openProjectDetail(p) {
     <div id="pt-docs" style="display:none">
       ${renderProjectDocs(p)}
     </div>
-    <div id="pt-info" style="display:none">
+    <div id="pt-info">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
         <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Nummer</div>
