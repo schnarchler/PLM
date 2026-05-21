@@ -36,6 +36,8 @@ Lieferscheine:        LS-2026-0001
 Kunden:               KD-0001
 ```
 
+Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** konfigurierbar.
+
 ---
 
 ## Freigabe-Workflow
@@ -45,8 +47,6 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
          │                └──► OBS (veraltet)
          └──► DFT (zurück)
 ```
-
-Revisionen: rev1, rev2, rev3, …
 
 | Status | Bedeutung |
 |--------|-----------|
@@ -64,15 +64,18 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 ## Features
 
 ### PLM
-- Projekte mit 4-stelliger Nummer (0001–9999)
+- Projekte mit konfigurierbarer Nummer (Standard 4-stellig)
 - Baugruppen (ASM), Parts (PRT) und Dokumente (DOC) mit sprechenden Nummern
 - Beliebige Hierarchietiefe (ASM in ASM)
-- Revisionsverwaltung rev1, rev2, rev3, … (alle alten Revisionen bleiben erhalten)
+- Revisionsverwaltung rev1, rev2, … (alle alten Revisionen bleiben erhalten)
 - Freigabe-Workflow: DFT → REV → REL → ECO → neue Rev
 - Stückliste (BOM) pro Revision mit Mengen und Einheiten
 - Dateien (Datasets) pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
 - Konstruktions-/Entwicklungszeiten pro Bauteil und Revision erfassbar
+- **Klassifizierung** – farbige Chips (z.B. Normteil, Kaufteil, Eigenentwicklung), konfigurierbar unter Einstellungen → PLM
+- **Where-Used** – zeigt in welchen Baugruppen ein Bauteil verbaut ist
+- **Kalkulation** – Gesamtumsatz und Gewinn pro Bauteil aus verknüpften Aufträgen
 - Checkout/Check-in Funktion für CAD-Dateien (siehe unten)
 - Vollständige Änderungshistorie / Audit-Trail
 
@@ -85,6 +88,8 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 - PLM-Items in Positionen verknüpfen
 - Unterteile (BOM) in Rechnung/Angebot aufklappen
 - Firmendaten, Bankverbindung und Texte unter Einstellungen
+- Lagerbestandsprüfung beim Abbuchen – blockiert wenn Bestand zu klein
+- Geplante Menge (aus offenen Aufträgen) im Lager sichtbar
 
 ### Lieferscheine / Produktionsblätter
 - Eigenständig oder mit Auftrag verknüpft
@@ -92,6 +97,23 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 - Preis pro Position (wird automatisch aus PLM-Listenpreis vorausgefüllt)
 - Druckansicht als Produktionsblatt mit Unterschriftsfeldern
 - Belegdruck auf **Pipsta Classic Thermodrucker** (siehe unten)
+
+### Dashboard & Suche
+- Dashboard mit offenen Aufträgen, Angeboten, fälligen Lieferscheinen und ablaufenden Angeboten
+- Globale Suche (Ctrl+K) über Projekte, PLM-Items, Aufträge, Angebote, Lieferscheine, Kunden
+- Suche nach Klassifizierung über Schnellfilter-Chips
+
+### Navigation
+- **Ctrl+K** – Suche öffnen
+- **Escape** – modales Fenster oder Detail schliessen
+- **Browser-Zurück-Button** – navigiert innerhalb der App
+- **Zuletzt geöffnet** – letzte Bauteile in der Seitenleiste
+
+### Einstellungen / Admin
+- **Firma** – Name, Adresse, Bankverbindung, Logo
+- **PLM** – Klassifizierungsliste (Name + Farbe, per Drag&Drop sortierbar)
+- **System** – Checkout-Ordner, CAD-Programm-Pfad, Backup/Export
+- **Admin** – Nummerierungsstruktur (Präfixe, Stellen, Revisionsformat), Datensätze löschen
 
 ### Datei-Index
 - Übersicht aller gespeicherten Dateien unter **Navigation → Datei-Index**
@@ -212,35 +234,9 @@ Bei mehreren Positionen erscheinen oben zwei Sammelbuttons:
 - **🖶 Alle kurz** – alle Positionen auf einem Bon ohne Parameter
 - **🖶 Alle mit Parametern** – alle Positionen mit Druckparametern + Gesamtpreis
 
-**Bon-Beispiel (Vollbeleg):**
-```
-  Firmenname
-  13.05.2026  14:23
-  Kunde Name
-────────────────────
-0028-ASM-001
-Roboterarm Schultergelenk
-────────────────────
-Menge: 2 Stk
-────────────────────
-DRUCKPARAMETER
-Profil: Quality 0.20mm
-Schicht mm: 0.20
-Infill: 20%
-Muster: gyroid
-Material: PETG
-Duese °C: 215
-Bett °C: 85
-Support: Ja
-────────────────────
-   Total CHF 24.50
-────────────────────
-  Vielen Dank!
-```
-
 **Bon-Einstellungen** (unter Einstellungen → Firma / Briefkopf bzw. Thermodrucker):
 - **Firmenname** → erscheint als Titel auf dem Bon
-- **Fusszeile Kassabon** → Text ganz unten auf dem Bon (z.B. „Vielen Dank für Ihren Auftrag!")
+- **Fusszeile Kassabon** → Text ganz unten auf dem Bon
 
 ### Fehlersuche Drucker
 
@@ -285,6 +281,7 @@ PLM/
 │       ├── index.html     ← HTML-Grundstruktur
 │       ├── app.js         ← Single-Page-App (Frontend-Logik)
 │       └── styles.css     ← Design-System (Dark Theme)
+├── ANLEITUNG.md           ← Ausführliche Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md
 ```
