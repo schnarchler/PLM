@@ -178,7 +178,7 @@ body {
   border-radius: var(--r-xs);
   cursor: pointer;
   color: var(--t2);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 450;
   transition: color .12s var(--ease), background .12s var(--ease);
   border: none;
