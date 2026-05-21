@@ -177,13 +177,11 @@ Die Klasse wird als farbiger Chip im Projektbaum und in der Detailansicht angeze
 
 ### 5.7 Varianten (z.B. M3, M4, M5)
 
-Jede Variante wird als **separates Bauteil** mit eigenem Suffix erfasst:
-```
-BRACKET-001-M3    (eigene Revisionen, eigene Dateien)
-BRACKET-001-M4
-BRACKET-001-M5
-```
-Dies ist der sauberste Ansatz, da jede Variante eine eigene CAD-Datei hat.
+Es gibt keine spezielle Varianten-Funktion — Varianten werden einfach als **separate Parts** erfasst.
+
+**Vorgehen:** Im Projekt → **+ Part** → Name `Halterung M3` → speichern. Dann nochmals **+ Part** → `Halterung M4` usw.
+
+Jede Variante bekommt automatisch eine eigene Nummer und hat unabhängige Revisionen, Dateien und Freigaben. In der Stückliste einer Baugruppe wählt man dann die gewünschte Variante aus.
 
 ### 5.8 Stückliste (BOM)
 
