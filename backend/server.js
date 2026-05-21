@@ -1808,7 +1808,7 @@ app.get('/api/stats', (req, res) => {
 app.get('/api/search', (req, res) => {
   const q = '%' + (req.query.q || '') + '%';
 
-  const items = all('SELECT i.*,p.name as project_name,p.number as project_number FROM items i JOIN projects p ON i.project_id=p.id WHERE i.item_number LIKE ? OR i.name LIKE ? OR i.description LIKE ? ORDER BY i.id DESC LIMIT 30', [q,q,q]);
+  const items = all('SELECT i.*,p.name as project_name,p.number as project_number FROM items i JOIN projects p ON i.project_id=p.id WHERE i.item_number LIKE ? OR i.name LIKE ? OR i.description LIKE ? OR i.classification LIKE ? ORDER BY i.id DESC LIMIT 30', [q,q,q,q]);
   items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
 
   const projects = all('SELECT * FROM projects WHERE number LIKE ? OR name LIKE ? OR description LIKE ? OR customer LIKE ? LIMIT 10', [q,q,q,q]);

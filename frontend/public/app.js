@@ -99,11 +99,21 @@ function _itemColor(t) { return t==="asm" ? "var(--blue)" : t==="doc" ? "var(--p
 function _itemBg(t)    { return t==="asm" ? "rgba(142,163,255,.12)" : t==="doc" ? "rgba(180,140,255,.12)" : "rgba(106,208,214,.12)"; }
 function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.75)}px;line-height:1;flex-shrink:0">${_itemSvg(t)}</span>`; }
 
-const CLASS_COLORS = { Eigenteil:'var(--blue)', Kaufteil:'var(--teal)', Normteil:'var(--amber)', Halbzeug:'var(--purple)', Rohmaterial:'var(--t3)' };
-const CLASS_BG     = { Eigenteil:'rgba(142,163,255,.12)', Kaufteil:'rgba(106,208,214,.12)', Normteil:'rgba(239,177,74,.12)', Halbzeug:'rgba(180,140,255,.12)', Rohmaterial:'rgba(100,100,110,.12)' };
+const _CLASS_PALETTE = [
+  ['var(--blue)','rgba(142,163,255,.12)'],['var(--teal)','rgba(106,208,214,.12)'],
+  ['var(--amber)','rgba(239,177,74,.12)'],['var(--purple)','rgba(180,140,255,.12)'],
+  ['var(--green)','rgba(91,211,138,.12)'],['var(--red)','rgba(241,120,120,.12)'],
+  ['var(--t3)','rgba(100,100,110,.12)']
+];
+function _classColor(cls) {
+  const list = getClassifications();
+  const i = list.indexOf(cls);
+  return _CLASS_PALETTE[i >= 0 ? i % _CLASS_PALETTE.length : _CLASS_PALETTE.length - 1];
+}
 function _classChip(cls) {
   if (!cls) return '';
-  return `<span style="font-family:var(--mono);font-size:8px;padding:1px 5px;border-radius:3px;background:${CLASS_BG[cls]||'rgba(100,100,110,.12)'};color:${CLASS_COLORS[cls]||'var(--t3)'};flex-shrink:0">${cls}</span>`;
+  const [color, bg] = _classColor(cls);
+  return `<span style="font-family:var(--mono);font-size:8px;padding:1px 5px;border-radius:3px;background:${bg};color:${color};flex-shrink:0">${esc(cls)}</span>`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -1315,6 +1325,7 @@ async function renderSettings() {
         <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kalkulation</button>
         <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kassabon</button>
         <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
+        <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
         <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
         <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
       </div>
@@ -1432,6 +1443,21 @@ async function renderSettings() {
           </div>
           <input type="hidden" id="st-mat-id" value="">
           <button class="btn btn-ghost btn-sm" id="st-mat-add-btn" onclick="addMaterialPreset()">+ Vorlage hinzufügen</button>
+        </div>
+      </div>
+
+      <!-- TAB: PLM -->
+      <div class="st-tab-pane" data-tab="plm" hidden>
+        <div class="sep-label" style="margin-top:0">Klassifizierungen</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:12px">Verfügbare Klassifizierungen für Bauteile, Baugruppen und Dokumente. Reihenfolge per Drag &amp; Drop ändern.</div>
+        <div id="st-class-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="fi" id="st-class-new" placeholder="Neue Klassifizierung…" style="max-width:240px" onkeydown="if(event.key==='Enter')_addClass()">
+          <button class="btn btn-ghost btn-sm" onclick="_addClass()">+ Hinzufügen</button>
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn-primary btn-sm" onclick="_saveClassifications()">Speichern</button>
+          <span id="st-class-msg" style="font-size:12px;color:var(--t3);margin-left:8px"></span>
         </div>
       </div>
 
@@ -1589,6 +1615,7 @@ async function renderSettings() {
     b.addEventListener('click', () => {
       styleActiveTabs();
       if (b.dataset.tab === 'loeschen') _loadDelTab();
+      if (b.dataset.tab === 'plm') _loadPlmTab();
     });
   });
 
@@ -2376,7 +2403,18 @@ async function _doCreateDelivery(orderId) {
 // ── SEARCH ────────────────────────────────────────────────────
 function renderSearchView() {
   setLeftHeader('Suche', '');
-  setLeftBody(`<div style="padding:40px;text-align:center;color:var(--t3)">Suchbegriff oben eingeben …</div>`);
+  const classes = getClassifications();
+  const chips = classes.map(c => {
+    const [color, bg] = _classColor(c);
+    return `<span onclick="document.getElementById('globalSearch').value='${esc(c)}';onSearch('${esc(c)}')"
+      style="font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color.replace(')',',0.3)').replace('var(','rgba(')};transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c)}</span>`;
+  }).join('');
+  setLeftBody(`
+    <div style="padding:12px 0 8px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
+      <span style="font-size:11px;color:var(--t4);align-self:center;margin-right:4px">Klasse:</span>
+      ${chips}
+    </div>
+    <div id="search-results"><div style="padding:20px;text-align:center;color:var(--t3)">Suchbegriff oben eingeben …</div></div>`);
 }
 
 let searchTimer;
@@ -2384,7 +2422,7 @@ async function onSearch(q) {
   clearTimeout(searchTimer);
   if (!q || q.length < 2) return;
   searchTimer = setTimeout(async () => {
-    if (state.view !== 'search') { state.view = 'search'; document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active')); }
+    if (state.view !== 'search') { state.view = 'search'; document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active')); renderSearchView(); }
     const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
     const fmtSz = b => !b?'—':b<1024?b+'B':b<1048576?(b/1024).toFixed(0)+'KB':(b/1048576).toFixed(1)+'MB';
     const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMG:'🖼',DOC:'📄'}[t]||'📎');
@@ -2435,10 +2473,12 @@ async function onSearch(q) {
         <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>
         <div class="card-num">${p.number}</div><div class="card-name">${esc(p.name)}</div></div>`).join('')}</div>` : ''}
       ${r.items?.length ? section('PLM Items', r.items.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Nummer</th><th>Name</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
+        <thead><tr><th>Nummer</th><th>Name</th><th>Klasse</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
         <tbody>${r.items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
           <td style="font-family:var(--mono);font-size:10px;color:var(--blue)">${i.item_number}</td>
-          <td>${esc(i.name)}</td><td style="color:var(--t3)">${i.project_name}</td>
+          <td>${esc(i.name)}</td>
+          <td>${i.classification ? _classChip(i.classification) : '<span style="color:var(--t4)">—</span>'}</td>
+          <td style="color:var(--t3)">${i.project_name}</td>
           <td style="font-family:var(--mono);font-size:10px">${i.latest_revision?.rev||'—'}</td>
           <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
@@ -2453,7 +2493,9 @@ async function onSearch(q) {
           <td onclick="event.stopPropagation()"><a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a></td>
         </tr>`).join('')}</tbody></table></div>` : ''}
     ` : noHits;
-    setLeftBody(`<div style="padding-bottom:20px">${html}</div>`);
+    const resEl = document.getElementById('search-results');
+    if (resEl) resEl.innerHTML = `<div style="padding-bottom:20px">${html}</div>`;
+    else setLeftBody(`<div style="padding-bottom:20px">${html}</div>`);
   }, 300);
 }
 
@@ -2580,6 +2622,64 @@ async function _doSaveAdminSettings() {
   await api('/api/settings', 'PUT', settings);
   state.settings = await api('/api/settings');
   toast('Admin-Einstellungen gespeichert', 'ok');
+}
+
+const DEFAULT_CLASSIFICATIONS = ['Eigenteil','Kaufteil','Normteil','Halbzeug','Rohmaterial'];
+
+function getClassifications() {
+  try {
+    const raw = state.settings?.item_classifications;
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [...DEFAULT_CLASSIFICATIONS];
+}
+
+function _loadPlmTab() {
+  _renderClassList(getClassifications());
+}
+
+function _renderClassList(list) {
+  const el = document.getElementById('st-class-list');
+  if (!el) return;
+  el.innerHTML = list.map((c, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+      <span style="cursor:grab;color:var(--t4);font-size:14px">⠿</span>
+      ${_classChip(c)}
+      <span style="flex:1;font-size:12px">${esc(c)}</span>
+      <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})">✕</button>
+    </div>`).join('');
+}
+
+function _getCurrentClassList() {
+  const el = document.getElementById('st-class-list');
+  if (!el) return [];
+  return [...el.querySelectorAll('span[style*="flex:1"]')].map(s => s.textContent.trim());
+}
+
+function _addClass() {
+  const inp = document.getElementById('st-class-new');
+  const val = inp?.value.trim();
+  if (!val) return;
+  const list = _getCurrentClassList();
+  if (list.includes(val)) { toast('Bereits vorhanden', 'err'); return; }
+  list.push(val);
+  _renderClassList(list);
+  inp.value = '';
+}
+
+function _removeClass(idx) {
+  const list = _getCurrentClassList();
+  list.splice(idx, 1);
+  _renderClassList(list);
+}
+
+async function _saveClassifications() {
+  const list = _getCurrentClassList();
+  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list) });
+  state.settings = await api('/api/settings');
+  const msg = document.getElementById('st-class-msg');
+  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2000); }
+  toast('Klassifizierungen gespeichert', 'ok');
 }
 
 async function _loadDelTab() {
@@ -2785,7 +2885,9 @@ async function openEditItemModal(id) {
   set('eim-desc', item.description || '');
   set('eim-url', item.source_url || '');
   set('eim-price', item.default_price != null ? item.default_price : '');
-  document.getElementById('eim-classification').value = item.classification || '';
+  const clSel = document.getElementById('eim-classification');
+  clSel.innerHTML = '<option value="">— keine —</option>' + getClassifications().map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  clSel.value = item.classification || '';
   document.getElementById('eim-title').textContent = 'Bearbeiten: ' + item.item_number;
   openModal('editItemModal');
 }
