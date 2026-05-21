@@ -99,6 +99,13 @@ function _itemColor(t) { return t==="asm" ? "var(--blue)" : t==="doc" ? "var(--p
 function _itemBg(t)    { return t==="asm" ? "rgba(142,163,255,.12)" : t==="doc" ? "rgba(180,140,255,.12)" : "rgba(106,208,214,.12)"; }
 function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.75)}px;line-height:1;flex-shrink:0">${_itemSvg(t)}</span>`; }
 
+const CLASS_COLORS = { Eigenteil:'var(--blue)', Kaufteil:'var(--teal)', Normteil:'var(--amber)', Halbzeug:'var(--purple)', Rohmaterial:'var(--t3)' };
+const CLASS_BG     = { Eigenteil:'rgba(142,163,255,.12)', Kaufteil:'rgba(106,208,214,.12)', Normteil:'rgba(239,177,74,.12)', Halbzeug:'rgba(180,140,255,.12)', Rohmaterial:'rgba(100,100,110,.12)' };
+function _classChip(cls) {
+  if (!cls) return '';
+  return `<span style="font-family:var(--mono);font-size:8px;padding:1px 5px;border-radius:3px;background:${CLASS_BG[cls]||'rgba(100,100,110,.12)'};color:${CLASS_COLORS[cls]||'var(--t3)'};flex-shrink:0">${cls}</span>`;
+}
+
 // ── INIT ──────────────────────────────────────────────────────
 // ── RECENTLY VIEWED ───────────────────────────────────────────
 const _MAX_RECENT = 8;
@@ -389,6 +396,7 @@ function _renderTreeNode(item, map, isRoot) {
       ${_itemChip(item.item_type, 20)}
       <span class="tree-num" style="font-size:10px">${item.item_number}</span>
       <span class="tree-name">${esc(item.name)}</span>
+      ${item.classification ? _classChip(item.classification) : ''}
       ${co ? `<span style="font-family:var(--mono);font-size:8px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
       ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:9px">rev${rev.rev}</span>` : ''}
     </div>
@@ -610,13 +618,15 @@ function renderItemDetail(item, activeRevId) {
     `<span style="font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
     + `<span style="font-family:var(--mono);font-size:11px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(item.name)}</strong>`
+    + (item.classification ? ' ' + _classChip(item.classification) : '')
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
     + ` <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
     <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>
-    ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}`;
+    ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}
+    <button class="tab" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Where-Used</button>`;
   document.getElementById('dp-tabs').innerHTML = tabs;
   if (!isDOC) {
     const activeCheckout = state.checkouts.find(c => c.item_id === item.id);
@@ -679,7 +689,10 @@ function renderItemDetail(item, activeRevId) {
     </div>
     ${!isDOC ? `<div id="it-time" style="display:none">
       <div id="item-time-list"><div style="color:var(--t3);font-size:12px;padding:8px 0">Wird geladen…</div></div>
-    </div>` : ''}`;
+    </div>` : ''}
+    <div id="it-whereused" style="display:none">
+      <div id="it-whereused-list"><div style="color:var(--t3);font-size:12px;padding:8px 0">Wird geladen…</div></div>
+    </div>`;
   setTimeout(() => {
     document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
       if (!c._stlInit) { c._stlInit = true; initSTLViewer(c.id, c.dataset.stlUrl); }
@@ -2772,7 +2785,8 @@ async function openEditItemModal(id) {
   set('eim-desc', item.description || '');
   set('eim-url', item.source_url || '');
   set('eim-price', item.default_price != null ? item.default_price : '');
-  document.getElementById('eim-title').textContent = 'Umbenennen: ' + item.item_number;
+  document.getElementById('eim-classification').value = item.classification || '';
+  document.getElementById('eim-title').textContent = 'Bearbeiten: ' + item.item_number;
   openModal('editItemModal');
 }
 
@@ -2780,7 +2794,11 @@ async function saveEditItem() {
   const id = V('eim-id');
   const name = V('eim-name');
   if (!name) return toast('Name fehlt', 'err');
-  await api('/api/items/' + id, 'PUT', { name, description: V('eim-desc'), source_url: V('eim-url')||null, default_price: V('eim-price') ? parseFloat(V('eim-price')) : null });
+  await api('/api/items/' + id, 'PUT', {
+    name, description: V('eim-desc'), source_url: V('eim-url')||null,
+    default_price: V('eim-price') ? parseFloat(V('eim-price')) : null,
+    classification: document.getElementById('eim-classification').value || null
+  });
   toast('Name gespeichert', 'ok');
   closeModal('editItemModal');
   const item = await api('/api/items/' + id);
@@ -4812,6 +4830,27 @@ async function delTimeEntry(id) {
 
 // ── ITEM ZEITERFASSUNG ────────────────────────────────────────
 let _teItemId = null;
+
+async function loadWhereUsed(itemId) {
+  const el = document.getElementById('it-whereused-list');
+  if (!el) return;
+  const rows = await api(`/api/items/${itemId}/where-used`).catch(() => []);
+  if (!rows.length) {
+    el.innerHTML = '<div style="color:var(--t3);font-size:12px;padding:8px 0">Dieses Teil wird in keiner Baugruppe verwendet.</div>';
+    return;
+  }
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px">
+    ${rows.map(r => `
+      <div onclick="openProjectAndItem(${r.project_id},${r.id})" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+        ${_itemChip(r.item_type, 16)}
+        <span style="font-family:var(--mono);font-size:10px;color:var(--blue)">${esc(r.item_number)}</span>
+        <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</span>
+        ${_classChip(r.classification)}
+        <span class="status st-${r.status}" style="font-size:9px">rev${r.rev}</span>
+        <span style="font-size:10px;color:var(--t4);font-family:var(--mono)">${esc(r.project_number)}</span>
+      </div>`).join('')}
+  </div>`;
+}
 
 async function loadItemTimeEntries(itemId) {
   _teItemId = itemId;

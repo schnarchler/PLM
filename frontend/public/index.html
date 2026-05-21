@@ -503,6 +503,18 @@
         <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="eim-url" type="url" placeholder="https://…"></div>
         <div class="fg"><label class="fl">Listenpreis (CHF)</label><input class="fi" id="eim-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
       </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Klassifizierung</label>
+          <select class="fs" id="eim-classification">
+            <option value="">— keine —</option>
+            <option value="Eigenteil">Eigenteil</option>
+            <option value="Kaufteil">Kaufteil</option>
+            <option value="Normteil">Normteil</option>
+            <option value="Halbzeug">Halbzeug</option>
+            <option value="Rohmaterial">Rohmaterial</option>
+          </select>
+        </div>
+      </div>
       <input type="hidden" id="eim-id">
     </div>
     <div class="modal-foot">
