@@ -99,16 +99,11 @@ function _itemColor(t) { return t==="asm" ? "var(--blue)" : t==="doc" ? "var(--p
 function _itemBg(t)    { return t==="asm" ? "rgba(142,163,255,.12)" : t==="doc" ? "rgba(180,140,255,.12)" : "rgba(106,208,214,.12)"; }
 function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.75)}px;line-height:1;flex-shrink:0">${_itemSvg(t)}</span>`; }
 
-const _CLASS_PALETTE = [
-  ['var(--blue)','rgba(142,163,255,.12)'],['var(--teal)','rgba(106,208,214,.12)'],
-  ['var(--amber)','rgba(239,177,74,.12)'],['var(--purple)','rgba(180,140,255,.12)'],
-  ['var(--green)','rgba(91,211,138,.12)'],['var(--red)','rgba(241,120,120,.12)'],
-  ['var(--t3)','rgba(100,100,110,.12)']
-];
 function _classColor(cls) {
   const list = getClassifications();
-  const i = list.indexOf(cls);
-  return _CLASS_PALETTE[i >= 0 ? i % _CLASS_PALETTE.length : _CLASS_PALETTE.length - 1];
+  const entry = list.find(c => c.name === cls);
+  const hex = entry?.color || '#7a7f8e';
+  return [hex, hex + '20'];
 }
 function _classChip(cls) {
   if (!cls) return '';
@@ -2624,14 +2619,26 @@ async function _doSaveAdminSettings() {
   toast('Admin-Einstellungen gespeichert', 'ok');
 }
 
-const DEFAULT_CLASSIFICATIONS = ['Eigenteil','Kaufteil','Normteil','Halbzeug','Rohmaterial'];
+const DEFAULT_CLASSIFICATIONS = [
+  {name:'Eigenteil',  color:'#8ea3ff'},
+  {name:'Kaufteil',   color:'#6ad0d6'},
+  {name:'Normteil',   color:'#efb14a'},
+  {name:'Halbzeug',   color:'#b48cff'},
+  {name:'Rohmaterial',color:'#7a7f8e'},
+];
 
 function getClassifications() {
   try {
     const raw = state.settings?.item_classifications;
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Backwards compat: old format was array of strings
+      if (parsed.length && typeof parsed[0] === 'string')
+        return parsed.map((name, i) => ({ name, color: DEFAULT_CLASSIFICATIONS[i]?.color || '#7a7f8e' }));
+      return parsed;
+    }
   } catch {}
-  return [...DEFAULT_CLASSIFICATIONS];
+  return DEFAULT_CLASSIFICATIONS.map(c => ({...c}));
 }
 
 function _loadPlmTab() {
@@ -2643,16 +2650,21 @@ let _classDragIdx = null;
 function _renderClassList(list) {
   const el = document.getElementById('st-class-list');
   if (!el) return;
-  el.innerHTML = list.map((c, i) => `
-    <div class="cls-row" data-idx="${i}" draggable="true"
+  el.innerHTML = list.map((c, i) => {
+    const col = c.color || '#7a7f8e';
+    const bg = col + '20'; // hex with 12% alpha approximation
+    return `<div class="cls-row" data-idx="${i}" draggable="true"
       style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);transition:opacity .15s">
       <span class="cls-handle" style="cursor:grab;color:var(--t4);font-size:16px;line-height:1;flex-shrink:0">⠿</span>
-      ${_classChip(c)}
-      <input class="fi cls-name" value="${esc(c)}" style="flex:1;font-size:12px;padding:3px 7px;height:28px" onchange="_onClassRename(${i},this.value)">
+      <input type="color" class="cls-color" value="${col}" title="Farbe wählen"
+        style="width:28px;height:28px;padding:2px;border:1px solid var(--line);border-radius:4px;background:var(--bg3);cursor:pointer;flex-shrink:0"
+        oninput="_onClassColorChange()">
+      <span class="cls-preview" style="font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:3px;background:${bg};color:${col};flex-shrink:0">${esc(c.name)}</span>
+      <input class="fi cls-name" value="${esc(c.name)}" style="flex:1;font-size:12px;padding:3px 7px;height:28px" oninput="_onClassNameInput(this)">
       <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
-  // Drag & drop handlers
   el.querySelectorAll('.cls-row').forEach(row => {
     row.addEventListener('dragstart', e => {
       _classDragIdx = parseInt(row.dataset.idx);
@@ -2660,7 +2672,7 @@ function _renderClassList(list) {
       e.dataTransfer.effectAllowed = 'move';
     });
     row.addEventListener('dragend', () => { row.style.opacity = '1'; });
-    row.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; row.style.borderColor = 'var(--blue)'; });
+    row.addEventListener('dragover', e => { e.preventDefault(); row.style.borderColor = 'var(--blue)'; });
     row.addEventListener('dragleave', () => { row.style.borderColor = 'var(--line)'; });
     row.addEventListener('drop', e => {
       e.preventDefault();
@@ -2675,16 +2687,30 @@ function _renderClassList(list) {
   });
 }
 
-function _onClassRename(idx, newVal) {
-  const list = _getCurrentClassList();
-  list[idx] = newVal.trim() || list[idx];
-  _renderClassList(list);
+// Live preview: update chip when name or color changes
+function _onClassNameInput(inp) {
+  const row = inp.closest('.cls-row');
+  const preview = row?.querySelector('.cls-preview');
+  if (preview) preview.textContent = inp.value || '…';
+}
+function _onClassColorChange() {
+  const el = document.getElementById('st-class-list');
+  if (!el) return;
+  el.querySelectorAll('.cls-row').forEach(row => {
+    const col = row.querySelector('.cls-color')?.value || '#7a7f8e';
+    const bg = col + '20';
+    const preview = row.querySelector('.cls-preview');
+    if (preview) { preview.style.color = col; preview.style.background = bg; }
+  });
 }
 
 function _getCurrentClassList() {
   const el = document.getElementById('st-class-list');
   if (!el) return [];
-  return [...el.querySelectorAll('.cls-name')].map(i => i.value.trim()).filter(Boolean);
+  return [...el.querySelectorAll('.cls-row')].map(row => ({
+    name:  row.querySelector('.cls-name')?.value.trim() || '',
+    color: row.querySelector('.cls-color')?.value || '#7a7f8e',
+  })).filter(c => c.name);
 }
 
 function _addClass() {
@@ -2692,8 +2718,8 @@ function _addClass() {
   const val = inp?.value.trim();
   if (!val) return;
   const list = _getCurrentClassList();
-  if (list.includes(val)) { toast('Bereits vorhanden', 'err'); return; }
-  list.push(val);
+  if (list.some(c => c.name === val)) { toast('Bereits vorhanden', 'err'); return; }
+  list.push({ name: val, color: '#8ea3ff' });
   _renderClassList(list);
   inp.value = '';
   inp.focus();
@@ -3951,9 +3977,10 @@ async function _doShutdown(checkinFirst) {
     }
   }
   _hideDynModal();
-  try { await fetch('/api/shutdown', { method: 'POST' }); } catch {}
-  // Zu einer Data-URI navigieren die sich selbst schliesst —
-  // funktioniert auch wenn der Tab mehrere History-Einträge hat
+  // keepalive: true stellt sicher dass der Request auch bei Navigation abgeschlossen wird
+  try { await fetch('/api/shutdown', { method: 'POST', keepalive: true }); } catch {}
+  // Kurze Pause damit der Server den Request verarbeiten kann
+  await new Promise(r => setTimeout(r, 400));
   window.location.href = "data:text/html,<html><body style='background:#0a0b0d'><script>window.close();setTimeout(function(){document.body.innerHTML='<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0b0d;color:#ecedef;font-family:sans-serif;gap:16px\"><div style=\"font-size:36px\">■</div><div style=\"font-size:17px;font-weight:600\">PLM & ERP wurde beendet</div><div style=\"font-size:12px;color:#4a5470\">Tab kann geschlossen werden.</div></div>'},200)<\/script></body></html>";
 }
 
