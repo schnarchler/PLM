@@ -493,11 +493,11 @@ function openProjectDetail(p) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
         <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Nummer</div>
-          <div style="font-family:var(--mono);font-size:14px;color:var(--blue);margin-top:3px">${p.number}</div>
+          <div style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-top:3px">${p.number}</div>
         </div>
         <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Kunde</div>
-          <div style="font-size:14px;color:var(--t1);margin-top:3px">${p.customer||'—'}</div>
+          <div style="font-size:13px;color:var(--t1);margin-top:3px">${p.customer||'—'}</div>
         </div>
         ${p.description?`<div style="grid-column:span 2;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px">
           <div class="ps-label">Beschreibung</div>
@@ -1280,7 +1280,7 @@ async function renderChangelog() {
       <div style="font-family:var(--mono);font-size:13px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--line);margin-bottom:6px">${date}</div>
       ${entries.map(r => `
         <div style="display:flex;gap:10px;padding:7px 6px;border-radius:var(--r);transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-          <div style="width:18px;text-align:center;flex-shrink:0;font-size:14px;margin-top:1px">${actionIcon(r.action)}</div>
+          <div style="width:18px;text-align:center;flex-shrink:0;font-size:13px;margin-top:1px">${actionIcon(r.action)}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>
@@ -1316,13 +1316,13 @@ async function renderSettings() {
   setLeftBody(`
     <div style="max-width:720px">
       <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px">
-        <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Firma</button>
-        <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kalkulation</button>
-        <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kassabon</button>
-        <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
-        <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
-        <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
-        <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
+        <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Firma</button>
+        <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kalkulation</button>
+        <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kassabon</button>
+        <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
+        <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
+        <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
+        <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
       </div>
 
       <!-- TAB: Firma -->
@@ -2186,7 +2186,7 @@ async function openCustomerDetail(id) {
       ${delivRows}
     </div>
     <div id="cd-info" style="display:none;padding:14px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;margin-bottom:14px">
         ${c.email?`<div><div class="ps-label">E-Mail</div><div class="ps-val"><a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a></div></div>`:''}
         ${c.phone?`<div><div class="ps-label">Telefon</div><div class="ps-val">${esc(c.phone)}</div></div>`:''}
         ${c.street?`<div style="grid-column:span 2"><div class="ps-label">Adresse</div><div class="ps-val">${esc(c.street)}, ${c.postal_code||''} ${c.city||''}, ${c.country||''}</div></div>`:''}
@@ -2291,7 +2291,7 @@ function _renderBillableTimeSection(timeEntries, taxRate, discountPct, includeTa
           <div style="color:var(--t3)">Positionen: <span style="font-family:var(--mono)">${fmtCHF(netItems)}</span></div>
           <div style="color:var(--t2)">+ Arbeitszeit ${fmtN(billableH,2)} h: <span style="font-family:var(--mono)">${fmtCHF(timeCost)}</span></div>
           ${includeTax?`<div style="color:var(--t3)">MwSt. ${taxRate}%: <span style="font-family:var(--mono)">${fmtCHF(tax)}</span></div>`:''}
-          <div style="font-size:14px;font-weight:600;margin-top:4px;color:var(--green)">Gesamttotal: <span style="font-family:var(--mono)">${fmtCHF(grandTotal)}</span></div>
+          <div style="font-size:13px;font-weight:600;margin-top:4px;color:var(--green)">Gesamttotal: <span style="font-family:var(--mono)">${fmtCHF(grandTotal)}</span></div>
         </div>
       </div>
     </div>
@@ -2400,9 +2400,9 @@ function renderSearchView() {
   setLeftHeader('Suche', '');
   const classes = getClassifications();
   const chips = classes.map(c => {
-    const [color, bg] = _classColor(c);
-    return `<span onclick="document.getElementById('globalSearch').value='${esc(c)}';onSearch('${esc(c)}')"
-      style="font-family:var(--mono);font-size:13px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color.replace(')',',0.3)').replace('var(','rgba(')};transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c)}</span>`;
+    const [color, bg] = _classColor(c.name);
+    return `<span onclick="document.getElementById('globalSearch').value='${esc(c.name)}';onSearch('${esc(c.name)}')"
+      style="font-family:var(--mono);font-size:13px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color}40;transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c.name)}</span>`;
   }).join('');
   setLeftBody(`
     <div style="padding:12px 0 8px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
@@ -2578,7 +2578,7 @@ function _admPreview() {
 async function saveAdminSettings() {
   _showDynModal(`<div class="modal" style="max-width:420px">
     <div class="modal-head"><div class="modal-title" style="color:var(--red)">⚠ Admin-Einstellungen speichern</div></div>
-    <div class="modal-body" style="padding:14px 16px;font-size:14px;color:var(--t2)">
+    <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2)">
       Änderungen an Präfixen und Nummernformat gelten nur für <b>neu erstellte</b> Datensätze.<br><br>
       Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.<br><br>
       Wirklich speichern?
@@ -2884,7 +2884,7 @@ async function openMoveItemModal(itemId) {
       <button class="btn btn-icon btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="font-size:14px;color:var(--t2);margin-bottom:14px">
+      <div style="font-size:13px;color:var(--t2);margin-bottom:14px">
         <strong style="color:var(--t1)">${esc(item.name)}</strong> in ein anderes Projekt verschieben.<br>
         <span style="font-size:13px;color:var(--t3);margin-top:4px;display:block">Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items (Kinder) werden mitgenommen.</span>
       </div>
@@ -2944,7 +2944,7 @@ async function openEditItemModal(id) {
   set('eim-url', item.source_url || '');
   set('eim-price', item.default_price != null ? item.default_price : '');
   const clSel = document.getElementById('eim-classification');
-  clSel.innerHTML = '<option value="">— keine —</option>' + getClassifications().map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  clSel.innerHTML = '<option value="">— keine —</option>' + getClassifications().map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
   clSel.value = item.classification || '';
   document.getElementById('eim-title').textContent = 'Bearbeiten: ' + item.item_number;
   openModal('editItemModal');
@@ -3511,7 +3511,7 @@ async function openQuoteDetail(id) {
       </div>
       ${q.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
         <div style="text-align:right;font-size:13px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
-          <span style="font-family:var(--mono);font-weight:700;font-size:14px;color:var(--green);margin-left:8px">${fmtCHF(grandTotal)}</span>
+          <span style="font-family:var(--mono);font-weight:700;font-size:13px;color:var(--green);margin-left:8px">${fmtCHF(grandTotal)}</span>
         </div>
       </div>` : ''}
     </div>`;
@@ -3676,7 +3676,7 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
           <div style="color:var(--amber)">Rabatt ${discountPct}%: <span style="font-family:var(--mono)">-${fmtChf(discAmt)}</span></div>`:''}
           <div style="color:var(--t2)">Netto: <span style="font-family:var(--mono)">${fmtChf(net)}</span></div>
           ${includeTax?`<div style="color:var(--t3)">MwSt. ${taxRate}%: <span style="font-family:var(--mono)">${fmtChf(tax)}</span></div>`:''}
-          <div style="font-size:14px;font-weight:600;margin-top:4px;color:var(--green)">Total: <span style="font-family:var(--mono)">${fmtChf(total)}</span></div>
+          <div style="font-size:13px;font-weight:600;margin-top:4px;color:var(--green)">Total: <span style="font-family:var(--mono)">${fmtChf(total)}</span></div>
         </div>
       </div>
     </div>
@@ -3917,7 +3917,7 @@ async function shutdownServer() {
         <div class="modal-title" style="color:var(--amber)">⚠ Aktive Checkouts</div>
       </div>
       <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:14px;color:var(--t2)">${checkouts.length} Checkout(s) aktiv · ${totalFiles} Dateien</div>
+        <div style="font-size:13px;color:var(--t2)">${checkouts.length} Checkout(s) aktiv · ${totalFiles} Dateien</div>
         <div style="display:flex;flex-direction:column;gap:4px">
           ${checkouts.map(c => `<div style="font-size:13px;font-family:var(--mono);color:var(--t3)">
             ${_itemChip(c.item_type,14)} <span style="color:var(--blue)">${esc(c.item_number)}</span> – ${esc(c.item_name)}
@@ -3941,7 +3941,7 @@ async function shutdownServer() {
         <div class="modal-title" style="color:var(--amber)">⚠ Nicht erfasste Dateien</div>
       </div>
       <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:14px;color:var(--t2)">${newCount} Datei(en) im Checkout-Ordner noch nicht im PLM erfasst:</div>
+        <div style="font-size:13px;color:var(--t2)">${newCount} Datei(en) im Checkout-Ordner noch nicht im PLM erfasst:</div>
         <div style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto">
           ${allFiles.map(f => `<div style="font-size:13px;color:var(--t3)">${f}</div>`).join('')}
         </div>
@@ -3959,7 +3959,7 @@ async function shutdownServer() {
         <div class="modal-title">Server beenden</div>
       </div>
       <div class="modal-body" style="padding:14px 16px">
-        <div style="font-size:14px;color:var(--t2)">PLM-Server wirklich beenden?</div>
+        <div style="font-size:13px;color:var(--t2)">PLM-Server wirklich beenden?</div>
         <div style="font-size:13px;color:var(--t3);margin-top:6px">Die Weboberfläche ist danach nicht mehr erreichbar.</div>
       </div>
       <div class="modal-foot">
@@ -3983,7 +3983,7 @@ async function _doShutdown(checkinFirst) {
     <div style="font-size:36px;color:#4a5470">■</div>
     <div style="font-size:17px;font-weight:600">PLM & ERP wurde beendet</div>
     <div style="font-size:13px;color:#4a5470;margin-bottom:8px">Der Server wurde gestoppt.</div>
-    <button onclick="window.close()" style="background:#1d2029;border:1px solid #2a2d3a;color:#ecedef;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:14px;font-family:Manrope,sans-serif">✕ Tab schliessen</button>
+    <button onclick="window.close()" style="background:#1d2029;border:1px solid #2a2d3a;color:#ecedef;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;font-family:Manrope,sans-serif">✕ Tab schliessen</button>
   </div>`;
   // Tab schliessen versuchen (funktioniert wenn Tab per Skript geöffnet wurde)
   setTimeout(() => window.close(), 600);
@@ -4568,7 +4568,7 @@ async function generateDoc(id, type) {
 <html lang="de-CH">
 <head><meta charset="UTF-8"><title>${docLabel} ${d.number}</title>
 <style>
-  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#1f2937;margin:0;padding:40px}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:40px}
   .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px}
   .company-name{font-size:22px;font-weight:700;color:${color};letter-spacing:-0.5px}
   .company-detail{font-size:13px;color:#6b7280;margin-top:2px;line-height:1.6}
@@ -4580,7 +4580,7 @@ async function generateDoc(id, type) {
   thead{background:#f9fafb}
   thead th{text-align:left;padding:10px 6px;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;border-bottom:2px solid #e5e7eb}
   .totals{margin-left:auto;width:300px;margin-top:10px}
-  .total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:14px;border-bottom:1px solid #f3f4f6}
+  .total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #f3f4f6}
   .total-gross{display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:700;border-top:2px solid ${color};margin-top:4px;color:${color}}
   .footer{margin-top:50px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#9ca3af}
   .badge{display:inline-block;background:#dbeafe;color:${color};font-size:13px;padding:2px 8px;border-radius:20px;font-weight:600}
@@ -4600,7 +4600,7 @@ async function generateDoc(id, type) {
   </div>
   <div style="text-align:right">
     <div class="doc-label">${docLabel}</div>
-    <div style="font-family:monospace;font-size:14px;color:${color}">${d.number}</div>
+    <div style="font-family:monospace;font-size:13px;color:${color}">${d.number}</div>
     <div class="meta">
       Datum: ${today}<br>
       ${isQuote && d.valid_until ? 'Gültig bis: '+d.valid_until+'<br>' : ''}
@@ -4614,7 +4614,7 @@ async function generateDoc(id, type) {
 <div class="addr-block">
   ${d.customer_name ? `<div>
     <div class="addr-label">${isQuote ? 'Angebotsempfänger' : 'Rechnungsempfänger'}</div>
-    <div style="font-weight:600;font-size:14px">${escHtml(d.customer_name)}</div>
+    <div style="font-weight:600;font-size:13px">${escHtml(d.customer_name)}</div>
     ${d.customer_number ? '<div style="font-size:13px;color:#6b7280">'+d.customer_number+'</div>' : ''}
     <div style="margin-top:4px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
     ${d.customer_email ? '<div style="margin-top:4px;color:#6b7280">'+escHtml(d.customer_email)+'</div>' : ''}
@@ -4797,7 +4797,7 @@ async function generateDeliveryDoc(id) {
       <div style="background:#1e40af;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px">
         <span style="background:rgba(255,255,255,.2);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${idx+1}</span>
         ${item.item_number?`<span style="font-family:monospace;font-size:13px;opacity:.8">${escHtml(item.item_number)}</span>`:''}
-        <span style="font-weight:600;font-size:14px;flex:1">${escHtml(item.description)}</span>
+        <span style="font-weight:600;font-size:13px;flex:1">${escHtml(item.description)}</span>
         <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${item.unit}</span>
       </div>
       ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:13px;color:#374151;border-bottom:1px solid #dbeafe">Notiz: ${escHtml(item.notes)}</div>`:''}
@@ -4811,7 +4811,7 @@ async function generateDeliveryDoc(id) {
 <html lang="de-CH">
 <head><meta charset="UTF-8"><title>Lieferschein ${escHtml(d.number)}</title>
 <style>
-  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;color:#1f2937;margin:0;padding:32px}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:32px}
   .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #1d4ed8}
   .company-name{font-size:20px;font-weight:700;color:#1d4ed8}
   .doc-label{font-size:26px;font-weight:700;color:#111827;margin-bottom:4px}
@@ -4836,7 +4836,7 @@ async function generateDeliveryDoc(id) {
   </div>
   <div style="text-align:right">
     <div class="doc-label">Lieferschein</div>
-    <div style="font-family:monospace;font-size:14px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
+    <div style="font-family:monospace;font-size:13px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
     <div class="meta">
       Erstellt: ${today}<br>
       ${d.delivery_date?'Lieferdatum: '+d.delivery_date+'<br>':''}
@@ -4850,7 +4850,7 @@ async function generateDeliveryDoc(id) {
 <div class="addr-block">
   ${d.customer_name?`<div>
     <div class="addr-label">Empfänger</div>
-    <div style="font-weight:600;font-size:14px">${escHtml(d.customer_name)}</div>
+    <div style="font-weight:600;font-size:13px">${escHtml(d.customer_name)}</div>
     ${d.customer_number?'<div style="font-size:13px;color:#6b7280">'+escHtml(d.customer_number)+'</div>':''}
     <div style="margin-top:3px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
     ${d.customer_email?'<div style="margin-top:3px;color:#6b7280">'+escHtml(d.customer_email)+'</div>':''}
