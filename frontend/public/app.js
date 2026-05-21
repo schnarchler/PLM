@@ -2638,22 +2638,53 @@ function _loadPlmTab() {
   _renderClassList(getClassifications());
 }
 
+let _classDragIdx = null;
+
 function _renderClassList(list) {
   const el = document.getElementById('st-class-list');
   if (!el) return;
   el.innerHTML = list.map((c, i) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
-      <span style="cursor:grab;color:var(--t4);font-size:14px">⠿</span>
+    <div class="cls-row" data-idx="${i}" draggable="true"
+      style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);transition:opacity .15s">
+      <span class="cls-handle" style="cursor:grab;color:var(--t4);font-size:16px;line-height:1;flex-shrink:0">⠿</span>
       ${_classChip(c)}
-      <span style="flex:1;font-size:12px">${esc(c)}</span>
+      <input class="fi cls-name" value="${esc(c)}" style="flex:1;font-size:12px;padding:3px 7px;height:28px" onchange="_onClassRename(${i},this.value)">
       <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})">✕</button>
     </div>`).join('');
+
+  // Drag & drop handlers
+  el.querySelectorAll('.cls-row').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      _classDragIdx = parseInt(row.dataset.idx);
+      row.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => { row.style.opacity = '1'; });
+    row.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; row.style.borderColor = 'var(--blue)'; });
+    row.addEventListener('dragleave', () => { row.style.borderColor = 'var(--line)'; });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      row.style.borderColor = 'var(--line)';
+      const toIdx = parseInt(row.dataset.idx);
+      if (_classDragIdx === null || _classDragIdx === toIdx) return;
+      const cur = _getCurrentClassList();
+      const [moved] = cur.splice(_classDragIdx, 1);
+      cur.splice(toIdx, 0, moved);
+      _renderClassList(cur);
+    });
+  });
+}
+
+function _onClassRename(idx, newVal) {
+  const list = _getCurrentClassList();
+  list[idx] = newVal.trim() || list[idx];
+  _renderClassList(list);
 }
 
 function _getCurrentClassList() {
   const el = document.getElementById('st-class-list');
   if (!el) return [];
-  return [...el.querySelectorAll('span[style*="flex:1"]')].map(s => s.textContent.trim());
+  return [...el.querySelectorAll('.cls-name')].map(i => i.value.trim()).filter(Boolean);
 }
 
 function _addClass() {
@@ -2665,6 +2696,7 @@ function _addClass() {
   list.push(val);
   _renderClassList(list);
   inp.value = '';
+  inp.focus();
 }
 
 function _removeClass(idx) {
