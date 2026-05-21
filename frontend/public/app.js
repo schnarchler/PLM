@@ -827,7 +827,9 @@ function renderRevDetail(rev, item) {
     </div>
 
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px">
-      <button class="btn btn-red btn-sm" onclick="deleteItem(${item.id})">🗑 Item löschen</button>
+      ${itemIsEditable(item)
+        ? `<button class="btn btn-red btn-sm" onclick="deleteItem(${item.id})">🗑 Item löschen</button>`
+        : `<span style="font-size:11px;color:var(--t3);font-family:var(--mono)">🔒 Löschen nur unter Einstellungen → Admin</span>`}
     </div>`;
 }
 
@@ -1351,11 +1353,25 @@ async function renderSettings() {
         </div>
 
         <div class="sep-label" style="margin-top:0;color:var(--red)">Datensätze löschen</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Projekte mit Inhalten (Items, Dateien) können nur hier gelöscht werden.</div>
-        <div id="st-del-projects" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div style="font-size:12px;color:var(--t3);margin:12px 0 10px">Aufträge und Angebote die nicht im Entwurf-Status sind.</div>
-        <div id="st-del-orders" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
+        <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px">
+          <button class="adm-del-tab active" data-deltab="teile"    onclick="_admDelTab('teile')"    style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:12px;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-1px;font-weight:600">Teile</button>
+          <button class="adm-del-tab"        data-deltab="projekte" onclick="_admDelTab('projekte')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:12px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Projekte</button>
+          <button class="adm-del-tab"        data-deltab="auftraege" onclick="_admDelTab('auftraege')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:12px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Aufträge</button>
+        </div>
+        <div id="adm-del-teile">
+          <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Freigegebene (REL/OBS) Bauteile, Baugruppen und Dokumente</div>
+          <div id="st-del-items" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+        <div id="adm-del-projekte" style="display:none">
+          <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Projekte mit Inhalten (Items, Dateien)</div>
+          <div id="st-del-projects" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+        <div id="adm-del-auftraege" style="display:none">
+          <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Aufträge (nicht Entwurf)</div>
+          <div id="st-del-orders" style="display:flex;flex-direction:column;gap:4px"></div>
+          <div style="font-size:12px;color:var(--t3);margin:10px 0 6px">Angebote (nicht Entwurf)</div>
+          <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
 
         <div class="sep-label" style="margin-top:28px">Nummernpräfixe</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:12px">Präfixe für neu erstellte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.</div>
@@ -2294,6 +2310,19 @@ async function _forceDeleteProject(id, name) {
   _loadDelTab();
 }
 
+function _admDelTab(name) {
+  document.querySelectorAll('.adm-del-tab').forEach(b => {
+    const active = b.dataset.deltab === name;
+    b.style.color = active ? 'var(--red)' : 'var(--t3)';
+    b.style.borderBottomColor = active ? 'var(--red)' : 'transparent';
+    b.style.fontWeight = active ? '600' : '400';
+  });
+  ['teile','projekte','auftraege'].forEach(t => {
+    const el = document.getElementById('adm-del-' + t);
+    if (el) el.style.display = t === name ? '' : 'none';
+  });
+}
+
 function _admPreview() {
   const g = id => document.getElementById(id)?.value || '';
   const pre  = g('adm-prefix-order') || 'AUF';
@@ -2410,6 +2439,22 @@ async function _loadDelTab() {
     }
   });
   _admPreview();
+  _admDelTab('teile');
+
+  // Released items
+  const itemsEl = document.getElementById('st-del-items');
+  if (itemsEl) {
+    const relItems = await api('/api/items-released').catch(()=>[]);
+    itemsEl.innerHTML = relItems.length
+      ? relItems.map(i => `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+          ${_itemChip(i.item_type,15)}
+          <span style="font-family:var(--mono);font-size:11px;color:var(--blue)">${esc(i.item_number)}</span>
+          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
+          <span style="font-size:10px;color:var(--t3)">${esc(i.project_number||'')}</span>
+          <button class="btn btn-red btn-sm" onclick="_forceDelItem(${i.id},'${esc(i.item_number)}')">Löschen</button>
+        </div>`).join('')
+      : '<div style="font-size:12px;color:var(--t3)">Keine freigegebenen Items</div>';
+  }
 
   const pelEl = document.getElementById('st-del-projects');
   if (pelEl) {
@@ -2448,6 +2493,12 @@ async function _loadDelTab() {
         </div>`).join('')
       : '<div style="font-size:12px;color:var(--t3)">Keine gesperrten Angebote</div>';
   }
+}
+
+async function _forceDelItem(id, number) {
+  if (!confirm(`Item ${number} unwiderruflich löschen? Alle Revisionen und Dateien werden entfernt.`)) return;
+  await api(`/api/items/${id}`,'DELETE');
+  toast(`${number} gelöscht`,'ok'); _loadDelTab();
 }
 
 async function _forceDelOrder(id, number) {
