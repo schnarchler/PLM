@@ -193,20 +193,21 @@ window.addEventListener('popstate', e => {
 });
 
 function _applyFontScale(scale) {
-  document.documentElement.style.zoom = scale || localStorage.getItem('plm_font_scale') || '1';
+  document.documentElement.style.zoom = scale || state.settings?.font_scale || '1';
 }
-function setFontScale(scale) {
-  localStorage.setItem('plm_font_scale', scale);
+async function setFontScale(scale) {
   _applyFontScale(scale);
   document.querySelectorAll('.fs-preset-btn').forEach(b => {
     b.classList.toggle('btn-primary', b.dataset.scale === String(scale));
     b.classList.toggle('btn-ghost',   b.dataset.scale !== String(scale));
   });
+  await api('/api/settings', 'PUT', { font_scale: scale });
+  state.settings = await api('/api/settings');
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  _applyFontScale();
   state.settings = await api('/api/settings').catch(() => ({}));
+  _applyFontScale();
   const cadBtn = document.getElementById('tb-cad-btn');
   if (cadBtn) cadBtn.style.display = state.settings?.cad_path ? '' : 'none';
   history.replaceState({ view: 'dashboard' }, '');
@@ -1476,8 +1477,7 @@ async function renderSettings() {
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Schriftgrösse der Benutzeroberfläche anpassen.</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${[['0.8','Klein'],['0.9','Mittel-klein'],['1','Normal'],['1.1','Mittel-gross'],['1.2','Gross'],['1.35','Sehr gross']].map(([sc,l]) => {
-            const cur = localStorage.getItem('plm_font_scale') || '1';
-            const active = cur === sc ? ' btn-primary' : ' btn-ghost';
+            const active = (s.font_scale || '1') === sc ? ' btn-primary' : ' btn-ghost';
             return `<button class="btn btn-sm fs-preset-btn${active}" data-scale="${sc}" onclick="setFontScale('${sc}')">${l}</button>`;
           }).join('')}
         </div>
