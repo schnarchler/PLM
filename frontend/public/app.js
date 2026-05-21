@@ -105,10 +105,11 @@ function _classColor(cls) {
   const hex = entry?.color || '#7a7f8e';
   return [hex, hex + '20'];
 }
-function _classChip(cls) {
+function _classChip(cls, size) {
   if (!cls) return '';
   const [color, bg] = _classColor(cls);
-  return `<span style="font-family:var(--mono);font-size:11px;padding:1px 5px;border-radius:3px;background:${bg};color:${color};flex-shrink:0">${esc(cls)}</span>`;
+  const fs = size || 11;
+  return `<span style="font-family:var(--mono);font-size:${fs}px;padding:1px 5px;border-radius:3px;background:${bg};color:${color};flex-shrink:0">${esc(cls)}</span>`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -2402,7 +2403,7 @@ function renderSearchView() {
   const chips = classes.map(c => {
     const [color, bg] = _classColor(c.name);
     return `<span onclick="document.getElementById('globalSearch').value='${esc(c.name)}';onSearch('${esc(c.name)}')"
-      style="font-family:var(--mono);font-size:13px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color}40;transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c.name)}</span>`;
+      style="font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color}40;transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c.name)}</span>`;
   }).join('');
   setLeftBody(`
     <div style="padding:12px 0 8px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
@@ -2472,7 +2473,7 @@ async function onSearch(q) {
         <tbody>${r.items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
           <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</td>
           <td>${esc(i.name)}</td>
-          <td>${i.classification ? _classChip(i.classification) : '<span style="color:var(--t4)">—</span>'}</td>
+          <td>${i.classification ? _classChip(i.classification, 10) : '<span style="color:var(--t4)">—</span>'}</td>
           <td style="color:var(--t3)">${i.project_name}</td>
           <td style="font-family:var(--mono);font-size:13px">${i.latest_revision?.rev||'—'}</td>
           <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
@@ -5005,7 +5006,7 @@ async function loadWhereUsed(itemId) {
         ${_itemChip(r.item_type, 16)}
         <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(r.item_number)}</span>
         <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</span>
-        ${_classChip(r.classification)}
+        ${_classChip(r.classification, 10)}
         <span class="status st-${r.status}" style="font-size:11px">rev${r.rev}</span>
         <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(r.project_number)}</span>
       </div>`).join('')}
