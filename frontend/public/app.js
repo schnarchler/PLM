@@ -104,9 +104,9 @@ function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.
 const _MAX_RECENT = 8;
 let _recentItems = JSON.parse(localStorage.getItem('plm_recent') || '[]');
 
-function _trackRecent(type, id, label, sub) {
+function _trackRecent(type, id, label, sub, itemType) {
   _recentItems = _recentItems.filter(r => !(r.type === type && r.id === id));
-  _recentItems.unshift({ type, id, label, sub, ts: Date.now() });
+  _recentItems.unshift({ type, id, label, sub, itemType, ts: Date.now() });
   if (_recentItems.length > _MAX_RECENT) _recentItems = _recentItems.slice(0, _MAX_RECENT);
   localStorage.setItem('plm_recent', JSON.stringify(_recentItems));
   _renderRecent();
@@ -118,7 +118,7 @@ function _renderRecent() {
   if (!_recentItems.length) { el.style.display = 'none'; return; }
   el.style.display = '';
   el.innerHTML = _recentItems.map(r => {
-    const icon = r.type === 'order' ? '📋' : r.type === 'quote' ? '📄' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : '🔩';
+    const icon = r.type === 'order' ? '📋' : r.type === 'quote' ? '📄' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : r.itemType ? _itemSvg(r.itemType) : '🔩';
     return `<button class="nav-item" style="font-size:11px;padding:4px 12px 4px 16px;gap:6px" onclick="_openRecent(${JSON.stringify(r).replace(/"/g,'&quot;')})">
       <span style="font-size:12px;flex-shrink:0">${icon}</span>
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${esc(r.label)}</span>
@@ -262,7 +262,6 @@ async function openProject(id) {
   state.item = null;
   if (state.filterBomChildren === undefined) state.filterBomChildren = true;
   document.getElementById('ni-projects').classList.add('active');
-  _trackRecent('project', p.id, p.name, p.number);
   _pushHistory({ view: 'projects', detailType: 'project', detailId: p.id });
 
   setLeftHeader(
@@ -590,6 +589,7 @@ async function openItemDetail(itemId) {
   const item = await api(`/api/items/${itemId}`);
   state.item = item;
   state.activeRevId = item.revisions?.[0]?.id || null;
+  _trackRecent('item', item.id, item.name, item.item_number, item.item_type);
 
   renderItemDetail(item, state.activeRevId);
   showDetail();
