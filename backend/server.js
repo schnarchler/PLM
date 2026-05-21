@@ -1140,8 +1140,11 @@ app.post('/api/items/:id/checkout', (req, res) => {
       item_type: item.item_type, checked_out: new Date().toISOString(), files: copied
     }, null, 2));
 
-    const typeLabels = types && types.length ? types.join(', ') : 'alle';
-    log('item', item.id, 'Ausgecheckt', `${copied.length} Dateien (${typeLabels}) → ${outDir}`);
+    const nonRel = copied.filter(f => !f.readonly);
+    if (nonRel.length) {
+      const typeLabels = types && types.length ? types.join(', ') : 'alle';
+      log('item', item.id, 'Ausgecheckt', `${nonRel.length} Dateien (${typeLabels}) → ${outDir}`);
+    }
     res.json({ folder: outDir, files: copied });
   } catch (err) {
     console.error('Checkout error:', err);
