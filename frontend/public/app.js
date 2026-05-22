@@ -4314,39 +4314,48 @@ function openLineItemModal(parentType, parentId, itemId) {
       set('li-hours', li.estimated_hours||'');
       set('li-print-hours', li.estimated_print_hours||'');
       document.getElementById('li-unit').value = li.unit||'Stk';
-      // Defer dropdown values until dropdowns are populated
-      setTimeout(() => {
-        if (li.raw_material_id) document.getElementById('li-rawmat').value = li.raw_material_id;
-        if (li.printer_name)    document.getElementById('li-printer').value = li.printer_name;
-        if (li.raw_material_id || li.printer_name || li.estimated_hours || li.estimated_print_hours)
-          _calcLiCost();
-      }, 300);
       if (li.item_id && li.item_number) {
         set('li-linked-plm-id', li.item_id);
         const icon = _itemChip(li.item_type, 18);
         document.getElementById('li-plm-badge').innerHTML = icon + ' <span style="font-family:var(--mono)">' + esc(li.item_number) + '</span>';
         document.getElementById('li-plm-name').textContent = li.description;
         document.getElementById('li-plm-selected').style.display = 'flex';
-        // Show cost hint directly from already-loaded data
+        // Load full item so weight + effective_weight_g are available for cost calc
+        api('/api/items/' + li.item_id).then(fullItem => {
+          if (!fullItem) return;
+          window._liItem = fullItem;
+          setTimeout(() => {
+            if (li.raw_material_id) document.getElementById('li-rawmat').value = li.raw_material_id;
+            if (li.printer_name)    document.getElementById('li-printer').value = li.printer_name;
+            _calcLiCost();
+          }, 50);
+        }).catch(() => {});
+        // Show cost hint from already-loaded backend data while item loads
         const hint = document.getElementById('li-cost-hint');
         const mc = li.manufacturing_cost;
         if (mc) {
           const parts = [];
-          if (mc.filament > 0) parts.push(`Filament ${fmtCHF(mc.filament)}`);
-          if (mc.machine > 0) parts.push(`Maschine ${fmtCHF(mc.machine)}`);
-          const sellPrice = li.unit_price;
-          const margin = sellPrice != null ? sellPrice - mc.total : null;
+          if (mc.material > 0) parts.push(`Mat. ${fmtCHF(mc.material)}`);
+          if (mc.machine  > 0) parts.push(`Druck ${fmtCHF(mc.machine)}`);
+          if (mc.work     > 0) parts.push(`Arbeit ${fmtCHF(mc.work)}`);
+          const margin = li.unit_price != null ? li.unit_price - mc.total : null;
           const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
-          const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
-          hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>${fmtCHF(mc.total)}</strong>`
-            + (parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
-            + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge ${fmtCHF(margin)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
+          const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : marginPct != null && marginPct < 15 ? 'var(--amber)' : 'var(--green)';
+          hint.innerHTML = `<span style="color:var(--t3)">Herst./Stk.:</span> <strong>${fmtCHF(mc.total)}</strong>`
+            + (parts.length ? ` <span style="color:var(--t4)">(${parts.join(' + ')})</span>` : '')
+            + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor};font-weight:600">Marge ${fmtCHF(margin)}${marginPct != null ? ` (${marginPct.toFixed(0)}%)` : ''}</span>` : '');
           hint.style.display = 'block';
         } else {
           hint.style.display = 'none';
         }
       } else {
         document.getElementById('li-plm-selected').style.display = 'none';
+        setTimeout(() => {
+          if (li.raw_material_id) document.getElementById('li-rawmat').value = li.raw_material_id;
+          if (li.printer_name)    document.getElementById('li-printer').value = li.printer_name;
+          if (li.raw_material_id || li.printer_name || li.estimated_hours || li.estimated_print_hours)
+            _calcLiCost();
+        }, 300);
       }
     }
   } else {
