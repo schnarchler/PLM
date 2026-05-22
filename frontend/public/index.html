@@ -90,7 +90,7 @@
     </button>
     <button class="nav-item" id="ni-deliveries" onclick="gotoView('deliveries')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-      Lieferscheine
+      Produktion
       <span class="badge" id="badge-deliveries">—</span>
     </button>
     <button class="nav-item" id="ni-profit" onclick="gotoView('profit')">
@@ -559,13 +559,6 @@
           </select>
         </div>
       </div>
-      <div class="form-row">
-        <div class="fg"><label class="fl">Rohmaterial (aus Lager)</label>
-          <select class="fs" id="ps-rawmat" onchange="applyRawMaterial(this.value)">
-            <option value="">— kein Rohmaterial zuweisen —</option>
-          </select>
-        </div>
-      </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Material</label><input class="fi" id="ps-mat" placeholder="z.B. PETG, PLA, ASA"></div>
         <div class="fg"><label class="fl">Farbe</label><input class="fi" id="ps-col" placeholder="z.B. Schwarz, RAL 9005"></div>
@@ -621,7 +614,7 @@
 <!-- Delivery Modal -->
 <div class="overlay" id="deliveryModal">
   <div class="modal">
-    <div class="modal-head"><div class="modal-title" id="dm-title">Neuer Lieferschein</div><button class="btn btn-icon btn-ghost" onclick="closeModal('deliveryModal')">✕</button></div>
+    <div class="modal-head"><div class="modal-title" id="dm-title">Neuer Produktionsauftrag</div><button class="btn btn-icon btn-ghost" onclick="closeModal('deliveryModal')">✕</button></div>
     <div class="modal-body">
       <div class="form-row">
         <div class="fg"><label class="fl">Bezeichnung *</label><input class="fi" id="dm-title-f" placeholder="z.B. Roboterarm – 2 Stück"></div>
@@ -711,6 +704,13 @@
         <!-- Manual entry section -->
         <div id="dim-section-manual" style="display:none">
           <div class="form-row">
+            <div class="fg"><label class="fl">Rohmaterial</label>
+              <select class="fs" id="dim-rawmat" onchange="applyDimRawMat(this.value)">
+                <option value="">— kein Rohmaterial zuweisen —</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
             <div class="fg"><label class="fl">Material-Vorlage</label>
               <select class="fs" id="dim-man-preset" onchange="applyDimPreset(this.value)">
                 <option value="">— Vorlage auswählen —</option>
@@ -749,6 +749,7 @@
       </div>
       <input type="hidden" id="dim-delivery-id">
       <input type="hidden" id="dim-item-id">
+      <input type="hidden" id="dim-rawmat-id">
       <input type="hidden" id="dim-linked-plm-id">
       <input type="hidden" id="dim-settings-json">
     </div>

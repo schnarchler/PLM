@@ -1114,7 +1114,7 @@ async function renderDashboard() {
       <span class="status st-REV">rev${r.rev}</span>
     </div>`).join('') : emptyRow('Keine Items in Prüfung');
 
-  // ── Fällige Lieferscheine ──
+  // ── Fällige Produktionsaufträge ──
   const todayIso = new Date().toISOString().slice(0,10);
   const dueSoon = d.dueSoon || [];
   const dueSoonHtml = dueSoon.length ? dueSoon.map(ls => {
@@ -1132,7 +1132,7 @@ async function renderDashboard() {
         <div style="font-size:13px;color:var(--t4)">${ls.delivery_date}</div>
       </div>
     </div>`;
-  }).join('') : emptyRow('Keine Lieferscheine fällig in 14 Tagen');
+  }).join('') : emptyRow('Keine Produktionsaufträge fällig in 14 Tagen');
 
   // ── Ablaufende Angebote ──
   const quotesExpiring = d.quotesExpiring || [];
@@ -1229,7 +1229,7 @@ async function renderDashboard() {
       <!-- Spalte 2 -->
       <div>
         <div style="background:var(--bg1);border:1px solid ${dueSoon.length ? 'var(--amber-line)' : 'var(--line)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
-          <div style="padding:12px 14px 8px">${sh('Fällige Lieferscheine'+(dueSoon.length?` <span style="color:var(--amber)">${dueSoon.length}</span>`:''))}</div>
+          <div style="padding:12px 14px 8px">${sh('Fällige Produktionsaufträge'+(dueSoon.length?` <span style="color:var(--amber)">${dueSoon.length}</span>`:''))}</div>
           <div style="padding:0 4px 8px">${dueSoonHtml}</div>
         </div>
         <div style="background:var(--bg1);border:1px solid ${quotesExpiring.length ? 'var(--red-line)' : 'var(--line)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
@@ -1585,7 +1585,7 @@ async function renderSettings() {
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-prefix-order" placeholder="AUF"></div>
           <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-prefix-quote" placeholder="ANG"></div>
-          <div class="fg"><label class="fl">Lieferscheine</label><input class="fi" id="adm-prefix-delivery" placeholder="LS"></div>
+          <div class="fg"><label class="fl">Produktion</label><input class="fi" id="adm-prefix-delivery" placeholder="LS"></div>
           <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-prefix-customer" placeholder="KD"></div>
         </div>
 
@@ -1593,7 +1593,7 @@ async function renderSettings() {
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-pad-order" type="number" min="1" max="8" placeholder="4"></div>
           <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-pad-quote" type="number" min="1" max="8" placeholder="4"></div>
-          <div class="fg"><label class="fl">Lieferscheine</label><input class="fi" id="adm-pad-delivery" type="number" min="1" max="8" placeholder="4"></div>
+          <div class="fg"><label class="fl">Produktion</label><input class="fi" id="adm-pad-delivery" type="number" min="1" max="8" placeholder="4"></div>
           <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-pad-customer" type="number" min="1" max="8" placeholder="4"></div>
           <div class="fg"><label class="fl">Projekte</label><input class="fi" id="adm-pad-project" type="number" min="1" max="8" placeholder="4"></div>
           <div class="fg" style="display:flex;align-items:center;gap:10px;padding-top:20px">
@@ -2393,7 +2393,7 @@ async function openOrderDetail(id) {
         <button class="btn btn-ghost btn-sm" onclick="openOrderModal(${id})">✏️ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Klonen</button>
-        <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🚚 Lieferschein erstellen</button>
+        <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🔧 Produktionsauftrag erstellen</button>
         ${o.status==='DRAFT' ? `<button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>` : ''}
       </div>
     </div>
@@ -2409,7 +2409,7 @@ async function orderToDelivery(orderId) {
   const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
   const billableH = billable.reduce((s,e)=>s+(e.hours||0),0);
   _showDynModal(`<div class="modal" style="max-width:400px">
-    <div class="modal-head"><div class="modal-title">Lieferschein erstellen</div>
+    <div class="modal-head"><div class="modal-title">Produktionsauftrag erstellen</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
       <div style="font-size:13px;color:var(--t2)">Alle Positionen des Auftrags werden übernommen.</div>
@@ -2433,7 +2433,7 @@ async function _doCreateDelivery(orderId) {
   const include_time = cb ? cb.checked : false;
   _hideDynModal();
   const d = await api(`/api/orders/${orderId}/to-delivery`, 'POST', { include_time });
-  toast(`Lieferschein ${d.number} erstellt`, 'ok');
+  toast(`Produktionsauftrag ${d.number} erstellt`, 'ok');
   await renderDeliveries();
   openDeliveryDetail(d.id);
 }
@@ -2492,7 +2492,7 @@ async function onSearch(q) {
           <td><span class="status ${qstC[q.status]||''}">${qstL[q.status]||q.status}</span></td>
           <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${q.valid_until||'—'}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.deliveries?.length ? section('Lieferscheine', r.deliveries.length) + `<div class="tbl-wrap"><table>
+      ${r.deliveries?.length ? section('Produktion', r.deliveries.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Datum</th></tr></thead>
         <tbody>${r.deliveries.map(d=>`<tr style="cursor:pointer" onclick="gotoView('deliveries');openDeliveryDetail(${d.id})">
           <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</td>
@@ -3321,12 +3321,6 @@ function _refreshRawMaterials() {
   state._psConfigLoaded = false; // force reload on next psModal open
 }
 function _populatePsSelects() {
-  const rmSel = document.getElementById('ps-rawmat');
-  if (rmSel) rmSel.innerHTML = '<option value="">— kein Rohmaterial zuweisen —</option>' +
-    (state.rawMaterials||[]).map(m => {
-      const label = [m.material_type, m.color, m.brand].filter(Boolean).join(' · ');
-      return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${m.unit}</option>`;
-    }).join('');
   const matSel = document.getElementById('ps-mat-preset');
   if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen (füllt Felder automatisch aus) —</option>' +
     state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
@@ -3348,7 +3342,6 @@ async function openPsModal(revId, ps) {
   document.getElementById('ps-nozzle').value = ps.nozzle||'';
   document.getElementById('ps-printer').value = ps.printer||'';
   document.getElementById('ps-mat-preset').value = '';
-  document.getElementById('ps-rawmat').value = ps.raw_material_id || '';
   set('ps-cost-hr', ps.printer_cost_hr || state.settings.default_machine_cost_hr || '');
   set('ps-fil-price', ps.filament_price_kg || state.settings.default_filament_price_kg || '');
   set('ps-fil-weight', ps.filament_weight_total||'');
@@ -3357,13 +3350,42 @@ async function openPsModal(revId, ps) {
   calcCost();
   openModal('psModal');
 }
-function applyRawMaterial(val) {
+async function applyDimRawMat(val) {
   if (!val) return;
-  const sel = document.getElementById('ps-rawmat');
+  const sel = document.getElementById('dim-rawmat');
   const opt = sel?.options[sel.selectedIndex];
   if (!opt) return;
-  if (opt.dataset.mat) set('ps-mat', opt.dataset.mat);
-  if (opt.dataset.col) set('ps-col', opt.dataset.col);
+  if (opt.dataset.mat) set('dim-man-mat', opt.dataset.mat);
+  if (opt.dataset.col) set('dim-man-color', opt.dataset.col);
+
+  // Load prices from incoming movements
+  const prices = await api(`/api/raw-materials/${val}/prices`).catch(() => []);
+  if (!prices.length) return;
+
+  const unit = opt.dataset.unit || 'Stk';
+  if (prices.length === 1) {
+    set('dim-price', prices[0].unit_price);
+    return;
+  }
+  // Multiple different prices → ask user
+  _showDynModal(`<div class="modal" style="max-width:380px">
+    <div class="modal-head"><div class="modal-title">Einkaufspreis wählen</div></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+        Mehrere Einkaufspreise für dieses Material vorhanden. Welchen möchtest du verwenden?
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${prices.map(p => `
+          <button class="btn btn-ghost" style="text-align:left;justify-content:space-between"
+            onclick="set('dim-price','${p.unit_price}');_hideDynModal()">
+            <span style="font-family:var(--mono)">${fmtChf(p.unit_price)} / ${esc(unit)}</span>
+            <span style="font-size:11px;color:var(--t4)">${p.created_at?.slice(0,10)||''}${p.notes?' · '+esc(p.notes):''}</span>
+          </button>`).join('')}
+        <button class="btn btn-ghost" style="text-align:left;color:var(--t4)"
+          onclick="_hideDynModal()">— Kein Preis übernehmen</button>
+      </div>
+    </div>
+  </div>`);
 }
 function applyMaterialPreset(presetId) {
   if (!presetId) return;
@@ -3386,6 +3408,12 @@ function onPsPrinterChange(sel) {
 }
 // Same helpers exposed for delivery item manual entry
 function _populateDimSelects() {
+  const rmSel = document.getElementById('dim-rawmat');
+  if (rmSel) rmSel.innerHTML = '<option value="">— kein Rohmaterial —</option>' +
+    (state.rawMaterials||[]).map(m => {
+      const label = [m.material_type, m.color, m.dimensions].filter(Boolean).join(' · ');
+      return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}" data-unit="${esc(m.unit)}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${m.unit}</option>`;
+    }).join('');
   const matSel = document.getElementById('dim-man-preset');
   if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen —</option>' +
     state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
@@ -3442,7 +3470,6 @@ async function savePrintSettings() {
     filament_price_kg: parseFloat(V('ps-fil-price'))||null,
     filament_weight_total: parseFloat(V('ps-fil-weight'))||null,
     print_duration: parseFloat(V('ps-duration'))||null,
-    raw_material_id: parseInt(document.getElementById('ps-rawmat')?.value)||null,
   });
   toast('Druckparameter gespeichert','ok'); closeModal('psModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
@@ -4191,10 +4218,10 @@ const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'}
 let _deliveryFilter = { text:'', status:'', dateFrom:'', dateTo:'' };
 function _clearDeliveryFilter(){_deliveryFilter={text:'',status:'',dateFrom:'',dateTo:''};renderDeliveries();}
 async function renderDeliveries() {
-  setLeftHeader('Lieferscheine', `<button class="btn btn-primary btn-sm" onclick="openDeliveryModal()">+ Lieferschein</button>`);
+  setLeftHeader('Produktion', `<button class="btn btn-primary btn-sm" onclick="openDeliveryModal()">+ Produktionsauftrag</button>`);
   const rows = await api('/api/deliveries');
   state.deliveries = rows;
-  if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🚚</div><div class="empty-text">Noch keine Lieferscheine</div></div>`); return; }
+  if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Noch keine Produktionsaufträge</div></div>`); return; }
   setLeftBody(_filterBar(_deliveryFilter,[['DRAFT','Entwurf'],['READY','Bereit'],['DELIVERED','Geliefert']],'_clearDeliveryFilter','_delivery')+
     `<div class="tbl-wrap"><table>
       <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Datum</th><th></th></tr></thead>
@@ -4277,6 +4304,7 @@ function renderDeliveryItems(items, deliveryId) {
         </div>
         ${item.item_number?`<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${item.item_number}</span>`:''}
         <span style="font-size:13px;font-weight:500;flex:1">${esc(item.description)}</span>
+        ${item.rm_name?`<span style="font-size:11px;background:rgba(142,163,255,.12);color:var(--blue);border-radius:3px;padding:1px 6px;font-family:var(--mono);flex-shrink:0">${esc(item.rm_name)}</span>`:''}
         <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${item.unit}</span>
         ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">${fmtCHF(parseFloat(item.unit_price))}</span>`:''}
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="Kurzbeleg">🖶</button>
@@ -4518,12 +4546,12 @@ async function openDeliveryModal(id) {
     set('dm-title-f', d.title); setCustFields('dm',d.customer_id,d.customer_name_free); oSel.value = d.order_id||'';
     document.getElementById('dm-status').value = d.status||'DRAFT';
     set('dm-date', d.delivery_date||''); set('dm-manufacture-date', d.manufacture_date||''); set('dm-notes', d.notes||'');
-    document.getElementById('dm-title').textContent = 'Lieferschein bearbeiten';
+    document.getElementById('dm-title').textContent = 'Produktionsauftrag bearbeiten';
   } else {
     ['dm-title-f','dm-date','dm-manufacture-date','dm-notes'].forEach(f=>set(f,''));
     document.getElementById('dm-status').value = 'DRAFT';
     cSel.value = ''; oSel.value = '';
-    document.getElementById('dm-title').textContent = 'Neuer Lieferschein';
+    document.getElementById('dm-title').textContent = 'Neuer Produktionsauftrag';
   }
   set('dm-id', id||''); openModal('deliveryModal');
 }
@@ -4539,14 +4567,14 @@ async function saveDelivery() {
     openDeliveryDetail(editingDeliveryId);
   } else {
     const d = await api('/api/deliveries','POST',body);
-    toast('Lieferschein angelegt','ok'); closeModal('deliveryModal');
+    toast('Produktionsauftrag angelegt','ok'); closeModal('deliveryModal');
     await renderDeliveries(); openDeliveryDetail(d.id);
   }
   loadStats();
 }
 
 async function delDelivery(id) {
-  if (!confirm('Lieferschein löschen?')) return;
+  if (!confirm('Produktionsauftrag löschen?')) return;
   await api(`/api/deliveries/${id}`,'DELETE'); toast('Gelöscht','ok'); closeDetail(); renderDeliveries(); loadStats();
 }
 
@@ -4573,6 +4601,8 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   document.getElementById('dim-man-nozzle').value = '';
   document.getElementById('dim-man-printer').value = '';
   document.getElementById('dim-man-preset').value = '';
+  document.getElementById('dim-rawmat').value = '';
+  set('dim-rawmat-id', '');
 
   if (itemId) {
     const fresh = await api(`/api/deliveries/${deliveryId}`);
@@ -4581,6 +4611,10 @@ async function openDeliveryItemModal(deliveryId, itemId) {
       set('dim-desc', it.description); set('dim-qty', it.quantity); set('dim-notes', it.notes||'');
       set('dim-price', it.unit_price!=null ? it.unit_price : '');
       document.getElementById('dim-unit').value = it.unit||'Stk';
+      if (it.raw_material_id) {
+        document.getElementById('dim-rawmat').value = it.raw_material_id;
+        set('dim-rawmat-id', it.raw_material_id);
+      }
       if (it.item_id && it.item_number) {
         set('dim-linked-plm-id', it.item_id);
         const icon = _itemChip(it.item_type, 18);
@@ -4639,13 +4673,15 @@ async function saveDeliveryItem() {
       settingsJson = JSON.stringify(obj);
     } else { settingsJson = null; }
   }
+  const rmVal = document.getElementById('dim-rawmat')?.value;
   const body = {
     description: desc, quantity: parseFloat(V('dim-qty'))||1,
     unit: document.getElementById('dim-unit').value,
     unit_price: priceVal !== '' ? parseFloat(priceVal) : null,
     item_id: V('dim-linked-plm-id') ? parseInt(V('dim-linked-plm-id')) : null,
     print_settings_json: settingsJson,
-    notes: V('dim-notes')
+    notes: V('dim-notes'),
+    raw_material_id: rmVal ? parseInt(rmVal) : null,
   };
   try {
     if (itemId) {
@@ -4995,6 +5031,7 @@ async function generateDeliveryDoc(id) {
         <span style="font-weight:600;font-size:13px;flex:1">${escHtml(item.description)}</span>
         <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${item.unit}</span>
       </div>
+      ${item.rm_name?`<div style="padding:6px 14px;background:#f0f9ff;font-size:13px;color:#0369a1;border-bottom:1px solid #bae6fd">🧵 Rohmaterial: <strong>${escHtml(item.rm_name)}</strong>${item.rm_type?' · '+escHtml(item.rm_type):''}${item.rm_color?' · '+escHtml(item.rm_color):''}</div>`:''}
       ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:13px;color:#374151;border-bottom:1px solid #dbeafe">Notiz: ${escHtml(item.notes)}</div>`:''}
       <div style="padding:12px 14px">
         ${hasSettings ? renderSettingsTablePdf(item.print_settings) : '<p style="color:#9ca3af;font-size:13px;margin:0">Keine 3MF-Druckeinstellungen hinterlegt.</p>'}
@@ -6054,11 +6091,12 @@ async function openRawMatDetail(id) {
     </div>
     <div id="rm-moves" hidden>
       ${movements.length ? `<div class="tbl-wrap"><table>
-        <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th>Notiz</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th style="text-align:right">Preis/Stk</th><th>Notiz</th></tr></thead>
         <tbody>${movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:11px;color:var(--t4)">${m.created_at?.slice(0,16)||'—'}</td>
           <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${item.unit}</td>
+          <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3)">${m.unit_price!=null?fmtChf(m.unit_price):'—'}</td>
           <td style="font-size:13px;color:var(--t3)">${esc(m.notes||'')}</td>
         </tr>`).join('')}</tbody>
       </table></div>`
@@ -6086,22 +6124,22 @@ async function _loadRawMatForm(id) {
     item = all.find(x => x.id === id) || {};
   }
   document.getElementById('rawmat-modal-body').innerHTML = `
+    <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+      Felder ausfüllen → Name wird automatisch vorgeschlagen (oder manuell überschreiben).
+    </div>
     <div class="form-row cols2">
       <div class="fg"><label class="fl">Materialtyp *</label>
-        <input class="fi" id="rm-type" list="rm-type-list" value="${esc(item.material_type||'')}" placeholder="PLA, PETG, ABS, TPU …">
+        <input class="fi" id="rm-type" list="rm-type-list" value="${esc(item.material_type||'')}" placeholder="PLA, PETG, ABS, TPU …" oninput="_rmAutoName()">
         <datalist id="rm-type-list">
           <option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option>
           <option>TPU</option><option>Nylon</option><option>HIPS</option><option>PC</option>
           <option>Aluminium</option><option>Stahl</option><option>Holz</option><option>Sonstiges</option>
         </datalist>
       </div>
-      <div class="fg"><label class="fl">Farbe</label><input class="fi" id="rm-col" value="${esc(item.color||'')}" placeholder="z.B. Schwarz, Galaxy Black"></div>
-    </div>
-    <div class="form-row">
-      <div class="fg"><label class="fl">Name *</label><input class="fi" id="rm-name" value="${esc(item.name||'')}" placeholder="z.B. PETG Schwarz 1kg"></div>
+      <div class="fg"><label class="fl">Farbe</label><input class="fi" id="rm-col" value="${esc(item.color||'')}" placeholder="z.B. Schwarz, Galaxy Black" oninput="_rmAutoName()"></div>
     </div>
     <div class="form-row cols3">
-      <div class="fg"><label class="fl">Marke / Hersteller</label><input class="fi" id="rm-brand" value="${esc(item.brand||'')}" placeholder="z.B. Prusament"></div>
+      <div class="fg"><label class="fl">Marke / Hersteller</label><input class="fi" id="rm-brand" value="${esc(item.brand||'')}" placeholder="z.B. Prusament" oninput="_rmAutoName()"></div>
       <div class="fg"><label class="fl">Lotnummer</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="z.B. LOT-2024-001"></div>
       <div class="fg"><label class="fl">Einheit</label>
         <select class="fs" id="rm-unit">
@@ -6112,10 +6150,13 @@ async function _loadRawMatForm(id) {
     <div class="form-row">
       <div class="fg"><label class="fl">Abmessungen / Grösse</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="fi" id="rm-dim" value="${esc(item.dimensions||'')}" placeholder="z.B. 2x20x200mm, 1000g, Ø12mm, 1m" style="flex:1">
+          <input class="fi" id="rm-dim" value="${esc(item.dimensions||'')}" placeholder="z.B. 2x20x200mm, 1000g, Ø12mm, 1m" style="flex:1" oninput="_rmAutoName()">
           <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:15px" title="Durchmesserzeichen einfügen" onclick="const el=document.getElementById('rm-dim');const s=el.selectionStart,e=el.selectionEnd;el.value=el.value.slice(0,s)+'Ø'+el.value.slice(e);el.selectionStart=el.selectionEnd=s+1;el.focus()">Ø</button>
         </div>
       </div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label class="fl">Name (auto-generiert, editierbar) *</label><input class="fi" id="rm-name" value="${esc(item.name||'')}" placeholder="z.B. PETG Schwarz 1000g Prusament"></div>
     </div>
     <div class="form-row cols2">
       <div class="fg"><label class="fl">Anfangsbestand${id?' (aktuell: '+fmtN(item.stock_qty,0)+' '+item.unit+')':''}</label>
@@ -6144,6 +6185,7 @@ async function saveRawMat(id) {
     unit: document.getElementById('rm-unit')?.value,
     notes: document.getElementById('rm-notes')?.value.trim(),
   };
+  if (!body.name) { toast('Name erforderlich', 'err'); return; }
   if (!id) body.stock_qty = parseFloat(document.getElementById('rm-stock')?.value)||0;
   if (id) await api(`/api/raw-materials/${id}`, 'PUT', body);
   else await api('/api/raw-materials', 'POST', body);
@@ -6153,26 +6195,42 @@ async function saveRawMat(id) {
   await renderRawMaterials();
 }
 
+function _rmAutoName() {
+  const type  = document.getElementById('rm-type')?.value.trim()  || '';
+  const col   = document.getElementById('rm-col')?.value.trim()   || '';
+  const dim   = document.getElementById('rm-dim')?.value.trim()   || '';
+  const brand = document.getElementById('rm-brand')?.value.trim() || '';
+  const parts = [type, col, dim, brand].filter(Boolean);
+  const el = document.getElementById('rm-name');
+  if (el) el.value = parts.join(' ');
+}
+
 function openRawMatAdjust(id, type) {
-  _showDynModal(`
-    <div class="modal-head"><div class="modal-title">${type==='in'?'+ Einbuchen':'− Ausbuchen'}</div></div>
+  _showDynModal(`<div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title">${type==='in'?'+ Einbuchen':'− Ausbuchen'}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body">
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Menge *</label><input class="fi" type="number" id="adj-qty" min="0.001" step="any" placeholder="0"></div>
-        <div class="fg"><label class="fl">Notiz</label><input class="fi" id="adj-notes" placeholder="z.B. neue Spule, Druck XY"></div>
+        <div class="fg"><label class="fl">Notiz</label><input class="fi" id="adj-notes" placeholder="z.B. neue Spule, Lieferschein-Nr."></div>
       </div>
+      ${type==='in' ? `<div class="form-row">
+        <div class="fg"><label class="fl">Einkaufspreis / Einheit (optional)</label>
+          <input class="fi" type="number" id="adj-price" min="0" step="0.01" placeholder="z.B. 24.90"></div>
+      </div>` : ''}
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveRawMatAdjust(${id},'${type}')">Buchen</button>
-    </div>`);
+    </div>
+  </div>`);
 }
 
 async function saveRawMatAdjust(id, type) {
   const qty = parseFloat(document.getElementById('adj-qty')?.value);
   if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
   const notes = document.getElementById('adj-notes')?.value.trim();
-  const r = await api(`/api/raw-materials/${id}/adjust`, 'POST', { qty, type, notes });
+  const unit_price = parseFloat(document.getElementById('adj-price')?.value) || null;
+  const r = await api(`/api/raw-materials/${id}/adjust`, 'POST', { qty, type, notes, unit_price });
   _hideDynModal();
   toast(`Gebucht — neuer Bestand: ${fmtN(r.stock_qty,0)}`, 'ok');
   await renderRawMaterials();

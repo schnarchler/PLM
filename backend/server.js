@@ -306,6 +306,7 @@ async function initDb() {
     position INTEGER DEFAULT 999
   )`);
   migrate('ALTER TABLE delivery_items ADD COLUMN unit_price REAL');
+  migrate('ALTER TABLE delivery_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
   migrate('ALTER TABLE orders ADD COLUMN customer_name_free TEXT');
   migrate('ALTER TABLE quotes ADD COLUMN customer_name_free TEXT');
   migrate('ALTER TABLE deliveries ADD COLUMN customer_name_free TEXT');
@@ -462,6 +463,7 @@ async function initDb() {
   )`);
   migrate('ALTER TABLE raw_materials ADD COLUMN lot_number TEXT DEFAULT \'\'');
   migrate('ALTER TABLE raw_materials ADD COLUMN dimensions TEXT DEFAULT \'\'');
+  migrate('ALTER TABLE raw_material_movements ADD COLUMN unit_price REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS time_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2320,8 +2322,10 @@ app.get('/api/deliveries/:id', (req, res) => {
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Not found' });
-  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,
+    rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
+    LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id
     WHERE di.delivery_id=? ORDER BY di.position,di.id`, [d.id]);
   d.items.forEach(item => {
     if (item.print_settings_json) {
@@ -2373,23 +2377,23 @@ app.delete('/api/deliveries/:id', (req, res) => {
 });
 
 app.post('/api/deliveries/:id/items', (req, res) => {
-  const { item_id, description, quantity, unit, unit_price, print_settings_json, notes, position } = req.body;
+  const { item_id, description, quantity, unit, unit_price, print_settings_json, notes, position, raw_material_id } = req.body;
   if (!description) return res.status(400).json({ error: 'Description required' });
-  const id = runGetId(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,print_settings_json,notes,position)
-    VALUES (?,?,?,?,?,?,?,?,?)`,
+  const id = runGetId(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,print_settings_json,notes,position,raw_material_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [req.params.id, item_id||null, description, quantity||1, unit||'Stk',
      unit_price!=null ? parseFloat(unit_price) : null,
-     print_settings_json||null, notes||'', position||999]);
-  res.json(get('SELECT * FROM delivery_items WHERE id=?', [id]));
+     print_settings_json||null, notes||'', position||999, raw_material_id||null]);
+  res.json(get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [id]));
 });
 
 app.put('/api/delivery-items/:id', (req, res) => {
-  const { description, quantity, unit, unit_price, print_settings_json, notes, position } = req.body;
-  run(`UPDATE delivery_items SET description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=? WHERE id=?`,
+  const { description, quantity, unit, unit_price, print_settings_json, notes, position, raw_material_id } = req.body;
+  run(`UPDATE delivery_items SET description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=?,raw_material_id=? WHERE id=?`,
     [description, quantity||1, unit||'Stk',
      unit_price!=null ? parseFloat(unit_price) : null,
-     print_settings_json??null, notes||'', position||999, req.params.id]);
-  res.json(get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]));
+     print_settings_json??null, notes||'', position||999, raw_material_id||null, req.params.id]);
+  res.json(get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [req.params.id]));
 });
 
 app.delete('/api/delivery-items/:id', (req, res) => {
@@ -2407,8 +2411,10 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Not found' });
-  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,
+    rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
+    LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id
     WHERE di.delivery_id=? ORDER BY di.position,di.id`, [d.id]);
   d.items.forEach(item => {
     if (item.print_settings_json) {
@@ -2928,19 +2934,29 @@ app.delete('/api/raw-materials/:id', (req, res) => {
 });
 
 app.post('/api/raw-materials/:id/adjust', (req, res) => {
-  const { qty, type, notes } = req.body;
+  const { qty, type, notes, unit_price } = req.body;
   const mat = get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]);
   if (!mat) return res.status(404).json({ error: 'Nicht gefunden' });
   const delta = type === 'out' ? -Math.abs(parseFloat(qty)) : Math.abs(parseFloat(qty));
   const newQty = Math.max(0, mat.stock_qty + delta);
   run(`UPDATE raw_materials SET stock_qty=?,updated_at=datetime('now') WHERE id=?`, [newQty, req.params.id]);
-  run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes) VALUES (?,?,?,?)',
-    [req.params.id, Math.abs(parseFloat(qty)), type, notes||'']);
+  run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,unit_price) VALUES (?,?,?,?,?)',
+    [req.params.id, Math.abs(parseFloat(qty)), type, notes||'', unit_price||null]);
   res.json({ stock_qty: newQty });
 });
 
 app.get('/api/raw-materials/:id/movements', (req, res) => {
   res.json(all('SELECT * FROM raw_material_movements WHERE raw_material_id=? ORDER BY created_at DESC LIMIT 50', [req.params.id]));
+});
+
+app.get('/api/raw-materials/:id/prices', (req, res) => {
+  const prices = all(`SELECT unit_price, notes, created_at FROM raw_material_movements
+    WHERE raw_material_id=? AND type='in' AND unit_price IS NOT NULL
+    ORDER BY created_at DESC`, [req.params.id]);
+  // Return distinct prices (deduplicated by value)
+  const seen = new Set();
+  const distinct = prices.filter(p => { const k = p.unit_price; return seen.has(k) ? false : seen.add(k); });
+  res.json(distinct);
 });
 
 app.get('/api/time-entries', (req, res) => {
