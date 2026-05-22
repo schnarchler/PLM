@@ -686,6 +686,7 @@ function renderItemDetail(item, activeRevId) {
             <span style="color:var(--t4)">CHF</span>
           </span>
           ${bomHint}
+          ${item.weight_g != null ? `<span style="font-size:13px;color:var(--t3)">⚖ <span style="font-family:var(--mono);color:var(--t2)">${fmtN(item.weight_g,1)} g</span></span>` : ''}
           ${item.source_url ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>` : ''}
         </div>`;
       })()}
@@ -2986,6 +2987,7 @@ async function openEditItemModal(id) {
   set('eim-desc', item.description || '');
   set('eim-url', item.source_url || '');
   set('eim-price', item.default_price != null ? item.default_price : '');
+  set('eim-weight', item.weight_g != null ? item.weight_g : '');
   const clSel = document.getElementById('eim-classification');
   clSel.innerHTML = '<option value="">— keine —</option>' + getClassifications().map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
   clSel.value = item.classification || '';
@@ -3000,6 +3002,7 @@ async function saveEditItem() {
   await api('/api/items/' + id, 'PUT', {
     name, description: V('eim-desc'), source_url: V('eim-url')||null,
     default_price: V('eim-price') ? parseFloat(V('eim-price')) : null,
+    weight_g: V('eim-weight') ? parseFloat(V('eim-weight')) : null,
     classification: document.getElementById('eim-classification').value || null
   });
   toast('Name gespeichert', 'ok');
@@ -6025,26 +6028,36 @@ async function renderRawMaterials() {
     return;
   }
 
-  const _statusDot = item => {
-    if (item.stock_qty <= 0) return `<span style="color:var(--red);font-size:13px">●</span>`;
-    if (item.min_qty > 0 && item.stock_qty <= item.min_qty) return `<span style="color:var(--amber);font-size:13px">●</span>`;
-    return `<span style="color:var(--green);font-size:13px">●</span>`;
-  };
+  const cards = items.map(i => {
+    const empty   = i.stock_qty <= 0;
+    const low     = !empty && i.min_qty > 0 && i.stock_qty <= i.min_qty;
+    const dotCol  = empty ? 'var(--red)' : low ? 'var(--amber)' : 'var(--green)';
+    const opacity = empty ? 'opacity:.45' : '';
+    const stockCol = empty ? 'color:var(--red)' : low ? 'color:var(--amber)' : 'color:var(--green)';
+    return `
+      <div onclick="openRawMatDetail(${i.id})"
+        style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--r-sm);cursor:pointer;border:1px solid var(--line);background:var(--bg1);transition:background .12s;${opacity}"
+        onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='var(--bg1)'">
+        <span style="color:${dotCol};font-size:11px;flex-shrink:0">●</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
+            ${i.material_type ? `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);flex-shrink:0">${esc(i.material_type)}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">
+            ${i.color  ? `<span style="font-size:11px;color:var(--t4)">${esc(i.color)}</span>` : ''}
+            ${i.brand  ? `<span style="font-size:11px;color:var(--t4)">${esc(i.brand)}</span>` : ''}
+            ${i.lot_number ? `<span style="font-size:11px;font-family:var(--mono);color:var(--t4)">Lot: ${esc(i.lot_number)}</span>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;${stockCol}">${fmtN(i.stock_qty,0)}</div>
+          <div style="font-size:11px;color:var(--t4)">${esc(i.unit)}</div>
+        </div>
+      </div>`;
+  }).join('');
 
-  const rows = items.map(i => `
-    <tr onclick="openRawMatDetail(${i.id})" style="cursor:pointer">
-      <td>${_statusDot(i)}</td>
-      <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.material_type||'—')}</td>
-      <td style="font-size:13px">${esc(i.name)}</td>
-      <td style="color:var(--t3);font-size:13px">${esc(i.color||'—')}</td>
-      <td style="color:var(--t3);font-size:13px">${esc(i.brand||'—')}</td>
-      <td style="font-family:var(--mono);font-size:13px;text-align:right">${fmtN(i.stock_qty,0)} ${i.unit}</td>
-    </tr>`).join('');
-
-  setLeftBody(`<div class="tbl-wrap"><table>
-    <thead><tr><th></th><th>Typ</th><th>Name</th><th>Farbe</th><th>Marke</th><th style="text-align:right">Bestand</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`);
+  setLeftBody(`<div style="display:flex;flex-direction:column;gap:4px;padding:4px 0">${cards}</div>`);
 }
 
 async function openRawMatDetail(id) {
@@ -6078,6 +6091,7 @@ async function openRawMatDetail(id) {
         <div style="flex:1;display:flex;flex-direction:column;gap:3px">
           ${item.color      ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
           ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">Abmessungen:</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
+          ${item.weight_g != null ? `<div style="font-size:13px"><span style="color:var(--t4)">Gewicht:</span> <span style="font-family:var(--mono)">${fmtN(item.weight_g,1)} g</span></div>` : ''}
           ${item.lot_number ? `<div style="font-size:13px"><span style="color:var(--t4)">Lot:</span> <span style="font-family:var(--mono)">${esc(item.lot_number)}</span></div>` : ''}
           ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${item.unit}</div>` : ''}
           <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
@@ -6159,9 +6173,12 @@ async function _loadRawMatForm(id) {
     <div class="form-row">
       <div class="fg"><label class="fl">Name (auto-generiert, editierbar) *</label><input class="fi" id="rm-name" value="${esc(item.name||'')}" placeholder="z.B. PETG Schwarz 1000g Prusament"></div>
     </div>
-    <div class="form-row cols2">
+    <div class="form-row cols3">
       <div class="fg"><label class="fl">Mindestbestand (Warnung)</label>
         <input class="fi" type="number" id="rm-min" value="${item.min_qty||''}" placeholder="0" min="0" step="any">
+      </div>
+      <div class="fg"><label class="fl">Gewicht / Stück (g)</label>
+        <input class="fi" type="number" id="rm-weight" value="${item.weight_g!=null?item.weight_g:''}" placeholder="z.B. 250" min="0" step="0.1">
       </div>
     </div>
     ${!id ? `<div class="sep-label" style="margin-top:4px">Anfangsbestand einbuchen</div>
@@ -6188,6 +6205,7 @@ async function saveRawMat(id) {
     brand: document.getElementById('rm-brand')?.value.trim(),
     lot_number: document.getElementById('rm-lot')?.value.trim(),
     dimensions: document.getElementById('rm-dim')?.value.trim(),
+    weight_g: document.getElementById('rm-weight')?.value ? parseFloat(document.getElementById('rm-weight').value) : null,
     min_qty: parseFloat(document.getElementById('rm-min')?.value)||0,
     unit: document.getElementById('rm-unit')?.value,
     notes: document.getElementById('rm-notes')?.value.trim(),
