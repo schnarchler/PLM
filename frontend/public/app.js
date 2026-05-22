@@ -6159,13 +6159,19 @@ async function _loadRawMatForm(id) {
       <div class="fg"><label class="fl">Name (auto-generiert, editierbar) *</label><input class="fi" id="rm-name" value="${esc(item.name||'')}" placeholder="z.B. PETG Schwarz 1000g Prusament"></div>
     </div>
     <div class="form-row cols2">
-      <div class="fg"><label class="fl">Anfangsbestand${id?' (aktuell: '+fmtN(item.stock_qty,0)+' '+item.unit+')':''}</label>
-        <input class="fi" type="number" id="rm-stock" value="${id?'':''}" placeholder="${id?'— nicht ändern (über Buchung)':'0'}" ${id?'disabled':''} min="0" step="any">
-      </div>
       <div class="fg"><label class="fl">Mindestbestand (Warnung)</label>
         <input class="fi" type="number" id="rm-min" value="${item.min_qty||''}" placeholder="0" min="0" step="any">
       </div>
     </div>
+    ${!id ? `<div class="sep-label" style="margin-top:4px">Anfangsbestand einbuchen</div>
+    <div class="form-row cols2">
+      <div class="fg"><label class="fl">Menge</label>
+        <input class="fi" type="number" id="rm-stock" value="" placeholder="0" min="0" step="any">
+      </div>
+      <div class="fg"><label class="fl">Einkaufspreis / Einheit (optional)</label>
+        <input class="fi" type="number" id="rm-init-price" placeholder="z.B. 24.90" min="0" step="0.01">
+      </div>
+    </div>` : ''}
     <div class="form-row">
       <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="rm-notes" rows="2">${esc(item.notes||'')}</textarea></div>
     </div>`;
@@ -6186,9 +6192,18 @@ async function saveRawMat(id) {
     notes: document.getElementById('rm-notes')?.value.trim(),
   };
   if (!body.name) { toast('Name erforderlich', 'err'); return; }
-  if (!id) body.stock_qty = parseFloat(document.getElementById('rm-stock')?.value)||0;
-  if (id) await api(`/api/raw-materials/${id}`, 'PUT', body);
-  else await api('/api/raw-materials', 'POST', body);
+  if (id) {
+    await api(`/api/raw-materials/${id}`, 'PUT', body);
+  } else {
+    const initQty   = parseFloat(document.getElementById('rm-stock')?.value) || 0;
+    const initPrice = parseFloat(document.getElementById('rm-init-price')?.value) || null;
+    body.stock_qty = 0; // start at 0, then book via movement so price is tracked
+    const created = await api('/api/raw-materials', 'POST', body);
+    if (initQty > 0) {
+      await api(`/api/raw-materials/${created.id}/adjust`, 'POST',
+        { qty: initQty, type: 'in', notes: 'Anfangsbestand', unit_price: initPrice });
+    }
+  }
   _hideDynModal();
   _refreshRawMaterials();
   toast('Gespeichert', 'ok');
