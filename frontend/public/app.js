@@ -5470,12 +5470,12 @@ async function showCheckoutList() {
   const totalFiles = list.reduce((s, c) => s + (c.files?.length || 0), 0);
   const newCount = _scanNewCount();
 
-  _showDynModal(`<div class="modal" style="max-width:580px">
+  _showDynModal(`<div class="modal" style="max-width:720px;width:95vw">
     <div class="modal-head">
       <div class="modal-title">Checkouts${list.length ? ` <span style="font-family:var(--mono);font-size:13px;color:var(--teal);font-weight:400">${list.length} aktiv · ${totalFiles} Dateien</span>` : ''}${newCount ? ` <span style="font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:400">+${newCount} neu erkannt</span>` : ''}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
-    <div class="modal-body" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px;max-height:520px;overflow-y:auto">
+    <div class="modal-body" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow-y:auto">
 
       ${newCount ? `<div>
         <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Neue Dateien erkannt</div>
