@@ -6433,7 +6433,7 @@ async function _loadRawMatForm(id) {
     </div>
     <div class="form-row cols2">
       <div class="fg"><label class="fl">Materialtyp *</label>
-        <input class="fi" id="rm-type" list="rm-type-list" value="${esc(item.material_type||'')}" placeholder="PLA, PETG, ABS, TPU …" oninput="_rmAutoName()">
+        <input class="fi" id="rm-type" list="rm-type-list" value="${esc(item.material_type||'')}" placeholder="PLA, PETG, ABS, TPU …" oninput="_rmAutoName();_rmAutoFillTemps()">
         <datalist id="rm-type-list">
           <option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option>
           <option>TPU</option><option>Nylon</option><option>HIPS</option><option>PC</option>
@@ -6443,7 +6443,12 @@ async function _loadRawMatForm(id) {
       <div class="fg"><label class="fl">Farbe</label><input class="fi" id="rm-col" value="${esc(item.color||'')}" placeholder="z.B. Schwarz, Galaxy Black" oninput="_rmAutoName()"></div>
     </div>
     <div class="form-row cols3">
-      <div class="fg"><label class="fl">Marke / Hersteller</label><input class="fi" id="rm-brand" value="${esc(item.brand||'')}" placeholder="z.B. Prusament" oninput="_rmAutoName()"></div>
+      <div class="fg"><label class="fl">Marke / Hersteller</label>
+        <input class="fi" id="rm-brand" value="${esc(item.brand||'')}" placeholder="z.B. Prusament" oninput="_rmAutoName()" list="rm-brand-list">
+        <datalist id="rm-brand-list">
+          ${[...new Set((state.rawMaterials||[]).map(m=>m.brand).filter(Boolean))].map(b=>`<option value="${esc(b)}">`).join('')}
+        </datalist>
+      </div>
       <div class="fg"><label class="fl">Lotnummer</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="z.B. LOT-2024-001"></div>
       <div class="fg"><label class="fl">Einheit</label>
         <select class="fs" id="rm-unit">
@@ -6544,6 +6549,21 @@ function _rmAutoName() {
   const parts = [type, col, dim, brand].filter(Boolean);
   const el = document.getElementById('rm-name');
   if (el) el.value = parts.join(' ');
+}
+
+function _rmAutoFillTemps() {
+  const type = document.getElementById('rm-type')?.value.trim();
+  if (!type) return;
+  const tempEl = document.getElementById('rm-print-temp');
+  const bedEl  = document.getElementById('rm-bed-temp');
+  // Only fill if fields are still empty
+  if ((tempEl?.value || bedEl?.value)) return;
+  const match = (state.rawMaterials||[]).find(
+    m => m.material_type?.toLowerCase() === type.toLowerCase() && (m.print_temp || m.bed_temp)
+  );
+  if (!match) return;
+  if (match.print_temp && tempEl) tempEl.value = match.print_temp;
+  if (match.bed_temp   && bedEl)  bedEl.value  = match.bed_temp;
 }
 
 function editLotRow(movId, lotNr, qty, price, unit, matId) {
