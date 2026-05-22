@@ -7034,6 +7034,9 @@ async function saveRawMatAdjust(id, type) {
 async function renderNormteile() {
   setLeftHeader('Normteile', `
     <button class="btn btn-ghost btn-sm" onclick="checkoutNormteile()" title="Alle Normteil-Dateien in Checkout-Ordner kopieren">⬇ Auschecken</button>
+    <button class="btn btn-ghost btn-sm" onclick="openNormteilBibliothek()">📚 Bibliothek</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportNormteile()" title="Alle Normteile als normteile.json exportieren">↓ Export</button>
+    <label class="btn btn-ghost btn-sm" title="normteile.json importieren" style="cursor:pointer">↑ Import<input type="file" accept=".json" style="display:none" onchange="importNormteileFile(this)"></label>
     <button class="btn btn-primary btn-sm" onclick="openNormteilModal()">+ Normteil</button>`);
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
@@ -7083,6 +7086,7 @@ async function openNormteilDetail(id) {
     <div id="nt-info">
       <div style="display:flex;gap:6px;margin-bottom:14px">
         <button class="btn btn-ghost btn-sm" onclick="openNormteilModal(${id})">✎ Bearbeiten</button>
+        <button class="btn btn-ghost btn-sm" onclick="cloneNormteil(${id})">⧉ Dublizieren</button>
         <button class="btn btn-red btn-sm" onclick="delNormteil(${id})">🗑</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
@@ -7218,6 +7222,27 @@ async function saveNormteil(id) {
   await renderNormteile();
 }
 
+function exportNormteile() {
+  window.open(API + '/api/standard-parts/export', '_blank');
+}
+
+async function importNormteileFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const parts = data.parts || (Array.isArray(data) ? data : null);
+    if (!parts) { toast('Ungültiges Format — erwartet { parts: [...] }', 'err'); return; }
+    const r = await api('/api/standard-parts/import', 'POST', { parts });
+    toast(`${r.added} importiert, ${r.skipped} bereits vorhanden`, 'ok');
+    await renderNormteile();
+  } catch(e) {
+    toast('Import fehlgeschlagen: ' + (e.message||''), 'err');
+  }
+  input.value = '';
+}
+
 async function checkoutNormteile() {
   const r = await api('/api/checkout/normteile', 'POST', {});
   if (!r.copied.length && !r.message) {
@@ -7254,6 +7279,158 @@ async function checkoutNormteile() {
       <button class="btn btn-primary" onclick="_hideDynModal()">OK</button>
     </div>
   </div>`);
+}
+
+function _screws(norm, prefix, mat, sizes) {
+  return sizes.flatMap(([d, lens]) => lens.map(l => ({
+    g: prefix, designation: `${prefix} ${norm} M${d}×${l}`,
+    standard: 'DIN', std_number: norm, size: `M${d}×${l}`, material: mat
+  })));
+}
+function _nuts(norm, prefix, mat, ds) {
+  return ds.map(d => ({ g: prefix, designation: `${prefix} ${norm} M${d}`,
+    standard: 'DIN', std_number: norm, size: `M${d}`, material: mat }));
+}
+function _washers(norm, prefix, mat, ds) {
+  return ds.map(d => ({ g: prefix, designation: `${prefix} ${norm} M${d}`,
+    standard: 'DIN', std_number: norm, size: `M${d}`, material: mat }));
+}
+
+const _NORMTEIL_BIBLIOTHEK = [
+  // Zylinderschrauben DIN 912
+  ..._screws('DIN 912', 'Zylinderschraube', 'Stahl 8.8', [
+    ['2',   [6, 8, 10, 12, 16, 20]],
+    ['2.5', [6, 8, 10, 12, 16, 20]],
+    ['3',   [6, 8, 10, 12, 16, 20, 25, 30]],
+    ['4',   [6, 8, 10, 12, 16, 20, 25, 30]],
+    ['5',   [8, 10, 12, 16, 20, 25, 30, 40]],
+    ['6',   [10, 12, 16, 20, 25, 30, 40]],
+    ['8',   [12, 16, 20, 25, 30, 40]],
+    ['10',  [16, 20, 25, 30, 40]],
+    ['12',  [20, 25, 30, 40]],
+    ['16',  [25, 30, 40]],
+  ]),
+  // Senkschrauben DIN 7991
+  ..._screws('DIN 7991', 'Senkschraube', 'Stahl 8.8', [
+    ['2',   [6, 8, 10, 12]],
+    ['2.5', [6, 8, 10, 12]],
+    ['3',   [6, 8, 10, 12, 16, 20]],
+    ['4',   [8, 10, 12, 16, 20, 25]],
+    ['5',   [10, 12, 16, 20, 25, 30]],
+    ['6',   [12, 16, 20, 25, 30, 40]],
+    ['8',   [16, 20, 25, 30, 40]],
+    ['10',  [20, 25, 30, 40]],
+    ['12',  [25, 30, 40]],
+    ['16',  [30, 40]],
+  ]),
+  // Sechskantschrauben DIN 933
+  ..._screws('DIN 933', 'Sechskantschraube', 'Stahl 8.8', [
+    ['3',   [10, 12, 16, 20]],
+    ['4',   [10, 12, 16, 20, 25, 30]],
+    ['5',   [10, 12, 16, 20, 25, 30, 40]],
+    ['6',   [12, 16, 20, 25, 30, 40]],
+    ['8',   [16, 20, 25, 30, 40]],
+    ['10',  [20, 25, 30, 40]],
+    ['12',  [25, 30, 40]],
+    ['16',  [30, 40]],
+  ]),
+  // Muttern DIN 934
+  ..._nuts('DIN 934', 'Sechskantmutter', 'Stahl 8', ['2','2.5','3','4','5','6','8','10','12','16']),
+  // Einpressmuttern (für 3D-Druck)
+  ...['2','2.5','3','4','5'].map(d => ({ g:'Einpressmuttern', designation:`Einpressmutter M${d}`,
+    standard:'', std_number:'', size:`M${d}`, material:'Messing' })),
+  // Scheiben DIN 125 + DIN 9021 (groß)
+  ..._washers('DIN 125', 'Scheibe', 'Stahl', ['2','2.5','3','4','5','6','8','10','12','16']),
+  ..._washers('DIN 9021', 'Karosseriescheibe', 'Stahl', ['3','4','5','6','8','10']),
+  // Sicherungsringe Welle DIN 471 / Bohrung DIN 472
+  ...[3,4,5,6,8,10,12,15,16,20].map(d => ({ g:'Sicherungsringe (Welle)', designation:`Sicherungsring DIN 471 Ø${d}`,
+    standard:'DIN', std_number:'471', size:`Ø${d}`, material:'Federstahl' })),
+  ...[8,10,12,15,16,20,25].map(d => ({ g:'Sicherungsringe (Bohrung)', designation:`Sicherungsring DIN 472 Ø${d}`,
+    standard:'DIN', std_number:'472', size:`Ø${d}`, material:'Federstahl' })),
+  // Passstifte DIN 7 (Toleranz m6)
+  ...['3×8','3×10','3×12','4×10','4×12','4×16','5×12','5×16','5×20','6×16','6×20','8×20','8×25','10×25'].map(s => ({
+    g:'Passstifte', designation:`Passstift DIN 7 Ø${s}`,
+    standard:'DIN', std_number:'7', size:`Ø${s}`, material:'Stahl m6' })),
+  // Gewindestifte DIN 913 (Kegelkuppe)
+  ..._screws('DIN 913', 'Gewindestift', 'Stahl 45H', [
+    ['3', [4,6,8,10]], ['4', [4,6,8,10,12]], ['5', [6,8,10,12,16]], ['6', [6,8,10,12,16,20]],
+  ]),
+  // Rillenkugellager
+  ...([['608','8×22×7'],['624','4×13×5'],['625','5×16×5'],['626','6×19×6'],
+       ['628','8×24×8'],['634','4×16×5'],['6000','10×26×8'],['6001','12×28×8'],
+       ['6002','15×32×9'],['6200','10×30×9'],['6201','12×32×10'],['6202','15×35×11']]).map(([n,s]) => ({
+    g:'Rillenkugellager', designation:`Rillenkugellager ${n}`,
+    standard:'ISO', std_number:n, size:s, material:'Stahl' })),
+  // Gewindeeinlagen DIN 8140 (Helicoil)
+  ...[['3',4],['3',6],['4',6],['4',8],['5',8],['5',10],['6',8],['6',10],['6',12]].map(([d,l]) => ({
+    g:'Gewindeeinsätze', designation:`Gewindeeinsatz DIN 8140 M${d}×${l}`,
+    standard:'DIN', std_number:'8140', size:`M${d}×${l}`, material:'Stahl' })),
+];
+
+function openNormteilBibliothek() {
+  const groups = {};
+  _NORMTEIL_BIBLIOTHEK.forEach(p => { if (!groups[p.g]) groups[p.g] = []; groups[p.g].push(p); });
+  let selected = new Set();
+
+  const html = Object.entries(groups).map(([grp, items]) => `
+    <div data-grp="${esc(grp)}" style="margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--t2);padding:3px 0;margin-bottom:2px">
+        <input type="checkbox" class="bib-grp-cb" onchange="document.querySelectorAll('[data-grp=\\'${esc(grp)}\\'] .bib-cb').forEach(c=>c.checked=this.checked);_bibUpdateCount()" style="accent-color:var(--blue)">
+        ${esc(grp)} <span style="font-weight:400;color:var(--t4);font-size:12px">(${items.length})</span>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;padding-left:20px">
+        ${items.map(p => `
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 5px;border-radius:3px" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+            <input type="checkbox" class="bib-cb" data-idx="${_NORMTEIL_BIBLIOTHEK.indexOf(p)}" onchange="_bibUpdateCount()" style="accent-color:var(--blue);flex-shrink:0">
+            <span style="font-family:var(--mono);font-size:12px">${esc(p.size)}</span>
+          </label>`).join('')}
+      </div>
+    </div>`).join('');
+
+  _showDynModal(`<div class="modal" style="max-width:580px">
+    <div class="modal-head">
+      <div class="modal-title">📚 Normteil-Bibliothek</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:60vh;overflow-y:auto">${html}</div>
+    <div class="modal-foot" style="justify-content:space-between">
+      <span id="bib-count" style="font-size:13px;color:var(--t3)">0 ausgewählt</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="importNormteilBibliothek()">Importieren</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+function _bibUpdateCount() {
+  const n = document.querySelectorAll('.bib-cb:checked').length;
+  const el = document.getElementById('bib-count');
+  if (el) el.textContent = n + ' ausgewählt';
+}
+
+async function importNormteilBibliothek() {
+  const checked = [...document.querySelectorAll('.bib-cb:checked')];
+  if (!checked.length) { toast('Nichts ausgewählt', 'err'); return; }
+  const existing = await api('/api/standard-parts');
+  const existingDesig = new Set(existing.map(p => p.designation));
+  let added = 0, skipped = 0;
+  for (const cb of checked) {
+    const p = _NORMTEIL_BIBLIOTHEK[parseInt(cb.dataset.idx)];
+    if (existingDesig.has(p.designation)) { skipped++; continue; }
+    await api('/api/standard-parts', 'POST', { designation: p.designation, standard: p.standard, std_number: p.std_number, size: p.size, material: p.material });
+    added++;
+  }
+  _hideDynModal();
+  await renderNormteile();
+  toast(`${added} Normteile importiert${skipped ? `, ${skipped} bereits vorhanden` : ''}`, 'ok');
+}
+
+async function cloneNormteil(id) {
+  const p = await api(`/api/standard-parts/${id}/clone`, 'POST');
+  await renderNormteile();
+  openNormteilDetail(p.id);
+  openNormteilModal(p.id);
 }
 
 async function delNormteil(id) {
