@@ -1513,9 +1513,13 @@ async function renderSettings() {
         </div>
 
         <div class="sep-label" style="margin-top:24px">Datensicherung</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten (Datenbank + hochgeladene Dateien) als ZIP-Archiv herunter.</div>
-        <div style="display:flex;gap:8px">
-          <a class="btn btn-ghost" href="/api/export" download>&#x1F4E6; Gesamtexport herunterladen</a>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten als ZIP-Archiv herunter.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn btn-ghost" href="/api/export" download>&#x1F4E6; Gesamtexport (Rohdaten)</a>
+          <a class="btn btn-ghost" href="/api/export-named" download title="Dateien werden wie beim Checkout mit korrekten Namen und Ordnerstruktur exportiert">&#x1F4C1; Export mit Klarnamen</a>
+        </div>
+        <div style="font-size:11px;color:var(--t4);margin-top:6px">
+          Klarnamen-Export: Dateien werden nach Projekt/Item/Revision sortiert und mit Original-Dateinamen abgelegt — wie beim Checkout.
         </div>
 
         <div class="sep-label" style="margin-top:24px">Datei-Index</div>

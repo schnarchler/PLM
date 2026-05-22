@@ -2716,6 +2716,63 @@ app.get('/api/file-index', (req, res) => {
   res.json({ datasets, documents });
 });
 
+function sanitizeName(s) {
+  return (s||'').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').slice(0, 80);
+}
+
+app.get('/api/export-named', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const entries = [{ name: 'plm.db', data: Buffer.from(db.export()) }];
+
+  // Datasets: Projekte/{proj_nr} - {proj_name}/{item_nr}_rev{rev}_{original_name}
+  const datasets = all(`
+    SELECT d.filename, d.original_name, d.ds_type,
+      r.rev, i.item_number, i.name as item_name,
+      p.number as proj_nr, p.name as proj_name
+    FROM datasets d
+    JOIN revisions r ON d.revision_id = r.id
+    JOIN items i ON r.item_id = i.id
+    JOIN projects p ON i.project_id = p.id`);
+  for (const d of datasets) {
+    const src = path.join(FILES_DIR, d.filename);
+    if (!fs.existsSync(src)) continue;
+    const ext = path.extname(d.original_name);
+    const projFolder = sanitizeName(`${d.proj_nr}_${d.proj_name}`);
+    const fname = sanitizeName(`${d.item_number}_rev${d.rev}_${d.original_name.slice(0, 60)}`) + (ext && !sanitizeName(d.original_name.slice(0,60)).endsWith(ext.replace('.','')) ? '' : '');
+    try { entries.push({ name: `Projekte/${projFolder}/Dateien/${fname}`, data: fs.readFileSync(src) }); } catch {}
+  }
+
+  // Project documents: Projekte/{proj_nr} - {proj_name}/Dokumente/{original_name}
+  const docs = all(`
+    SELECT d.filename, d.original_name,
+      p.number as proj_nr, p.name as proj_name
+    FROM documents d JOIN projects p ON d.project_id = p.id`);
+  for (const d of docs) {
+    const src = path.join(FILES_DIR, d.filename);
+    if (!fs.existsSync(src)) continue;
+    const projFolder = sanitizeName(`${d.proj_nr}_${d.proj_name}`);
+    const fname = sanitizeName(d.original_name);
+    try { entries.push({ name: `Projekte/${projFolder}/Dokumente/${fname}`, data: fs.readFileSync(src) }); } catch {}
+  }
+
+  // Standard part files: Normteile/{designation}/{original_name}
+  const spFiles = all(`
+    SELECT f.filename, f.original_name, sp.designation
+    FROM standard_part_files f JOIN standard_parts sp ON f.std_part_id = sp.id`);
+  for (const f of spFiles) {
+    const src = path.join(FILES_DIR, f.filename);
+    if (!fs.existsSync(src)) continue;
+    const folder = sanitizeName(f.designation);
+    const fname  = sanitizeName(f.original_name);
+    try { entries.push({ name: `Normteile/${folder}/${fname}`, data: fs.readFileSync(src) }); } catch {}
+  }
+
+  const zip = buildZip(entries);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="plm-export-benannt-${today}.zip"`);
+  res.send(zip);
+});
+
 app.get('/api/export', (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const entries = [{ name: 'plm.db', data: Buffer.from(db.export()) }];
