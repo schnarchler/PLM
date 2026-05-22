@@ -74,10 +74,6 @@ function count(sql, params = []) {
   return (get(sql, params) || {c: 0}).c;
 }
 
-function migrate(sql) {
-  try { db.run(sql); } catch(e) {}
-}
-
 function runGetId(sql, params = []) {
   db.run(sql, params);
   saveDb();
@@ -117,11 +113,11 @@ async function initDb() {
     description TEXT,
     source_url TEXT,
     default_price REAL,
+    classification TEXT DEFAULT NULL,
+    weight_g REAL,
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(item_number)
   )`);
-  migrate('ALTER TABLE items ADD COLUMN source_url TEXT');
-  migrate('ALTER TABLE items ADD COLUMN default_price REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS revisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -169,13 +165,9 @@ async function initDb() {
     filament_price_kg REAL,
     filament_weight_total REAL,
     part_weight REAL,
-    print_duration REAL
+    print_duration REAL,
+    raw_material_id INTEGER REFERENCES raw_materials(id)
   )`);
-  migrate('ALTER TABLE print_settings ADD COLUMN printer_cost_hr REAL');
-  migrate('ALTER TABLE print_settings ADD COLUMN filament_price_kg REAL');
-  migrate('ALTER TABLE print_settings ADD COLUMN filament_weight_total REAL');
-  migrate('ALTER TABLE print_settings ADD COLUMN part_weight REAL');
-  migrate('ALTER TABLE print_settings ADD COLUMN print_duration REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS changelog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,15 +186,12 @@ async function initDb() {
     street TEXT, postal_code TEXT, city TEXT, country TEXT DEFAULT 'Deutschland',
     created_at TEXT DEFAULT (datetime('now'))
   )`);
-  migrate('ALTER TABLE customers ADD COLUMN street TEXT');
-  migrate('ALTER TABLE customers ADD COLUMN postal_code TEXT');
-  migrate('ALTER TABLE customers ADD COLUMN city TEXT');
-  migrate("ALTER TABLE customers ADD COLUMN country TEXT DEFAULT 'Deutschland'");
 
   db.run(`CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     number TEXT UNIQUE NOT NULL,
     customer_id INTEGER,
+    customer_name_free TEXT,
     status TEXT DEFAULT 'DRAFT',
     title TEXT NOT NULL,
     notes TEXT,
@@ -215,10 +204,6 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
-  migrate('ALTER TABLE orders ADD COLUMN tax_rate REAL DEFAULT 19');
-  migrate('ALTER TABLE orders ADD COLUMN discount_pct REAL DEFAULT 0');
-  migrate('ALTER TABLE orders ADD COLUMN payment_terms TEXT');
-  migrate('ALTER TABLE orders ADD COLUMN include_tax INTEGER DEFAULT 0');
 
   db.run(`CREATE TABLE IF NOT EXISTS order_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,25 +214,19 @@ async function initDb() {
     unit TEXT DEFAULT 'pcs',
     unit_price REAL DEFAULT 0,
     discount_pct REAL DEFAULT 0,
-    notes TEXT
+    notes TEXT,
+    position INTEGER DEFAULT 999,
+    raw_material_id INTEGER REFERENCES raw_materials(id),
+    estimated_hours REAL,
+    printer_name TEXT DEFAULT '',
+    estimated_print_hours REAL
   )`);
-  migrate('ALTER TABLE order_items ADD COLUMN discount_pct REAL DEFAULT 0');
-  migrate('ALTER TABLE order_items ADD COLUMN notes TEXT');
-  migrate('ALTER TABLE order_items ADD COLUMN position INTEGER DEFAULT 999');
-  migrate('ALTER TABLE quote_items ADD COLUMN position INTEGER DEFAULT 999');
-  migrate('ALTER TABLE quote_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
-  migrate('ALTER TABLE quote_items ADD COLUMN estimated_hours REAL');
-  migrate("ALTER TABLE quote_items ADD COLUMN printer_name TEXT DEFAULT ''");
-  migrate('ALTER TABLE quote_items ADD COLUMN estimated_print_hours REAL');
-  migrate('ALTER TABLE order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
-  migrate('ALTER TABLE order_items ADD COLUMN estimated_hours REAL');
-  migrate("ALTER TABLE order_items ADD COLUMN printer_name TEXT DEFAULT ''");
-  migrate('ALTER TABLE order_items ADD COLUMN estimated_print_hours REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS quotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     number TEXT UNIQUE NOT NULL,
     customer_id INTEGER,
+    customer_name_free TEXT,
     status TEXT DEFAULT 'DRAFT',
     title TEXT NOT NULL,
     notes TEXT,
@@ -257,12 +236,11 @@ async function initDb() {
     discount_pct REAL DEFAULT 0,
     payment_terms TEXT,
     include_tax INTEGER DEFAULT 0,
+    estimated_hours REAL DEFAULT 0,
+    include_hours INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
-  migrate('ALTER TABLE quotes ADD COLUMN include_tax INTEGER DEFAULT 0');
-  migrate('ALTER TABLE quotes ADD COLUMN estimated_hours REAL DEFAULT 0');
-  migrate('ALTER TABLE quotes ADD COLUMN include_hours INTEGER DEFAULT 0');
 
   db.run(`CREATE TABLE IF NOT EXISTS quote_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -273,7 +251,12 @@ async function initDb() {
     unit TEXT DEFAULT 'pcs',
     unit_price REAL DEFAULT 0,
     discount_pct REAL DEFAULT 0,
-    notes TEXT
+    notes TEXT,
+    position INTEGER DEFAULT 999,
+    raw_material_id INTEGER REFERENCES raw_materials(id),
+    estimated_hours REAL,
+    printer_name TEXT DEFAULT '',
+    estimated_print_hours REAL
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS documents (
@@ -294,8 +277,10 @@ async function initDb() {
     title TEXT NOT NULL,
     order_id INTEGER,
     customer_id INTEGER,
+    customer_name_free TEXT,
     status TEXT DEFAULT 'DRAFT',
     delivery_date TEXT,
+    manufacture_date TEXT,
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
@@ -311,14 +296,9 @@ async function initDb() {
     unit_price REAL,
     print_settings_json TEXT,
     notes TEXT,
-    position INTEGER DEFAULT 999
-  )`);
-  migrate('ALTER TABLE delivery_items ADD COLUMN unit_price REAL');
-  migrate('ALTER TABLE delivery_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
-  migrate('ALTER TABLE orders ADD COLUMN customer_name_free TEXT');
-  migrate('ALTER TABLE quotes ADD COLUMN customer_name_free TEXT');
-  migrate('ALTER TABLE deliveries ADD COLUMN customer_name_free TEXT');
-  migrate('ALTER TABLE deliveries ADD COLUMN manufacture_date TEXT');
+    position INTEGER DEFAULT 999,
+    raw_material_id INTEGER REFERENCES raw_materials(id)
+  )`)
 
   db.run(`CREATE TABLE IF NOT EXISTS counters (
     key TEXT PRIMARY KEY,
@@ -407,12 +387,12 @@ async function initDb() {
     price_per_unit REAL,
     supplier_id INTEGER REFERENCES suppliers(id),
     notes TEXT,
+    item_id INTEGER REFERENCES items(id),
+    color TEXT,
+    material TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
-  )`);
-  migrate('ALTER TABLE inventory_items ADD COLUMN item_id INTEGER REFERENCES items(id)');
-  migrate('ALTER TABLE inventory_items ADD COLUMN color TEXT');
-  migrate('ALTER TABLE inventory_items ADD COLUMN material TEXT');
+  )`)
 
   db.run(`CREATE TABLE IF NOT EXISTS inventory_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -434,20 +414,28 @@ async function initDb() {
     min_qty REAL DEFAULT 0,
     unit TEXT DEFAULT 'g',
     notes TEXT DEFAULT '',
+    lot_number TEXT DEFAULT '',
+    dimensions TEXT DEFAULT '',
+    weight_g REAL,
+    print_temp REAL,
+    bed_temp REAL,
+    nozzle TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS raw_material_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     raw_material_id INTEGER NOT NULL REFERENCES raw_materials(id) ON DELETE CASCADE,
     qty REAL NOT NULL,
     type TEXT NOT NULL,
     notes TEXT DEFAULT '',
+    unit_price REAL,
+    lot_number TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`);
-  migrate('ALTER TABLE print_settings ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
 
-  db.run(`CREATE TABLE IF NOT EXISTS std_part_files (
+  db.run(`CREATE TABLE IF NOT EXISTS standard_part_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     std_part_id INTEGER NOT NULL REFERENCES standard_parts(id) ON DELETE CASCADE,
     filename TEXT NOT NULL,
@@ -480,28 +468,17 @@ async function initDb() {
     notes TEXT DEFAULT '',
     UNIQUE(parent_rev_id, std_part_id)
   )`);
-  migrate('ALTER TABLE raw_materials ADD COLUMN lot_number TEXT DEFAULT \'\'');
-  migrate('ALTER TABLE raw_materials ADD COLUMN dimensions TEXT DEFAULT \'\'');
-  migrate('ALTER TABLE raw_materials ADD COLUMN weight_g REAL');
-  migrate('ALTER TABLE raw_materials ADD COLUMN print_temp REAL');
-  migrate('ALTER TABLE raw_materials ADD COLUMN bed_temp REAL');
-  migrate("ALTER TABLE raw_materials ADD COLUMN nozzle TEXT DEFAULT ''");
-  migrate('ALTER TABLE raw_material_movements ADD COLUMN unit_price REAL');
-  migrate("ALTER TABLE raw_material_movements ADD COLUMN lot_number TEXT DEFAULT ''");
 
   db.run(`CREATE TABLE IF NOT EXISTS time_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER REFERENCES orders(id),
+    item_id INTEGER REFERENCES items(id),
     date TEXT,
     hours REAL NOT NULL,
     description TEXT,
     billable INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
-  migrate('ALTER TABLE time_entries ADD COLUMN billable INTEGER DEFAULT 0');
-  migrate('ALTER TABLE time_entries ADD COLUMN item_id INTEGER REFERENCES items(id)');
-  migrate('ALTER TABLE items ADD COLUMN classification TEXT DEFAULT NULL');
-  migrate('ALTER TABLE items ADD COLUMN weight_g REAL');;
 
   db.run(`CREATE TABLE IF NOT EXISTS applied_migrations (key TEXT PRIMARY KEY)`);
 
@@ -2739,6 +2716,63 @@ app.get('/api/file-index', (req, res) => {
   res.json({ datasets, documents });
 });
 
+function sanitizeName(s) {
+  return (s||'').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').slice(0, 80);
+}
+
+app.get('/api/export-named', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const entries = [{ name: 'plm.db', data: Buffer.from(db.export()) }];
+
+  // Datasets: Projekte/{proj_nr} - {proj_name}/{item_nr}_rev{rev}_{original_name}
+  const datasets = all(`
+    SELECT d.filename, d.original_name, d.ds_type,
+      r.rev, i.item_number, i.name as item_name,
+      p.number as proj_nr, p.name as proj_name
+    FROM datasets d
+    JOIN revisions r ON d.revision_id = r.id
+    JOIN items i ON r.item_id = i.id
+    JOIN projects p ON i.project_id = p.id`);
+  for (const d of datasets) {
+    const src = path.join(FILES_DIR, d.filename);
+    if (!fs.existsSync(src)) continue;
+    const ext = path.extname(d.original_name);
+    const projFolder = sanitizeName(`${d.proj_nr}_${d.proj_name}`);
+    const fname = sanitizeName(`${d.item_number}_rev${d.rev}_${d.original_name.slice(0, 60)}`) + (ext && !sanitizeName(d.original_name.slice(0,60)).endsWith(ext.replace('.','')) ? '' : '');
+    try { entries.push({ name: `Projekte/${projFolder}/Dateien/${fname}`, data: fs.readFileSync(src) }); } catch {}
+  }
+
+  // Project documents: Projekte/{proj_nr} - {proj_name}/Dokumente/{original_name}
+  const docs = all(`
+    SELECT d.filename, d.original_name,
+      p.number as proj_nr, p.name as proj_name
+    FROM documents d JOIN projects p ON d.project_id = p.id`);
+  for (const d of docs) {
+    const src = path.join(FILES_DIR, d.filename);
+    if (!fs.existsSync(src)) continue;
+    const projFolder = sanitizeName(`${d.proj_nr}_${d.proj_name}`);
+    const fname = sanitizeName(d.original_name);
+    try { entries.push({ name: `Projekte/${projFolder}/Dokumente/${fname}`, data: fs.readFileSync(src) }); } catch {}
+  }
+
+  // Standard part files: Normteile/{designation}/{original_name}
+  const spFiles = all(`
+    SELECT f.filename, f.original_name, sp.designation
+    FROM standard_part_files f JOIN standard_parts sp ON f.std_part_id = sp.id`);
+  for (const f of spFiles) {
+    const src = path.join(FILES_DIR, f.filename);
+    if (!fs.existsSync(src)) continue;
+    const folder = sanitizeName(f.designation);
+    const fname  = sanitizeName(f.original_name);
+    try { entries.push({ name: `Normteile/${folder}/${fname}`, data: fs.readFileSync(src) }); } catch {}
+  }
+
+  const zip = buildZip(entries);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="plm-export-benannt-${today}.zip"`);
+  res.send(zip);
+});
+
 app.get('/api/export', (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const entries = [{ name: 'plm.db', data: Buffer.from(db.export()) }];
@@ -2907,37 +2941,37 @@ app.put('/api/standard-parts/:id', (req, res) => {
 
 app.delete('/api/standard-parts/:id', (req, res) => {
   // delete associated files from disk
-  const files = all('SELECT * FROM std_part_files WHERE std_part_id=?', [req.params.id]);
+  const files = all('SELECT * FROM standard_part_files WHERE std_part_id=?', [req.params.id]);
   files.forEach(f => { try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {} });
   run('DELETE FROM standard_parts WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
 
 app.get('/api/standard-parts/:id/files', (req, res) => {
-  res.json(all('SELECT * FROM std_part_files WHERE std_part_id=? ORDER BY uploaded_at DESC', [req.params.id]));
+  res.json(all('SELECT * FROM standard_part_files WHERE std_part_id=? ORDER BY uploaded_at DESC', [req.params.id]));
 });
 
 app.post('/api/standard-parts/:id/files', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
   const dsType = guessType(req.file.originalname);
-  const id = runGetId('INSERT INTO std_part_files (std_part_id,filename,original_name,file_size,ds_type,notes) VALUES (?,?,?,?,?,?)',
+  const id = runGetId('INSERT INTO standard_part_files (std_part_id,filename,original_name,file_size,ds_type,notes) VALUES (?,?,?,?,?,?)',
     [req.params.id, req.file.filename, req.file.originalname, req.file.size, dsType, req.body.notes||'']);
-  res.json(get('SELECT * FROM std_part_files WHERE id=?', [id]));
+  res.json(get('SELECT * FROM standard_part_files WHERE id=?', [id]));
 });
 
-app.get('/api/std-part-files/:id/download', (req, res) => {
-  const f = get('SELECT * FROM std_part_files WHERE id=?', [req.params.id]);
+app.get('/api/standard-part-files/:id/download', (req, res) => {
+  const f = get('SELECT * FROM standard_part_files WHERE id=?', [req.params.id]);
   if (!f) return res.status(404).json({ error: 'Not found' });
   const fp = path.join(FILES_DIR, f.filename);
   if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
   res.download(fp, f.original_name);
 });
 
-app.delete('/api/std-part-files/:id', (req, res) => {
-  const f = get('SELECT * FROM std_part_files WHERE id=?', [req.params.id]);
+app.delete('/api/standard-part-files/:id', (req, res) => {
+  const f = get('SELECT * FROM standard_part_files WHERE id=?', [req.params.id]);
   if (!f) return res.status(404).json({ error: 'Not found' });
   try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {}
-  run('DELETE FROM std_part_files WHERE id=?', [req.params.id]);
+  run('DELETE FROM standard_part_files WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
 
@@ -3049,7 +3083,7 @@ app.post('/api/checkout/normteile', (req, res) => {
   } catch(e) { return res.status(500).json({ error: 'Ordner konnte nicht erstellt werden: ' + e.message }); }
 
   const files = all(`SELECT spf.*, sp.designation
-    FROM std_part_files spf JOIN standard_parts sp ON spf.std_part_id=sp.id
+    FROM standard_part_files spf JOIN standard_parts sp ON spf.std_part_id=sp.id
     ORDER BY sp.standard, sp.std_number, spf.original_name`);
 
   if (!files.length) return res.json({ copied: [], dir: normteileDir, message: 'Keine Dateien vorhanden' });

@@ -32,7 +32,7 @@ Dokument:             0028-doc-001
 
 Aufträge:             AUF-2026-0001
 Angebote:             ANG-2026-0001
-Lieferscheine:        LS-2026-0001
+Produktion:           LS-2026-0001
 Kunden:               KD-0001
 ```
 
@@ -69,200 +69,139 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 - Beliebige Hierarchietiefe (ASM in ASM)
 - Revisionsverwaltung rev1, rev2, … (alle alten Revisionen bleiben erhalten)
 - Freigabe-Workflow: DFT → REV → REL → ECO → neue Rev
-- Stückliste (BOM) pro Revision mit Mengen und Einheiten
+- Stückliste (BOM) pro Revision mit Mengen und Einheiten – inkl. Normteile
 - Dateien (Datasets) pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
-- Konstruktions-/Entwicklungszeiten pro Bauteil und Revision erfassbar
+- Gewicht pro Part (direkt inline editierbar)
+- Konstruktions-/Entwicklungszeiten pro Bauteil erfassbar
 - **Klassifizierung** – farbige Chips (z.B. Normteil, Kaufteil, Eigenentwicklung), konfigurierbar unter Einstellungen → PLM
 - **Where-Used** – zeigt in welchen Baugruppen ein Bauteil verbaut ist
-- **Kalkulation** – Gesamtumsatz und Gewinn pro Bauteil aus verknüpften Aufträgen
-- **BOM-Import aus STEP** – Stückliste automatisch aus Solid Edge STEP-Export einlesen (Einzel-Teile werden per Namensabgleich zugeordnet)
+- **BOM-Import aus STEP** – Stückliste automatisch aus Solid Edge STEP-Export einlesen
+- **Normteilverwaltung** – eigene Datenbank für Normteile (DIN/ISO/EN) mit Dateien, in BOM einsetzbar, Auschecken in festen `normteile/`-Ordner
 - Checkout/Check-in Funktion für CAD-Dateien (siehe unten)
 - Vollständige Änderungshistorie / Audit-Trail
 
 ### ERP
 - Kundenverwaltung (KD-0001)
-- Kunde als Freitext eingeben möglich (auch ohne hinterlegten Kunden)
-- Angebote mit PDF-Export (ANG-2026-0001)
-- Aufträge mit Rechnungs-PDF (AUF-2026-0001)
+- Kunde als Freitext eingeben möglich
+- Angebote mit PDF-Export und automatischer Kostenkalkulation
+- Aufträge mit Rechnungs-PDF
 - Angebot → Auftrag umwandeln
 - PLM-Items in Positionen verknüpfen
-- Unterteile (BOM) in Rechnung/Angebot aufklappen
-- Firmendaten, Bankverbindung und Texte unter Einstellungen
-- Lagerbestandsprüfung beim Abbuchen – blockiert wenn Bestand zu klein
-- Geplante Menge (aus offenen Aufträgen) im Lager sichtbar
+- Lagerbestandsprüfung beim Abbuchen
 
-### Lieferscheine / Produktionsblätter
+### Angebots-Kalkulation
+Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet werden:
+- **Material** – Bauteilgewicht × Rohmaterialpreis/Gewicht (Lot-spezifisch)
+- **Arbeitszeit** – geschätzte Stunden × Stundenansatz
+- **Druckzeit** – Druckstunden × Drucker CHF/h
+- **Aus BOM** – Button „📦 Aus BOM kalkullieren" expandiert eine Baugruppe in Einzelpositionen
+
+### Rohmaterial
+- Eigene Verwaltung mit Materialtyp, Farbe, Abmessungen, Gewicht, Druckparametern (Temp/Bett)
+- Lot-Tracking: jede Einbuchung mit Lotnummer und Einkaufspreis
+- Remaining-Qty pro Lot, aufgebrauchte Lots durchgestrichen/ausgeblendet
+- Bei Auswahl in Produktion: Drucktemperatur und Betttemperatur werden automatisch übernommen
+
+### Normteile
+- Katalog für genormte Bauteile (DIN, ISO, EN, …)
+- Auto-Bezeichnung aus Norm + Nummer + Größe + Material
+- Dateien (STEP, PDF, …) pro Normteil hinterlegbar
+- Als BOM-Positionen in Baugruppen einsetzbar (Tab **⚙ Normteil** im BOM-Modal)
+- **⬇ Auschecken** – alle Normteil-Dateien in festen `normteile/`-Ordner kopieren
+
+### Produktion (ehem. Lieferscheine)
 - Eigenständig oder mit Auftrag verknüpft
-- Druckparameter direkt aus 3MF-Datei auslesen (PrusaSlicer ab 2.x inkl. 2.9+, SuperSlicer, OrcaSlicer, BambuStudio)
-- Preis pro Position (wird automatisch aus PLM-Listenpreis vorausgefüllt)
+- Rohmaterial pro Position zuweisbar (übernimmt Druckparameter)
+- Druckparameter direkt aus 3MF-Datei auslesen (PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio)
 - Druckansicht als Produktionsblatt mit Unterschriftsfeldern
-- Belegdruck auf **Pipsta Classic Thermodrucker** (siehe unten)
+- Belegdruck auf **Pipsta Classic Thermodrucker**
 
 ### Dashboard & Suche
-- Dashboard mit offenen Aufträgen, Angeboten, fälligen Lieferscheinen und ablaufenden Angeboten
-- Globale Suche (Ctrl+K) über Projekte, PLM-Items, Aufträge, Angebote, Lieferscheine, Kunden
+- Dashboard mit offenen Aufträgen, Angeboten, fälligen Produktionsaufträgen, ablaufenden Angeboten
+- Globale Suche (`Ctrl+K`) über Projekte, PLM-Items, Aufträge, Angebote, Produktion, Kunden
 - Suche nach Klassifizierung über Schnellfilter-Chips
 
 ### Navigation
 - **Ctrl+K** – Suche öffnen
-- **Escape** – modales Fenster oder Detail schliessen
+- **Escape** – Modal / Detail schliessen
 - **Browser-Zurück-Button** – navigiert innerhalb der App
 - **Zuletzt geöffnet** – letzte Bauteile in der Seitenleiste
 
 ### Einstellungen / Admin
 - **Firma** – Name, Adresse, Bankverbindung, Logo
-- **PLM** – Klassifizierungsliste (Name + Farbe, per Drag&Drop sortierbar)
-- **Daten** – Schriftgrösse (serverseitig gespeichert), Checkout-Ordner, CAD-Programm-Pfad, Backup/Export
-- **Admin** – Nummerierungsstruktur (Präfixe, Stellen, Revisionsformat), Datensätze löschen
-
-### Datei-Index
-- Übersicht aller gespeicherten Dateien unter **Navigation → Datei-Index**
-- Zeigt angezeigten Namen (PLM) ↔ tatsächlichen Dateinamen auf der Festplatte
-- Als CSV exportierbar (Notfall-Referenz)
-- Speicherort der Dateien: `data/files/`
+- **Kalkulation** – Stundenansatz, Maschinenkosten, Standardwerte
+- **3D-Druck** – Drucker, Düsen, Materialprofile
+- **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop)
+- **Daten** – Schriftgrösse, Checkout-Ordner, CAD-Programm, Backup
+- **Admin** – Nummerierungsstruktur, Datensätze löschen
 
 ---
 
 ## Checkout / Check-in (CAD-Workflow mit Solid Edge)
 
-Der Checkout-Mechanismus kopiert CAD-Dateien aus dem PLM in einen lokalen Arbeitsordner, damit diese im CAD-Programm bearbeitet werden können. Nach der Bearbeitung werden die Dateien wieder in PLM importiert.
-
 ### Solid Edge: Standardpfad setzen
-
-Damit neue Solid Edge-Dateien automatisch im Checkout-Ordner landen:
 
 **Tools → Options → File Locations**
 
-| Dateityp | Pfad setzen auf |
-|----------|----------------|
-| Parts (.par / .psm) | Checkout-Ordner (z.B. `/home/user/PLM-Checkout`) |
+| Dateityp | Pfad |
+|----------|------|
+| Parts (.par / .psm) | Checkout-Ordner |
 | Assemblies (.asm) | gleicher Pfad |
 | Drafts (.dft) | gleicher Pfad |
 
-Den Checkout-Pfad festlegen unter: **Einstellungen → System → Checkout-Ordner**
+Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis**
 
-### Checkout-Workflow
+### Workflow
 
 ```
-1. Bauteil im PLM auswählen → "Auschecken"
-   → Dateien werden in <checkout-pfad>/<item-nummer>/ kopiert
-   → Freigegebene Dateien (REL) sind schreibgeschützt
+1. Bauteil → "⬇ Auschecken"
+   → Dateien in <checkout-pfad>/<item-nummer>/ (kein Zeitstempel → Pfad bleibt konstant)
 
-2. Solid Edge öffnet Dateien aus dem Checkout-Ordner
-   → Verlinkungen in Baugruppen bleiben erhalten, da alle Teile
-     im gleichen Ordner liegen und der Pfad bei jedem Checkout
-     gleich bleibt (<item-nummer> ohne Zeitstempel)
+2. In Solid Edge bearbeiten
 
-3. Nach der Bearbeitung → PLM → "Einchecken"
-   → Checkout-Ordner wird gelöscht
-   → Vorgang wird im Changelog festgehalten
+3. → "⬆ Einchecken" → Ordner wird gelöscht, Changelog-Eintrag
 
-4. Neue Dateien werden automatisch erkannt
-   → Beim Öffnen der Checkout-Übersicht erkennt PLM neue Dateien
-     im Ordner, die noch nicht im System sind
+4. Neue Dateien → PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht
 ```
 
-### Neue Dateien aus Solid Edge importieren
+### Normteile auschecken
 
-Wenn beim Bearbeiten in Solid Edge neue Dateien entstehen (z.B. neue Parts einer Baugruppe), erkennt PLM diese automatisch beim nächsten Öffnen der Checkout-Übersicht:
-
-**Datei im Checkout-Unterordner eines Bauteils** (z.B. `checkout/PRT-001/neues-teil.par`):
-→ Button "Zu Bauteil hinzufügen" → wird in die neueste offene Revision importiert
-
-**Datei direkt im Checkout-Hauptordner** (z.B. `checkout/neues-teil.par`):
-→ Button "Als neues Bauteil erfassen" → Projekt, Typ und Name angeben → neues Bauteil wird erstellt
+Navigation → Normteile → **⬇ Auschecken** — kopiert alle Normteil-STEP-Dateien in `<checkout-pfad>/normteile/`. Ordnername ist immer gleich → einmalig in Solid Edge als Suchpfad konfigurieren.
 
 ### Varianten (z.B. M3, M4, M5)
 
-Jede Variante wird als **separates Bauteil** mit eigenem Suffix erfasst:
-
-```
-BRACKET-001-M3    (eigene Revisionen, eigene Dateien)
-BRACKET-001-M4
-BRACKET-001-M5
-```
-
-Dies ist der sauberste Ansatz, da jede Variante eine eigene CAD-Datei hat und unabhängig freigegeben werden kann.
-
-### Baugruppen-Checkout (rekursiv)
-
-Beim Auschecken einer Baugruppe werden **alle untergeordneten Parts rekursiv** in denselben Ordner kopiert. Solid Edge findet die verlinkten Dateien über seinen Fallback-Suchmechanismus, da alle Dateien im gleichen Verzeichnis liegen.
-
-> **Hinweis:** Solid Edge verwendet standardmässig absolute Pfade. Da der Checkout-Ordner immer denselben Namen hat (keine Zeitstempel), bleibt der Pfad bei jedem Checkout identisch — Verknüpfungen müssen nicht neu gesetzt werden.
+Separate Parts mit eigenem Suffix: `Halterung M3`, `Halterung M4` usw. Jede Variante hat eigene Revisionen und Dateien.
 
 ---
 
-## Pipsta Classic – Einrichtung (einmalig)
+## Pipsta Classic – Einrichtung (Windows, einmalig)
 
-### Voraussetzungen
-- Pipsta Classic via USB am PC angeschlossen
-- Python 3.x installiert (python.org – **"Add to PATH"** beim Setup ankreuzen)
-- Stromversorgung: Pipsta benötigt ausreichend Strom – grüne LED muss leuchten
-
-### 1. Python-Pakete installieren
-
-CMD öffnen und eingeben:
 ```
 pip install pyusb
 ```
 
-### 2. WinUSB-Treiber mit Zadig installieren
-
-1. **Zadig** herunterladen: [zadig.akeo.ie](https://zadig.akeo.ie)
-2. Pipsta einschalten und per USB anschliessen
-3. Zadig als **Administrator** starten
-4. Menü: `Options → List All Devices` aktivieren
-5. In der Dropdown-Liste **Pipsta** (oder `STM32` / `Unknown Device`) auswählen
-6. Treiber rechts auf **WinUSB** stellen
-7. **Replace Driver** klicken und warten bis „Driver installed successfully"
-
-> Dieser Schritt muss nur einmal pro PC durchgeführt werden.  
-> Nach einem Windows-Update ggf. wiederholen.
-
-### 3. Server neu starten – fertig
-
-### Belegdruck
-
-In jedem Lieferschein hat jede Position zwei **🖶-Buttons**:
-
-| Button | Inhalt |
-|--------|--------|
-| 🖶 | **Kurzbeleg** – Name, Nummer, Menge, Preis, Kunde |
-| 🖶≡ | **Vollbeleg** – zusätzlich alle Druckparameter |
-
-Bei mehreren Positionen erscheinen oben zwei Sammelbuttons:
-- **🖶 Alle kurz** – alle Positionen auf einem Bon ohne Parameter
-- **🖶 Alle mit Parametern** – alle Positionen mit Druckparametern + Gesamtpreis
-
-**Bon-Einstellungen** (unter Einstellungen → Firma / Briefkopf bzw. Thermodrucker):
-- **Firmenname** → erscheint als Titel auf dem Bon
-- **Fusszeile Kassabon** → Text ganz unten auf dem Bon
-
-### Fehlersuche Drucker
+Zadig-Treiber installieren: [zadig.akeo.ie](https://zadig.akeo.ie) → Pipsta → WinUSB
 
 | Fehlermeldung | Lösung |
 |---|---|
-| LED blinkt rot/grün | Stromversorgung prüfen – Netzteil verwenden, nicht nur USB |
-| `Kein WinUSB-Gerät gefunden` | USB-Kabel prüfen, Zadig-Treiber nochmals installieren |
-| `pyusb nicht installiert` | `pip install pyusb` in CMD ausführen |
-| Zeichen `@B` am Anfang | Drucker aus- und einschalten (Puffer leeren) |
+| LED blinkt rot/grün | Netzteil verwenden |
+| `Kein WinUSB-Gerät gefunden` | Zadig-Treiber neu installieren |
+| `pyusb nicht installiert` | `pip install pyusb` |
+| Zeichen `@B` am Anfang | Drucker aus- und einschalten |
 
 ---
 
-## 3MF-Druckparameter auslesen
+## 3MF-Druckparameter
 
-Beim Hinzufügen einer Position im Lieferschein kann eine `.3mf`-Datei hochgeladen werden. Das System liest die gespeicherten Slicereinstellungen automatisch aus.
+Beim Hinzufügen einer Produktionsposition kann eine `.3mf`-Datei hochgeladen werden.
 
-**Unterstützte Slicer:**
-| Slicer | Format | Unterstützt |
-|--------|--------|-------------|
-| PrusaSlicer 2.x (inkl. 2.9+) | INI als Kommentare | ✓ |
-| SuperSlicer | INI | ✓ |
-| OrcaSlicer | JSON | ✓ |
-| BambuStudio | JSON | ✓ |
-
-Die wichtigsten Parameter (Schichthöhe, Infill, Temperatur, Support, …) werden in gruppierten Kacheln angezeigt.
+| Slicer | Unterstützt |
+|--------|-------------|
+| PrusaSlicer 2.x (inkl. 2.9+) | ✓ |
+| SuperSlicer | ✓ |
+| OrcaSlicer | ✓ |
+| BambuStudio | ✓ |
 
 ---
 
@@ -280,9 +219,9 @@ PLM/
 ├── frontend/
 │   └── public/
 │       ├── index.html     ← HTML-Grundstruktur
-│       ├── app.js         ← Single-Page-App (Frontend-Logik)
+│       ├── app.js         ← Single-Page-App
 │       └── styles.css     ← Design-System (Dark Theme)
-├── ANLEITUNG.md           ← Ausführliche Bedienungsanleitung (Deutsch)
+├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md
 ```
@@ -291,10 +230,6 @@ PLM/
 
 ## Datensicherung
 
-Über **Einstellungen → Export** wird ein ZIP erstellt mit:
-- `plm.db` – komplette Datenbank
-- `files/` – alle hochgeladenen Dateien
+**Einstellungen → Daten → Gesamtexport herunterladen** – ZIP mit `plm.db` + `files/`.
 
-Zum Wiederherstellen: ZIP entpacken, Inhalt in den `data/`-Ordner legen.
-
-**Notfall-Referenz:** Unter **Datei-Index** (Navigation) ist eine vollständige Zuordnung von angezeigtem Namen zu tatsächlichem Dateinamen auf der Festplatte abrufbar und als CSV exportierbar.
+Wiederherstellen: ZIP entpacken → Inhalt in `data/`-Ordner → Server neu starten.
