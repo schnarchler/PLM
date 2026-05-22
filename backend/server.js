@@ -1866,9 +1866,28 @@ app.get('/api/dashboard', (req, res) => {
     WHERE q.status IN ('DRAFT','SENT') AND q.valid_until IS NOT NULL AND q.valid_until <= ?
     GROUP BY q.id ORDER BY q.valid_until ASC`, [in14]);
 
+  // Raw material stats
+  const rawMats = all('SELECT * FROM raw_materials');
+  const rawMatCount = rawMats.length;
+  const rawMatActive = rawMats.filter(m => m.stock_qty > 0).length;
+  // Total purchase value: for each material, sum (latest price per lot × remaining qty) for active lots
+  let rawMatValue = 0;
+  for (const m of rawMats) {
+    const lots = all(`SELECT lot_number,
+      SUM(CASE WHEN type='in' THEN qty ELSE -qty END) as remaining_qty,
+      MAX(CASE WHEN type='in' THEN unit_price ELSE NULL END) as unit_price
+      FROM raw_material_movements WHERE raw_material_id=? AND lot_number IS NOT NULL AND lot_number!=''
+      GROUP BY lot_number`, [m.id]);
+    for (const l of lots) {
+      const rem = Math.max(0, l.remaining_qty || 0);
+      if (rem > 0 && l.unit_price) rawMatValue += rem * l.unit_price;
+    }
+  }
+
   res.json({ openOrders, openQuotes, inReview, recentDeliveries, inProduction,
     revenueMonth: revMonth?.total || 0, revenueTotal: revTotal?.total || 0,
-    dueSoon, quotesExpiring });
+    dueSoon, quotesExpiring,
+    rawMatCount, rawMatActive, rawMatValue });
 });
 
 // ==============================================================
