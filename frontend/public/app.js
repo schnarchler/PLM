@@ -853,6 +853,90 @@ function switchSTLViewer(revId, url) {
   initSTLViewer(canvasId, url);
 }
 
+function renderBomList(rev, item, locked) {
+  const plmRows = (rev.bom||[]).map(b => ({ ...b, _std: false })).sort((a,b) => (a.position||999)-(b.position||999));
+  const stdRows = (rev.bom_std||[]).map(b => ({ ...b, _std: true }));
+  if (!plmRows.length && !stdRows.length)
+    return '<div style="padding:12px;color:var(--t3);font-size:13px;text-align:center">Noch keine Positionen</div>';
+
+  const plmHtml = plmRows.map((b, idx) => `
+    <div class="bom-row${locked ? '' : ' bom-draggable'}" data-bom-id="${b.id}" data-rev-id="${rev.id}"
+      ${locked ? '' : 'draggable="true" ondragstart="_bomDragStart(event)" ondragover="_bomDragOver(event)" ondrop="_bomDrop(event,'+rev.id+')" ondragend="_bomDragEnd()"'}>
+      ${locked ? '' : '<span style="color:var(--t4);cursor:grab;padding:0 4px;font-size:13px;flex-shrink:0">⠿</span>'}
+      <span style="color:var(--t4);font-size:12px;width:20px;text-align:right;flex-shrink:0">${idx+1}</span>
+      <span>${_itemChip(b.item_type,16)}</span>
+      <span class="bom-num">${esc(b.item_number)}</span>
+      <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</span>
+      ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0;font-size:11px">rev${b.child_active_rev.rev}</span>` : ''}
+      ${locked
+        ? `<span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>`
+        : `<span class="bom-qty" style="display:flex;align-items:center;gap:4px">
+            <input type="number" value="${Math.round(b.quantity)}" min="1" step="1"
+              style="width:52px;font-size:13px;font-family:var(--mono);text-align:right;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 4px;color:var(--t1)"
+              onkeydown="if(event.key==='.'||event.key===','||event.key==='-')event.preventDefault()"
+              onchange="saveBomQty(${b.id},'${rev.id}',this.value,'${b.unit||'Stk'}',${item.id})" onclick="event.stopPropagation()">
+            <span style="font-size:13px;color:var(--t3)">${b.unit||'Stk'}</span>
+           </span>`}
+      ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delBom(${b.id},${item.id},${rev.id})">✕</button>`}
+    </div>`).join('');
+
+  const stdHtml = stdRows.length ? `
+    <div style="padding:5px 10px 3px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t4);border-top:1px solid var(--line)">Normteile</div>
+    ${stdRows.map(b => `
+    <div class="bom-row">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0;${locked?'':'margin-left:26px'}">N</span>
+      <span class="bom-num" style="color:var(--t2)">${esc(b.designation)}</span>
+      <span style="flex:1;font-size:13px;color:var(--t3)">${b.material ? esc(b.material) : ''}</span>
+      <span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>
+      ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBomStd(${b.id},${item.id},${rev.id})">✕</button>`}
+    </div>`).join('')}` : '';
+
+  return plmHtml + stdHtml;
+}
+
+async function saveBomQty(bomId, revId, qty, unit, itemId) {
+  await api(`/api/bom/${bomId}/quantity`, 'PUT', { quantity: Math.max(1, Math.round(parseFloat(qty)||1)), unit });
+}
+
+let _bomDragSrc = null;
+function _bomDragStart(e) {
+  _bomDragSrc = e.currentTarget;
+  e.currentTarget.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function _bomDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const row = e.currentTarget;
+  document.querySelectorAll('.bom-draggable').forEach(r => r.style.outline = '');
+  if (row !== _bomDragSrc) row.style.outline = '2px solid var(--blue)';
+}
+function _bomDragEnd() {
+  document.querySelectorAll('.bom-draggable').forEach(r => { r.style.opacity=''; r.style.outline=''; });
+}
+async function _bomDrop(e, revId) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  if (!_bomDragSrc || _bomDragSrc === target) return;
+  const list = target.closest('#bom-list-' + revId);
+  if (!list) return;
+  const rows = [...list.querySelectorAll('.bom-draggable')];
+  const srcIdx = rows.indexOf(_bomDragSrc);
+  const tgtIdx = rows.indexOf(target);
+  if (srcIdx < 0 || tgtIdx < 0) return;
+  // Reorder DOM
+  if (srcIdx < tgtIdx) target.after(_bomDragSrc);
+  else target.before(_bomDragSrc);
+  // Update position numbers
+  [...list.querySelectorAll('.bom-draggable')].forEach((r, i) => {
+    const numEl = r.querySelector('span[style*="width:20px"]');
+    if (numEl) numEl.textContent = i + 1;
+  });
+  // Save to backend
+  const order = [...list.querySelectorAll('.bom-draggable')].map(r => parseInt(r.dataset.bomId));
+  await api(`/api/revisions/${revId}/bom-reorder`, 'PUT', { order });
+}
+
 function renderRevDetail(rev, item) {
   const isASM = item.item_type === 'asm';
   const isDOC = item.item_type === 'doc';
@@ -882,31 +966,8 @@ function renderRevDetail(rev, item) {
     ${isASM ? `
     <!-- BOM -->
     <div class="sep-label">Stückliste (BOM)</div>
-    <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
-      ${(() => {
-        const plmRows = (rev.bom||[]).map(b => ({ ...b, _std: false, _pos: b.position||999 }));
-        const stdRows = (rev.bom_std||[]).map(b => ({ ...b, _std: true, _pos: b.position||999 }));
-        const all = [...plmRows, ...stdRows].sort((a,b) => a._pos - b._pos);
-        if (!all.length) return '<div style="padding:12px;color:var(--t3);font-size:13px;text-align:center">Noch keine Positionen</div>';
-        return all.map(b => b._std ? `
-          <div class="bom-row">
-            <span style="color:var(--t3);font-size:13px;width:24px">${b._pos||'—'}</span>
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0">N</span>
-            <span class="bom-num" style="color:var(--t2)">${esc(b.designation)}</span>
-            <span style="flex:1;font-size:13px;color:var(--t3)">${b.material ? esc(b.material) : ''}</span>
-            <span class="bom-qty">${b.quantity} ${b.unit}</span>
-            ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBomStd(${b.id},${item.id},${rev.id})">✕</button>`}
-          </div>` : `
-          <div class="bom-row">
-            <span style="color:var(--t3);font-size:13px;width:24px">${b._pos||'—'}</span>
-            <span>${_itemChip(b.item_type,16)}</span>
-            <span class="bom-num">${b.item_number}</span>
-            <span style="flex:1;font-size:13px">${esc(b.name)}</span>
-            ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">rev${b.child_active_rev.rev}</span>` : ''}
-            <span class="bom-qty">${b.quantity} ${b.unit}</span>
-            ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBom(${b.id},${item.id},${rev.id})">✕</button>`}
-          </div>`).join('');
-      })()}
+    <div id="bom-list-${rev.id}" style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
+      ${renderBomList(rev, item, locked)}
     </div>
     ${locked ? '' : `
       <div style="display:flex;gap:6px;flex-wrap:wrap">
