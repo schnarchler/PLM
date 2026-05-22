@@ -924,6 +924,7 @@ app.get('/api/items/:id', (req, res) => {
   });
   item.changelog = all("SELECT * FROM changelog WHERE entity_type='item' AND entity_id=? ORDER BY created_at DESC", [item.id]);
   item.children = all('SELECT * FROM items WHERE parent_id=?', [item.id]);
+  item.effective_weight_g = getEffectiveWeight(item.id);
   res.json(item);
 });
 
