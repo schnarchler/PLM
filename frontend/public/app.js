@@ -3027,9 +3027,10 @@ async function saveItem() {
   const projectId = V('im-project-id');
   const parentId = V('im-parent-id');
   const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null, source_url: V('im-url')||null, default_price: V('im-price') ? parseFloat(V('im-price')) : null };
-  await api(`/api/projects/${projectId}/items`,'POST',body);
+  const newItem = await api(`/api/projects/${projectId}/items`,'POST',body);
   toast('Item angelegt','ok'); closeModal('itemModal');
-  openProject(projectId); loadStats();
+  await openProject(projectId); loadStats();
+  if (newItem?.id) openItemDetail(newItem.id);
 }
 
 async function deleteItem(id) {
@@ -3049,13 +3050,47 @@ const statusHints = {
   OBS: 'Revision als veraltet markieren.'
 };
 
-function openStatusModal(revId, targetStatus) {
+async function openStatusModal(revId, targetStatus) {
+  // Check completeness before REL
+  if (targetStatus === 'REL' && state.item) {
+    const warnings = [];
+    if (state.item.default_price == null) warnings.push('Kein Verkaufspreis (VP) hinterlegt');
+    if (state.item.weight_g == null)      warnings.push('Kein Gewicht hinterlegt');
+    const rev = state.item.revisions?.find(r => r.id === revId);
+    if (!rev?.datasets?.length)           warnings.push('Keine Dateien (Datasets) hochgeladen');
+    if (warnings.length) {
+      const proceed = await _showReleaseWarning(warnings);
+      if (!proceed) return;
+    }
+  }
   set('sm-rev-id', revId); set('sm-target-status', targetStatus);
   set('sm-desc',''); set('sm-eco','');
   document.getElementById('sm-title').textContent = `Status → ${targetStatus}`;
   document.getElementById('sm-hint').textContent = statusHints[targetStatus]||'';
   document.getElementById('sm-eco-row').style.display = targetStatus==='ECO' ? 'block':'none';
   openModal('statusModal');
+}
+
+function _showReleaseWarning(warnings) {
+  return new Promise(resolve => {
+    _showDynModal(`<div class="modal" style="max-width:420px">
+      <div class="modal-head"><div class="modal-title" style="color:var(--amber)">⚠ Freigabe-Warnung</div></div>
+      <div class="modal-body">
+        <div style="font-size:13px;color:var(--t2);margin-bottom:12px">Folgende Angaben fehlen:</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+          ${warnings.map(w => `<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--amber)">
+            <span>⚠</span><span>${esc(w)}</span>
+          </div>`).join('')}
+        </div>
+        <div style="font-size:13px;color:var(--t3)">Trotzdem freigeben?</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="_hideDynModal();window._releaseResolve(false)">Abbrechen</button>
+        <button class="btn btn-amber" onclick="_hideDynModal();window._releaseResolve(true)">Trotzdem freigeben</button>
+      </div>
+    </div>`);
+    window._releaseResolve = resolve;
+  });
 }
 
 async function doStatusChange() {
