@@ -5756,8 +5756,12 @@ async function showCheckoutList() {
                 Neue Datei auf oberster Ebene: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span>
                 <span style="font-size:13px;color:var(--t4);margin-left:6px">[${f.ds_type}]</span>
               </div>
-              <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
-                onclick="importNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ Als neues Bauteil erfassen</button>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
+                  onclick="importNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ Als neues Bauteil erfassen (mit Datei)</button>
+                <button class="btn btn-sm btn-ghost"
+                  onclick="createNewItemFromCheckout()">+ Neues Bauteil anlegen</button>
+              </div>
             </div>`).join('')}
         </div>
       </div>` : ''}
@@ -5862,6 +5866,56 @@ async function _doImportNewItem(f) {
     showCheckoutList();
     if (state.project) { const p = await api(`/api/projects/${state.project.id}`); openProjectDetail(p); }
   } catch(e) { toast('Fehler: ' + (e.message||''), 'err'); }
+}
+
+async function createNewItemFromCheckout() {
+  const projects = await api('/api/projects').catch(() => []);
+  _showDynModal(`<div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <div class="modal-title">Neues Bauteil anlegen</div>
+      <button class="btn btn-icon btn-ghost" onclick="showCheckoutList()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div class="fg"><label class="fl">Projekt *</label>
+        <select id="cnb-project" class="fs">
+          ${projects.map(p => `<option value="${p.id}">${esc(p.number)} – ${esc(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Typ *</label>
+        <select id="cnb-type" class="fs">
+          <option value="prt">🔩 Part (prt)</option>
+          <option value="asm">📦 Baugruppe (asm)</option>
+          <option value="doc">📄 Dokument (doc)</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Name *</label>
+        <input id="cnb-name" class="fi" placeholder="z.B. Halterung M4">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="showCheckoutList()">Zurück</button>
+      <button class="btn btn-primary" onclick="_doCreateNewItemFromCheckout()">Bauteil anlegen</button>
+    </div>
+  </div>`);
+}
+
+async function _doCreateNewItemFromCheckout() {
+  const project_id = document.getElementById('cnb-project')?.value;
+  const item_type  = document.getElementById('cnb-type')?.value;
+  const name       = document.getElementById('cnb-name')?.value?.trim();
+  if (!project_id || !item_type || !name) { toast('Alle Felder ausfüllen', 'err'); return; }
+  const body = { name, description: '', item_type, parent_id: null,
+    source_url: null, default_price: null };
+  const item = await api(`/api/projects/${project_id}/items`, 'POST', body).catch(e => { toast(e.message, 'err'); });
+  if (!item) return;
+  toast(`${item.item_number} – ${esc(name)} angelegt`, 'ok');
+  _hideDynModal();
+  showCheckoutList();
+  // Navigate to the new item if the project is open
+  if (state.project?.id == project_id) {
+    const p = await api(`/api/projects/${project_id}`);
+    openProjectDetail(p);
+  }
 }
 
 // ── LAGER / BESTAND ───────────────────────────────────────────
