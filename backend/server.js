@@ -235,6 +235,14 @@ async function initDb() {
   migrate('ALTER TABLE order_items ADD COLUMN notes TEXT');
   migrate('ALTER TABLE order_items ADD COLUMN position INTEGER DEFAULT 999');
   migrate('ALTER TABLE quote_items ADD COLUMN position INTEGER DEFAULT 999');
+  migrate('ALTER TABLE quote_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
+  migrate('ALTER TABLE quote_items ADD COLUMN estimated_hours REAL');
+  migrate("ALTER TABLE quote_items ADD COLUMN printer_name TEXT DEFAULT ''");
+  migrate('ALTER TABLE quote_items ADD COLUMN estimated_print_hours REAL');
+  migrate('ALTER TABLE order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
+  migrate('ALTER TABLE order_items ADD COLUMN estimated_hours REAL');
+  migrate("ALTER TABLE order_items ADD COLUMN printer_name TEXT DEFAULT ''");
+  migrate('ALTER TABLE order_items ADD COLUMN estimated_print_hours REAL');
 
   db.run(`CREATE TABLE IF NOT EXISTS quotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1597,16 +1605,16 @@ app.delete('/api/orders/:id', (req, res) => {
 });
 
 app.post('/api/orders/:id/items', (req, res) => {
-  const { item_id, description, quantity, unit, unit_price, discount_pct, notes } = req.body;
-  const id = runGetId('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [req.params.id, item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'']);
+  const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
+  const id = runGetId('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    [req.params.id, item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null]);
   res.json(get('SELECT * FROM order_items WHERE id=?', [id]));
 });
 
 app.put('/api/order-items/:id', (req, res) => {
-  const { description, quantity, unit, unit_price, discount_pct, notes } = req.body;
-  run('UPDATE order_items SET description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=? WHERE id=?',
-    [description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', req.params.id]);
+  const { description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
+  run('UPDATE order_items SET description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
+    [description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
   res.json(get('SELECT * FROM order_items WHERE id=?', [req.params.id]));
 });
 
@@ -1704,16 +1712,16 @@ app.delete('/api/quotes/:id', (req, res) => {
 });
 
 app.post('/api/quotes/:id/items', (req, res) => {
-  const { item_id, description, quantity, unit, unit_price, discount_pct, notes } = req.body;
-  const id = runGetId('INSERT INTO quote_items (quote_id,item_id,description,quantity,unit,unit_price,discount_pct,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [req.params.id, item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'']);
+  const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
+  const id = runGetId('INSERT INTO quote_items (quote_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    [req.params.id, item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null]);
   res.json(get('SELECT * FROM quote_items WHERE id=?', [id]));
 });
 
 app.put('/api/quote-items/:id', (req, res) => {
-  const { description, quantity, unit, unit_price, discount_pct, notes } = req.body;
-  run('UPDATE quote_items SET description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=? WHERE id=?',
-    [description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', req.params.id]);
+  const { description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
+  run('UPDATE quote_items SET description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
+    [description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
   res.json(get('SELECT * FROM quote_items WHERE id=?', [req.params.id]));
 });
 
@@ -3017,6 +3025,19 @@ app.post('/api/checkout/normteile', (req, res) => {
     catch(e) { errors.push(f.original_name); }
   }
   res.json({ copied, errors, dir: normteileDir });
+});
+
+// BOM children with full calc data for quote import
+app.get('/api/items/:id/bom-for-quote', (req, res) => {
+  const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  const rev = getActiveRevision(item.id);
+  if (!rev) return res.json([]);
+  const bom = all(`SELECT b.quantity, b.unit, i.id, i.item_number, i.name, i.item_type, i.weight_g, i.default_price
+    FROM bom b JOIN items i ON b.child_item_id=i.id
+    WHERE b.parent_rev_id=? ORDER BY b.position`, [rev.id]);
+  bom.forEach(b => { b.manufacturing_cost = calcItemCost(b.id); });
+  res.json(bom);
 });
 
 app.get('/api/raw-materials/:id/prices', (req, res) => {
