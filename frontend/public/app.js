@@ -4014,28 +4014,29 @@ function _bqmSearch(q) {
     const asms = items.filter(i => i.item_type === 'asm');
     if (!asms.length) { res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Baugruppen gefunden</div>'; res.style.display = 'block'; return; }
     res.innerHTML = asms.map(i => `
-      <div onclick="_bqmSelectAsm(${JSON.stringify(i).replace(/"/g,'&quot;')})"
+      <div onclick="_bqmSelectAsm(${i.id})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${_itemChip('asm', 16)}</span>
-        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
         <span style="flex:1;font-size:13px">${esc(i.name)}</span>
-        <span style="font-size:13px;color:var(--t3)">${i.project_name}</span>
+        <span style="font-size:13px;color:var(--t3)">${esc(i.project_name)}</span>
       </div>`).join('');
     res.style.display = 'block';
   }, 200);
 }
 
-async function _bqmSelectAsm(item) {
+async function _bqmSelectAsm(itemId) {
   document.getElementById('bqm-results').style.display = 'none';
   document.getElementById('bqm-search').value = '';
+  document.getElementById('bqm-parts').style.display = 'block';
+  document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--t3);font-size:13px">Lade BOM…</div>';
+  const item = await api('/api/items/' + itemId).catch(() => null);
+  if (!item) { document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--red);font-size:13px">Fehler beim Laden</div>'; return; }
   const badge = document.getElementById('bqm-asm-badge');
   document.getElementById('bqm-asm-label').textContent = item.item_number;
   document.getElementById('bqm-asm-name').textContent = item.name;
   badge.style.display = 'flex';
-  document.getElementById('bqm-parts').style.display = 'none';
-  document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--t3);font-size:13px">Lade BOM…</div>';
-  document.getElementById('bqm-parts').style.display = 'block';
 
   const bom = await api(`/api/items/${item.id}/bom-for-quote`);
   if (!bom.length) {
@@ -6253,7 +6254,7 @@ function searchInvPlmItem(q) {
       const icon = _itemChip(i.item_type, 18);
       const mc = i.manufacturing_cost;
       const price = i.default_price ?? mc?.total ?? null;
-      return `<div onclick="selectInvPlmItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
+      return `<div onclick="selectInvPlmItem(${i.id})"
         style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${icon}</span>
@@ -6267,16 +6268,17 @@ function searchInvPlmItem(q) {
   }, 200);
 }
 
-function selectInvPlmItem(item) {
+async function selectInvPlmItem(itemId) {
+  document.getElementById('inv-plm-results').style.display = 'none';
+  const item = await api('/api/items/' + itemId).catch(() => null);
+  if (!item) return;
   document.getElementById('inv-item-id').value = item.id;
   document.getElementById('inv-plm-search').value = item.item_number + ' – ' + item.name;
-  document.getElementById('inv-plm-results').style.display = 'none';
   const nameEl = document.getElementById('inv-name');
   if (nameEl && !nameEl.value.trim()) nameEl.value = item.item_number + ' – ' + item.name;
   const priceEl = document.getElementById('inv-price');
   if (priceEl && !priceEl.value) {
-    const mc = item.manufacturing_cost;
-    const price = item.default_price ?? mc?.total ?? null;
+    const price = item.default_price ?? null;
     if (price != null) priceEl.value = price;
   }
 }
