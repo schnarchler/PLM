@@ -3389,7 +3389,7 @@ app.post('/api/orders/:id/clone', (req, res) => {
   if (!o) return res.status(404).json({ error: 'Not found' });
   const number = nextOrderNumber();
   const newId = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    [number, o.customer_id||null, o.customer_name_free||null, o.title+' (Kopie)', o.notes||'',
+    [number, o.customer_id||null, o.customer_name_free||null, o.title, o.notes||'',
      new Date().toISOString().slice(0,10), o.tax_rate??0, o.discount_pct||0, o.payment_terms||'', o.include_tax||0]);
   all('SELECT * FROM order_items WHERE order_id=?', [o.id]).forEach((oi, idx) => {
     run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,position) VALUES (?,?,?,?,?,?,?,?,?)',
