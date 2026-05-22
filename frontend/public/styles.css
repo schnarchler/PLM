@@ -341,7 +341,7 @@ tbody tr:last-child { border-bottom: none; }
 
 /* ── DETAIL PANEL ── */
 #detail-panel {
-  width: 540px;
+  width: 620px;
   flex-shrink: 0;
   border-left: 1px solid var(--line);
   background: var(--bg1);
