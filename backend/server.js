@@ -99,6 +99,7 @@ async function initDb() {
     name TEXT NOT NULL,
     description TEXT,
     customer TEXT,
+    pinned INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
@@ -820,7 +821,7 @@ app.use(express.static(FRONTEND_DIR));
 // PROJECTS
 // ==============================================================
 app.get('/api/projects', (req, res) => {
-  const projects = all('SELECT * FROM projects ORDER BY number DESC');
+  const projects = all('SELECT * FROM projects ORDER BY pinned DESC, number DESC');
   projects.forEach(p => {
     p.item_count = count('SELECT COUNT(*) as c FROM items WHERE project_id=?', [p.id]);
     p.asm_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='asm'", [p.id]);
@@ -868,6 +869,14 @@ app.put('/api/projects/:id', (req, res) => {
   run("UPDATE projects SET name=?,description=?,customer=?,updated_at=datetime('now') WHERE id=?", [name, description, customer, req.params.id]);
   log('project', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM projects WHERE id=?', [req.params.id]));
+});
+
+app.post('/api/projects/:id/pin', (req, res) => {
+  const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  const pinned = p.pinned ? 0 : 1;
+  run('UPDATE projects SET pinned=? WHERE id=?', [pinned, req.params.id]);
+  res.json({ pinned });
 });
 
 app.delete('/api/projects/:id', (req, res) => {
@@ -1719,8 +1728,8 @@ app.post('/api/quotes/:id/convert', (req, res) => {
     [number, q.customer_id, q.customer_name_free||null, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'', q.include_tax||0]);
   const qItems = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]);
   qItems.forEach(qi => {
-    run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes) VALUES (?,?,?,?,?,?,?,?)',
-      [orderId, qi.item_id, qi.description, qi.quantity, qi.unit, qi.unit_price, qi.discount_pct, qi.notes||'']);
+    run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [orderId, qi.item_id, qi.description, qi.quantity, qi.unit, qi.unit_price, qi.discount_pct, qi.notes||'', qi.raw_material_id||null, qi.estimated_hours||null, qi.printer_name||'', qi.estimated_print_hours||null]);
   });
   run("UPDATE quotes SET status='ACCEPTED',updated_at=datetime('now') WHERE id=?", [q.id]);
   res.json(get('SELECT * FROM orders WHERE id=?', [orderId]));
@@ -2733,12 +2742,25 @@ app.get('/api/export-named', (req, res) => {
     JOIN revisions r ON d.revision_id = r.id
     JOIN items i ON r.item_id = i.id
     JOIN projects p ON i.project_id = p.id`);
+  // Group datasets by (item_number, rev) to detect multiple files per revision
+  const revGroups = {};
+  for (const d of datasets) {
+    const key = `${d.item_number}_rev${d.rev}`;
+    if (!revGroups[key]) revGroups[key] = [];
+    revGroups[key].push(d);
+  }
   for (const d of datasets) {
     const src = path.join(FILES_DIR, d.filename);
     if (!fs.existsSync(src)) continue;
-    const ext = path.extname(d.original_name);
+    const ext  = path.extname(d.original_name);
+    const base = sanitizeName(`${d.item_number}_rev${d.rev}`);
+    const key  = `${d.item_number}_rev${d.rev}`;
+    const group = revGroups[key];
+    const idx  = group.indexOf(d);
+    // Single file → no suffix; multiple files → _1, _2, …
+    const suffix = group.length > 1 ? `_${idx + 1}` : '';
+    const fname  = `${base}${suffix}${ext}`;
     const projFolder = sanitizeName(`${d.proj_nr}_${d.proj_name}`);
-    const fname = sanitizeName(`${d.item_number}_rev${d.rev}_${d.original_name.slice(0, 60)}`) + (ext && !sanitizeName(d.original_name.slice(0,60)).endsWith(ext.replace('.','')) ? '' : '');
     try { entries.push({ name: `Projekte/${projFolder}/Dateien/${fname}`, data: fs.readFileSync(src) }); } catch {}
   }
 
