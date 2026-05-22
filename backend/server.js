@@ -3264,6 +3264,20 @@ app.post('/api/revisions/:revId/bom-std', (req, res) => {
   } catch { res.status(400).json({ error: 'Bereits in BOM vorhanden' }); }
 });
 
+app.put('/api/bom-std/:id/quantity', (req, res) => {
+  const { quantity, unit } = req.body;
+  run('UPDATE bom_std_parts SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
+  saveDb();
+  res.json({ success: true });
+});
+
+app.put('/api/revisions/:revId/bom-std-reorder', (req, res) => {
+  const { order } = req.body; // array of bom_std_parts ids in new order
+  order.forEach((id, idx) => run('UPDATE bom_std_parts SET position=? WHERE id=? AND parent_rev_id=?', [idx+1, id, req.params.revId]));
+  saveDb();
+  res.json({ success: true });
+});
+
 app.delete('/api/bom-std/:id', (req, res) => {
   const row = get('SELECT bs.*, sp.designation FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.id=?', [req.params.id]);
   if (row) log('revision', row.parent_rev_id, 'BOM Entfernt', row.designation);

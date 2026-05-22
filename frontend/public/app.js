@@ -880,16 +880,30 @@ function renderBomList(rev, item, locked) {
       ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delBom(${b.id},${item.id},${rev.id})">✕</button>`}
     </div>`).join('');
 
-  const stdHtml = stdRows.length ? `
+  const stdRows2 = stdRows.slice().sort((a,b) => (a.position||999)-(b.position||999));
+  const stdHtml = stdRows2.length ? `
     <div style="padding:5px 10px 3px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t4);border-top:1px solid var(--line)">Normteile</div>
-    ${stdRows.map(b => `
-    <div class="bom-row">
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0;${locked?'':'margin-left:26px'}">N</span>
+    <div id="bom-std-list-${rev.id}">
+    ${stdRows2.map((b, idx) => `
+    <div class="bom-row${locked ? '' : ' bom-draggable bom-std-draggable'}" data-bom-std-id="${b.id}" data-rev-id="${rev.id}"
+      ${locked ? '' : `draggable="true" ondragstart="_bomStdDragStart(event)" ondragover="_bomDragOver(event)" ondrop="_bomStdDrop(event,${rev.id})" ondragend="_bomDragEnd()"`}>
+      ${locked ? '' : '<span style="color:var(--t4);cursor:grab;padding:0 4px;font-size:13px;flex-shrink:0">⠿</span>'}
+      <span style="color:var(--t4);font-size:12px;width:20px;text-align:right;flex-shrink:0">${plmRows.length + idx + 1}</span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0">N</span>
       <span class="bom-num" style="color:var(--t2)">${esc(b.designation)}</span>
       <span style="flex:1;font-size:13px;color:var(--t3)">${b.material ? esc(b.material) : ''}</span>
-      <span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>
-      ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBomStd(${b.id},${item.id},${rev.id})">✕</button>`}
-    </div>`).join('')}` : '';
+      ${locked
+        ? `<span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>`
+        : `<span class="bom-qty" style="display:flex;align-items:center;gap:4px">
+            <input type="number" value="${Math.round(b.quantity)}" min="1" step="1"
+              style="width:52px;font-size:13px;font-family:var(--mono);text-align:right;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 4px;color:var(--t1)"
+              onkeydown="if(event.key==='.'||event.key===','||event.key==='-')event.preventDefault()"
+              onchange="saveBomStdQty(${b.id},this.value,'${b.unit||'Stk'}')" onclick="event.stopPropagation()">
+            <span style="font-size:13px;color:var(--t3)">${b.unit||'Stk'}</span>
+           </span>`}
+      ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delBomStd(${b.id},${item.id},${rev.id})">✕</button>`}
+    </div>`).join('')}
+    </div>` : '';
 
   return plmHtml + stdHtml;
 }
@@ -898,7 +912,35 @@ async function saveBomQty(bomId, revId, qty, unit, itemId) {
   await api(`/api/bom/${bomId}/quantity`, 'PUT', { quantity: Math.max(1, Math.round(parseFloat(qty)||1)), unit });
 }
 
+async function saveBomStdQty(bomStdId, qty, unit) {
+  await api(`/api/bom-std/${bomStdId}/quantity`, 'PUT', { quantity: Math.max(1, Math.round(parseFloat(qty)||1)), unit });
+}
+
 let _bomDragSrc = null;
+let _bomStdDragSrc = null;
+
+function _bomStdDragStart(e) {
+  _bomStdDragSrc = e.currentTarget;
+  e.currentTarget.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+async function _bomStdDrop(e, revId) {
+  e.preventDefault();
+  const target = e.currentTarget;
+  if (!_bomStdDragSrc || _bomStdDragSrc === target) return;
+  const list = target.closest('#bom-std-list-' + revId);
+  if (!list) return;
+  const rows = [...list.querySelectorAll('.bom-std-draggable')];
+  const srcIdx = rows.indexOf(_bomStdDragSrc);
+  const tgtIdx = rows.indexOf(target);
+  if (srcIdx < 0 || tgtIdx < 0) return;
+  if (srcIdx < tgtIdx) target.after(_bomStdDragSrc);
+  else target.before(_bomStdDragSrc);
+  const order = [...list.querySelectorAll('.bom-std-draggable')].map(r => parseInt(r.dataset.bomStdId));
+  await api(`/api/revisions/${revId}/bom-std-reorder`, 'PUT', { order });
+}
+
 function _bomDragStart(e) {
   _bomDragSrc = e.currentTarget;
   e.currentTarget.style.opacity = '0.4';
@@ -969,11 +1011,13 @@ function renderRevDetail(rev, item) {
     <div id="bom-list-${rev.id}" style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
       ${renderBomList(rev, item, locked)}
     </div>
-    ${locked ? '' : `
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn btn-ghost btn-sm" onclick="printBom(${item.id},${rev.id})">🖨 Drucken</button>
+      ${locked ? '' : `
         <button class="btn btn-ghost btn-sm" onclick="openBomModal(${rev.id},${item.project_id})">+ Position hinzufügen</button>
         <button class="btn btn-ghost btn-sm" onclick="openStepBomImport(${rev.id},${item.project_id})">📐 BOM aus STEP</button>
-      </div>`}
+      `}
+    </div>
     ` : ''}
 
     ${(() => {
@@ -5548,6 +5592,90 @@ ${itemsHtml || '<p style="color:#9ca3af">Keine Positionen</p>'}
   w.document.close();
 }
 
+
+// ── BOM PRINT ─────────────────────────────────────────────────
+async function printBom(itemId, revId) {
+  const item = await api('/api/items/' + itemId);
+  const rev  = item.revisions?.find(r => r.id === revId) || item.revisions?.[0];
+  if (!rev) return toast('Revision nicht gefunden', 'err');
+  const s = state.settings || {};
+
+  const plmRows = (rev.bom||[]).slice().sort((a,b) => (a.position||999)-(b.position||999));
+  const stdRows = rev.bom_std||[];
+  const allRows = [...plmRows.map(b=>({...b,_std:false})), ...stdRows.map(b=>({...b,_std:true}))];
+
+  const escH = t => String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const totalWeight = allRows.reduce((s,b) => {
+    const w = b._std ? null : (b.weight_g ?? null);
+    return w != null ? s + w * b.quantity : s;
+  }, 0);
+
+  const rows = allRows.map((b, idx) => `
+    <tr>
+      <td style="text-align:center;color:#6b7280">${idx+1}</td>
+      <td style="font-family:monospace;font-size:12px;color:#1d4ed8">${b._std ? escH(b.designation) : escH(b.item_number)}</td>
+      <td>${b._std
+        ? `${escH(b.sp_name||b.designation)}${b.material?' <span style="color:#6b7280">'+escH(b.material)+'</span>':''}`
+        : escH(b.name)}</td>
+      <td style="text-align:center">${b._std
+        ? '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;font-size:11px">N</span>'
+        : escH(b.item_type?.toUpperCase())}</td>
+      <td style="text-align:right;font-family:monospace"><strong>${b.quantity}</strong> ${escH(b.unit||'Stk')}</td>
+      ${b._std ? '<td style="color:#9ca3af;font-size:12px">—</td>' : `<td style="font-family:monospace;font-size:12px;color:#6b7280">${b.child_active_rev?'rev'+b.child_active_rev.rev:'—'}</td>`}
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+  <title>BOM ${escH(item.item_number)}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 20mm 15mm; }
+    h1 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+    .sub { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
+    .meta { display: flex; justify-content: space-between; margin-bottom: 20px; align-items: flex-start; }
+    .company { font-size: 12px; color: #6b7280; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #1e40af; color: #fff; text-align: left; padding: 7px 10px; font-size: 12px; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #f9fafb; }
+    .footer { margin-top: 20px; display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    @media print { body { padding: 10mm 8mm; } }
+  </style>
+  </head><body>
+  <div class="meta">
+    <div>
+      <h1>${escH(item.item_number)} — ${escH(item.name)}</h1>
+      <div class="sub">Stückliste rev${rev.rev} · Status: ${rev.status}${item.classification?' · '+escH(item.classification):''}</div>
+      ${s.company_name?`<div class="company">${escH(s.company_name)}</div>`:''}
+    </div>
+    <div style="text-align:right;font-size:12px;color:#6b7280">
+      ${new Date().toLocaleDateString('de-CH')}<br>
+      ${allRows.length} Position(en)${totalWeight>0?' · Gewicht: ~'+totalWeight.toFixed(1)+' g':''}
+    </div>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:36px;text-align:center">Pos.</th>
+      <th style="width:130px">Nummer</th>
+      <th>Bezeichnung</th>
+      <th style="width:50px;text-align:center">Typ</th>
+      <th style="width:80px;text-align:right">Menge</th>
+      <th style="width:60px">Rev.</th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px">Keine Positionen</td></tr>'}</tbody>
+  </table>
+  <div class="footer">
+    <span>${escH(item.item_number)} · BOM rev${rev.rev}</span>
+    <span>Gedruckt: ${new Date().toLocaleDateString('de-CH')}</span>
+  </div>
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+}
 
 // ── CLONE ORDER ───────────────────────────────────────────────
 async function cloneOrder(id) {
