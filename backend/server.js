@@ -1151,9 +1151,20 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
   if (!req.file) return res.status(400).json({ error: 'No file' });
   const { notes, version } = req.body;
   const dsType = guessType(req.file.originalname);
+  const item = get('SELECT item_number FROM items WHERE id=?', [rev.item_id]);
+  const ext  = path.extname(req.file.originalname).toLowerCase();
+  const base = item ? `${item.item_number}_rev${rev.rev}` : path.basename(req.file.originalname, ext);
+  // Avoid duplicate names: check existing datasets for this revision
+  const existing = all('SELECT original_name FROM datasets WHERE revision_id=?', [rev.id]);
+  let displayName = base + ext;
+  if (existing.some(d => d.original_name === displayName)) {
+    let n = 2;
+    while (existing.some(d => d.original_name === `${base}_${n}${ext}`)) n++;
+    displayName = `${base}_${n}${ext}`;
+  }
   const id = runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-    [rev.id, dsType, req.file.filename, req.file.originalname, req.file.size, version || '1', notes || '']);
-  log('revision', rev.id, 'Dataset Added', req.file.originalname + ' (' + dsType + ')');
+    [rev.id, dsType, req.file.filename, displayName, req.file.size, version || '1', notes || '']);
+  log('revision', rev.id, 'Dataset Added', displayName + ' (' + dsType + ')');
   res.json(get('SELECT * FROM datasets WHERE id=?', [id]));
 });
 
@@ -1342,8 +1353,17 @@ app.post('/api/checkout/import', (req, res) => {
         const storedName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
         fs.copyFileSync(src, path.join(FILES_DIR, storedName));
         const stat = fs.statSync(src);
+        const chkItem = get('SELECT item_number FROM items WHERE id=?', [item_id]);
+        const chkExt  = path.extname(f.name).toLowerCase();
+        const chkBase = chkItem ? `${chkItem.item_number}_rev${rev.rev}` : path.basename(f.name, chkExt);
+        const chkExisting = all('SELECT original_name FROM datasets WHERE revision_id=?', [rev.id]);
+        let chkDisplay = chkBase + chkExt;
+        if (chkExisting.some(d => d.original_name === chkDisplay)) {
+          let n = 2; while (chkExisting.some(d => d.original_name === `${chkBase}_${n}${chkExt}`)) n++;
+          chkDisplay = `${chkBase}_${n}${chkExt}`;
+        }
         runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-          [rev.id, f.ds_type || guessType(f.name), storedName, f.name, stat.size, '1', 'Importiert aus Checkout']);
+          [rev.id, f.ds_type || guessType(f.name), storedName, chkDisplay, stat.size, '1', 'Importiert aus Checkout']);
         // Track in .checkout.json so it's not flagged again
         const metaPath = path.join(folder, '.checkout.json');
         try {
@@ -1380,8 +1400,11 @@ app.post('/api/checkout/import', (req, res) => {
         const storedName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
         fs.copyFileSync(filePath, path.join(FILES_DIR, storedName));
         const stat = fs.statSync(filePath);
+        const newExt  = path.extname(file_name).toLowerCase();
+        const newItem = get('SELECT item_number FROM items WHERE id=?', [itemId]);
+        const newDisplay = newItem ? `${newItem.item_number}_rev${firstRevLabel()}${newExt}` : file_name;
         runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-          [revId, ds_type || guessType(file_name), storedName, file_name, stat.size, '1', 'Importiert aus Checkout']);
+          [revId, ds_type || guessType(file_name), storedName, newDisplay, stat.size, '1', 'Importiert aus Checkout']);
       }
 
       log('item', itemId, 'Erstellt', `${item_type} ${item_number} via Checkout-Import`);
