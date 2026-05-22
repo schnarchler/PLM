@@ -474,6 +474,7 @@ async function initDb() {
   )`);
   migrate('ALTER TABLE raw_materials ADD COLUMN lot_number TEXT DEFAULT \'\'');
   migrate('ALTER TABLE raw_materials ADD COLUMN dimensions TEXT DEFAULT \'\'');
+  migrate('ALTER TABLE raw_materials ADD COLUMN weight_g REAL');
   migrate('ALTER TABLE raw_material_movements ADD COLUMN unit_price REAL');
   migrate("ALTER TABLE raw_material_movements ADD COLUMN lot_number TEXT DEFAULT ''");
 
@@ -489,6 +490,7 @@ async function initDb() {
   migrate('ALTER TABLE time_entries ADD COLUMN billable INTEGER DEFAULT 0');
   migrate('ALTER TABLE time_entries ADD COLUMN item_id INTEGER REFERENCES items(id)');
   migrate('ALTER TABLE items ADD COLUMN classification TEXT DEFAULT NULL');
+  migrate('ALTER TABLE items ADD COLUMN weight_g REAL');;
 
   db.run(`CREATE TABLE IF NOT EXISTS applied_migrations (key TEXT PRIMARY KEY)`);
 
@@ -957,9 +959,9 @@ app.post('/api/projects/:projectId/items', (req, res) => {
 });
 
 app.put('/api/items/:id', (req, res) => {
-  const { name, description, source_url, default_price, classification } = req.body;
-  run('UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=? WHERE id=?',
-    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, classification||null, req.params.id]);
+  const { name, description, source_url, default_price, classification, weight_g } = req.body;
+  run('UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=?,weight_g=? WHERE id=?',
+    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, classification||null, weight_g != null ? parseFloat(weight_g) : null, req.params.id]);
   log('item', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
 });
@@ -2957,17 +2959,17 @@ app.get('/api/raw-materials', (req, res) => {
 });
 
 app.post('/api/raw-materials', (req, res) => {
-  const { name, material_type, color, brand, stock_qty, min_qty, unit, notes, lot_number, dimensions } = req.body;
+  const { name, material_type, color, brand, stock_qty, min_qty, unit, notes, lot_number, dimensions, weight_g } = req.body;
   if (!name) return res.status(400).json({ error: 'Name erforderlich' });
-  const id = runGetId('INSERT INTO raw_materials (name,material_type,color,brand,stock_qty,min_qty,unit,notes,lot_number,dimensions) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'']);
+  const id = runGetId('INSERT INTO raw_materials (name,material_type,color,brand,stock_qty,min_qty,unit,notes,lot_number,dimensions,weight_g) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null]);
   res.json(get('SELECT * FROM raw_materials WHERE id=?', [id]));
 });
 
 app.put('/api/raw-materials/:id', (req, res) => {
-  const { name, material_type, color, brand, min_qty, unit, notes, lot_number, dimensions } = req.body;
-  run(`UPDATE raw_materials SET name=?,material_type=?,color=?,brand=?,min_qty=?,unit=?,notes=?,lot_number=?,dimensions=?,updated_at=datetime('now') WHERE id=?`,
-    [name, material_type||'', color||'', brand||'', parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', req.params.id]);
+  const { name, material_type, color, brand, min_qty, unit, notes, lot_number, dimensions, weight_g } = req.body;
+  run(`UPDATE raw_materials SET name=?,material_type=?,color=?,brand=?,min_qty=?,unit=?,notes=?,lot_number=?,dimensions=?,weight_g=?,updated_at=datetime('now') WHERE id=?`,
+    [name, material_type||'', color||'', brand||'', parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, req.params.id]);
   res.json(get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]));
 });
 
