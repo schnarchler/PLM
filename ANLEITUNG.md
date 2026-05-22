@@ -8,33 +8,31 @@
 2. [Programmstart](#2-programmstart)
 3. [Oberfläche](#3-oberfläche)
 4. [Dashboard](#4-dashboard)
-5. [PLM — Projekte & Bauteile](#5-plm--projekte--bauteile) *(inkl. BOM-Import aus STEP)*
-6. [Freigabe-Workflow](#6-freigabe-workflow)
-7. [Checkout / Check-in](#7-checkout--check-in)
-8. [ERP — Aufträge & Angebote](#8-erp--aufträge--angebote)
-9. [Lieferscheine](#9-lieferscheine)
-10. [Kunden](#10-kunden)
-11. [Lager](#11-lager)
-12. [Kalkulation](#12-kalkulation)
-13. [Suche](#13-suche)
-14. [Changelog](#14-changelog)
-15. [Einstellungen](#15-einstellungen)
-16. [Tastaturkürzel](#16-tastaturkürzel)
+5. [PLM — Projekte & Bauteile](#5-plm--projekte--bauteile)
+6. [Normteile](#6-normteile)
+7. [Freigabe-Workflow](#7-freigabe-workflow)
+8. [Checkout / Check-in](#8-checkout--check-in)
+9. [Angebote & Kostenkalkulation](#9-angebote--kostenkalkulation)
+10. [Aufträge](#10-aufträge)
+11. [Produktion](#11-produktion)
+12. [Rohmaterial](#12-rohmaterial)
+13. [Kunden](#13-kunden)
+14. [Lager](#14-lager)
+15. [Kalkulation](#15-kalkulation)
+16. [Suche](#16-suche)
+17. [Changelog](#17-changelog)
+18. [Einstellungen](#18-einstellungen)
+19. [Tastaturkürzel](#19-tastaturkürzel)
 
 ---
 
 ## 1. Überblick
 
-PLM & ERP ist ein lokales System zur Verwaltung von Konstruktionsprojekten (PLM) und Geschäftsvorgängen (ERP). Es läuft vollständig im eigenen Netzwerk — ohne Internet oder Cloud-Abhängigkeit.
+PLM & ERP ist ein lokales System zur Verwaltung von Konstruktionsprojekten und Geschäftsvorgängen. Es läuft vollständig im eigenen Netzwerk — ohne Internet oder Cloud-Abhängigkeit.
 
-**PLM (Product Lifecycle Management)** verwaltet:
-- Projekte mit Baugruppen, Parts und Dokumenten
-- Revisionen und Freigabe-Workflows
-- Stücklisten (BOM), Dateien (Datasets), Zeiten
+**PLM** verwaltet: Projekte, Baugruppen, Parts, Dokumente, Revisionen, Stücklisten, Dateien, Zeiten, Normteile.
 
-**ERP (Enterprise Resource Planning)** verwaltet:
-- Kunden, Angebote, Aufträge
-- Lieferscheine, Lager
+**ERP** verwaltet: Kunden, Angebote mit Kalkulation, Aufträge, Produktion, Lager, Rohmaterial.
 
 ---
 
@@ -44,56 +42,45 @@ PLM & ERP ist ein lokales System zur Verwaltung von Konstruktionsprojekten (PLM)
 ```bash
 cd PLM && bash start-plm.sh
 ```
-Der Browser öffnet sich automatisch auf `http://localhost:3000`.
 
-**Über das Desktop-Icon:**
-Doppelklick auf `PLM-ERP` im Anwendungsmenü oder Desktop.
+**Desktop-Icon:** Doppelklick auf `PLM-ERP`.
 
-**Server beenden:**
-Oben rechts → **■ Beenden** → Bestätigen. Falls noch Checkouts aktiv sind, wird gefragt ob diese vorher eingecheckt werden sollen.
+**Server beenden:** Oben rechts → **■ Beenden**. Bei aktiven Checkouts wird gefragt ob zuerst eingecheckt werden soll.
 
 ---
 
 ## 3. Oberfläche
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Logo  │  Suchfeld            │ CAD │ ⬆ │ Beenden│  ← Topbar
-├────────┼─────────────────────────────────────────┤
-│        │  Listenbereich (links)  │ Detailbereich │
-│  Nav   │                         │  (rechts)     │
-│  links │                         │               │
-└────────┴─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  Logo  │  Suchfeld (Ctrl+K)  │ CAD │ ⬆ │ Beenden │  ← Topbar
+├────────┼──────────────────────────────────────────┤
+│        │  Listenbereich                │ Detail   │
+│  Nav   │  (links)                      │ (rechts) │
+└────────┴──────────────────────────────────────────┘
 ```
 
-**Navigation (links):** Klick auf einen Bereich (Dashboard, Projekte, Aufträge usw.) lädt die entsprechende Liste.
-
-**Listenbereich:** Zeigt alle Einträge des aktiven Bereichs. Klick auf einen Eintrag öffnet die Details rechts.
-
-**Detailbereich:** Zeigt Tabs mit den Informationen des gewählten Eintrags. Mit **Escape** schliessen.
-
-**Zuletzt geöffnet:** Unten in der Navigation — die letzten 8 besuchten Bauteile, Aufträge etc. für schnellen Rücksprung.
+- **Navigation links:** Klick wechselt den Bereich
+- **Listenbereich:** Alle Einträge des aktiven Bereichs
+- **Detailbereich:** Tabs mit Informationen des gewählten Eintrags — mit **Escape** schliessen
+- **Zuletzt geöffnet:** Letzte Bauteile unten in der Navigation
 
 ---
 
 ## 4. Dashboard
 
-Das Dashboard gibt einen Überblick über den aktuellen Arbeitsstatus:
-
 | Kachel | Bedeutung |
 |--------|-----------|
-| **Umsatz** | Diesen Monat und Gesamtumsatz aller bestätigten Aufträge |
-| **Aufträge** | Offene Aufträge (Entwurf + Bestätigt) |
-| **Angebote** | Offene Angebote (Entwurf + Versendet) |
-| **Lieferungen** | Aktive, noch nicht gelieferte Lieferscheine |
-| **Freigabe** | Bauteile die aktuell auf Prüfung warten (REV-Status) |
+| **Umsatz** | Diesen Monat und Gesamt aller bestätigten Aufträge |
+| **Aufträge** | Offene Aufträge |
+| **Angebote** | Offene Angebote |
+| **Produktion** | Aktive Produktionsaufträge |
+| **Freigabe** | Bauteile in Prüfung (REV-Status) |
 | **Lager** | Artikel unter Mindestbestand |
 
-**Fällige Lieferscheine:** Zeigt alle Lieferscheine mit Lieferdatum in den nächsten 14 Tagen. Überfällige erscheinen rot.
+**Fällige Produktionsaufträge:** Aufträge mit Lieferdatum in den nächsten 14 Tagen. Überfällige erscheinen rot.
 
-**Ablaufende Angebote:** Angebote deren Gültigkeit in 14 Tagen abläuft.
-
-**Freigabe-Pipeline:** Bauteile im REV-Status — direkt anklickbar um den Freigabe-Prozess fortzuführen.
+**Ablaufende Angebote:** Angebote die in 14 Tagen ablaufen.
 
 ---
 
@@ -101,121 +88,107 @@ Das Dashboard gibt einen Überblick über den aktuellen Arbeitsstatus:
 
 ### 5.1 Projekte
 
-Projekte sind die oberste Organisationsebene. Jedes Projekt erhält eine automatische vierstellige Nummer (z.B. `0028`).
+Projekte sind die oberste Organisationsebene mit automatischer Nummer (z.B. `0028`).
 
-**Neues Projekt:** Oben links → **+ Projekt**
-
-**Projektdetails** haben vier Tabs:
-- **Info** — Name, Kunde, Beschreibung, Erstellungsdatum
+**Projektdetails:**
+- **Info** — Name, Kunde, Beschreibung
 - **Struktur** — Baumansicht aller Bauteile
-- **Dokumente** — Projektdokumente (PDF, Bilder usw.)
-- **Log** — Änderungshistorie des Projekts
+- **Dokumente** — Projektdokumente
+- **Log** — Änderungshistorie
 
 ### 5.2 Nummernschema
 
 ```
-Projekt:              0028
-Baugruppe:            0028-asm-001
-Unter-Baugruppe:      0028-asm-002
-Part in Baugruppe:    0028-asm-001-prt-001
-Part im Projekt:      0028-prt-001
-Dokument:             0028-doc-001
+Projekt:           0028
+Baugruppe:         0028-asm-001
+Part in BG:        0028-asm-001-prt-001
+Part im Projekt:   0028-prt-001
+Dokument:          0028-doc-001
 ```
 
 ### 5.3 Item-Typen
 
 | Symbol | Typ | Beschreibung |
 |--------|-----|-------------|
-| 📦 | **ASM** | Baugruppe — kann andere ASM und PRT enthalten |
+| 📦 | **ASM** | Baugruppe — enthält andere ASM und PRT |
 | 🔩 | **PRT** | Part / Einzelteil |
-| 📄 | **DOC** | Dokument (Zeichnung, Spezifikation, etc.) |
+| 📄 | **DOC** | Dokument (Zeichnung, Spezifikation) |
 
-### 5.4 Neues Bauteil erstellen
+### 5.4 Bauteil-Detailansicht
 
-Im Projektbaum oder in der Detailansicht:
-- **+ Baugruppe** — neue ASM
-- **+ Part** — neues PRT
-- **+ Dokument** — neues DOC
+**Revisionen-Tab:**
+- Verkaufspreis (VP) und Gewicht direkt inline editierbar
+- Stückliste (BOM) mit PLM-Items und Normteilen
+- Dateien (Datasets): CAD, PDF, Bilder, GCode
+- Freigabe-Workflow
 
-Parts die einer Baugruppe untergeordnet sind, erhalten automatisch die Nummernstruktur der Baugruppe.
+**Weitere Tabs:** Changelog, Zeiten, Where-Used
 
-### 5.5 Bauteil-Detailansicht
+### 5.5 Gewicht
 
-Tabs in der Bauteil-Detailansicht:
-
-**Revisionen**
-- Aktive Revision wird oben angezeigt
-- Stückliste (BOM): Klick auf **+ Position** um Unterteile zu verknüpfen
-- Dateien (Datasets): CAD-Dateien, PDFs, Bilder, GCode etc.
-- Druckparameter: Material, Schichthöhe, Temperatur etc.
-- Freigabe-Workflow (siehe Kapitel 6)
-
-**Changelog**
-Alle Änderungen an diesem Bauteil mit Zeitstempel.
-
-**Zeiten**
-Konstruktions- und Entwicklungszeiten pro Bauteil erfassen.
-
-**Where-Used**
-Zeigt in welchen Baugruppen dieses Bauteil verbaut ist.
+Das Gewicht ⚖ eines Parts wird direkt in der Detailansicht neben dem Verkaufspreis eingetragen (in Gramm). Es wird für die automatische Materialkostenkalkulation in Angeboten verwendet.
 
 ### 5.6 Klassifizierung
 
-Jedem Bauteil kann eine Klassifizierung zugewiesen werden:
+Farbige Chips im Projektbaum und in der Detailansicht. Konfigurierbar unter **Einstellungen → PLM**.
 
-| Klasse | Bedeutung |
-|--------|-----------|
-| **Eigenteil** | Selbst konstruiertes Bauteil |
-| **Kaufteil** | Zugekauftes Bauteil |
-| **Normteil** | Genormtes Bauteil (Schraube, Mutter, etc.) |
-| **Halbzeug** | Rohmaterial mit Bearbeitung |
-| **Rohmaterial** | Unbearbeitetes Material |
+### 5.7 Stückliste (BOM)
 
-Klassifizierungen sind konfigurierbar unter **Einstellungen → PLM**.
+In der aktiven Revision einer ASM:
+- **+ Position** → PLM-Item aus dem Projekt suchen
+- **⚙ Normteil** → Normteil aus dem Katalog hinzufügen
+- **📐 BOM aus STEP** → Stückliste aus Solid Edge STEP-Export importieren
 
-Die Klasse wird als farbiger Chip im Projektbaum und in der Detailansicht angezeigt.
+### 5.8 BOM aus STEP importieren
 
-### 5.7 Varianten (z.B. M3, M4, M5)
+1. Baugruppe in Solid Edge → **Datei → Exportieren → STEP AP214**
+2. PLM → Baugruppe → BOM → **📐 BOM aus STEP**
+3. STEP-Datei hochladen → Analysieren
+4. Teile werden automatisch per Namensabgleich zugeordnet (✓ = gefunden, ? = manuell zuordnen)
+5. **✓ BOM übernehmen**
 
-Es gibt keine spezielle Varianten-Funktion — Varianten werden einfach als **separate Parts** erfasst.
+### 5.9 Where-Used
 
-**Vorgehen:** Im Projekt → **+ Part** → Name `Halterung M3` → speichern. Dann nochmals **+ Part** → `Halterung M4` usw.
+Tab **Where-Used** in der Bauteil-Detailansicht zeigt alle Baugruppen in denen dieses Teil verbaut ist.
 
-Jede Variante bekommt automatisch eine eigene Nummer und hat unabhängige Revisionen, Dateien und Freigaben. In der Stückliste einer Baugruppe wählt man dann die gewünschte Variante aus.
+### 5.10 Varianten (z.B. M3, M4, M5)
 
-### 5.8 Stückliste (BOM)
-
-In der aktiven Revision eines ASM-Bauteils:
-- **+ Position** → Bauteil aus dem Projekt suchen und Menge angeben
-- Positionen können per Pfeilen umsortiert werden
-- Freigegebene (REL) Revisionen sind gesperrt — keine BOM-Änderungen möglich
-
-### 5.9 BOM aus STEP-Datei importieren
-
-Die Stückliste einer Baugruppe kann automatisch aus einer Solid Edge STEP-Datei übernommen werden, ohne jede Position von Hand einzutragen.
-
-**Vorgehen in Solid Edge:**
-1. Baugruppe öffnen
-2. **Datei → Exportieren → STEP AP214** (oder AP242)
-3. Datei speichern (z.B. `baugruppe.stp`)
-
-**Vorgehen in PLM:**
-1. Baugruppe im PLM öffnen → Tab **Revisionen**
-2. Unten im BOM-Bereich: **📐 BOM aus STEP**
-3. Exportierte `.stp`-Datei auswählen → **📤 Analysieren**
-4. PLM zeigt eine Tabelle mit allen gefundenen Teilen:
-   - **✓** = automatisch einem bestehenden PLM-Bauteil zugeordnet (Namensübereinstimmung)
-   - **?** = im Dropdown manuell zuordnen oder „überspringen" wählen
-   - Menge kann angepasst werden
-5. **✓ BOM übernehmen** → alle ausgewählten Positionen werden in die Stückliste eingetragen
-
-> Sub-Baugruppen werden als `[ASM · n]` markiert. Für diese kann der Import separat wiederholt werden, nachdem die entsprechende ASM im PLM geöffnet wurde.
+Separate Parts mit eigenem Suffix anlegen: `Halterung M3`, `Halterung M4`. Jede Variante hat eigene Revisionen, Dateien und Freigaben.
 
 ---
 
-## 6. Freigabe-Workflow
+## 6. Normteile
 
-Jede Revision durchläuft folgende Zustände:
+Navigation → **Normteile** — Katalog für genormte Bauteile (DIN, ISO, EN, ASME, …).
+
+### Neues Normteil
+
+Felder ausfüllen → Bezeichnung wird automatisch generiert (z.B. `DIN 912 Zylinderschraube M4x12 A2-70`), manuell überschreibbar.
+
+| Feld | Beispiel |
+|------|---------|
+| Norm | DIN |
+| Norm-Nr. | 912 |
+| Größe / Maß | M4x12 |
+| Kurzbezeichnung | Zylinderschraube |
+| Material / Güte | A2-70 |
+| Stückpreis | 0.15 CHF |
+
+### Dateien
+
+Tab **Dateien** pro Normteil: STEP-Dateien, PDFs, Zeichnungen hochladen (Mehrfachauswahl).
+
+### In BOM verwenden
+
+Im BOM-Modal einer Baugruppe → Tab **⚙ Normteil** → Normteil aus Dropdown wählen.
+
+### Normteile auschecken
+
+**⬇ Auschecken** im Normteile-Header kopiert alle Normteil-Dateien in `<checkout-verzeichnis>/normteile/`. Ordnername ist immer gleich → einmalig in Solid Edge als Suchpfad konfigurieren.
+
+---
+
+## 7. Freigabe-Workflow
 
 ```
 DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
@@ -225,285 +198,251 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 
 | Status | Farbe | Bedeutung |
 |--------|-------|-----------|
-| **DFT** | Blau | Entwurf — in Bearbeitung |
-| **REV** | Amber | In Prüfung — wartet auf Freigabe |
-| **REL** | Grün | Freigegeben — produktiv einsetzbar |
-| **ECO** | Lila | Engineering Change — Änderung läuft |
-| **OBS** | Grau | Obsolete — durch neuere Revision abgelöst |
+| **DFT** | Blau | Entwurf |
+| **REV** | Amber | In Prüfung |
+| **REL** | Grün | Freigegeben |
+| **ECO** | Lila | Engineering Change |
+| **OBS** | Grau | Abgelöst |
 
-**Aktionen:**
-- `→ In Review` — Revision zur Prüfung einreichen
-- `✓ Freigeben` — Revision freigeben (setzt vorherige auf OBS)
-- `← Zurück zu Entwurf` — Prüfung zurückziehen
-- `⚡ ECO starten` — Änderungsauftrag starten
-
-**Freigegebene Bauteile löschen** ist nur über **Einstellungen → Admin** möglich.
+Freigegebene Bauteile löschen nur über **Einstellungen → Admin**.
 
 ---
 
-## 7. Checkout / Check-in
-
-Der Checkout-Mechanismus ermöglicht das Bearbeiten von CAD-Dateien ausserhalb des PLM.
+## 8. Checkout / Check-in
 
 ### Workflow
 
-**Auschecken:**
-1. Bauteil öffnen → **⬇ Auschecken**
-2. Dateitypen wählen (CAD, PDF, etc.) → **Auschecken**
-3. Dateien werden in den Checkout-Ordner kopiert
-4. Freigegebene Dateien (REL) sind schreibgeschützt
+**Auschecken:** Bauteil → **⬇ Auschecken** → Dateitypen wählen → Dateien landen in `<checkout-pfad>/<item-nummer>/` (ohne Zeitstempel, Pfad bleibt bei jedem Checkout identisch).
 
-**Arbeiten im CAD:**
-- Dateien im Checkout-Ordner bearbeiten
-- Neue Dateien im selben Ordner erstellen
-- Baugruppen funktionieren, da alle verlinkten Parts im selben Ordner liegen
+**Arbeiten im CAD:** Dateien bearbeiten oder neue erstellen.
 
-**Einchecken:**
-1. Im PLM → Bauteil → **⬆ Einchecken**
-2. Checkout-Ordner wird gelöscht
-3. Vorgang wird im Changelog aufgezeichnet
+**Einchecken:** **⬆ Einchecken** → Ordner wird gelöscht, Changelog-Eintrag.
 
-### Neue Dateien importieren
+**Neue Dateien:** PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht (⬆ Checkouts):
+- Im Unterordner eines Bauteils → „Zu Bauteil hinzufügen"
+- Im Hauptordner → „Als neues Bauteil erfassen"
 
-Wenn beim Bearbeiten neue Dateien entstehen, erkennt PLM diese automatisch beim Öffnen der Checkout-Übersicht (⬆ Checkouts oben rechts):
+### Solid Edge Standardpfad
 
-- **Datei im Unterordner eines Bauteils** → "Zu Bauteil hinzufügen"
-- **Datei im Hauptordner** → "Als neues Bauteil erfassen"
+**Tools → Options → File Locations** → Parts, Assemblies, Drafts → Checkout-Ordner eintragen.
 
-### Solid Edge — Standardpfad setzen
-
-Damit neue Dateien automatisch im Checkout-Ordner landen:
-
-**Tools → Options → File Locations**
-
-| Dateityp | Pfad setzen auf |
-|----------|----------------|
-| Parts (.par / .psm) | Checkout-Ordner |
-| Assemblies (.asm) | gleicher Pfad |
-| Drafts (.dft) | gleicher Pfad |
-
-Checkout-Pfad konfigurieren unter: **Einstellungen → Daten → Checkout-Verzeichnis**
-
-### CAD direkt starten
-
-Oben rechts in der Topbar: **🖥 CAD** — startet das konfigurierte CAD-Programm direkt aus PLM.
-
-Pfad konfigurieren unter: **Einstellungen → Daten → CAD-Programm**
+Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis**
 
 ---
 
-## 8. ERP — Aufträge & Angebote
+## 9. Angebote & Kostenkalkulation
 
-### 8.1 Angebote
+### Angebot erstellen
 
-**Neues Angebot:** Navigation → Angebote → **+ Angebot**
+Navigation → Angebote → **+ Angebot**
 
-Angebote durchlaufen folgende Zustände:
-```
-Entwurf → Versendet → Akzeptiert
-                    → Abgelehnt
-```
-
-**Positionen hinzufügen:** Im Angebot → **+ Position**
-- Optionale Verknüpfung mit PLM-Item (Listenpreis wird übernommen)
-- Menge, Preis, Rabatt, Notizen
+Status: `Entwurf → Versendet → Akzeptiert / Abgelehnt`
 
 **In Auftrag umwandeln:** Angebot → **➜ In Auftrag umwandeln**
 
-**PDF erstellen:** Angebot → **📄 Angebot PDF**
+### Position hinzufügen mit Kalkulation
 
-### 8.2 Aufträge
+Beim Hinzufügen einer Position:
 
-**Neuer Auftrag:** Navigation → Aufträge → **+ Auftrag**
+1. **PLM-Item verknüpfen** — suche nach Teilenummer oder Name
+2. **Rohmaterial wählen** — bei mehreren aktiven Lots erscheint ein Picker zur Lot-Auswahl
+3. **Arbeitszeit (h)** — geschätzte Stunden
+4. **Drucker + Druckzeit (h)** — für Druckkosten
+5. System zeigt **Kostenaufstellung** live:
+   - Material: `Bauteilgewicht × (Rohmaterialpreis / Rohmaterialgewicht)`
+   - Arbeitszeit: `Stunden × Stundenansatz`
+   - Druckzeit: `Stunden × Drucker CHF/h`
+6. **„Als Preis übernehmen"** — kalkulierten Preis als Einzelpreis setzen
 
-Auftrags-Zustände:
+> Bauteil und Rohmaterial müssen beide ein Gewicht hinterlegt haben, sonst erscheint eine Warnmeldung.
+
+### BOM kalkullieren (Baugruppen)
+
+**📦 Aus BOM kalkullieren** — wähle eine Baugruppe, alle BOM-Teile werden als einzelne Positionen mit automatischen Kosten übernommen.
+
+---
+
+## 10. Aufträge
+
+Navigation → Aufträge → **+ Auftrag**
+
+Status: `Entwurf → Bestätigt → Geliefert → Fakturiert / Storniert`
+
+- **Rechnung PDF** — Auftrag → **📄 Rechnung PDF**
+- **Produktionsauftrag erstellen** — Auftrag → **🔧 Produktionsauftrag erstellen**
+- **Lager abbuchen** — Auftragsposition → **📦** (nur wenn genügend Bestand)
+
+Aufträge im Status Entwurf können direkt gelöscht werden. Andere Status nur über **Einstellungen → Admin**.
+
+---
+
+## 11. Produktion
+
+Navigation → **Produktion** — ersetzt den früheren „Lieferschein"-Begriff für interne Produktionsaufträge.
+
+**Neuer Produktionsauftrag:** + Produktionsauftrag
+
+Status: `Entwurf → Bereit → Geliefert`
+
+### Position hinzufügen
+
+- **PLM-Item** verknüpfen
+- **Rohmaterial** zuweisen → übernimmt automatisch Drucktemperatur und Betttemperatur
+- **3MF-Import** oder manuelle Druckparameter
+- **Drucker** und **Düse** separat wählen
+
+### Lieferschein drucken
+
+Druckansicht öffnen → **📄 Lieferschein** — zeigt alle Positionen mit Druckparametern, Rohmaterial und Unterschriftsfeldern.
+
+### Thermodrucker (Pipsta)
+
+Pro Position: **🖶** Kurzbeleg oder **🖶≡** Vollbeleg mit Druckparametern.
+
+---
+
+## 12. Rohmaterial
+
+Navigation → **Rohmaterial**
+
+### Material erfassen
+
+| Feld | Beschreibung |
+|------|-------------|
+| Materialtyp | PLA, PETG, ABS, Aluminium, … |
+| Farbe | z.B. Schwarz, Galaxy Black |
+| Marke | z.B. Prusament |
+| Abmessungen | z.B. 2×20×200mm, Ø12mm, 1000g |
+| Gewicht / Stück | Gesamtgewicht der Einheit in Gramm (für Preiskalkulation) |
+| Drucktemp (°C) | Wird bei Zuweisung in Produktion automatisch übernommen |
+| Bett (°C) | Wird bei Zuweisung in Produktion automatisch übernommen |
+| Mindestbestand | Warnschwelle |
+
+Name wird automatisch aus Typ + Farbe + Abmessungen + Marke generiert (editierbar).
+
+### Lot-Tracking
+
+Jede **Einbuchung** kann eine Lotnummer und einen Einkaufspreis erhalten. Mehrere Lots desselben Materials werden untereinander aufgelistet:
+
 ```
-Entwurf → Bestätigt → Geliefert → Fakturiert
-                    → Storniert
+LOT-2025-001    500 g    CHF 24.90/g    ● aktiv
+LOT-2024-011    200 g    CHF 23.50/g    ● aktiv
+LOT-2024-003      0 g    CHF 25.00/g    ● leer
 ```
 
-**Lieferschein erstellen:** Auftrag → **🚚 Lieferschein erstellen**
+Aktive Lots erscheinen zuerst, leere danach (ausgegraut). In der Übersicht links werden leere Lots ausgeblendet.
 
-**Rechnung PDF:** Auftrag → **📄 Rechnung PDF**
+### Ausbuchen
 
-**Lager abbuchen:** Bei jeder Auftragsposition mit verknüpftem PLM-Item → **📦** (Kisten-Symbol) — bucht die Menge aus dem Lager ab. Nur möglich wenn genügend Bestand vorhanden.
+**− Ausbuchen** öffnet ein Modal mit Lot-Auswahl. Leere Lots sind deaktiviert.
 
-> Aufträge und Angebote im Status **Entwurf** können direkt gelöscht werden. Alle anderen Status können nur über **Einstellungen → Admin** gelöscht werden.
+### Buchungshistorie
 
----
+Tab **Buchungen** zeigt alle Ein- und Ausgänge mit laufendem Saldo.
 
-## 9. Lieferscheine
+### Verwendung in Angeboten
 
-Lieferscheine können eigenständig oder aus einem Auftrag heraus erstellt werden.
-
-**Neuer Lieferschein:** Navigation → Lieferscheine → **+ Lieferschein**
-
-**Status:**
-- **Entwurf** — in Bearbeitung
-- **Bereit** — zur Auslieferung bereit
-- **Geliefert** — ausgeliefert (setzt Lieferdatum automatisch)
-
-Wenn alle Lieferscheine eines Auftrags auf **Geliefert** gesetzt werden, wechselt der Auftrag automatisch auf **Geliefert**.
-
-**Druckparameter:** Jede Position kann 3MF-Druckparameter speichern (manuell oder per 3MF-Import).
-
-**Thermodrucker (Pipsta):** Jede Position hat zwei Druckbuttons:
-- **🖶** — Kurzbeleg
-- **🖶≡** — Vollbeleg mit Druckparametern
+Im Positions-Modal eines Angebots → Rohmaterial wählen → bei mehreren aktiven Lots erscheint ein Picker. Der Lot-Preis wird für die Materialkalkulation verwendet.
 
 ---
 
-## 10. Kunden
+## 13. Kunden
 
-Kundenverwaltung unter Navigation → Kunden.
+Navigation → **Kunden** — jeder Kunde erhält eine automatische Nummer (`KD-0001`).
 
-Jeder Kunde erhält eine automatische Nummer (`KD-0001`).
-
-**Kundendetails** zeigen verknüpfte Angebote, Aufträge, Lieferscheine und zugeordnete Lagerartikel.
-
-Bei Aufträgen und Angeboten kann der Kunde per **Suchfeld** gefunden werden, oder als Freitext eingegeben werden (für einmalige Kunden ohne Stammdaten).
+Bei Aufträgen und Angeboten kann der Kunde per Suchfeld gefunden oder als Freitext eingegeben werden.
 
 ---
 
-## 11. Lager
+## 14. Lager
 
-Die Lagerverwaltung unter Navigation → Lager.
+Navigation → **Lager**
 
-### Artikel verwalten
-
-**Neuer Artikel:** **+ Artikel** oben rechts
-
-Felder:
-- **Name, Kategorie, Artikelnummer (SKU)**
-- **Einheit** (Stk, m, g, kg, ...)
-- **Mindestbestand** — Warnung wenn Bestand ≤ Minimum
-- **Farbe / Material** — für Varianten des gleichen Artikels
-- **PLM-Verknüpfung** — verknüpft mit einem PLM-Bauteil
-
-### Bestandsführung
-
-**Einbuchen / Ausbuchen:** **＋** / **－** Buttons in der Zeile
-
-**Geplante Menge:** Zeigt wie viele Einheiten in offenen Aufträgen reserviert sind.
-
-**Verfügbare Menge = Bestand − Geplant**
-
-### Bestandswarnungen
-
-| Farbe | Bedeutung |
-|-------|-----------|
-| 🟢 Grün | Bestand über Mindestmenge |
-| 🟡 Amber | Bestand = Mindestmenge |
-| 🔴 Rot | Bestand unter Mindestmenge |
-
-Im Dashboard werden kritische Artikel unter **Lager — Warnungen** angezeigt.
+- PLM-Bauteil verknüpfen → Bestand wird beim Abbuchen aus Aufträgen reduziert
+- **Geplante Menge** = Bestand der in offenen Aufträgen vorgemerkt ist
+- Warnung wenn Bestand ≤ Mindestbestand
 
 ---
 
-## 12. Kalkulation
+## 15. Kalkulation
 
-Navigation → Kalkulation — Übersicht aller Parts und Baugruppen mit Kostenvergleich.
+Navigation → **Kalkulation** — Übersicht aller Parts mit Kostenvergleich.
 
 | Spalte | Bedeutung |
 |--------|-----------|
-| **Herst.-kosten** | Filamentkosten + Maschinenkosten aus Druckparametern |
 | **Verkaufspreis** | Listenpreis aus dem PLM |
-| **Marge** | Verkaufspreis − Herstellungskosten |
-| **%** | Marge in Prozent der Herstellungskosten |
 | **Stk. verkauft** | Gesamtmenge aus allen Aufträgen |
 | **Umsatz** | Gesamtumsatz dieses Bauteils |
-| **Gewinn total** | Umsatz − (Herstellungskosten × verkaufte Stück) |
+| **Gewinn total** | Umsatz − (Kosten × verkaufte Stück) |
 
-**CSV-Export:** Oben links → **↓ CSV**
-
-**Filtern:** Nach Margen-Status (positiv/negativ/fehlend) und Bauteiltyp.
+**CSV-Export** — oben links → **↓ CSV**
 
 ---
 
-## 13. Suche
+## 16. Suche
 
-**Öffnen:** Suchfeld oben in der Topbar — oder `Ctrl+K`
+**Öffnen:** Suchfeld oben — oder `Ctrl+K`
 
-Die Suche durchsucht gleichzeitig:
-- Aufträge, Angebote, Lieferscheine
-- Kunden
-- Projekte, PLM-Items (inkl. Klassifizierung)
-- Dateien (Datasets)
+Durchsucht gleichzeitig: Projekte, PLM-Items, Normteile, Aufträge, Angebote, Produktion, Kunden, Dateien.
 
-**Schnellfilter:** In der Suchansicht erscheinen oben farbige Klassifizierungs-Chips. Klick auf z.B. **Kaufteil** zeigt alle Kaufteile.
-
-Klick auf ein Suchergebnis öffnet direkt den entsprechenden Eintrag.
+**Schnellfilter:** Klassifizierungs-Chips in der Suchansicht für direkte Filterung.
 
 ---
 
-## 14. Changelog
+## 17. Changelog
 
-Navigation → Changelog — vollständige Änderungshistorie aller Aktionen im System.
+Navigation → **Changelog** — vollständige Änderungshistorie aller Aktionen.
 
-**Filterbar** nach Zeitraum und Export als CSV.
-
-Jede Aktion (Erstellen, Ändern, Freigeben, Auschecken etc.) wird automatisch aufgezeichnet.
+Filterbar nach Zeitraum, exportierbar als CSV.
 
 ---
 
-## 15. Einstellungen
+## 18. Einstellungen
 
 Navigation → Einstellungen (Zahnrad-Symbol)
 
 ### Firma
-Firmenname, Adresse, UID, Bankverbindung, Kontaktdaten — erscheinen auf Rechnungen und Angeboten.
-
-Texte für Fussnoten auf Rechnungen, Angeboten und Kassabons.
+Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen und Angeboten.
 
 ### Kalkulation
-Stundenansatz und Maschinenkosten für die automatische Kostenberechnung.
-
-Standardwerte für Steuersatz, Zahlungskonditionen und Angebotsgültigkeit.
+- Stundenansatz (CHF/h) — für Arbeitszeitkalkulation in Angeboten
+- Maschinenkosten — Standardwerte
+- Steuersatz, Zahlungskonditionen, Angebotsgültigkeit
 
 ### Kassabon
 Einstellungen für den Pipsta-Thermodrucker.
 
 ### 3D-Druck
-Drucker, Düsen und Materialprofile für die automatische Vorausfüllung der Druckparameter.
+Drucker (mit CHF/h), Düsen und Materialprofile.
+
+> Druckparameter werden nicht mehr pro PLM-Bauteil gespeichert, sondern pro Produktionsauftrag. Materialtemperaturen werden direkt im Rohmaterial hinterlegt.
 
 ### PLM
-**Klassifizierungen** — eigene Klassifizierungen für Bauteile definieren:
-- Namen bearbeiten (direkt im Textfeld)
-- Farbe per Color-Picker wählen
-- Reihenfolge per Drag & Drop anpassen
-- **Speichern** nicht vergessen
+Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren.
 
 ### Daten
-- **Darstellung** — Schriftgrösse der Benutzeroberfläche (Klein bis Sehr gross), wird serverseitig gespeichert und gilt auf allen Geräten/Browsern
-- **Datenpfad** — wo Datenbank und Dateien gespeichert werden
-- **CAD-Programm** — Pfad zum CAD-Programm (für den CAD-Button in der Topbar)
-- **Checkout-Verzeichnis** — wo ausgecheckte CAD-Dateien abgelegt werden
+- **Darstellung** — Schriftgrösse (wird serverseitig gespeichert)
+- **Datenpfad** — Datenbank und Dateispeicher
+- **CAD-Programm** — Pfad für den 🖥 CAD-Button in der Topbar
+- **Checkout-Verzeichnis** — Zielordner für Checkouts
 - **Datensicherung** — ZIP-Export aller Daten
-- **Datei-Index** — Übersicht aller Dateien mit echtem Dateinamen
+- **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte
 
 ### Admin
-Zugang zu erweiterten Einstellungen — **Vorsicht, Änderungen können Daten beschädigen.**
+**Vorsicht — Änderungen können Daten dauerhaft beschädigen.**
 
-**Löschen:**
-- Freigegebene Bauteile (REL/OBS) löschen
-- Projekte mit Inhalten löschen
-- Aufträge und Angebote ausserhalb des Entwurf-Status löschen
-
-**Nummerierung:**
-- Präfixe für Aufträge (AUF), Angebote (ANG), Lieferscheine (LS), Kunden (KD)
-- Anzahl Stellen (Padding) pro Typ
-- Trennzeichen und Kürzel für Item-Nummern
-- Revisionsformat: Numerisch (1, 2, 3) oder Buchstaben (A, B, C)
+- Freigegebene Bauteile, Projekte mit Inhalt, abgeschlossene Aufträge/Angebote löschen
+- Nummerierungsstruktur: Präfixe, Stellen, Revisionsformat
 
 ---
 
-## 16. Tastaturkürzel
+## 19. Tastaturkürzel
 
 | Kürzel | Aktion |
 |--------|--------|
-| `Ctrl+K` | Suchfeld fokussieren |
-| `Escape` | Modal/Detailpanel schliessen |
-| Browser-Zurück | Zur vorherigen Ansicht navigieren |
+| `Ctrl+K` | Suche öffnen |
+| `Escape` | Modal / Detail schliessen |
+| Browser-Zurück | Zur vorherigen Ansicht |
 
 ---
 
@@ -511,27 +450,23 @@ Zugang zu erweiterten Einstellungen — **Vorsicht, Änderungen können Daten be
 
 **Einstellungen → Daten → Gesamtexport herunterladen**
 
-Erstellt ein ZIP mit:
-- `plm.db` — komplette Datenbank
-- `files/` — alle hochgeladenen Dateien
-
-**Wiederherstellen:** ZIP entpacken, Inhalt in den `data/`-Ordner legen, Server neu starten.
+ZIP mit `plm.db` + `files/`. Wiederherstellen: ZIP entpacken → Inhalt in `data/`-Ordner → Server neu starten.
 
 ---
 
-## Nummernkreise im Überblick
+## Nummernkreise
 
 ```
-Projekte:       0001 – 9999
-Baugruppen:     0028-asm-001, 0028-asm-002, …
-Parts:          0028-prt-001 / 0028-asm-001-prt-001
-Dokumente:      0028-doc-001
-Aufträge:       AUF-2026-0001
-Angebote:       ANG-2026-0001
-Lieferscheine:  LS-2026-0001
-Kunden:         KD-0001
+Projekte:      0001 – 9999
+Baugruppen:    0028-asm-001, 0028-asm-002, …
+Parts:         0028-prt-001 / 0028-asm-001-prt-001
+Dokumente:     0028-doc-001
+Aufträge:      AUF-2026-0001
+Angebote:      ANG-2026-0001
+Produktion:    LS-2026-0001
+Kunden:        KD-0001
 ```
 
 ---
 
-*Für technische Fragen zum Aufbau des Systems: siehe `README.md`*
+*Technische Details: siehe `README.md`*
