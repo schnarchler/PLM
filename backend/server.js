@@ -1216,7 +1216,22 @@ function collectCheckoutDatasets(itemId, types, visited = new Set()) {
   const rev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1', [itemId]);
   if (!rev) return [];
   let datasets = all('SELECT * FROM datasets WHERE revision_id=?', [rev.id]);
-  if (types && types.length) datasets = datasets.filter(d => types.includes(d.ds_type));
+  if (types && types.length) {
+    // CAD sub-types (STL, STEP, OBJ, 3MF …) are stored as ds_type='CAD' — match by extension
+    const CAD_SUBTYPES = { STL:['stl'], OBJ:['obj'], '3MF':['3mf'],
+      STEP:['step','stp'], IGES:['iges','igs'], OTHER_CAD:['f3d','blend','fcstd','ipt','iam','sldprt','sldasm','par','asm','prt','catpart','catproduct','jt','x_t','x_b'] };
+    const cadExtKeys = new Set(types.filter(t => CAD_SUBTYPES[t]));
+    const allowedExts = new Set([].concat(...[...cadExtKeys].map(k => CAD_SUBTYPES[k])));
+    const wantCad = types.includes('CAD');
+    datasets = datasets.filter(d => {
+      if (d.ds_type !== 'CAD') return types.includes(d.ds_type);
+      // For CAD files: match if 'CAD' selected, or if specific subtype extension matches
+      const ext = path.extname(d.original_name).slice(1).toLowerCase();
+      if (wantCad && !cadExtKeys.size) return true;          // only 'CAD' selected, no subtypes → all CAD
+      if (wantCad) return true;                               // 'CAD' + subtypes → all CAD
+      return allowedExts.has(ext);                            // only subtypes → match by ext
+    });
+  }
   const result = datasets.map(d => ({ ...d, item_number: item.item_number, item_name: item.name, rev_status: rev.status }));
   if (item.item_type === 'asm') {
     const children = all('SELECT child_item_id FROM bom WHERE parent_rev_id=?', [rev.id]);

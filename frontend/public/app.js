@@ -662,8 +662,9 @@ function renderItemDetail(item, activeRevId) {
   document.getElementById('dp-tabs').innerHTML = tabs;
   if (!isDOC) {
     const activeCheckout = state.checkouts.find(c => c.item_id === item.id);
+    if (activeCheckout) window._itemDetailCheckoutFolder = activeCheckout.folder;
     const coBtn = activeCheckout
-      ? `<button class="btn btn-amber btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="doCheckin('${activeCheckout.folder.replace(/'/g,"\\'")}',this)">⬆ Einchecken</button>`
+      ? `<button class="btn btn-amber btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="doCheckin(window._itemDetailCheckoutFolder,this)">⬆ Einchecken</button>`
       : `<button class="btn btn-teal btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}')">⬇ Auschecken</button>`;
     document.getElementById('dp-title').innerHTML += coBtn;
   }
@@ -5728,9 +5729,9 @@ async function delItemTimeEntry(id) {
 
 // ── CHECKOUT ──────────────────────────────────────────────────
 const CHECKOUT_TYPES = [
-  { key: 'CAD',         label: 'CAD-Dateien',     hint: '.step, .stp, .par, .asm …' },
-  { key: 'GCODE',       label: 'G-Code',           hint: '.gcode, .nc …' },
+  { key: 'CAD',         label: 'CAD-Dateien',     hint: '.step, .stp, .par, .asm, .3mf …' },
   { key: 'STL',         label: 'STL',              hint: '.stl' },
+  { key: 'GCODE',       label: 'G-Code',           hint: '.gcode, .nc …' },
   { key: 'PDF',         label: 'PDF',              hint: '.pdf' },
   { key: 'IMAGE',       label: 'Bilder',           hint: '.png, .jpg …' },
   { key: 'DOC',         label: 'Dokumente',        hint: '.docx, .txt …' },
