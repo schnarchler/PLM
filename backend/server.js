@@ -3166,12 +3166,45 @@ app.get('/api/standard-parts', (req, res) => {
   res.json(all('SELECT * FROM standard_parts ORDER BY standard, std_number, size, designation'));
 });
 
+app.get('/api/standard-parts/export', (req, res) => {
+  const parts = all('SELECT designation,standard,std_number,name,size,material,unit_price,notes FROM standard_parts ORDER BY standard,std_number,size,designation');
+  res.setHeader('Content-Disposition', 'attachment; filename="normteile.json"');
+  res.setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify({ version: 1, exported: new Date().toISOString(), parts }, null, 2));
+});
+
+app.post('/api/standard-parts/import', (req, res) => {
+  const { parts } = req.body;
+  if (!Array.isArray(parts)) return res.status(400).json({ error: 'Ungültiges Format' });
+  const existing = new Set(all('SELECT designation FROM standard_parts').map(p => p.designation));
+  let added = 0, skipped = 0;
+  for (const p of parts) {
+    if (!p.designation) continue;
+    if (existing.has(p.designation)) { skipped++; continue; }
+    runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
+      [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.notes||'']);
+    existing.add(p.designation);
+    added++;
+  }
+  saveDb();
+  res.json({ added, skipped });
+});
+
 app.post('/api/standard-parts', (req, res) => {
   const { designation, standard, std_number, name, size, material, unit_price, notes } = req.body;
   if (!designation) return res.status(400).json({ error: 'Bezeichnung erforderlich' });
   const id = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
     [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, notes||'']);
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [id]));
+});
+
+app.post('/api/standard-parts/:id/clone', (req, res) => {
+  const p = get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  const newId = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
+    [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.notes||'']);
+  saveDb();
+  res.json(get('SELECT * FROM standard_parts WHERE id=?', [newId]));
 });
 
 app.put('/api/standard-parts/:id', (req, res) => {
