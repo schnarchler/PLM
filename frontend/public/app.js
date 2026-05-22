@@ -3916,13 +3916,13 @@ async function searchItemsForLine(q) {
     res.innerHTML = items.map(i => {
       const rev = i.latest_revision;
       const icon = _itemChip(i.item_type, 18);
-      return `<div onclick="selectLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
+      return `<div onclick="selectLinkedItem(${i.id})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${icon}</span>
-        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
         <span style="flex:1;font-size:13px">${esc(i.name)}</span>
-        <span style="font-size:13px;color:var(--t3)">${i.project_name}</span>
+        <span style="font-size:13px;color:var(--t3)">${esc(i.project_name)}</span>
         ${rev?`<span class="status st-${rev.status}" style="margin-left:4px">rev${rev.rev}</span>`:''}
       </div>`;
     }).join('');
@@ -3930,15 +3930,21 @@ async function searchItemsForLine(q) {
   }, 200);
 }
 
-function selectLinkedItem(item) {
-  set('li-linked-plm-id', item.id);
+async function selectLinkedItem(itemId) {
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-plm-results').style.display = 'none';
+  const item = await api('/api/items/' + itemId).catch(() => null);
+  if (!item) return;
+  set('li-linked-plm-id', item.id);
   const sel = document.getElementById('li-plm-selected');
   document.getElementById('li-plm-badge').innerHTML = _itemChip(item.item_type, 15) + ' <span style="font-family:var(--mono)">' + esc(item.item_number) + '</span>';
-  document.getElementById('li-plm-name').textContent = item.name + ' · ' + item.project_name;
+  const extras = [];
+  if (item.weight_g != null) extras.push(`⚖ ${fmtN(item.weight_g, 1)} g`);
+  if (item.default_price != null) extras.push(`VP: ${fmtCHF(item.default_price)}`);
+  document.getElementById('li-plm-name').textContent = item.name + (item.project?.name ? ' · ' + item.project.name : '') + (extras.length ? ' · ' + extras.join(' · ') : '');
   sel.style.display = 'flex';
   if (!V('li-desc')) set('li-desc', item.item_number + ' – ' + item.name);
+  if (item.default_price != null && !(parseFloat(V('li-price')) > 0)) set('li-price', item.default_price);
   window._liItem = item;
   _calcLiCost();
 }
@@ -4128,12 +4134,7 @@ async function doBomQuoteImport(quoteId) {
 async function _doCalcLiCost() {
   const hint = document.getElementById('li-cost-hint');
   if (!hint) return;
-  let item = window._liItem;
-  // Fetch weight_g if missing (items-all may not include it before server restart)
-  if (item && item.weight_g == null) {
-    const full = await api('/api/items/' + item.id).catch(() => null);
-    if (full?.weight_g != null) { item = { ...item, weight_g: full.weight_g }; window._liItem = item; }
-  }
+  const item = window._liItem;
   const rmId = document.getElementById('li-rawmat')?.value;
   const hours = parseFloat(document.getElementById('li-hours')?.value) || 0;
   const qty   = parseFloat(V('li-qty')) || 1;
@@ -4141,6 +4142,11 @@ async function _doCalcLiCost() {
 
   const rows = [];
   let total = 0;
+
+  // Show item weight info when linked (even without raw material)
+  if (item?.weight_g != null && !rmId) {
+    rows.push({ label: 'Bauteilgewicht', val: null, info: `${fmtN(item.weight_g, 1)} g — Rohmaterial wählen für Materialkostenrechnung` });
+  }
 
   // Material cost from selected lot
   if (rmId) {
@@ -4160,11 +4166,10 @@ async function _doCalcLiCost() {
         const detail  = `${fmtN(itemWeight,1)}g × ${fmtCHF(price)}/${fmtN(rmWeight,0)}g${lotLabel}`;
         if (matCost > 0) { rows.push({ label: 'Material', val: matCost, detail }); total += matCost; }
       } else {
-        // Show warning which weight is missing
         const missing = [];
-        if (itemWeight == null) missing.push('Bauteil-Gewicht (im PLM-Teil hinterlegen)');
-        if (rmWeight <= 0)      missing.push('Rohmaterial-Gewicht (im Rohmaterial hinterlegen)');
-        rows.push({ label: 'Material', val: null, warn: `⚠ Gewicht fehlt: ${missing.join(', ')}` });
+        if (itemWeight == null) missing.push(`Bauteilgewicht fehlt (im PLM-Teil unter Gewicht eintragen)`);
+        if (rmWeight <= 0)      missing.push(`Rohmaterialgewicht fehlt (Spool-Gewicht im Rohmaterial eintragen)`);
+        rows.push({ label: 'Material', val: null, warn: `⚠ ${missing.join(' · ')}` });
       }
     }
   }
@@ -4196,18 +4201,19 @@ async function _doCalcLiCost() {
   hint.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:4px">
       ${rows.map(r => r.warn ? `
-        <div style="font-size:11px;color:var(--amber);padding:3px 0">${r.warn}</div>` : `
+        <div style="font-size:11px;color:var(--amber);padding:3px 0">${r.warn}</div>` : r.info ? `
+        <div style="font-size:11px;color:var(--t3);padding:3px 0">${r.info}</div>` : `
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
           <span style="color:var(--t4)">${r.label}${r.detail?` <span style="font-size:11px">(${r.detail})</span>`:''}</span>
           <span style="font-family:var(--mono)">${fmtCHF(r.val)}</span>
         </div>`).join('')}
-      <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line2);padding-top:6px;margin-top:2px;gap:8px">
+      ${total > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line2);padding-top:6px;margin-top:2px;gap:8px">
         <span style="color:var(--t3)">Kalkuliert / Stk${qty>1?` (× ${qty} = ${fmtCHF(totalAll)} total)`:''}:</span>
         <div style="display:flex;align-items:center;gap:8px">
           <strong style="font-family:var(--mono);color:var(--blue)">${fmtCHF(totalPerPiece)}</strong>
           <button class="btn btn-primary btn-sm" onclick="set('li-price','${totalPerPiece.toFixed(2)}')">Als Preis übernehmen</button>
         </div>
-      </div>
+      </div>` : ''}
     </div>`;
   hint.style.display = 'block';
 }
@@ -4764,13 +4770,13 @@ async function searchItemsForDim(q) {
     if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const icon = _itemChip(i.item_type, 18);
-      return `<div onclick="selectDimLinkedItem(${JSON.stringify(i).replace(/"/g,'&quot;')})"
+      return `<div onclick="selectDimLinkedItem(${i.id})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <span>${icon}</span>
-        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
         <span style="flex:1;font-size:13px">${esc(i.name)}</span>
-        <span style="font-size:13px;color:var(--t3)">${i.project_name}</span>
+        <span style="font-size:13px;color:var(--t3)">${esc(i.project_name)}</span>
       </div>`;
     }).join('');
     res.style.display = 'block';
@@ -4796,19 +4802,21 @@ async function _showDimStockInfo(itemId) {
   } catch { el.style.display = 'none'; }
 }
 
-function selectDimLinkedItem(item) {
-  set('dim-linked-plm-id', item.id);
+async function selectDimLinkedItem(itemId) {
   document.getElementById('dim-plm-search').value = '';
   document.getElementById('dim-plm-results').style.display = 'none';
+  const item = await api('/api/items/' + itemId).catch(() => null);
+  if (!item) return;
+  set('dim-linked-plm-id', item.id);
   const icon = _itemChip(item.item_type, 18);
   document.getElementById('dim-plm-badge').innerHTML = icon + ' <span style="font-family:var(--mono)">' + esc(item.item_number) + '</span>';
-  document.getElementById('dim-plm-name').textContent = item.name + ' · ' + item.project_name;
+  document.getElementById('dim-plm-name').textContent = item.name + (item.project?.name ? ' · ' + item.project.name : '');
   document.getElementById('dim-plm-selected').style.display = 'flex';
   _showDimStockInfo(item.id);
   if (!V('dim-desc')) set('dim-desc', item.item_number + ' – ' + item.name);
   if (item.default_price != null && !V('dim-price')) set('dim-price', item.default_price);
   // Auto-fill manual print parameters from linked item's print settings
-  const ps = item.latest_revision && item.latest_revision.print_settings;
+  const ps = item.revisions?.[0]?.print_settings;
   if (ps) {
     if (ps.filament_weight_total && !V('dim-man-fw')) set('dim-man-fw', ps.filament_weight_total);
     if (ps.print_duration && !V('dim-man-dur')) set('dim-man-dur', ps.print_duration);
