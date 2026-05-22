@@ -279,9 +279,18 @@ async function renderProjectsList() {
         ${statChip(p.doc_count, 'doc', 'var(--purple)')}
         ${p.file_count ? `<span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}
         <span style="font-size:13px;color:var(--t4);white-space:nowrap">${new Date(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span>
+        <button onclick="event.stopPropagation();pinProject(${p.id})" title="${p.pinned?'Angeheftet – klicken zum Lösen':'Anpinnen'}"
+          style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:${p.pinned?'1':'0.3'};transition:opacity .15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='${p.pinned?'1':'0.3'}'">
+          📌
+        </button>
         <span style="color:var(--t4);font-size:13px">›</span>
       </div>
     </div>`).join('')}</div>`);
+}
+
+async function pinProject(id) {
+  await api(`/api/projects/${id}/pin`, 'POST', {});
+  renderProjectsList();
 }
 
 // ── PROJECT DETAIL (tree view) ────────────────────────────────
@@ -3688,6 +3697,11 @@ async function openQuoteDetail(id) {
         <button class="btn btn-ghost btn-sm" onclick="openLineItemModal('quote',${id})">+ Position</button>
         <button class="btn btn-ghost btn-sm" onclick="openBomQuoteImport(${id})">📦 Aus BOM kalkullieren</button>
       </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px">
+        <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'quote')">📄 Angebot PDF</button>
+        ${q.status !== 'ACCEPTED' ? `<button class="btn btn-green btn-sm" onclick="convertQuoteToOrder(${id})">➜ In Auftrag umwandeln</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="switchTab(document.querySelector('[onclick*=qd-info]'), 'qd-info')">⚙ Details / Bearbeiten</button>
+      </div>
     </div>
     <div id="qd-info" style="display:none">
       <div class="sep-label">Angebotsdaten</div>
@@ -3778,7 +3792,7 @@ async function convertQuoteToOrder(quoteId) {
   if(!confirm('Angebot in Auftrag umwandeln? Das Angebot wird als "Akzeptiert" markiert.')) return;
   const o = await api(`/api/quotes/${quoteId}/convert`,'POST',{});
   toast('Auftrag '+o.number+' angelegt','ok');
-  gotoView('orders');
+  await gotoView('orders');
   openOrderDetail(o.id);
 }
 
@@ -6251,8 +6265,16 @@ async function deductFromInventory() {
 }
 
 // ── RAW MATERIALS ─────────────────────────────────────────────
+let _rmSort = 'material';
+function _rmSetSort(s) { _rmSort = s; renderRawMaterials(); }
+
 async function renderRawMaterials() {
-  setLeftHeader('Rohmaterial', `<button class="btn btn-primary btn-sm" onclick="openRawMatModal()">+ Material</button>`);
+  setLeftHeader('Rohmaterial', `
+    <div style="display:flex;gap:4px;align-items:center">
+      <span style="font-size:11px;color:var(--t4)">Sortierung:</span>
+      ${['material','color','price'].map(s => `<button class="btn btn-sm ${_rmSort===s?'btn-primary':'btn-ghost'}" onclick="_rmSetSort('${s}')">${s==='material'?'Material':s==='color'?'Farbe':'Preis'}</button>`).join('')}
+      <button class="btn btn-primary btn-sm" onclick="openRawMatModal()" style="margin-left:4px">+ Material</button>
+    </div>`);
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
   const items = await api('/api/raw-materials');
@@ -6261,6 +6283,12 @@ async function renderRawMaterials() {
   const low = items.filter(i => i.min_qty > 0 && i.stock_qty <= i.min_qty);
   const badge = document.getElementById('badge-rawmat');
   if (badge) badge.textContent = low.length || items.length || '—';
+
+  // Sort
+  const getPrice = i => (i.lots||[]).filter(l=>l.lot_number).map(l=>l.unit_price??Infinity).sort((a,b)=>a-b)[0] ?? Infinity;
+  if (_rmSort === 'color')    items.sort((a,b) => (a.color||'').localeCompare(b.color||'') || (a.material_type||'').localeCompare(b.material_type||''));
+  else if (_rmSort === 'price') items.sort((a,b) => getPrice(a) - getPrice(b));
+  else items.sort((a,b) => (a.material_type||'').localeCompare(b.material_type||'') || (a.color||'').localeCompare(b.color||''));
 
   if (!items.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">🧵</div><div class="empty-text">Noch kein Rohmaterial erfasst</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openRawMatModal()">Erstes Material anlegen</button></div></div>`);
