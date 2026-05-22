@@ -685,8 +685,14 @@ function renderItemDetail(item, activeRevId) {
               class="no-spin" onblur="saveItemPrice(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
             <span style="color:var(--t4)">CHF</span>
           </span>
-          ${bomHint}
-          ${item.weight_g != null ? `<span style="font-size:13px;color:var(--t3)">⚖ <span style="font-family:var(--mono);color:var(--t2)">${fmtN(item.weight_g,1)} g</span></span>` : ''}
+          <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
+            ⚖
+            <input id="item-weight-field" type="number" step="0.1" min="0" placeholder="—"
+              value="${item.weight_g != null ? item.weight_g : ''}"
+              style="width:72px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:13px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
+              class="no-spin" onblur="saveItemWeight(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
+            <span style="color:var(--t4)">g</span>
+          </span>
           ${item.source_url ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>` : ''}
         </div>`;
       })()}
@@ -698,7 +704,6 @@ function renderItemDetail(item, activeRevId) {
             <span style="color:var(--t3);font-size:13px">${r.status}</span>
           </div>`).join('')}
         <div style="margin-left:auto;display:flex;gap:4px">
-          ${!isDOC ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px" onclick="openItemModal(${item.project_id},${isASM ? item.id : (item.parent_id||'null')},'prt')">+ Part</button>` : ''}
           ${isASM ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Sub-ASM</button>` : ''}
         </div>
       </div>
@@ -848,7 +853,6 @@ function renderRevDetail(rev, item) {
   const wfBtns = (wfMap[rev.status]||[]).map(b =>
     `<button class="btn btn-sm ${b.cls}" onclick="openStatusModal(${rev.id},'${b.s}')">${b.label}</button>`).join('');
 
-  const ps = rev.print_settings;
   return `
     <!-- Rev info -->
     <div class="sep-label">rev${rev.rev} – Details</div>
@@ -921,39 +925,6 @@ function renderRevDetail(rev, item) {
       ${renderDatasets(rev.datasets||[], rev.id, locked)}
     </div>
 
-    ${!isASM && !isDOC ? `
-    <!-- Print settings -->
-    <div class="sep-label" style="margin-top:12px">Druckparameter
-      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openPsModal(${rev.id}, ${JSON.stringify(ps||{}).replace(/"/g,'&quot;')})">Bearbeiten</button>
-    </div>
-    ${ps && (ps.material||ps.layer_height||ps.printer_cost_hr) ? `
-    <div class="ps-grid">
-      ${ps.material?`<div class="ps-cell"><div class="ps-label">Material</div><div class="ps-val">${esc(ps.material)}</div></div>`:''}
-      ${ps.color?`<div class="ps-cell"><div class="ps-label">Farbe</div><div class="ps-val">${esc(ps.color)}</div></div>`:''}
-      ${ps.printer?`<div class="ps-cell"><div class="ps-label">Drucker</div><div class="ps-val">${esc(ps.printer)}</div></div>`:''}
-      ${ps.layer_height?`<div class="ps-cell"><div class="ps-label">Layer</div><div class="ps-val">${ps.layer_height} mm</div></div>`:''}
-      ${ps.infill?`<div class="ps-cell"><div class="ps-label">Infill</div><div class="ps-val">${ps.infill}%</div></div>`:''}
-      ${ps.supports?`<div class="ps-cell"><div class="ps-label">Supports</div><div class="ps-val">${esc(ps.supports)}</div></div>`:''}
-      ${ps.nozzle?`<div class="ps-cell"><div class="ps-label">Düse</div><div class="ps-val">${ps.nozzle} mm</div></div>`:''}
-      ${ps.print_temp?`<div class="ps-cell"><div class="ps-label">Drucktemp</div><div class="ps-val">${ps.print_temp}°C</div></div>`:''}
-      ${ps.bed_temp?`<div class="ps-cell"><div class="ps-label">Bett</div><div class="ps-val">${ps.bed_temp}°C</div></div>`:''}
-      ${ps.print_duration?`<div class="ps-cell"><div class="ps-label">Druckdauer</div><div class="ps-val">${ps.print_duration} h</div></div>`:''}
-      ${ps.filament_weight_total?`<div class="ps-cell"><div class="ps-label">Filament ges.</div><div class="ps-val">${ps.filament_weight_total} g</div></div>`:''}
-    </div>
-    ${(ps.printer_cost_hr||ps.filament_price_kg) ? (() => {
-      const mat = ((ps.filament_weight_total||0)/1000)*(ps.filament_price_kg||0);
-      const mach = (ps.print_duration||0)*(ps.printer_cost_hr||0);
-      const total = mat+mach;
-      return '<div class="cost-result" style="margin-top:8px">'
-        +'<div style="font-size:13px;font-family:var(--mono);color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Kostenrechnung</div>'
-        +(mat?'<div class="cost-row"><span>Materialkosten</span><span>'+fmtN(mat)+' CHF</span></div>':'')
-        +(mach?'<div class="cost-row"><span>Maschinenkosten</span><span>'+fmtN(mach)+' CHF</span></div>':'')
-        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">'
-        +'<span style="font-size:13px;color:var(--t3)">Gesamt</span>'
-        +'<span class="cost-total">'+fmtN(total)+' CHF</span></div></div>';
-    })() : ''}
-    ` : `<div style="color:var(--t3);font-size:13px">Noch keine Druckparameter hinterlegt.</div>`}
-    ` : ''}
 
     <!-- Workflow -->
     <div class="wf-strip" style="margin-top:16px">
@@ -2963,6 +2934,21 @@ async function confirmMoveItem(itemId) {
   }
 }
 
+async function saveItemWeight(itemId, input) {
+  const val = input.value.trim();
+  const weight = val === '' ? null : parseFloat(val);
+  try {
+    const item = await api('/api/items/' + itemId);
+    await api('/api/items/' + itemId, 'PUT', {
+      name: item.name, description: item.description,
+      source_url: item.source_url || null, default_price: item.default_price ?? null,
+      weight_g: weight, classification: item.classification || null
+    });
+    input.style.borderColor = 'var(--green)';
+    setTimeout(() => { input.style.borderColor = ''; }, 1200);
+  } catch { input.style.borderColor = 'var(--red)'; }
+}
+
 async function saveItemPrice(itemId, input) {
   const val = input.value.trim();
   const price = val === '' ? null : parseFloat(val);
@@ -3737,7 +3723,10 @@ async function openQuoteDetail(id) {
     <div id="qd-pos">
       ${renderLineItems(q.items||[], 'quote', id, q.tax_rate??0, q.discount_pct||0, !!q.include_tax)}
       ${hoursSection}
-      <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('quote',${id})">+ Position</button>
+      <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="openLineItemModal('quote',${id})">+ Position</button>
+        <button class="btn btn-ghost btn-sm" onclick="openBomQuoteImport(${id})">📦 Aus BOM kalkullieren</button>
+      </div>
     </div>
     <div id="qd-info" style="display:none">
       <div class="sep-label">Angebotsdaten</div>
@@ -3930,33 +3919,269 @@ function selectLinkedItem(item) {
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-plm-results').style.display = 'none';
   const sel = document.getElementById('li-plm-selected');
-  document.getElementById('li-plm-badge').textContent = item.item_number;
+  document.getElementById('li-plm-badge').innerHTML = _itemChip(item.item_type, 15) + ' <span style="font-family:var(--mono)">' + esc(item.item_number) + '</span>';
   document.getElementById('li-plm-name').textContent = item.name + ' · ' + item.project_name;
   sel.style.display = 'flex';
   if (!V('li-desc')) set('li-desc', item.item_number + ' – ' + item.name);
-  if (item.default_price != null && !(parseFloat(V('li-price')) > 0)) set('li-price', item.default_price);
-  // Show manufacturing cost hint
-  const hint = document.getElementById('li-cost-hint');
-  const mc = item.manufacturing_cost;
-  if (mc) {
-    const parts = [];
-    if (mc.filament > 0) parts.push(`Filament ${fmtCHF(mc.filament)}`);
-    if (mc.machine > 0) parts.push(`Maschine ${fmtCHF(mc.machine)}`);
-    const sellPrice = item.default_price;
-    const margin = sellPrice != null ? sellPrice - mc.total : null;
-    const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
-    const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : margin < mc.total * 0.2 ? 'var(--yellow)' : 'var(--green)';
-    hint.innerHTML = `<span style="color:var(--t3)">Herstellungskosten:</span> <strong>${fmtCHF(mc.total)}</strong>`
-      + (mc.from_bom ? ` <span style="color:var(--teal);font-size:13px">(aus BOM)</span>` : parts.length ? ` <span style="color:var(--t3)">(${parts.join(' + ')})</span>` : '')
-      + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor}">Marge ${fmtCHF(margin)}${marginPct != null ? ` / ${marginPct.toFixed(0)}%` : ''}</span>` : '');
-    hint.style.display = 'block';
-  } else {
-    hint.style.display = 'none';
+  window._liItem = item;
+  _calcLiCost();
+}
+
+let _calcLiCostTimer;
+function _calcLiCost() {
+  clearTimeout(_calcLiCostTimer);
+  _calcLiCostTimer = setTimeout(_doCalcLiCost, 150);
+}
+
+// ── BOM QUOTE IMPORT ──────────────────────────────────────────
+let _bomQItems = [];
+
+async function openBomQuoteImport(quoteId) {
+  _bomQItems = [];
+  if (!state.rawMaterials?.length) {
+    state.rawMaterials = await api('/api/raw-materials').catch(() => []);
   }
+  _showDynModal(`<div class="modal" style="max-width:780px;width:96vw">
+    <div class="modal-head">
+      <div class="modal-title">📦 Aus BOM kalkullieren</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+        Baugruppe wählen → alle BOM-Teile werden einzeln kalkuliert und als Positionen übernommen.
+      </div>
+      <div style="position:relative;margin-bottom:14px">
+        <input class="fi" id="bqm-search" placeholder="Baugruppe suchen (ASM)…" oninput="_bqmSearch(this.value)" autocomplete="off">
+        <div id="bqm-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:200px;overflow-y:auto"></div>
+      </div>
+      <div id="bqm-asm-badge" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 12px;margin-bottom:14px;font-size:13px;display:none;align-items:center;gap:8px">
+        <span id="bqm-asm-label" style="font-family:var(--mono);color:var(--blue)"></span>
+        <span id="bqm-asm-name" style="flex:1"></span>
+      </div>
+      <div class="form-row cols2" style="margin-bottom:12px">
+        <div class="fg"><label class="fl">Rohmaterial (für alle Teile, optional)</label>
+          <select class="fs" id="bqm-rawmat" onchange="_bqmCalcAll()">
+            <option value="">— kein Rohmaterial —</option>
+            ${(state.rawMaterials||[]).map(m => `<option value="${m.id}" data-unit="${esc(m.unit)}">${esc(m.name)} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Stundenansatz (CHF/h)</label>
+          <input class="fi" type="number" id="bqm-rate" value="${parseFloat(state.settings?.hourly_rate)||0}" min="0" step="1" oninput="_bqmCalcAll()">
+        </div>
+      </div>
+      <div id="bqm-parts" style="display:none">
+        <div class="sep-label" style="margin-top:0">BOM-Teile</div>
+        <div id="bqm-parts-list" style="display:flex;flex-direction:column;gap:4px;max-height:340px;overflow-y:auto"></div>
+        <div id="bqm-total" style="margin-top:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);font-size:13px"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" id="bqm-add-btn" style="display:none" onclick="doBomQuoteImport(${quoteId})">✓ Alle als Positionen übernehmen</button>
+    </div>
+  </div>`);
+}
+
+let _bqmSearchTimer;
+function _bqmSearch(q) {
+  clearTimeout(_bqmSearchTimer);
+  const res = document.getElementById('bqm-results');
+  if (!q || q.length < 1) { res.style.display = 'none'; return; }
+  _bqmSearchTimer = setTimeout(async () => {
+    const items = await api('/api/items-all?q=' + encodeURIComponent(q));
+    const asms = items.filter(i => i.item_type === 'asm');
+    if (!asms.length) { res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Baugruppen gefunden</div>'; res.style.display = 'block'; return; }
+    res.innerHTML = asms.map(i => `
+      <div onclick="_bqmSelectAsm(${JSON.stringify(i).replace(/"/g,'&quot;')})"
+        style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <span>${_itemChip('asm', 16)}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        <span style="font-size:13px;color:var(--t3)">${i.project_name}</span>
+      </div>`).join('');
+    res.style.display = 'block';
+  }, 200);
+}
+
+async function _bqmSelectAsm(item) {
+  document.getElementById('bqm-results').style.display = 'none';
+  document.getElementById('bqm-search').value = '';
+  const badge = document.getElementById('bqm-asm-badge');
+  document.getElementById('bqm-asm-label').textContent = item.item_number;
+  document.getElementById('bqm-asm-name').textContent = item.name;
+  badge.style.display = 'flex';
+  document.getElementById('bqm-parts').style.display = 'none';
+  document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--t3);font-size:13px">Lade BOM…</div>';
+  document.getElementById('bqm-parts').style.display = 'block';
+
+  const bom = await api(`/api/items/${item.id}/bom-for-quote`);
+  if (!bom.length) {
+    document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--amber);font-size:13px">⚠ Keine BOM-Teile gefunden</div>';
+    return;
+  }
+  _bomQItems = bom;
+  _bqmRenderParts();
+  await _bqmCalcAll();
+  document.getElementById('bqm-add-btn').style.display = '';
+}
+
+function _bqmRenderParts() {
+  const list = document.getElementById('bqm-parts-list');
+  list.innerHTML = _bomQItems.map((b, i) => `
+    <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span>${_itemChip(b.item_type, 15)}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(b.item_number)}</span>
+        <span style="flex:1;font-size:13px">${esc(b.name)}</span>
+        <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${fmtN(b.quantity,0)} ${b.unit}</span>
+        ${b.weight_g!=null ? `<span style="font-size:11px;color:var(--t4)">⚖ ${fmtN(b.weight_g,1)}g</span>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:11px;color:var(--t4);flex-shrink:0">Arbeitszeit/Stk (h):</label>
+        <input type="number" id="bqm-h-${i}" value="" min="0" step="0.25" placeholder="0"
+          style="width:70px;font-size:13px;background:var(--bg3);border:1px solid var(--line);border-radius:var(--r-xs);padding:2px 6px"
+          oninput="_bqmCalcAll()">
+        <span id="bqm-cost-${i}" style="font-size:13px;font-family:var(--mono);color:var(--t3);margin-left:auto"></span>
+      </div>
+    </div>`).join('');
+}
+
+async function _bqmCalcAll() {
+  if (!_bomQItems.length) return;
+  const rmId  = document.getElementById('bqm-rawmat')?.value;
+  const rate  = parseFloat(document.getElementById('bqm-rate')?.value) || 0;
+  const rm    = rmId ? (state.rawMaterials||[]).find(r => r.id == rmId) : null;
+  let rmPrice = null;
+  if (rmId) {
+    const prices = await api(`/api/raw-materials/${rmId}/prices`).catch(() => []);
+    rmPrice = prices[0]?.unit_price ?? null;
+  }
+
+  let grandTotal = 0;
+  _bomQItems.forEach((b, i) => {
+    const hours = parseFloat(document.getElementById(`bqm-h-${i}`)?.value) || 0;
+    const qty   = b.quantity || 1;
+    let costPerPiece = 0;
+
+    const mc = b.manufacturing_cost;
+    if (mc?.total > 0) costPerPiece += mc.total;
+
+    if (rm && rmPrice != null && b.weight_g != null) {
+      if (rm.unit === 'g')  costPerPiece += b.weight_g * rmPrice;
+      else if (rm.unit === 'kg') costPerPiece += (b.weight_g / 1000) * rmPrice;
+      else costPerPiece += rmPrice;
+    }
+    if (hours > 0 && rate > 0) costPerPiece += hours * rate;
+
+    const lineTotal = costPerPiece * qty;
+    grandTotal += lineTotal;
+    b._calcPrice = costPerPiece;
+    b._calcHours = hours;
+    const el = document.getElementById(`bqm-cost-${i}`);
+    if (el) el.textContent = lineTotal > 0 ? `${fmtCHF(costPerPiece)}/Stk × ${qty} = ${fmtCHF(lineTotal)}` : '—';
+  });
+
+  const tot = document.getElementById('bqm-total');
+  if (tot) tot.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="color:var(--t3)">Gesamtkosten (alle Teile):</span>
+    <strong style="font-family:var(--mono);font-size:15px;color:var(--blue)">${fmtCHF(grandTotal)}</strong>
+  </div>`;
+}
+
+async function doBomQuoteImport(quoteId) {
+  if (!_bomQItems.length) return;
+  const rmVal = document.getElementById('bqm-rawmat')?.value;
+  for (const b of _bomQItems) {
+    await api(`/api/quotes/${quoteId}/items`, 'POST', {
+      item_id: b.id,
+      description: b.item_number + ' – ' + b.name,
+      quantity: b.quantity || 1,
+      unit: b.unit || 'Stk',
+      unit_price: b._calcPrice || 0,
+      raw_material_id: rmVal ? parseInt(rmVal) : null,
+      estimated_hours: b._calcHours || null,
+      notes: ''
+    });
+  }
+  _hideDynModal();
+  toast(`${_bomQItems.length} Position${_bomQItems.length !== 1 ? 'en' : ''} hinzugefügt`, 'ok');
+  await renderQuotes();
+  openQuoteDetail(quoteId);
+}
+
+async function _doCalcLiCost() {
+  const hint = document.getElementById('li-cost-hint');
+  if (!hint) return;
+  const item = window._liItem;
+  const rmId = document.getElementById('li-rawmat')?.value;
+  const hours = parseFloat(document.getElementById('li-hours')?.value) || 0;
+  const qty   = parseFloat(V('li-qty')) || 1;
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
+
+  const rows = [];
+  let total = 0;
+
+  // Material cost: (rm_price / rm_weight_g) × item_weight_g
+  if (rmId && item?.weight_g != null) {
+    const prices = await api(`/api/raw-materials/${rmId}/prices`).catch(()=>[]);
+    if (prices.length) {
+      const rm       = (state.rawMaterials||[]).find(r => r.id == rmId);
+      const price    = prices[0].unit_price;
+      const rmWeight = parseFloat(rm?.weight_g) || 0;
+      if (rmWeight > 0) {
+        const matCost = (price / rmWeight) * item.weight_g;
+        const detail  = `${fmtN(item.weight_g,1)}g × ${fmtCHF(price)}/${fmtN(rmWeight,0)}g`;
+        if (matCost > 0) { rows.push({ label: 'Material', val: matCost, detail }); total += matCost; }
+      }
+    }
+  }
+
+  // Work time
+  if (hours > 0 && hourlyRate > 0) {
+    const workCost = hours * hourlyRate;
+    rows.push({ label: 'Arbeitszeit', val: workCost, detail: `${hours}h × ${fmtCHF(hourlyRate)}/h` });
+    total += workCost;
+  }
+
+  // Print cost (printer × estimated print hours)
+  const printerName  = document.getElementById('li-printer')?.value;
+  const printHours   = parseFloat(document.getElementById('li-print-hours')?.value) || 0;
+  if (printerName && printHours > 0) {
+    const printer = (state.printers||[]).find(p => p.name === printerName);
+    const costHr  = parseFloat(printer?.cost_per_hour) || 0;
+    if (costHr > 0) {
+      const printCost = printHours * costHr;
+      rows.push({ label: 'Druckzeit', val: printCost, detail: `${printHours}h × ${fmtCHF(costHr)}/h (${esc(printerName)})` });
+      total += printCost;
+    }
+  }
+
+  if (!rows.length) { hint.style.display = 'none'; return; }
+
+  const totalPerPiece = total;
+  const totalAll = total * qty;
+  hint.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:4px">
+      ${rows.map(r => `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+          <span style="color:var(--t4)">${r.label}${r.detail?` <span style="font-size:11px">(${r.detail})</span>`:''}</span>
+          <span style="font-family:var(--mono)">${fmtCHF(r.val)}</span>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line2);padding-top:6px;margin-top:2px;gap:8px">
+        <span style="color:var(--t3)">Kalkuliert / Stk${qty>1?` (× ${qty} = ${fmtCHF(totalAll)} total)`:''}:</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <strong style="font-family:var(--mono);color:var(--blue)">${fmtCHF(totalPerPiece)}</strong>
+          <button class="btn btn-primary btn-sm" onclick="set('li-price','${totalPerPiece.toFixed(2)}')">Als Preis übernehmen</button>
+        </div>
+      </div>
+    </div>`;
+  hint.style.display = 'block';
 }
 
 function clearLinkedItem() {
   set('li-linked-plm-id', '');
+  window._liItem = null;
   document.getElementById('li-plm-selected').style.display = 'none';
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-cost-hint').style.display = 'none';
@@ -3967,11 +4192,36 @@ function openLineItemModal(parentType, parentId, itemId) {
   set('li-parent-id', parentId);
   set('li-item-id', itemId||'');
   set('li-linked-plm-id', '');
+  set('li-hours', '');
+  set('li-print-hours', '');
+  window._liItem = null;
+  // Ensure raw materials + printers are loaded
+  const _liLoadPromises = [];
+  if (!state.rawMaterials?.length)
+    _liLoadPromises.push(api('/api/raw-materials').then(mats => { state.rawMaterials = mats; }).catch(()=>{}));
+  if (!state.printers?.length)
+    _liLoadPromises.push(api('/api/printers').then(p => { state.printers = p; }).catch(()=>{}));
+  Promise.all(_liLoadPromises).then(() => {
+    const rmSel = document.getElementById('li-rawmat');
+    if (rmSel) rmSel.innerHTML = '<option value="">— kein Rohmaterial —</option>' +
+      (state.rawMaterials||[]).map(m => `<option value="${m.id}" data-unit="${esc(m.unit)}">${esc(m.name)} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`).join('');
+    const prSel = document.getElementById('li-printer');
+    if (prSel) prSel.innerHTML = '<option value="">— kein Drucker —</option>' +
+      (state.printers||[]).map(p => `<option value="${esc(p.name)}" data-cost="${p.cost_per_hour}">${esc(p.name)} (${fmtChf(p.cost_per_hour)}/h)</option>`).join('');
+  });
   document.getElementById('li-title').textContent = itemId ? 'Position bearbeiten' : 'Position hinzufügen';
   document.getElementById('li-save').textContent = itemId ? 'Speichern' : 'Hinzufügen';
   document.getElementById('li-plm-results').style.display = 'none';
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-cost-hint').style.display = 'none';
+  // Populate raw material dropdown
+  const rmSel = document.getElementById('li-rawmat');
+  if (rmSel) {
+    rmSel.innerHTML = '<option value="">— kein Rohmaterial —</option>' +
+      (state.rawMaterials||[]).map(m =>
+        `<option value="${m.id}" data-unit="${esc(m.unit)}" data-rmweight="${m.weight_g||''}">${esc(m.name)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`
+      ).join('');
+  }
 
   if (itemId) {
     const src = parentType === 'order' ? state.orders : (state.quotes||[]);
@@ -3980,11 +4230,20 @@ function openLineItemModal(parentType, parentId, itemId) {
     if (li) {
       set('li-desc',li.description); set('li-qty',li.quantity); set('li-price',li.unit_price);
       set('li-disc',li.discount_pct||0); set('li-notes',li.notes||'');
+      set('li-hours', li.estimated_hours||'');
+      set('li-print-hours', li.estimated_print_hours||'');
       document.getElementById('li-unit').value = li.unit||'Stk';
+      // Defer dropdown values until dropdowns are populated
+      setTimeout(() => {
+        if (li.raw_material_id) document.getElementById('li-rawmat').value = li.raw_material_id;
+        if (li.printer_name)    document.getElementById('li-printer').value = li.printer_name;
+        if (li.raw_material_id || li.printer_name || li.estimated_hours || li.estimated_print_hours)
+          _calcLiCost();
+      }, 300);
       if (li.item_id && li.item_number) {
         set('li-linked-plm-id', li.item_id);
         const icon = _itemChip(li.item_type, 18);
-        document.getElementById('li-plm-badge').textContent = icon + ' ' + li.item_number;
+        document.getElementById('li-plm-badge').innerHTML = icon + ' <span style="font-family:var(--mono)">' + esc(li.item_number) + '</span>';
         document.getElementById('li-plm-name').textContent = li.description;
         document.getElementById('li-plm-selected').style.display = 'flex';
         // Show cost hint directly from already-loaded data
@@ -4024,12 +4283,17 @@ async function saveLineItem() {
   const itemId = V('li-item-id');
   const desc = V('li-desc'); if(!desc) return toast('Beschreibung fehlt','err');
   const linkedPlmId = V('li-linked-plm-id') ? parseInt(V('li-linked-plm-id')) : null;
+  const rmVal = document.getElementById('li-rawmat')?.value;
   const body = { description:desc, quantity:parseFloat(V('li-qty'))||1,
     unit:document.getElementById('li-unit').value,
     unit_price:parseFloat(V('li-price'))||0,
     discount_pct:parseFloat(V('li-disc'))||0,
     notes:V('li-notes'),
-    item_id: linkedPlmId };
+    item_id: linkedPlmId,
+    raw_material_id: rmVal ? parseInt(rmVal) : null,
+    estimated_hours: parseFloat(V('li-hours'))||null,
+    printer_name: document.getElementById('li-printer')?.value || null,
+    estimated_print_hours: parseFloat(V('li-print-hours'))||null };
   if (itemId) {
     await api(`/api/${parentType === 'order' ? 'order' : 'quote'}-items/${itemId}`,'PUT',body);
     toast('Gespeichert','ok');

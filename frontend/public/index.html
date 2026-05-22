@@ -424,14 +424,14 @@
 
 <!-- Line Item Modal (shared for orders + quotes) -->
 <div class="overlay" id="lineItemModal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:560px">
     <div class="modal-head"><div class="modal-title" id="li-title">Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('lineItemModal')">✕</button></div>
     <div class="modal-body">
       <!-- PLM Item search -->
       <div class="form-row" style="margin-bottom:6px">
         <div class="fg">
           <label class="fl">PLM Item verknüpfen <span style="color:var(--t3)">(optional)</span></label>
-          <div id="li-plm-selected" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 10px;margin-bottom:6px;display:none;align-items:center;gap:8px">
+          <div id="li-plm-selected" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 10px;margin-bottom:6px;align-items:center;gap:8px">
             <span id="li-plm-badge" style="font-family:var(--mono);font-size:10px;color:var(--blue)"></span>
             <span id="li-plm-name" style="font-size:12px;flex:1"></span>
             <button class="btn btn-icon btn-ghost btn-sm" onclick="clearLinkedItem()" title="Verknüpfung aufheben">✕</button>
@@ -442,17 +442,37 @@
           </div>
         </div>
       </div>
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">Rohmaterial <span style="color:var(--t3)">(optional)</span></label>
+          <select class="fs" id="li-rawmat" onchange="_calcLiCost()">
+            <option value="">— kein Rohmaterial —</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Arbeitszeit (h) <span style="color:var(--t3)">(optional)</span></label>
+          <input class="fi" type="number" id="li-hours" min="0" step="0.25" placeholder="0" oninput="_calcLiCost()">
+        </div>
+      </div>
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">Drucker <span style="color:var(--t3)">(optional)</span></label>
+          <select class="fs" id="li-printer" onchange="_calcLiCost()">
+            <option value="">— kein Drucker —</option>
+          </select>
+        </div>
+        <div class="fg"><label class="fl">Druckzeit (h) <span style="color:var(--t3)">(optional)</span></label>
+          <input class="fi" type="number" id="li-print-hours" min="0" step="0.25" placeholder="0" oninput="_calcLiCost()">
+        </div>
+      </div>
       <div class="form-row">
         <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="li-desc" placeholder="Leistungsbeschreibung oder Bezeichnung"></div>
       </div>
       <div class="form-row cols3">
-        <div class="fg"><label class="fl">Menge</label><input class="fi" id="li-qty" type="number" value="1" min="0.001" step="1"></div>
+        <div class="fg"><label class="fl">Menge</label><input class="fi" id="li-qty" type="number" value="1" min="0.001" step="1" oninput="_calcLiCost()"></div>
         <div class="fg"><label class="fl">Einheit</label>
           <select class="fs" id="li-unit"><option>Stk</option><option>h</option><option>m</option><option>mm</option><option>g</option><option>kg</option><option>Set</option><option>Pauschal</option></select>
         </div>
         <div class="fg"><label class="fl">Einzelpreis (CHF)</label><input class="fi" id="li-price" type="number" step="0.01" value="0"></div>
       </div>
-      <div id="li-cost-hint" style="display:none;margin:-4px 0 8px;padding:7px 10px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r);font-size:11px;color:var(--t2)"></div>
+      <div id="li-cost-hint" style="display:none;margin:-4px 0 8px;padding:10px 12px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r);font-size:13px;color:var(--t2)"></div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Rabatt (%)</label><input class="fi" id="li-disc" type="number" step="0.1" value="0" min="0" max="100"></div>
         <div class="fg"><label class="fl">Notizen</label><input class="fi" id="li-notes" placeholder="optional"></div>
