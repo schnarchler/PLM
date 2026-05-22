@@ -2418,7 +2418,7 @@ async function openOrderDetail(id) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openOrderModal(${id})">✏️ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>
-        <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Klonen</button>
+        <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Dublizieren</button>
         <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🔧 Produktionsauftrag erstellen</button>
         ${o.status==='DRAFT' ? `<button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>` : ''}
       </div>
@@ -5491,9 +5491,9 @@ ${itemsHtml || '<p style="color:#9ca3af">Keine Positionen</p>'}
 // ── CLONE ORDER ───────────────────────────────────────────────
 async function cloneOrder(id) {
   const o = await api(`/api/orders/${id}/clone`, 'POST');
-  toast(`Auftrag ${o.number} erstellt`, 'ok');
   await renderOrders();
-  openOrderDetail(o.id);
+  await openOrderDetail(o.id);
+  openOrderModal(o.id);
 }
 
 // ── ZEITERFASSUNG ─────────────────────────────────────────────
