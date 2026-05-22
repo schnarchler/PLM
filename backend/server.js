@@ -1560,7 +1560,15 @@ app.delete('/api/datasets/:id', (req, res) => {
 // ==============================================================
 // CUSTOMERS
 // ==============================================================
-app.get('/api/customers', (req, res) => res.json(all('SELECT * FROM customers ORDER BY number DESC')));
+app.get('/api/customers', (req, res) => {
+  const customers = all(`
+    SELECT c.*, COUNT(o.id) as order_count
+    FROM customers c
+    LEFT JOIN orders o ON o.customer_id = c.id
+    GROUP BY c.id
+    ORDER BY c.number DESC`);
+  res.json(customers);
+});
 
 app.post('/api/customers', (req, res) => {
   const { name, email, phone, street, postal_code, city, country, notes } = req.body;
