@@ -501,6 +501,9 @@ async function initDb() {
     console.log('Migration lowercase-numbering-v1 angewendet');
   });
 
+  // Add new columns to existing databases (safe try/catch)
+  try { db.run('ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0'); } catch {}
+
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
 }
