@@ -3976,8 +3976,9 @@ async function selectLinkedItem(itemId) {
   set('li-linked-plm-id', item.id);
   const sel = document.getElementById('li-plm-selected');
   document.getElementById('li-plm-badge').innerHTML = _itemChip(item.item_type, 15) + ' <span style="font-family:var(--mono)">' + esc(item.item_number) + '</span>';
+  const dispWeight = item.effective_weight_g ?? item.weight_g;
   const extras = [];
-  if (item.weight_g != null) extras.push(`⚖ ${fmtN(item.weight_g, 1)} g`);
+  if (dispWeight != null) extras.push(`⚖ ${fmtN(dispWeight, 1)} g${item.effective_weight_g != null && item.weight_g == null ? ' (BOM)' : ''}`);
   if (item.default_price != null) extras.push(`VP: ${fmtCHF(item.default_price)}`);
   document.getElementById('li-plm-name').textContent = item.name + (item.project?.name ? ' · ' + item.project.name : '') + (extras.length ? ' · ' + extras.join(' · ') : '');
   sel.style.display = 'flex';
@@ -4182,9 +4183,13 @@ async function _doCalcLiCost() {
   const rows = [];
   let total = 0;
 
+  // Effective weight: direct weight_g, or BOM sum for assemblies
+  const effectiveWeight = item ? (item.effective_weight_g ?? item.weight_g ?? null) : null;
+  const weightLabel = item?.effective_weight_g != null && item?.weight_g == null ? ' (BOM-Summe)' : '';
+
   // Show item weight info when linked (even without raw material)
-  if (item?.weight_g != null && !rmId) {
-    rows.push({ label: 'Bauteilgewicht', val: null, info: `${fmtN(item.weight_g, 1)} g — Rohmaterial wählen für Materialkostenrechnung` });
+  if (effectiveWeight != null && !rmId) {
+    rows.push({ label: 'Bauteilgewicht', val: null, info: `${fmtN(effectiveWeight, 1)} g${weightLabel} — Rohmaterial wählen für Materialkostenrechnung` });
   }
 
   // Material cost from selected lot
@@ -4198,15 +4203,15 @@ async function _doCalcLiCost() {
     }
     if (price != null) {
       const rmWeight   = parseFloat(rm?.weight_g) || 0;
-      const itemWeight = item?.weight_g ?? null;
+      const itemWeight = effectiveWeight;
       const lotLabel   = lot?.lot_number ? ` (Lot ${lot.lot_number})` : '';
       if (rmWeight > 0 && itemWeight != null) {
         const matCost = (price / rmWeight) * itemWeight;
-        const detail  = `${fmtN(itemWeight,1)}g × ${fmtCHF(price)}/${fmtN(rmWeight,0)}g${lotLabel}`;
+        const detail  = `${fmtN(itemWeight,1)}g${weightLabel} × ${fmtCHF(price)}/${fmtN(rmWeight,0)}g${lotLabel}`;
         if (matCost > 0) { rows.push({ label: 'Material', val: matCost, detail }); total += matCost; }
       } else {
         const missing = [];
-        if (itemWeight == null) missing.push(`Bauteilgewicht fehlt (im PLM-Teil unter Gewicht eintragen)`);
+        if (itemWeight == null) missing.push(`Bauteilgewicht fehlt (direkt am Teil oder über BOM-Teile)`);
         if (rmWeight <= 0)      missing.push(`Rohmaterialgewicht fehlt (Spool-Gewicht im Rohmaterial eintragen)`);
         rows.push({ label: 'Material', val: null, warn: `⚠ ${missing.join(' · ')}` });
       }
