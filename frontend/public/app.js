@@ -3341,11 +3341,14 @@ async function openPsModal(revId, ps) {
 }
 async function applyDimRawMat(val) {
   if (!val) return;
-  const sel = document.getElementById('dim-rawmat');
-  const opt = sel?.options[sel.selectedIndex];
-  if (!opt) return;
-  if (opt.dataset.mat) set('dim-man-mat', opt.dataset.mat);
-  if (opt.dataset.col) set('dim-man-color', opt.dataset.col);
+  const rm = (state.rawMaterials||[]).find(m => m.id == val);
+  if (rm) {
+    if (rm.material_type) set('dim-man-mat',   rm.material_type);
+    if (rm.color)         set('dim-man-color',  rm.color);
+    if (rm.print_temp)    set('dim-man-temp',  rm.print_temp);
+    if (rm.bed_temp)      set('dim-man-bed',   rm.bed_temp);
+    dimTab('manual');
+  }
 
   // Load prices from incoming movements
   const prices = await api(`/api/raw-materials/${val}/prices`).catch(() => []);
@@ -3398,21 +3401,58 @@ function onPsPrinterChange(sel) {
 function _buildRmOptions(mats) {
   let opts = '<option value="">— kein Rohmaterial —</option>';
   for (const m of mats) {
-    const lots = (m.lots||[]).filter(l => l.lot_number);
-    if (lots.length) {
-      opts += `<optgroup label="${esc(m.name)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''}">`;
-      for (const l of lots) {
-        const rem = Math.max(0, l.remaining_qty ?? l.qty ?? 0);
-        const depleted = rem <= 0;
-        const price = l.unit_price != null ? ` · ${fmtChf(l.unit_price)}/${m.unit}` : '';
-        opts += `<option value="${m.id}" data-unit="${esc(m.unit)}" data-rmweight="${m.weight_g||''}" data-lot="${esc(l.lot_number)}" data-price="${l.unit_price??''}" ${depleted?'disabled':''}>${depleted?'⊘ ':''}${esc(l.lot_number)} — ${fmtN(rem,0)} ${m.unit}${price}</option>`;
-      }
-      opts += '</optgroup>';
-    } else {
-      opts += `<option value="${m.id}" data-unit="${esc(m.unit)}" data-rmweight="${m.weight_g||''}">${esc(m.name)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`;
-    }
+    opts += `<option value="${m.id}" data-unit="${esc(m.unit)}" data-rmweight="${m.weight_g||''}">${esc(m.name)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`;
   }
   return opts;
+}
+
+// Called when a raw material is selected in the quote line item modal
+async function _onRmSelect(val) {
+  window._liSelectedLot = null;
+  if (!val) { _calcLiCost(); return; }
+  const mat = (state.rawMaterials||[]).find(m => m.id == val);
+  const activeLots = (mat?.lots||[]).filter(l => l.lot_number && (l.remaining_qty ?? l.qty ?? 0) > 0);
+  if (activeLots.length === 0) {
+    // No lots → use general price
+    _calcLiCost();
+  } else if (activeLots.length === 1) {
+    // One lot → auto-select
+    window._liSelectedLot = activeLots[0];
+    _calcLiCost();
+  } else {
+    // Multiple lots → ask user
+    _showLotPicker(mat, activeLots);
+  }
+}
+
+function _showLotPicker(mat, lots) {
+  _showDynModal(`<div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title">Lot wählen</div></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+        Mehrere aktive Lots für <strong>${esc(mat.name)}</strong>. Welches Lot verwenden?
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${lots.map(l => {
+          const rem = fmtN(l.remaining_qty ?? l.qty ?? 0, 0);
+          const price = l.unit_price != null ? fmtChf(l.unit_price)+'/'+mat.unit : '—';
+          return `<button class="btn btn-ghost" style="text-align:left;justify-content:space-between;display:flex;gap:12px"
+            onclick="_selectLot(${JSON.stringify(l).replace(/"/g,'&quot;')})">
+            <span style="font-family:var(--mono)">${esc(l.lot_number)}</span>
+            <span style="color:var(--t3);font-size:13px">${rem} ${mat.unit}</span>
+            <span style="color:var(--teal);font-family:var(--mono)">${price}</span>
+          </button>`;
+        }).join('')}
+        <button class="btn btn-ghost" style="color:var(--t4)" onclick="_selectLot(null)">— ohne Lot-Zuordnung</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+function _selectLot(lot) {
+  window._liSelectedLot = lot;
+  _hideDynModal();
+  _calcLiCost();
 }
 
 // Same helpers exposed for delivery item manual entry
@@ -3423,7 +3463,7 @@ function _populateDimSelects() {
       const label = [m.material_type, m.color, m.dimensions].filter(Boolean).join(' · ');
       return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}" data-unit="${esc(m.unit)}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${m.unit}</option>`;
     }).join('');
-  const matSel = document.getElementById('dim-man-preset');
+  const matSel = document.getElementById('dim-man-preset') || null;
   if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen —</option>' +
     state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
   const nozSel = document.getElementById('dim-man-nozzle');
@@ -3441,7 +3481,7 @@ function applyDimPreset(presetId) {
   set('dim-man-temp', m.print_temp||'');
   set('dim-man-bed', m.bed_temp||'');
   if (m.nozzle) document.getElementById('dim-man-nozzle').value = m.nozzle;
-  document.getElementById('dim-man-preset').value = '';
+  const _dmp = document.getElementById('dim-man-preset'); if (_dmp) _dmp.value = '';
 }
 function dimTab(tab) {
   ['3mf','manual'].forEach(t => {
@@ -4132,7 +4172,12 @@ async function doBomQuoteImport(quoteId) {
 async function _doCalcLiCost() {
   const hint = document.getElementById('li-cost-hint');
   if (!hint) return;
-  const item = window._liItem;
+  let item = window._liItem;
+  // Fetch weight_g if missing (items-all may not include it before server restart)
+  if (item && item.weight_g == null) {
+    const full = await api('/api/items/' + item.id).catch(() => null);
+    if (full?.weight_g != null) { item = { ...item, weight_g: full.weight_g }; window._liItem = item; }
+  }
   const rmId = document.getElementById('li-rawmat')?.value;
   const hours = parseFloat(document.getElementById('li-hours')?.value) || 0;
   const qty   = parseFloat(V('li-qty')) || 1;
@@ -4141,24 +4186,29 @@ async function _doCalcLiCost() {
   const rows = [];
   let total = 0;
 
-  // Material cost: (rm_price / rm_weight_g) × item_weight_g
-  if (rmId && item?.weight_g != null) {
-    const sel = document.getElementById('li-rawmat');
-    const opt = sel?.options[sel.selectedIndex];
+  // Material cost from selected lot
+  if (rmId) {
     const rm  = (state.rawMaterials||[]).find(r => r.id == rmId);
-    // Prefer lot-specific price from data-price attribute, fallback to API
-    let price = opt?.dataset.price !== '' && opt?.dataset.price != null ? parseFloat(opt.dataset.price) : null;
-    if (!price) {
+    const lot = window._liSelectedLot;
+    let price = lot?.unit_price ?? null;
+    if (price == null) {
       const prices = await api(`/api/raw-materials/${rmId}/prices`).catch(()=>[]);
       price = prices[0]?.unit_price ?? null;
     }
     if (price != null) {
-      const rmWeight = parseFloat(rm?.weight_g) || 0;
-      if (rmWeight > 0) {
-        const lotLabel = opt?.dataset.lot ? ` Lot ${opt.dataset.lot}` : '';
-        const matCost  = (price / rmWeight) * item.weight_g;
-        const detail   = `${fmtN(item.weight_g,1)}g × ${fmtCHF(price)}/${fmtN(rmWeight,0)}g${lotLabel}`;
+      const rmWeight   = parseFloat(rm?.weight_g) || 0;
+      const itemWeight = item?.weight_g ?? null;
+      const lotLabel   = lot?.lot_number ? ` (Lot ${lot.lot_number})` : '';
+      if (rmWeight > 0 && itemWeight != null) {
+        const matCost = (price / rmWeight) * itemWeight;
+        const detail  = `${fmtN(itemWeight,1)}g × ${fmtCHF(price)}/${fmtN(rmWeight,0)}g${lotLabel}`;
         if (matCost > 0) { rows.push({ label: 'Material', val: matCost, detail }); total += matCost; }
+      } else {
+        // Show warning which weight is missing
+        const missing = [];
+        if (itemWeight == null) missing.push('Bauteil-Gewicht (im PLM-Teil hinterlegen)');
+        if (rmWeight <= 0)      missing.push('Rohmaterial-Gewicht (im Rohmaterial hinterlegen)');
+        rows.push({ label: 'Material', val: null, warn: `⚠ Gewicht fehlt: ${missing.join(', ')}` });
       }
     }
   }
@@ -4189,7 +4239,8 @@ async function _doCalcLiCost() {
   const totalAll = total * qty;
   hint.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:4px">
-      ${rows.map(r => `
+      ${rows.map(r => r.warn ? `
+        <div style="font-size:11px;color:var(--amber);padding:3px 0">${r.warn}</div>` : `
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
           <span style="color:var(--t4)">${r.label}${r.detail?` <span style="font-size:11px">(${r.detail})</span>`:''}</span>
           <span style="font-family:var(--mono)">${fmtCHF(r.val)}</span>
@@ -4221,6 +4272,7 @@ function openLineItemModal(parentType, parentId, itemId) {
   set('li-hours', '');
   set('li-print-hours', '');
   window._liItem = null;
+  window._liSelectedLot = null;
   // Ensure raw materials + printers are loaded
   const _liLoadPromises = [];
   if (!state.rawMaterials?.length)
@@ -4793,7 +4845,7 @@ function selectDimLinkedItem(item) {
   document.getElementById('dim-plm-search').value = '';
   document.getElementById('dim-plm-results').style.display = 'none';
   const icon = _itemChip(item.item_type, 18);
-  document.getElementById('dim-plm-badge').textContent = icon + ' ' + item.item_number;
+  document.getElementById('dim-plm-badge').innerHTML = icon + ' <span style="font-family:var(--mono)">' + esc(item.item_number) + '</span>';
   document.getElementById('dim-plm-name').textContent = item.name + ' · ' + item.project_name;
   document.getElementById('dim-plm-selected').style.display = 'flex';
   _showDimStockInfo(item.id);
@@ -4890,7 +4942,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   document.getElementById('dim-man-sup').value = '';
   document.getElementById('dim-man-nozzle').value = '';
   document.getElementById('dim-man-printer').value = '';
-  document.getElementById('dim-man-preset').value = '';
+  const _dmp = document.getElementById('dim-man-preset'); if (_dmp) _dmp.value = '';
   document.getElementById('dim-rawmat').value = '';
   set('dim-rawmat-id', '');
 
@@ -4908,7 +4960,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
       if (it.item_id && it.item_number) {
         set('dim-linked-plm-id', it.item_id);
         const icon = _itemChip(it.item_type, 18);
-        document.getElementById('dim-plm-badge').textContent = icon + ' ' + it.item_number;
+        document.getElementById('dim-plm-badge').innerHTML = icon + ' <span style="font-family:var(--mono)">' + esc(it.item_number) + '</span>';
         document.getElementById('dim-plm-name').textContent = it.description;
         document.getElementById('dim-plm-selected').style.display = 'flex';
         _showDimStockInfo(it.item_id);
@@ -6395,6 +6447,8 @@ async function openRawMatDetail(id) {
           ${item.color      ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
           ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">Abmessungen:</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
           ${item.weight_g != null ? `<div style="font-size:13px"><span style="color:var(--t4)">Gewicht:</span> <span style="font-family:var(--mono)">${fmtN(item.weight_g,1)} g</span></div>` : ''}
+          ${item.print_temp ? `<div style="font-size:13px"><span style="color:var(--t4)">Drucktemp:</span> <span style="font-family:var(--mono)">${item.print_temp}°C</span></div>` : ''}
+          ${item.bed_temp   ? `<div style="font-size:13px"><span style="color:var(--t4)">Bett:</span> <span style="font-family:var(--mono)">${item.bed_temp}°C</span></div>` : ''}
           ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${item.unit}</div>` : ''}
           <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
         </div>
@@ -6525,6 +6579,13 @@ async function _loadRawMatForm(id) {
         <input class="fi" type="number" id="rm-init-price" placeholder="z.B. 24.90" min="0" step="0.01">
       </div>
     </div>` : ''}
+    <div class="sep-label" style="margin-top:4px">Druckparameter (optional)</div>
+    <div class="form-row cols2">
+      <div class="fg"><label class="fl">Drucktemp (°C)</label>
+        <input class="fi" type="number" id="rm-print-temp" value="${item.print_temp||''}" placeholder="z.B. 215" min="0" step="1"></div>
+      <div class="fg"><label class="fl">Bett (°C)</label>
+        <input class="fi" type="number" id="rm-bed-temp" value="${item.bed_temp||''}" placeholder="z.B. 60" min="0" step="1"></div>
+    </div>
     <div class="form-row">
       <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="rm-notes" rows="2">${esc(item.notes||'')}</textarea></div>
     </div>`;
@@ -6540,7 +6601,9 @@ async function saveRawMat(id) {
     brand: document.getElementById('rm-brand')?.value.trim(),
     lot_number: document.getElementById('rm-lot')?.value.trim(),
     dimensions: document.getElementById('rm-dim')?.value.trim(),
-    weight_g: document.getElementById('rm-weight')?.value ? parseFloat(document.getElementById('rm-weight').value) : null,
+    weight_g:    document.getElementById('rm-weight')?.value ? parseFloat(document.getElementById('rm-weight').value) : null,
+    print_temp:  document.getElementById('rm-print-temp')?.value ? parseFloat(document.getElementById('rm-print-temp').value) : null,
+    bed_temp:    document.getElementById('rm-bed-temp')?.value  ? parseFloat(document.getElementById('rm-bed-temp').value)  : null,
     min_qty: parseFloat(document.getElementById('rm-min')?.value)||0,
     unit: document.getElementById('rm-unit')?.value,
     notes: document.getElementById('rm-notes')?.value.trim(),
@@ -6561,7 +6624,14 @@ async function saveRawMat(id) {
     }
   }
   _hideDynModal();
-  _refreshRawMaterials();
+  // Refresh state and all open raw material dropdowns
+  state.rawMaterials = await api('/api/raw-materials').catch(() => state.rawMaterials);
+  state._psConfigLoaded = false;
+  const newOpts = _buildRmOptions(state.rawMaterials);
+  ['li-rawmat','dim-rawmat','bqm-rawmat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = newOpts;
+  });
   toast('Gespeichert', 'ok');
   await renderRawMaterials();
 }

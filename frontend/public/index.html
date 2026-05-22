@@ -444,7 +444,7 @@
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Rohmaterial <span style="color:var(--t3)">(optional)</span></label>
-          <select class="fs" id="li-rawmat" onchange="_calcLiCost()">
+          <select class="fs" id="li-rawmat" onchange="_onRmSelect(this.value)">
             <option value="">— kein Rohmaterial —</option>
           </select>
         </div>
@@ -728,13 +728,6 @@
             <div class="fg"><label class="fl">Rohmaterial</label>
               <select class="fs" id="dim-rawmat" onchange="applyDimRawMat(this.value)">
                 <option value="">— kein Rohmaterial zuweisen —</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="fg"><label class="fl">Material-Vorlage</label>
-              <select class="fs" id="dim-man-preset" onchange="applyDimPreset(this.value)">
-                <option value="">— Vorlage auswählen —</option>
               </select>
             </div>
           </div>

@@ -483,6 +483,9 @@ async function initDb() {
   migrate('ALTER TABLE raw_materials ADD COLUMN lot_number TEXT DEFAULT \'\'');
   migrate('ALTER TABLE raw_materials ADD COLUMN dimensions TEXT DEFAULT \'\'');
   migrate('ALTER TABLE raw_materials ADD COLUMN weight_g REAL');
+  migrate('ALTER TABLE raw_materials ADD COLUMN print_temp REAL');
+  migrate('ALTER TABLE raw_materials ADD COLUMN bed_temp REAL');
+  migrate("ALTER TABLE raw_materials ADD COLUMN nozzle TEXT DEFAULT ''");
   migrate('ALTER TABLE raw_material_movements ADD COLUMN unit_price REAL');
   migrate("ALTER TABLE raw_material_movements ADD COLUMN lot_number TEXT DEFAULT ''");
 
@@ -1954,7 +1957,7 @@ app.get('/api/items-released', (req, res) => {
 
 app.get('/api/items-all', (req, res) => {
   const q = req.query.q ? '%' + req.query.q + '%' : '%';
-  const items = all(`SELECT i.id, i.item_number, i.name, i.item_type, i.default_price,
+  const items = all(`SELECT i.id, i.item_number, i.name, i.item_type, i.default_price, i.weight_g,
     p.name as project_name, p.number as project_number
     FROM items i JOIN projects p ON i.project_id=p.id
     WHERE i.item_number LIKE ? OR i.name LIKE ?
@@ -2983,17 +2986,17 @@ app.get('/api/raw-materials', (req, res) => {
 });
 
 app.post('/api/raw-materials', (req, res) => {
-  const { name, material_type, color, brand, stock_qty, min_qty, unit, notes, lot_number, dimensions, weight_g } = req.body;
+  const { name, material_type, color, brand, stock_qty, min_qty, unit, notes, lot_number, dimensions, weight_g, print_temp, bed_temp, nozzle } = req.body;
   if (!name) return res.status(400).json({ error: 'Name erforderlich' });
-  const id = runGetId('INSERT INTO raw_materials (name,material_type,color,brand,stock_qty,min_qty,unit,notes,lot_number,dimensions,weight_g) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-    [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null]);
+  const id = runGetId('INSERT INTO raw_materials (name,material_type,color,brand,stock_qty,min_qty,unit,notes,lot_number,dimensions,weight_g,print_temp,bed_temp,nozzle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, print_temp||null, bed_temp||null, nozzle||'']);
   res.json(get('SELECT * FROM raw_materials WHERE id=?', [id]));
 });
 
 app.put('/api/raw-materials/:id', (req, res) => {
-  const { name, material_type, color, brand, min_qty, unit, notes, lot_number, dimensions, weight_g } = req.body;
-  run(`UPDATE raw_materials SET name=?,material_type=?,color=?,brand=?,min_qty=?,unit=?,notes=?,lot_number=?,dimensions=?,weight_g=?,updated_at=datetime('now') WHERE id=?`,
-    [name, material_type||'', color||'', brand||'', parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, req.params.id]);
+  const { name, material_type, color, brand, min_qty, unit, notes, lot_number, dimensions, weight_g, print_temp, bed_temp, nozzle } = req.body;
+  run(`UPDATE raw_materials SET name=?,material_type=?,color=?,brand=?,min_qty=?,unit=?,notes=?,lot_number=?,dimensions=?,weight_g=?,print_temp=?,bed_temp=?,nozzle=?,updated_at=datetime('now') WHERE id=?`,
+    [name, material_type||'', color||'', brand||'', parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, print_temp||null, bed_temp||null, nozzle||'', req.params.id]);
   res.json(get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]));
 });
 
