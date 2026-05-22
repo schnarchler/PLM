@@ -1053,6 +1053,7 @@ async function renderDashboard() {
       ${kpiTile('Lieferungen', activeDeliveries.length, 'aktiv offen', 'var(--amber)', "gotoView('deliveries')")}
       ${kpiTile('Freigabe', d.inReview.length, 'warten auf REV', 'var(--purple)', '')}
       ${kpiTile('Lager', invLow.length || '—', invAlert, invCritical.length ? 'var(--red)' : invWarn.length ? 'var(--amber)' : 'var(--green)', "gotoView('inventory')")}
+      ${kpiTile('Rohmaterial', d.rawMatActive + ' / ' + d.rawMatCount, d.rawMatValue > 0 ? fmtCHF(d.rawMatValue) + ' Warenwert' : '—', 'var(--teal)', "gotoView('rawmaterials')")}
     </div>`;
 
   // ── Section header ──
@@ -6354,52 +6355,38 @@ async function renderRawMaterials() {
     return;
   }
 
-  const cards = items.map(i => {
+  const rows = items.map(i => {
     const empty    = i.stock_qty <= 0;
     const low      = !empty && i.min_qty > 0 && i.stock_qty <= i.min_qty;
     const dotCol   = empty ? 'var(--red)' : low ? 'var(--amber)' : 'var(--green)';
-    const opacity  = empty ? 'opacity:.45' : '';
-    const stockCol = empty ? 'color:var(--red)' : low ? 'color:var(--amber)' : 'color:var(--green)';
-    const lots     = i.lots || [];
-
-    const activeLots = lots.filter(l => (l.remaining_qty ?? l.qty ?? 0) > 0);
-    const lotRows = activeLots.map(l => {
-      const label = l.lot_number || (l.last_date ? l.last_date.slice(0,10) : '—');
-      const rem   = l.remaining_qty ?? l.qty ?? 0;
-      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 10px 4px 28px;background:var(--bg0);border-top:1px solid var(--line)">
-        <span style="font-size:11px;color:var(--t4)">└</span>
-        <span style="font-family:var(--mono);font-size:11px;${l.lot_number?'color:var(--t2)':'color:var(--t4)'};flex:1">${esc(label)}</span>
-        <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${fmtN(rem,0)} ${i.unit}</span>
-        ${l.unit_price != null ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal)">${fmtChf(l.unit_price)}/${i.unit}</span>` : ''}
-      </div>`;
-    }).join('');
-
-    return `
-      <div style="border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg1);overflow:hidden;${opacity}">
-        <div onclick="openRawMatDetail(${i.id})"
-          style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;transition:background .12s"
-          onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-          <span style="color:${dotCol};font-size:11px;flex-shrink:0">●</span>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:baseline;gap:8px">
-              <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
-              ${i.material_type ? `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);flex-shrink:0">${esc(i.material_type)}</span>` : ''}
-            </div>
-            <div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">
-              ${i.color ? `<span style="font-size:11px;color:var(--t4)">${esc(i.color)}</span>` : ''}
-              ${i.brand ? `<span style="font-size:11px;color:var(--t4)">${esc(i.brand)}</span>` : ''}
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div style="font-family:var(--mono);font-size:13px;font-weight:600;${stockCol}">${fmtN(i.stock_qty,0)}</div>
-            <div style="font-size:11px;color:var(--t4)">${esc(i.unit)}</div>
-          </div>
-        </div>
-        ${lotRows}
-      </div>`;
+    const stockCol = empty ? 'var(--red)' : low ? 'var(--amber)' : 'var(--green)';
+    const opacity  = empty ? 'opacity:.5' : '';
+    const activeLotCount = (i.lots||[]).filter(l => (l.remaining_qty ?? l.qty ?? 0) > 0).length;
+    return `<tr onclick="openRawMatDetail(${i.id})" style="cursor:pointer;${opacity}">
+      <td><span style="color:${dotCol};font-size:11px">●</span></td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.material_type||'—')}</td>
+      <td style="font-size:13px">${esc(i.color||'—')}</td>
+      <td style="font-size:13px;color:var(--t3)">${esc(i.brand||'—')}</td>
+      <td style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${esc(i.name)}</td>
+      <td style="font-family:var(--mono);font-size:13px;text-align:right;color:${stockCol};font-weight:600">${fmtN(i.stock_qty,0)}</td>
+      <td style="font-size:11px;color:var(--t4)">${esc(i.unit)}</td>
+      <td style="font-size:11px;color:var(--t4)">${activeLotCount > 0 ? activeLotCount+' Lot'+(activeLotCount!==1?'s':'') : ''}</td>
+    </tr>`;
   }).join('');
 
-  setLeftBody(`<div style="display:flex;flex-direction:column;gap:4px;padding:4px 0">${cards}</div>`);
+  setLeftBody(`<div class="tbl-wrap"><table>
+    <thead><tr>
+      <th></th>
+      <th onclick="_rmSetSort('material')" style="cursor:pointer">Material ${_rmSort==='material'?'↑':''}</th>
+      <th onclick="_rmSetSort('color')" style="cursor:pointer">Farbe ${_rmSort==='color'?'↑':''}</th>
+      <th>Marke</th>
+      <th>Name</th>
+      <th onclick="_rmSetSort('price')" style="cursor:pointer;text-align:right">Bestand ${_rmSort==='price'?'↑':''}</th>
+      <th></th>
+      <th>Lots</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`);
 }
 
 async function openRawMatDetail(id) {
