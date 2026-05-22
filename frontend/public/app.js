@@ -6254,7 +6254,9 @@ async function saveRawMatAdjust(id, type) {
 
 // ── NORMTEILE ─────────────────────────────────────────────────
 async function renderNormteile() {
-  setLeftHeader('Normteile', `<button class="btn btn-primary btn-sm" onclick="openNormteilModal()">+ Normteil</button>`);
+  setLeftHeader('Normteile', `
+    <button class="btn btn-ghost btn-sm" onclick="checkoutNormteile()" title="Alle Normteil-Dateien in Checkout-Ordner kopieren">⬇ Auschecken</button>
+    <button class="btn btn-primary btn-sm" onclick="openNormteilModal()">+ Normteil</button>`);
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
   const parts = await api('/api/standard-parts');
@@ -6284,13 +6286,21 @@ async function renderNormteile() {
 }
 
 async function openNormteilDetail(id) {
-  const parts = await api('/api/standard-parts');
+  const [parts, files] = await Promise.all([
+    api('/api/standard-parts'),
+    api(`/api/standard-parts/${id}/files`)
+  ]);
   const p = parts.find(x => x.id === id);
   if (!p) return;
+
+  const fmtSize = b => b < 1024 ? b+'B' : b < 1048576 ? (b/1024).toFixed(0)+'KB' : (b/1048576).toFixed(1)+'MB';
+  const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMG:'🖼',DOC:'📄'}[t]||'📎');
+
   document.getElementById('dp-title').innerHTML =
     `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc([p.standard,p.std_number].filter(Boolean).join(' '))}</span>${esc(p.designation)}`;
   document.getElementById('dp-tabs').innerHTML =
-    `<button class="tab active" onclick="switchTab(this,'nt-info')">Details</button>`;
+    `<button class="tab active" onclick="switchTab(this,'nt-info')">Details</button>
+     <button class="tab" onclick="switchTab(this,'nt-files')">Dateien <span style="font-size:11px">${files.length||''}</span></button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="nt-info">
       <div style="display:flex;gap:6px;margin-bottom:14px">
@@ -6304,8 +6314,43 @@ async function openNormteilDetail(id) {
       </div>
       ${p.name  ? `<div style="font-size:13px;color:var(--t3);margin-bottom:6px">${esc(p.name)}</div>` : ''}
       ${p.notes ? `<div style="font-size:13px;color:var(--t3)">${esc(p.notes)}</div>` : ''}
+    </div>
+    <div id="nt-files" hidden>
+      <div style="margin-bottom:12px">
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+          📎 Datei hochladen
+          <input type="file" style="display:none" multiple onchange="uploadNtFiles(${id}, this)">
+        </label>
+      </div>
+      ${files.length ? `<div style="display:flex;flex-direction:column;gap:4px">
+        ${files.map(f => `
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+            <span style="font-size:15px">${dsIcon(f.ds_type)}</span>
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.original_name)}</span>
+            <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${fmtSize(f.file_size||0)}</span>
+            <a class="btn btn-ghost btn-sm btn-icon" href="/api/std-part-files/${f.id}/download" title="Herunterladen">⬇</a>
+            <button class="btn btn-red btn-sm btn-icon" onclick="delNtFile(${f.id},${id})">✕</button>
+          </div>`).join('')}
+      </div>` : `<div style="color:var(--t3);font-size:13px">Noch keine Dateien</div>`}
     </div>`;
   showDetail();
+}
+
+async function uploadNtFiles(stdPartId, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  for (const file of files) {
+    const fd = new FormData(); fd.append('file', file);
+    await fetch(`/api/standard-parts/${stdPartId}/files`, { method: 'POST', body: fd });
+  }
+  toast(`${files.length} Datei${files.length>1?'en':''} hochgeladen`, 'ok');
+  openNormteilDetail(stdPartId);
+}
+
+async function delNtFile(fileId, stdPartId) {
+  await api(`/api/std-part-files/${fileId}`, 'DELETE');
+  toast('Datei gelöscht', 'ok');
+  openNormteilDetail(stdPartId);
 }
 
 function openNormteilModal(id) {
