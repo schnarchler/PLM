@@ -2963,6 +2963,22 @@ app.delete('/api/bom-std/:id', (req, res) => {
 // ==============================================================
 app.get('/api/raw-materials', (req, res) => {
   const mats = all('SELECT * FROM raw_materials ORDER BY material_type, color, name');
+  mats.forEach(m => {
+    const withLot = all(`SELECT MIN(id) as id, lot_number,
+      SUM(CASE WHEN type='in' THEN qty ELSE 0 END) as qty,
+      SUM(CASE WHEN type='in' THEN qty ELSE -qty END) as remaining_qty,
+      MAX(CASE WHEN type='in' THEN unit_price ELSE NULL END) as unit_price,
+      MAX(created_at) as last_date
+      FROM raw_material_movements
+      WHERE raw_material_id=? AND lot_number IS NOT NULL AND lot_number!=''
+      GROUP BY lot_number
+      ORDER BY MAX(created_at) DESC`, [m.id]);
+    const withoutLot = all(`SELECT id, '' as lot_number, qty, qty as remaining_qty, unit_price, created_at as last_date, notes
+      FROM raw_material_movements
+      WHERE raw_material_id=? AND type='in' AND (lot_number IS NULL OR lot_number='')
+      ORDER BY created_at DESC`, [m.id]);
+    m.lots = [...withLot, ...withoutLot];
+  });
   res.json(mats);
 });
 
@@ -3000,8 +3016,27 @@ app.post('/api/raw-materials/:id/adjust', (req, res) => {
   res.json({ stock_qty: newQty });
 });
 
+app.put('/api/raw-material-movements/:id', (req, res) => {
+  const { lot_number, unit_price, qty, notes } = req.body;
+  run(`UPDATE raw_material_movements SET lot_number=?,unit_price=?,qty=?,notes=? WHERE id=?`,
+    [lot_number||'', unit_price!=null?parseFloat(unit_price):null, parseFloat(qty)||0, notes||'', req.params.id]);
+  // recalculate stock
+  const mov = get('SELECT * FROM raw_material_movements WHERE id=?', [req.params.id]);
+  if (mov) {
+    const total = all(`SELECT SUM(CASE WHEN type='in' THEN qty ELSE -qty END) as s FROM raw_material_movements WHERE raw_material_id=?`, [mov.raw_material_id])[0]?.s || 0;
+    run(`UPDATE raw_materials SET stock_qty=MAX(0,?),lot_number=COALESCE((SELECT lot_number FROM raw_material_movements WHERE raw_material_id=? AND type='in' AND lot_number!='' ORDER BY created_at DESC LIMIT 1),''),updated_at=datetime('now') WHERE id=?`,
+      [total, mov.raw_material_id, mov.raw_material_id]);
+  }
+  res.json({ success: true });
+});
+
 app.get('/api/raw-materials/:id/movements', (req, res) => {
-  res.json(all('SELECT * FROM raw_material_movements WHERE raw_material_id=? ORDER BY created_at DESC LIMIT 50', [req.params.id]));
+  const rows = all('SELECT * FROM raw_material_movements WHERE raw_material_id=? ORDER BY created_at ASC', [req.params.id]);
+  // Calculate running balance
+  let balance = 0;
+  rows.forEach(r => { balance += r.type === 'in' ? r.qty : -r.qty; r.balance = Math.max(0, balance); });
+  rows.reverse(); // newest first for display
+  res.json(rows);
 });
 
 app.post('/api/checkout/normteile', (req, res) => {
