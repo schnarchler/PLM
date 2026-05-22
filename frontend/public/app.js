@@ -6440,6 +6440,44 @@ async function saveNormteil(id) {
   await renderNormteile();
 }
 
+async function checkoutNormteile() {
+  const r = await api('/api/checkout/normteile', 'POST', {});
+  if (!r.copied.length && !r.message) {
+    toast('Keine Dateien bei Normteilen hinterlegt', 'err'); return;
+  }
+  // Group by designation for display
+  const byDesig = {};
+  for (const f of r.copied) {
+    if (!byDesig[f.designation]) byDesig[f.designation] = [];
+    byDesig[f.designation].push(f.name);
+  }
+  _showDynModal(`<div class="modal" style="max-width:560px">
+    <div class="modal-head">
+      <div class="modal-title">✓ Normteile ausgecheckt</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+        ${r.copied.length} Datei${r.copied.length!==1?'en':''} nach
+        <span style="font-family:var(--mono);color:var(--t2)">${esc(r.dir)}/</span> kopiert.
+        Der Ordner heisst immer <span style="font-family:var(--mono);color:var(--blue)">normteile</span> — Solid Edge findet die Dateien über den konfigurierten Suchpfad.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto">
+        ${Object.entries(byDesig).map(([desig, names]) => `
+          <div style="padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+            <div style="font-size:13px;font-weight:500;margin-bottom:3px">${esc(desig)}</div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--t4)">${names.map(n=>esc(n)).join(' · ')}</div>
+          </div>`).join('')}
+        ${r.errors.length ? `<div style="font-size:13px;color:var(--red);padding:7px 10px;background:var(--red-soft);border:1px solid var(--red-line);border-radius:var(--r-sm)">
+          ⚠ Fehler bei: ${r.errors.map(e=>esc(e)).join(', ')}</div>` : ''}
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" onclick="_hideDynModal()">OK</button>
+    </div>
+  </div>`);
+}
+
 async function delNormteil(id) {
   if (!confirm('Normteil löschen? Es wird auch aus allen BOMs entfernt.')) return;
   await api(`/api/standard-parts/${id}`, 'DELETE');
