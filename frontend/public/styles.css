@@ -352,6 +352,10 @@ tbody tr:last-child { border-bottom: none; }
 }
 #detail-panel.hidden { width: 0; border: none; }
 
+/* ── ACTIVE ROW ── */
+tr.row-active td { background: rgba(99,179,237,.08); }
+tr.row-active { outline: 1px solid rgba(99,179,237,.25); outline-offset: -1px; }
+
 /* ── TABS ── */
 .tabs { display: flex; border-bottom: 1px solid var(--line); flex-shrink: 0; padding: 0 14px; gap: 0; background: var(--bg1); }
 .tab {

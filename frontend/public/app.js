@@ -2155,7 +2155,7 @@ function _render_customerRows() {
   );
   const el = document.getElementById('_customer-tbody');
   if (!el) return;
-  el.innerHTML = rows.map(c=>`<tr onclick="openCustomerDetail(${c.id})">
+  el.innerHTML = rows.map(c=>`<tr data-id="${c.id}" onclick="openCustomerDetail(${c.id})">
     <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${c.number}</td>
     <td style="font-weight:500">${esc(c.name)}</td>
     <td style="text-align:center">${c.order_count > 0 ? `<span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:12px;padding:1px 8px;font-family:var(--mono)">${c.order_count}</span>` : '<span style="color:var(--t4)">—</span>'}</td>
@@ -2259,6 +2259,7 @@ async function openCustomerDetail(id) {
       <button class="btn btn-red btn-sm" style="margin-left:6px" onclick="delCustomer(${c.id})">🗑 Löschen</button>
     </div>`;
 
+  _markActiveRow(c.id);
   showDetail();
 }
 
@@ -2306,7 +2307,7 @@ function _render_orderRows() {
   );
   const el = document.getElementById('_order-tbody');
   if (!el) return;
-  el.innerHTML = rows.map(o=>`<tr onclick="openOrderDetail(${o.id})">
+  el.innerHTML = rows.map(o=>`<tr data-id="${o.id}" onclick="openOrderDetail(${o.id})">
     <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${o.number}</td>
     <td style="font-weight:500">${esc(o.title)}</td>
     <td style="color:var(--t2)">${o.customer_name||'—'}</td>
@@ -2420,6 +2421,7 @@ async function openOrderDetail(id) {
     <div id="od-time" style="display:none">
       <div id="time-entries-list"><div style="color:var(--t3);font-size:13px">Wird geladen…</div></div>
     </div>`;
+  _markActiveRow(o.id);
   showDetail();
 }
 
@@ -3708,7 +3710,7 @@ function _render_quoteRows() {
   );
   const el = document.getElementById('_quote-tbody');
   if (!el) return;
-  el.innerHTML = rows.map(q=>`<tr onclick="openQuoteDetail(${q.id})">
+  el.innerHTML = rows.map(q=>`<tr data-id="${q.id}" onclick="openQuoteDetail(${q.id})">
     <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${q.number}</td>
     <td style="font-weight:500">${esc(q.title)}</td>
     <td style="color:var(--t2)">${q.customer_name||'—'}</td>
@@ -3793,6 +3795,7 @@ async function openQuoteDetail(id) {
         ${q.status==='DRAFT' ? `<button class="btn btn-red btn-sm" onclick="delQuote(${id})">🗑 Löschen</button>` : ''}
       </div>
     </div>`;
+  _markActiveRow(id);
   showDetail();
 }
 
@@ -4410,6 +4413,13 @@ async function moveLineItem(parentType, itemId, parentId, direction) {
 // ── DETAIL PANEL ──────────────────────────────────────────────
 function showDetail() { document.getElementById('detail-panel').classList.remove('hidden'); }
 function closeDetail() { document.getElementById('detail-panel').classList.add('hidden'); }
+function _markActiveRow(id) {
+  document.querySelectorAll('#left-body tr.row-active').forEach(r => r.classList.remove('row-active'));
+  if (id != null) {
+    const tr = document.querySelector(`#left-body tr[data-id="${id}"]`);
+    if (tr) tr.classList.add('row-active');
+  }
+}
 function switchTab(btn, targetId) {
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
@@ -4598,7 +4608,7 @@ function _render_deliveryRows() {
   );
   const el = document.getElementById('_delivery-tbody');
   if (!el) return;
-  el.innerHTML = rows.map(d => `<tr onclick="openDeliveryDetail(${d.id})">
+  el.innerHTML = rows.map(d => `<tr data-id="${d.id}" onclick="openDeliveryDetail(${d.id})">
     <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${d.number}</td>
     <td style="font-weight:500">${esc(d.title)}</td>
     <td style="color:var(--t2)">${d.customer_name||'—'}</td>
@@ -4641,6 +4651,7 @@ async function openDeliveryDetail(id) {
         <button class="btn btn-red btn-sm" onclick="delDelivery(${id})">🗑 Löschen</button>
       </div>
     </div>`;
+  _markActiveRow(id);
   showDetail();
 }
 
