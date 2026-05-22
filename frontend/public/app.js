@@ -246,6 +246,7 @@ async function gotoView(v) {
   else if (v === 'profit') await renderProfitOverview();
   else if (v === 'inventory') await renderInventory();
   else if (v === 'rawmaterials') await renderRawMaterials();
+  else if (v === 'normteile') await renderNormteile();
 }
 
 // ── PROJECTS LIST ─────────────────────────────────────────────
@@ -863,17 +864,30 @@ function renderRevDetail(rev, item) {
     <!-- BOM -->
     <div class="sep-label">Stückliste (BOM)</div>
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
-      ${(rev.bom||[]).length ? rev.bom.map(b => `
-        <div class="bom-row">
-          <span style="color:var(--t3);font-size:13px;width:24px">${b.position||'—'}</span>
-          <span>${_itemChip(b.item_type,16)}</span>
-          <span class="bom-num">${b.item_number}</span>
-          <span style="flex:1;font-size:13px">${esc(b.name)}</span>
-          ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">rev${b.child_active_rev.rev}</span>` : ''}
-          <span class="bom-qty">${b.quantity} ${b.unit}</span>
-          ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBom(${b.id},${item.id},${rev.id})">✕</button>`}
-        </div>`).join('')
-        : '<div style="padding:12px;color:var(--t3);font-size:13px;text-align:center">Noch keine Positionen</div>'}
+      ${(() => {
+        const plmRows = (rev.bom||[]).map(b => ({ ...b, _std: false, _pos: b.position||999 }));
+        const stdRows = (rev.bom_std||[]).map(b => ({ ...b, _std: true, _pos: b.position||999 }));
+        const all = [...plmRows, ...stdRows].sort((a,b) => a._pos - b._pos);
+        if (!all.length) return '<div style="padding:12px;color:var(--t3);font-size:13px;text-align:center">Noch keine Positionen</div>';
+        return all.map(b => b._std ? `
+          <div class="bom-row">
+            <span style="color:var(--t3);font-size:13px;width:24px">${b._pos||'—'}</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0">N</span>
+            <span class="bom-num" style="color:var(--t2)">${esc(b.designation)}</span>
+            <span style="flex:1;font-size:13px;color:var(--t3)">${b.material ? esc(b.material) : ''}</span>
+            <span class="bom-qty">${b.quantity} ${b.unit}</span>
+            ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBomStd(${b.id},${item.id},${rev.id})">✕</button>`}
+          </div>` : `
+          <div class="bom-row">
+            <span style="color:var(--t3);font-size:13px;width:24px">${b._pos||'—'}</span>
+            <span>${_itemChip(b.item_type,16)}</span>
+            <span class="bom-num">${b.item_number}</span>
+            <span style="flex:1;font-size:13px">${esc(b.name)}</span>
+            ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0">rev${b.child_active_rev.rev}</span>` : ''}
+            <span class="bom-qty">${b.quantity} ${b.unit}</span>
+            ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delBom(${b.id},${item.id},${rev.id})">✕</button>`}
+          </div>`).join('');
+      })()}
     </div>
     ${locked ? '' : `
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -3145,19 +3159,46 @@ async function delDataset(dsId, revId) {
 }
 
 // ── BOM ───────────────────────────────────────────────────────
+function setBomTab(tab) {
+  document.getElementById('bom-pane-item').style.display = tab === 'item' ? '' : 'none';
+  document.getElementById('bom-pane-std').style.display  = tab === 'std'  ? '' : 'none';
+  document.getElementById('bom-tab-item').className = 'btn btn-sm ' + (tab === 'item' ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('bom-tab-std').className  = 'btn btn-sm ' + (tab === 'std'  ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('bom-modal-tab').value = tab;
+}
+
 async function openBomModal(revId, projectId) {
   set('bom-rev-id', revId); set('bom-qty','1'); set('bom-notes','');
-  const items = await api(`/api/projects/${projectId}/items-for-bom`);
-  const sel = document.getElementById('bom-child-id');
-  sel.innerHTML = '<option value="">— wählen —</option>' +
+  const [items, stdParts] = await Promise.all([
+    api(`/api/projects/${projectId}/items-for-bom`),
+    api('/api/standard-parts')
+  ]);
+  document.getElementById('bom-child-id').innerHTML = '<option value="">— wählen —</option>' +
     items.map(i=>`<option value="${i.id}">${i.item_number} · ${esc(i.name)}</option>`).join('');
+  document.getElementById('bom-std-id').innerHTML = '<option value="">— wählen —</option>' +
+    stdParts.map(s=>`<option value="${s.id}">${esc(s.designation)}${s.material?' · '+esc(s.material):''}</option>`).join('');
+  // reset to PLM-Item tab
+  if (!document.getElementById('bom-modal-tab')) {
+    const h = document.createElement('input'); h.type='hidden'; h.id='bom-modal-tab'; h.value='item';
+    document.getElementById('bom-rev-id').after(h);
+  }
+  setBomTab('item');
   openModal('bomModal');
 }
 
 async function doBomAdd() {
-  const childId = V('bom-child-id'); if (!childId) return toast('Item wählen','err');
   const revId = V('bom-rev-id');
-  await api(`/api/revisions/${revId}/bom`,'POST',{child_item_id:parseInt(childId),quantity:parseFloat(V('bom-qty'))||1,unit:V('bom-unit'),notes:V('bom-notes')});
+  const tab = document.getElementById('bom-modal-tab')?.value || 'item';
+  const qty = parseFloat(V('bom-qty')) || 1;
+  const unit = V('bom-unit'); const notes = V('bom-notes');
+  if (tab === 'std') {
+    const stdId = document.getElementById('bom-std-id').value;
+    if (!stdId) return toast('Normteil wählen', 'err');
+    await api(`/api/revisions/${revId}/bom-std`, 'POST', { std_part_id: parseInt(stdId), quantity: qty, unit, notes });
+  } else {
+    const childId = V('bom-child-id'); if (!childId) return toast('Item wählen','err');
+    await api(`/api/revisions/${revId}/bom`,'POST',{child_item_id:parseInt(childId),quantity:qty,unit,notes});
+  }
   toast('Position hinzugefügt','ok'); closeModal('bomModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
   refreshProjectTree();
@@ -3165,6 +3206,13 @@ async function doBomAdd() {
 
 async function delBom(bomId, itemId, revId) {
   await api(`/api/bom/${bomId}`,'DELETE');
+  toast('Position entfernt','ok');
+  if (state.item) await switchRev(itemId, revId);
+  refreshProjectTree();
+}
+
+async function delBomStd(bomStdId, itemId, revId) {
+  await api(`/api/bom-std/${bomStdId}`,'DELETE');
   toast('Position entfernt','ok');
   if (state.item) await switchRev(itemId, revId);
   refreshProjectTree();
@@ -4008,10 +4056,13 @@ async function loadStats() {
   if (el2) el2.textContent = s.deliveries||0;
   const el3 = document.getElementById('badge-inventory');
   if (el3) el3.textContent = s.inventory||0;
-  // raw material badge: count low/empty items
   api('/api/raw-materials').then(mats => {
-    const badge = document.getElementById('badge-rawmat');
-    if (badge) badge.textContent = mats.length || '—';
+    const b = document.getElementById('badge-rawmat');
+    if (b) b.textContent = mats.length || '—';
+  }).catch(() => {});
+  api('/api/standard-parts').then(parts => {
+    const b = document.getElementById('badge-normteile');
+    if (b) b.textContent = parts.length || '—';
   }).catch(() => {});
 }
 
@@ -5924,6 +5975,7 @@ async function deductFromInventory() {
 async function renderRawMaterials() {
   setLeftHeader('Rohmaterial', `<button class="btn btn-primary btn-sm" onclick="openRawMatModal()">+ Material</button>`);
   closeDetail();
+  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
   const items = await api('/api/raw-materials');
 
   // Update badge
@@ -5970,62 +6022,60 @@ async function openRawMatDetail(id) {
   const statusColor = isEmpty ? 'var(--red)' : isLow ? 'var(--amber)' : 'var(--green)';
   const statusLabel = isEmpty ? 'Leer' : isLow ? 'Niedrig' : 'OK';
 
-  setRightPanel(`
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
-      <div>
-        <div style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(item.material_type||'')}</div>
-        <div style="font-size:15px;font-weight:600">${esc(item.name)}</div>
-        ${item.brand ? `<div style="font-size:13px;color:var(--t3)">${esc(item.brand)}</div>` : ''}
-      </div>
-      <div style="display:flex;gap:6px">
+  document.getElementById('dp-title').innerHTML =
+    `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc(item.material_type||'')}</span>${esc(item.name)}`;
+  document.getElementById('dp-tabs').innerHTML =
+    `<button class="tab active" onclick="switchTab(this,'rm-info')">Details</button>
+     <button class="tab" onclick="switchTab(this,'rm-moves')">Buchungen</button>`;
+  document.getElementById('dp-body').innerHTML = `
+    <div id="rm-info">
+      <div style="display:flex;gap:6px;margin-bottom:14px">
         <button class="btn btn-ghost btn-sm" onclick="openRawMatModal(${id})">✎ Bearbeiten</button>
         <button class="btn btn-red btn-sm" onclick="delRawMat(${id})">🗑</button>
       </div>
+      <div style="display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${statusColor}">${fmtN(item.stock_qty,0)}</div>
+          <div style="font-size:13px;color:var(--t3)">${item.unit}</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+          ${item.color      ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
+          ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">Abmessungen:</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
+          ${item.lot_number ? `<div style="font-size:13px"><span style="color:var(--t4)">Lot:</span> <span style="font-family:var(--mono)">${esc(item.lot_number)}</span></div>` : ''}
+          ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${item.unit}</div>` : ''}
+          <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn btn-primary btn-sm" onclick="openRawMatAdjust(${id},'in')">+ Einbuchen</button>
+          <button class="btn btn-ghost btn-sm" onclick="openRawMatAdjust(${id},'out')">− Ausbuchen</button>
+        </div>
+      </div>
+      ${item.notes ? `<div style="font-size:13px;color:var(--t3)">${esc(item.notes)}</div>` : ''}
     </div>
-
-    <div style="display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:16px">
-      <div style="text-align:center">
-        <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${statusColor}">${fmtN(item.stock_qty,0)}</div>
-        <div style="font-size:13px;color:var(--t3)">${item.unit}</div>
-      </div>
-      <div style="flex:1">
-        ${item.color ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
-        ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">Abmessungen:</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
-        ${item.lot_number ? `<div style="font-size:13px"><span style="color:var(--t4)">Lot:</span> <span style="font-family:var(--mono)">${esc(item.lot_number)}</span></div>` : ''}
-        ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${item.unit}</div>` : ''}
-        <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <button class="btn btn-primary btn-sm" onclick="openRawMatAdjust(${id},'in')">+ Einbuchen</button>
-        <button class="btn btn-ghost btn-sm" onclick="openRawMatAdjust(${id},'out')">− Ausbuchen</button>
-      </div>
-    </div>
-
-    ${item.notes ? `<div style="font-size:13px;color:var(--t3);margin-bottom:16px">${esc(item.notes)}</div>` : ''}
-
-    <div class="sep-label">Bewegungen</div>
-    ${movements.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th>Notiz</th></tr></thead>
-      <tbody>${movements.map(m => `<tr>
-        <td style="font-family:var(--mono);font-size:11px;color:var(--t4)">${m.created_at?.slice(0,16)||'—'}</td>
-        <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
-        <td style="font-family:var(--mono);font-size:13px;text-align:right">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${item.unit}</td>
-        <td style="font-size:13px;color:var(--t3)">${esc(m.notes||'')}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`
-    : `<div style="color:var(--t3);font-size:13px">Noch keine Buchungen</div>`}
-  `);
+    <div id="rm-moves" hidden>
+      ${movements.length ? `<div class="tbl-wrap"><table>
+        <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th>Notiz</th></tr></thead>
+        <tbody>${movements.map(m => `<tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--t4)">${m.created_at?.slice(0,16)||'—'}</td>
+          <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
+          <td style="font-family:var(--mono);font-size:13px;text-align:right">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${item.unit}</td>
+          <td style="font-size:13px;color:var(--t3)">${esc(m.notes||'')}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`
+      : `<div style="color:var(--t3);font-size:13px">Noch keine Buchungen</div>`}
+    </div>`;
+  showDetail();
 }
 
 function openRawMatModal(id) {
-  const existing = id ? null : null; // loaded async below
-  _showDynModal(`
-    <div class="modal-head"><div class="modal-title">${id ? 'Material bearbeiten' : 'Neues Material'}</div></div>
-    <div class="modal-body" id="rawmat-modal-body">Lädt…</div>
+  _showDynModal(`<div class="modal" style="max-width:560px">
+    <div class="modal-head"><div class="modal-title">${id ? 'Material bearbeiten' : 'Neues Material'}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" id="rawmat-modal-body"><div style="color:var(--t3);font-size:13px">Lädt…</div></div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveRawMat(${id||''})">Speichern</button>
-    </div>`);
+    </div>
+  </div>`);
   _loadRawMatForm(id);
 }
 
@@ -6127,6 +6177,156 @@ async function saveRawMatAdjust(id, type) {
   toast(`Gebucht — neuer Bestand: ${fmtN(r.stock_qty,0)}`, 'ok');
   await renderRawMaterials();
   openRawMatDetail(id);
+}
+
+// ── NORMTEILE ─────────────────────────────────────────────────
+async function renderNormteile() {
+  setLeftHeader('Normteile', `<button class="btn btn-primary btn-sm" onclick="openNormteilModal()">+ Normteil</button>`);
+  closeDetail();
+  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
+  const parts = await api('/api/standard-parts');
+  const badge = document.getElementById('badge-normteile');
+  if (badge) badge.textContent = parts.length || '—';
+  if (!parts.length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">⚙</div><div class="empty-text">Noch keine Normteile erfasst</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openNormteilModal()">Erstes Normteil anlegen</button></div></div>`);
+    return;
+  }
+  // Group by standard + std_number
+  const groups = {};
+  for (const p of parts) {
+    const key = [p.standard, p.std_number].filter(Boolean).join(' ') || 'Sonstige';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  }
+  const html = Object.entries(groups).map(([grp, items]) => `
+    <div class="sep-label" style="margin-top:12px">${esc(grp)}</div>
+    ${items.map(p => `
+      <div onclick="openNormteilDetail(${p.id})" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0">N</span>
+        <span style="flex:1;font-size:13px">${esc(p.designation)}</span>
+        ${p.material ? `<span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${esc(p.material)}</span>` : ''}
+        ${p.unit_price ? `<span style="font-size:11px;color:var(--t3);font-family:var(--mono)">${fmtChf(p.unit_price)}</span>` : ''}
+      </div>`).join('')}`).join('');
+  setLeftBody(html);
+}
+
+async function openNormteilDetail(id) {
+  const parts = await api('/api/standard-parts');
+  const p = parts.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('dp-title').innerHTML =
+    `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc([p.standard,p.std_number].filter(Boolean).join(' '))}</span>${esc(p.designation)}`;
+  document.getElementById('dp-tabs').innerHTML =
+    `<button class="tab active" onclick="switchTab(this,'nt-info')">Details</button>`;
+  document.getElementById('dp-body').innerHTML = `
+    <div id="nt-info">
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button class="btn btn-ghost btn-sm" onclick="openNormteilModal(${id})">✎ Bearbeiten</button>
+        <button class="btn btn-red btn-sm" onclick="delNormteil(${id})">🗑</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        ${p.size     ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Größe</div><span style="font-family:var(--mono)">${esc(p.size)}</span></div>` : ''}
+        ${p.material ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Material</div>${esc(p.material)}</div>` : ''}
+        ${p.unit_price!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Stückpreis</div><span style="font-family:var(--mono)">${fmtChf(p.unit_price)}</span></div>` : ''}
+      </div>
+      ${p.name  ? `<div style="font-size:13px;color:var(--t3);margin-bottom:6px">${esc(p.name)}</div>` : ''}
+      ${p.notes ? `<div style="font-size:13px;color:var(--t3)">${esc(p.notes)}</div>` : ''}
+    </div>`;
+  showDetail();
+}
+
+function openNormteilModal(id) {
+  _showDynModal(`<div class="modal" style="max-width:560px">
+    <div class="modal-head"><div class="modal-title">${id ? 'Normteil bearbeiten' : 'Neues Normteil'}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" id="nt-modal-body"><div style="color:var(--t3);font-size:13px">Lädt…</div></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveNormteil(${id||''})">Speichern</button>
+    </div>
+  </div>`);
+  _loadNormteilForm(id);
+}
+
+async function _loadNormteilForm(id) {
+  let p = {};
+  if (id) { const all = await api('/api/standard-parts'); p = all.find(x => x.id === id) || {}; }
+  const stdOpts = ['DIN','ISO','EN','ASME','ÖNORM','SN','Sonstiges'].map(s =>
+    `<option ${(p.standard||'')=== s?'selected':''}>${s}</option>`).join('');
+  document.getElementById('nt-modal-body').innerHTML = `
+    <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+      Felder ausfüllen → Bezeichnung wird automatisch generiert (oder manuell überschreiben).
+    </div>
+    <div class="form-row cols3">
+      <div class="fg"><label class="fl">Norm</label>
+        <select class="fs" id="nt-std" onchange="_ntAutoDesig()">${stdOpts}</select>
+      </div>
+      <div class="fg"><label class="fl">Norm-Nr.</label>
+        <input class="fi" id="nt-num" value="${esc(p.std_number||'')}" placeholder="z.B. 912" oninput="_ntAutoDesig()">
+      </div>
+      <div class="fg"><label class="fl">Größe / Maß</label>
+        <input class="fi" id="nt-size" value="${esc(p.size||'')}" placeholder="z.B. M4x12" oninput="_ntAutoDesig()">
+      </div>
+    </div>
+    <div class="form-row cols2">
+      <div class="fg"><label class="fl">Kurzbezeichnung</label>
+        <input class="fi" id="nt-name" value="${esc(p.name||'')}" placeholder="z.B. Zylinderschraube" oninput="_ntAutoDesig()">
+      </div>
+      <div class="fg"><label class="fl">Material / Güte</label>
+        <input class="fi" id="nt-mat" value="${esc(p.material||'')}" placeholder="z.B. A2-70, 8.8" oninput="_ntAutoDesig()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label class="fl">Bezeichnung (auto-generiert, editierbar)</label>
+        <input class="fi" id="nt-desig" value="${esc(p.designation||'')}" placeholder="z.B. DIN 912 Zylinderschraube M4x12 A2-70">
+      </div>
+    </div>
+    <div class="form-row cols2">
+      <div class="fg"><label class="fl">Stückpreis (CHF)</label>
+        <input class="fi" type="number" id="nt-price" value="${p.unit_price??''}" placeholder="0.00" min="0" step="0.01">
+      </div>
+      <div class="fg"><label class="fl">Notizen</label>
+        <input class="fi" id="nt-notes" value="${esc(p.notes||'')}">
+      </div>
+    </div>`;
+  if (!id) _ntAutoDesig();
+}
+
+function _ntAutoDesig() {
+  const std  = document.getElementById('nt-std')?.value  || '';
+  const num  = document.getElementById('nt-num')?.value  || '';
+  const name = document.getElementById('nt-name')?.value || '';
+  const size = document.getElementById('nt-size')?.value || '';
+  const mat  = document.getElementById('nt-mat')?.value  || '';
+  const parts = [std, num, name, size, mat].filter(Boolean);
+  const desig = document.getElementById('nt-desig');
+  if (desig) desig.value = parts.join(' ');
+}
+
+async function saveNormteil(id) {
+  const designation = document.getElementById('nt-desig')?.value.trim();
+  if (!designation) { toast('Bezeichnung erforderlich', 'err'); return; }
+  const body = {
+    designation,
+    standard:   document.getElementById('nt-std')?.value.trim(),
+    std_number: document.getElementById('nt-num')?.value.trim(),
+    name:       document.getElementById('nt-name')?.value.trim(),
+    size:       document.getElementById('nt-size')?.value.trim(),
+    material:   document.getElementById('nt-mat')?.value.trim(),
+    unit_price: parseFloat(document.getElementById('nt-price')?.value) || null,
+    notes:      document.getElementById('nt-notes')?.value.trim(),
+  };
+  if (id) await api(`/api/standard-parts/${id}`, 'PUT', body);
+  else await api('/api/standard-parts', 'POST', body);
+  _hideDynModal();
+  toast('Gespeichert', 'ok');
+  await renderNormteile();
+}
+
+async function delNormteil(id) {
+  if (!confirm('Normteil löschen? Es wird auch aus allen BOMs entfernt.')) return;
+  await api(`/api/standard-parts/${id}`, 'DELETE');
+  closeDetail();
+  renderNormteile();
 }
 
 async function delRawMat(id) {

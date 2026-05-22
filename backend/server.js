@@ -437,6 +437,29 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
   migrate('ALTER TABLE print_settings ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
+
+  db.run(`CREATE TABLE IF NOT EXISTS standard_parts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    designation TEXT NOT NULL,
+    standard TEXT DEFAULT '',
+    std_number TEXT DEFAULT '',
+    name TEXT DEFAULT '',
+    size TEXT DEFAULT '',
+    material TEXT DEFAULT '',
+    unit_price REAL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS bom_std_parts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_rev_id INTEGER NOT NULL REFERENCES revisions(id),
+    std_part_id INTEGER NOT NULL REFERENCES standard_parts(id),
+    quantity REAL DEFAULT 1,
+    unit TEXT DEFAULT 'pcs',
+    position INTEGER DEFAULT 999,
+    notes TEXT DEFAULT '',
+    UNIQUE(parent_rev_id, std_part_id)
+  )`);
   migrate('ALTER TABLE raw_materials ADD COLUMN lot_number TEXT DEFAULT \'\'');
   migrate('ALTER TABLE raw_materials ADD COLUMN dimensions TEXT DEFAULT \'\'');
 
@@ -880,6 +903,7 @@ app.get('/api/items/:id', (req, res) => {
     if (item.item_type === 'asm') {
       rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
       rev.bom.forEach(b => { b.child_active_rev = getActiveRevision(b.child_item_id); });
+      rev.bom_std = all('SELECT bs.*, sp.designation, sp.name as sp_name, sp.material, sp.size, sp.unit_price, sp.standard, sp.std_number FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.parent_rev_id=? ORDER BY bs.position', [rev.id]);
     }
   });
   item.changelog = all("SELECT * FROM changelog WHERE entity_type='item' AND entity_id=? ORDER BY created_at DESC", [item.id]);
@@ -2827,6 +2851,54 @@ app.post('/api/inventory/:id/movement', (req, res) => {
 // ==============================================================
 // TIME ENTRIES
 // ==============================================================
+// ==============================================================
+// STANDARD PARTS (Normteile)
+// ==============================================================
+app.get('/api/standard-parts', (req, res) => {
+  res.json(all('SELECT * FROM standard_parts ORDER BY standard, std_number, size, designation'));
+});
+
+app.post('/api/standard-parts', (req, res) => {
+  const { designation, standard, std_number, name, size, material, unit_price, notes } = req.body;
+  if (!designation) return res.status(400).json({ error: 'Bezeichnung erforderlich' });
+  const id = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
+    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, notes||'']);
+  res.json(get('SELECT * FROM standard_parts WHERE id=?', [id]));
+});
+
+app.put('/api/standard-parts/:id', (req, res) => {
+  const { designation, standard, std_number, name, size, material, unit_price, notes } = req.body;
+  if (!designation) return res.status(400).json({ error: 'Bezeichnung erforderlich' });
+  run('UPDATE standard_parts SET designation=?,standard=?,std_number=?,name=?,size=?,material=?,unit_price=?,notes=? WHERE id=?',
+    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, notes||'', req.params.id]);
+  res.json(get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/standard-parts/:id', (req, res) => {
+  run('DELETE FROM standard_parts WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+app.post('/api/revisions/:revId/bom-std', (req, res) => {
+  const { std_part_id, quantity, unit, notes } = req.body;
+  const sp = get('SELECT * FROM standard_parts WHERE id=?', [std_part_id]);
+  if (!sp) return res.status(404).json({ error: 'Normteil nicht gefunden' });
+  try {
+    const pos = (get('SELECT MAX(position) as m FROM bom_std_parts WHERE parent_rev_id=?', [req.params.revId])?.m || 0) + 1;
+    const id = runGetId('INSERT INTO bom_std_parts (parent_rev_id,std_part_id,quantity,unit,position,notes) VALUES (?,?,?,?,?,?)',
+      [req.params.revId, std_part_id, quantity||1, unit||'pcs', pos, notes||'']);
+    log('revision', req.params.revId, 'BOM Add', sp.designation + ' x' + (quantity||1));
+    res.json({ success: true, id });
+  } catch { res.status(400).json({ error: 'Bereits in BOM vorhanden' }); }
+});
+
+app.delete('/api/bom-std/:id', (req, res) => {
+  const row = get('SELECT bs.*, sp.designation FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.id=?', [req.params.id]);
+  if (row) log('revision', row.parent_rev_id, 'BOM Entfernt', row.designation);
+  run('DELETE FROM bom_std_parts WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
 // ==============================================================
 // RAW MATERIALS
 // ==============================================================

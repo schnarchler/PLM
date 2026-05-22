@@ -46,6 +46,11 @@
       Projekte
       <span class="badge" id="badge-projects">—</span>
     </button>
+    <button class="nav-item" id="ni-normteile" onclick="gotoView('normteile')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      Normteile
+      <span class="badge" id="badge-normteile">—</span>
+    </button>
     <button class="nav-item" id="ni-search" onclick="gotoView('search')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       Suche
@@ -241,13 +246,26 @@
   <div class="modal" style="max-width:480px">
     <div class="modal-head"><div class="modal-title">Stückliste – Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('bomModal')">✕</button></div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="fg"><label class="fl">Teil / Baugruppe *</label>
-          <select class="fs" id="bom-child-id"><option value="">— wählen —</option></select>
+      <div style="display:flex;gap:4px;margin-bottom:14px;background:var(--bg1);border-radius:var(--r-sm);padding:3px">
+        <button id="bom-tab-item" onclick="setBomTab('item')" class="btn btn-sm btn-primary" style="flex:1">PLM-Item</button>
+        <button id="bom-tab-std"  onclick="setBomTab('std')"  class="btn btn-sm btn-ghost"   style="flex:1">⚙ Normteil</button>
+      </div>
+      <div id="bom-pane-item">
+        <div class="form-row">
+          <div class="fg"><label class="fl">Teil / Baugruppe *</label>
+            <select class="fs" id="bom-child-id"><option value="">— wählen —</option></select>
+          </div>
+        </div>
+      </div>
+      <div id="bom-pane-std" style="display:none">
+        <div class="form-row">
+          <div class="fg"><label class="fl">Normteil *</label>
+            <select class="fs" id="bom-std-id"><option value="">— wählen —</option></select>
+          </div>
         </div>
       </div>
       <div class="form-row cols2">
-        <div class="fg"><label class="fl">Menge</label><input class="fi" id="bom-qty" type="number" value="1" min="0.001" step="0.001"></div>
+        <div class="fg"><label class="fl">Menge</label><input class="fi" id="bom-qty" type="number" value="1" min="0.001" step="1"></div>
         <div class="fg"><label class="fl">Einheit</label>
           <select class="fs" id="bom-unit"><option>pcs</option><option>set</option><option>m</option><option>mm</option><option>g</option><option>kg</option></select>
         </div>
