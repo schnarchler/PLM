@@ -5761,7 +5761,7 @@ async function showCheckoutList() {
                 <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
                   onclick="importNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ Als neues Bauteil erfassen (mit Datei)</button>
                 <button class="btn btn-sm btn-ghost"
-                  onclick="createNewItemFromCheckout()">+ Neues Bauteil anlegen</button>
+                  onclick="attachCheckoutFileToItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ An Bauteil anhängen</button>
               </div>
             </div>`).join('')}
         </div>
@@ -5867,6 +5867,82 @@ async function _doImportNewItem(f) {
     showCheckoutList();
     if (state.project) { const p = await api(`/api/projects/${state.project.id}`); openProjectDetail(p); }
   } catch(e) { toast('Fehler: ' + (e.message||''), 'err'); }
+}
+
+async function attachCheckoutFileToItem(f) {
+  _showDynModal(`<div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <div class="modal-title">An Bauteil anhängen</div>
+      <button class="btn btn-icon btn-ghost" onclick="showCheckoutList()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:13px;color:var(--t3)">
+        Datei: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span>
+      </div>
+      <div class="fg"><label class="fl">Bauteil suchen *</label>
+        <div style="position:relative">
+          <input class="fi" id="atf-search" placeholder="Teilenummer oder Name…"
+            oninput="_atfSearch(this.value)" autocomplete="off">
+          <div id="atf-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div id="atf-selected" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 12px;font-size:13px;align-items:center;gap:8px">
+        <span id="atf-badge" style="font-family:var(--mono);color:var(--blue)"></span>
+        <span id="atf-name" style="flex:1"></span>
+        <button class="btn btn-icon btn-ghost btn-sm" onclick="document.getElementById('atf-selected').style.display='none';document.getElementById('atf-item-id').value=''">✕</button>
+      </div>
+      <input type="hidden" id="atf-item-id">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="showCheckoutList()">Zurück</button>
+      <button class="btn btn-primary" onclick="_doAttachCheckoutFile(${JSON.stringify(f).replace(/"/g,'&quot;')})">Anhängen</button>
+    </div>
+  </div>`);
+}
+
+let _atfTimer;
+function _atfSearch(q) {
+  clearTimeout(_atfTimer);
+  const res = document.getElementById('atf-results');
+  if (!q || q.length < 1) { res.style.display = 'none'; return; }
+  _atfTimer = setTimeout(async () => {
+    const items = await api('/api/items-all?q=' + encodeURIComponent(q));
+    if (!items.length) { res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display = 'block'; return; }
+    res.innerHTML = items.map(i => `
+      <div onclick="_atfSelect(${i.id},'${esc(i.item_number)}','${esc(i.name)}')"
+        style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <span>${_itemChip(i.item_type, 15)}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        <span style="font-size:13px;color:var(--t3)">${esc(i.project_name)}</span>
+      </div>`).join('');
+    res.style.display = 'block';
+  }, 200);
+}
+
+function _atfSelect(id, number, name) {
+  document.getElementById('atf-item-id').value = id;
+  document.getElementById('atf-badge').textContent = number;
+  document.getElementById('atf-name').textContent = name;
+  document.getElementById('atf-selected').style.display = 'flex';
+  document.getElementById('atf-results').style.display = 'none';
+  document.getElementById('atf-search').value = '';
+}
+
+async function _doAttachCheckoutFile(f) {
+  const itemId = document.getElementById('atf-item-id')?.value;
+  if (!itemId) { toast('Bauteil auswählen', 'err'); return; }
+  const folder = f.path.includes('/') ? f.path.substring(0, f.path.lastIndexOf('/')) : '.';
+  await api('/api/checkout/import', 'POST', {
+    mode: 'item',
+    item_id: parseInt(itemId),
+    folder,
+    files: [{ name: f.name, ds_type: f.ds_type }]
+  });
+  toast(`${esc(f.name)} angehängt`, 'ok');
+  await loadCheckouts();
+  showCheckoutList();
 }
 
 async function createNewItemFromCheckout() {
