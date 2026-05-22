@@ -4134,7 +4134,7 @@ async function shutdownServer() {
   const newRootFiles = _scanResult.root_files;
 
   if (checkouts.length > 0) {
-    _showDynModal(`<div class="modal" style="max-width:460px">
+    _showDynModal(`<div class="modal" style="max-width:640px;width:95vw">
       <div class="modal-head">
         <div class="modal-title" style="color:var(--amber)">⚠ Aktive Checkouts</div>
       </div>
@@ -4147,7 +4147,7 @@ async function shutdownServer() {
         </div>
         <div style="font-size:13px;color:var(--t3);padding-top:4px">Vor dem Beenden einchecken (Checkout-Ordner werden gelöscht)?</div>
       </div>
-      <div class="modal-foot" style="gap:6px">
+      <div class="modal-foot" style="gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
         <button class="btn btn-red" onclick="_doShutdown(false)">Beenden ohne Einchecken</button>
         <button class="btn btn-primary" onclick="_doShutdown(true)">Einchecken & Beenden</button>
