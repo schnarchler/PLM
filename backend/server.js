@@ -1649,12 +1649,8 @@ app.get('/api/orders/:id', (req, res) => {
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
   if (!o) return res.status(404).json({ error: 'Not found' });
-  o.items = all('SELECT oi.*,i.item_number,i.item_type,i.default_price FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
-  o.items.forEach(li => {
-    if (li.item_id) {
-      li.manufacturing_cost = calcItemCost(li.item_id);
-    }
-  });
+  o.items = all('SELECT oi.*,i.item_number,i.item_type,i.default_price,i.weight_g FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
+  o.items.forEach(li => { li.manufacturing_cost = calcLineItemCost(li) || null; });
   res.json(o);
 });
 
@@ -1763,12 +1759,8 @@ app.get('/api/quotes/:id', (req, res) => {
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
   if (!q) return res.status(404).json({ error: 'Not found' });
-  q.items = all('SELECT qi.*,i.item_number,i.item_type,i.default_price FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
-  q.items.forEach(li => {
-    if (li.item_id) {
-      li.manufacturing_cost = calcItemCost(li.item_id);
-    }
-  });
+  q.items = all('SELECT qi.*,i.item_number,i.item_type,i.default_price,i.weight_g FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
+  q.items.forEach(li => { li.manufacturing_cost = calcLineItemCost(li) || null; });
   res.json(q);
 });
 
@@ -2070,36 +2062,101 @@ app.get('/api/items-all', (req, res) => {
   res.json(items);
 });
 
+// Returns effective weight for an item: direct weight_g if set, else sum of BOM children (recursive)
+function getEffectiveWeight(itemId, _visited) {
+  const visited = _visited || new Set();
+  if (visited.has(itemId)) return null;
+  visited.add(itemId);
+  const item = get('SELECT weight_g, item_type FROM items WHERE id=?', [itemId]);
+  if (!item) return null;
+  if (item.weight_g > 0) return item.weight_g;
+  if (item.item_type !== 'asm') return null;
+  const rev = getLatestRevision(itemId);
+  if (!rev) return null;
+  const bom = all('SELECT child_item_id, quantity FROM bom WHERE parent_rev_id=?', [rev.id]);
+  if (!bom.length) return null;
+  let total = 0, hasAny = false;
+  for (const b of bom) {
+    const w = getEffectiveWeight(b.child_item_id, new Set(visited));
+    if (w == null) continue;
+    total += w * b.quantity;
+    hasAny = true;
+  }
+  return hasAny ? total : null;
+}
+
+function calcLineItemCost(oi) {
+  let material = 0, machine = 0, work = 0;
+  if (oi.raw_material_id && oi.item_id) {
+    const rm      = get('SELECT weight_g FROM raw_materials WHERE id=?', [oi.raw_material_id]);
+    const itemW   = getEffectiveWeight(oi.item_id);
+    const mov     = get(`SELECT unit_price FROM raw_material_movements
+      WHERE raw_material_id=? AND type='in' AND unit_price IS NOT NULL
+      ORDER BY created_at DESC LIMIT 1`, [oi.raw_material_id]);
+    if (rm?.weight_g > 0 && itemW > 0 && mov?.unit_price != null) {
+      material = (mov.unit_price / rm.weight_g) * itemW;
+    }
+  }
+  if (oi.printer_name && oi.estimated_print_hours > 0) {
+    const printer = get('SELECT cost_per_hour FROM printers WHERE name=?', [oi.printer_name]);
+    if (printer?.cost_per_hour > 0) machine = oi.estimated_print_hours * printer.cost_per_hour;
+  }
+  if (oi.estimated_hours > 0) {
+    const rate = parseFloat(getSetting('hourly_rate', '0')) || 0;
+    if (rate > 0) work = oi.estimated_hours * rate;
+  }
+  const total = material + machine + work;
+  return total > 0 ? { material, machine, work, total } : null;
+}
+
 app.get('/api/profit-overview', (req, res) => {
   const items = all(`SELECT i.id, i.project_id, i.item_number, i.name, i.item_type, i.default_price,
+    i.weight_g, i.classification,
     p.id as project_db_id, p.name as project_name, p.number as project_number
     FROM items i JOIN projects p ON i.project_id=p.id
     WHERE i.item_type IN ('prt','asm')
     ORDER BY p.number, i.item_number`);
 
-  // Order revenue/qty per item (non-cancelled orders)
-  const orderStats = all(`
+  // Revenue + qty per item from non-cancelled orders
+  const revenueStats = all(`
     SELECT oi.item_id,
       SUM(oi.quantity) as total_qty,
-      SUM(oi.quantity * COALESCE(oi.unit_price, i.default_price, 0)) as total_revenue
+      SUM(oi.quantity * COALESCE(oi.unit_price, 0)) as total_revenue
     FROM order_items oi
-    JOIN orders o ON oi.order_id=o.id
-    JOIN items i ON oi.item_id=i.id
-    WHERE o.status NOT IN ('CANCELLED')
+    JOIN orders o ON oi.order_id = o.id
+    WHERE o.status NOT IN ('CANCELLED') AND oi.item_id IS NOT NULL
     GROUP BY oi.item_id`);
-  const statsById = {};
-  orderStats.forEach(s => { statsById[s.item_id] = s; });
+  const revenueById = {};
+  revenueStats.forEach(s => { revenueById[s.item_id] = s; });
+
+  // Calculated cost per item: weighted average of calcLineItemCost across all non-cancelled order_items
+  const allOrderItems = all(`
+    SELECT oi.item_id, oi.quantity, oi.raw_material_id, oi.estimated_hours,
+           oi.printer_name, oi.estimated_print_hours
+    FROM order_items oi
+    JOIN orders o ON oi.order_id = o.id
+    WHERE o.status NOT IN ('CANCELLED') AND oi.item_id IS NOT NULL`);
+
+  const costSumById = {};  // { item_id: { weightedCostSum, totalQty } }
+  allOrderItems.forEach(oi => {
+    const c = calcLineItemCost(oi);
+    if (!c) return;
+    if (!costSumById[oi.item_id]) costSumById[oi.item_id] = { weightedSum: 0, qty: 0 };
+    costSumById[oi.item_id].weightedSum += c.total * oi.quantity;
+    costSumById[oi.item_id].qty         += oi.quantity;
+  });
 
   items.forEach(i => {
-    i.manufacturing_cost = calcItemCost(i.id);
-    const cost = i.manufacturing_cost ? i.manufacturing_cost.total : null;
+    const rev  = revenueById[i.id];
+    i.order_qty     = rev ? (rev.total_qty || 0) : 0;
+    i.order_revenue = rev ? (rev.total_revenue || 0) : 0;
+    const cs = costSumById[i.id];
+    i.avg_calc_cost = (cs && cs.qty > 0) ? cs.weightedSum / cs.qty : null;
+    const cost  = i.avg_calc_cost;
     const price = i.default_price;
-    i.margin = (cost != null && price != null) ? price - cost : null;
+    i.margin     = (cost != null && price != null) ? price - cost : null;
     i.margin_pct = (i.margin != null && cost > 0) ? (i.margin / cost * 100) : null;
-    const s = statsById[i.id];
-    i.order_qty      = s ? (s.total_qty || 0) : 0;
-    i.order_revenue  = s ? (s.total_revenue || 0) : 0;
-    i.order_profit   = (s && cost != null) ? s.total_revenue - (cost * s.total_qty) : null;
+    i.theor_gain = (i.margin != null && i.order_qty > 0) ? i.margin * i.order_qty : null;
   });
   res.json(items);
 });

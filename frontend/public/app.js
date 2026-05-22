@@ -1916,47 +1916,42 @@ let _profitData = [];
 let _profitState = { sort: 'number', dir: 1, text: '', margin: '' };
 
 function _exportProfitCsv() {
-  const { sort, dir, text, margin, type } = _profitState;
+  const { sort, dir, text, margin, type, project, sold } = _profitState;
   const q = text.toLowerCase();
   let rows = _profitData.filter(i => {
-    if (q && !i.item_number.toLowerCase().includes(q) && !i.name.toLowerCase().includes(q) && !i.project_number.toLowerCase().includes(q) && !(i.project_name||'').toLowerCase().includes(q)) return false;
-    if (type && i.item_type !== type) return false;
+    if (q && !i.item_number.toLowerCase().includes(q) && !i.name.toLowerCase().includes(q)
+           && !i.project_number.toLowerCase().includes(q) && !(i.project_name||'').toLowerCase().includes(q)) return false;
+    if (type    && i.item_type !== type) return false;
+    if (project && i.project_number !== project) return false;
+    if (sold    && !(i.order_qty > 0)) return false;
     if (margin === 'pos'     && !(i.margin != null && i.margin >= 0)) return false;
     if (margin === 'neg'     && !(i.margin != null && i.margin < 0))  return false;
     if (margin === 'missing' && i.margin != null) return false;
     return true;
   });
-  const val = i => ({
+  const sortVal = i => ({
     project: i.project_number, number: i.item_number, name: i.name,
-    cost: i.manufacturing_cost ? i.manufacturing_cost.total : -Infinity,
-    price: i.default_price ?? -Infinity,
-    margin: i.margin ?? -Infinity,
-    margin_pct: i.margin_pct ?? -Infinity,
+    cost: i.avg_calc_cost ?? -Infinity,
+    price: i.default_price ?? -Infinity, margin_pct: i.margin_pct ?? -Infinity,
   })[sort] ?? '';
-  rows.sort((a, b) => { const av = val(a), bv = val(b); return dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv); });
+  rows.sort((a, b) => { const av = sortVal(a), bv = sortVal(b); return dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv); });
 
   const csvNum = v => v == null ? '' : String(v).replace('.', ',');
   const csvStr = s => '"' + String(s||'').replace(/"/g, '""') + '"';
   const lines = [
-    ['Projekt','Nummer','Typ','Name','Herst.-kosten (CHF)','Filament (CHF)','Maschine (CHF)','Verkaufspreis (CHF)','Marge (CHF)','Marge (%)','Stk. verkauft','Umsatz (CHF)','Gewinn total (CHF)'].join(';'),
-    ...rows.map(i => {
-      const mc = i.manufacturing_cost;
-      return [
-        csvStr(i.project_number),
-        csvStr(i.item_number),
-        csvStr(i.item_type === 'asm' ? 'Baugruppe' : 'Part'),
-        csvStr(i.name),
-        csvNum(mc ? mc.total?.toFixed(2) : null),
-        csvNum(mc ? mc.filament?.toFixed(2) : null),
-        csvNum(mc ? mc.machine?.toFixed(2) : null),
-        csvNum(i.default_price != null ? i.default_price.toFixed(2) : null),
-        csvNum(i.margin != null ? i.margin.toFixed(2) : null),
-        csvNum(i.margin_pct != null ? i.margin_pct.toFixed(1) : null),
-        csvNum(i.order_qty || 0),
-        csvNum(i.order_revenue != null ? i.order_revenue.toFixed(2) : null),
-        csvNum(i.order_profit != null ? i.order_profit.toFixed(2) : null),
-      ].join(';');
-    })
+    ['Projekt','Nummer','Typ','Name','Klassifizierung','Gewicht (g)','Ø Herst.-kosten (CHF)','Verkaufspreis (CHF)','Marge (%)','Stk. verkauft','Umsatz (CHF)','Theor. Marge (CHF)'].join(';'),
+    ...rows.map(i => [
+      csvStr(i.project_number), csvStr(i.item_number),
+      csvStr(i.item_type === 'asm' ? 'Baugruppe' : 'Part'),
+      csvStr(i.name), csvStr(i.classification||''),
+      csvNum(i.weight_g != null ? i.weight_g : null),
+      csvNum(i.avg_calc_cost != null ? i.avg_calc_cost.toFixed(2) : null),
+      csvNum(i.default_price != null ? i.default_price.toFixed(2) : null),
+      csvNum(i.margin_pct != null ? i.margin_pct.toFixed(1) : null),
+      csvNum(i.order_qty || 0),
+      csvNum(i.order_revenue != null ? i.order_revenue.toFixed(2) : null),
+      csvNum(i.theor_gain != null ? i.theor_gain.toFixed(2) : null),
+    ].join(';'))
   ];
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
@@ -1967,58 +1962,71 @@ function _exportProfitCsv() {
 }
 
 async function renderProfitOverview() {
-  setLeftHeader('Kalkulation', `<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="_exportProfitCsv()">↓ CSV</button><button class="btn btn-ghost btn-sm" onclick="renderProfitOverview()">↺ Aktualisieren</button></div>`);
+  setLeftHeader('Kalkulation', `<div style="display:flex;gap:6px">
+    <button class="btn btn-ghost btn-sm" onclick="_exportProfitCsv()">↓ CSV</button>
+    <button class="btn btn-ghost btn-sm" onclick="renderProfitOverview()">↺</button>
+  </div>`);
   closeDetail();
   _profitData = await api('/api/profit-overview');
-  _profitState = { sort: 'number', dir: 1, text: '', margin: '' };
+  _profitState = { sort: 'number', dir: 1, text: '', margin: '', type: '', project: '', sold: false };
 
-  const withCost  = _profitData.filter(i => i.manufacturing_cost);
-  const withBoth  = _profitData.filter(i => i.manufacturing_cost && i.default_price != null);
-  const totalMargin = withBoth.reduce((s, i) => s + i.margin, 0);
-  const marginColor = m => m == null ? 'var(--t3)' : m < 0 ? 'var(--red)' : m < 1 ? 'var(--yellow)' : 'var(--green)';
+  const withPrice  = _profitData.filter(i => i.default_price != null);
+  const withBoth   = _profitData.filter(i => i.avg_calc_cost != null && i.default_price != null);
+  const withSales  = _profitData.filter(i => i.order_qty > 0);
+  const avgMargPct = withBoth.length ? (withBoth.reduce((s,i) => s + (i.margin_pct||0), 0) / withBoth.length) : null;
+  const totalRev   = _profitData.reduce((s,i) => s + (i.order_revenue||0), 0);
+  const totalTheor = _profitData.filter(i => i.theor_gain != null).reduce((s,i) => s + i.theor_gain, 0);
+  const mc = m => m == null ? 'var(--t3)' : m < 0 ? 'var(--red)' : m < 20 ? 'var(--amber)' : 'var(--green)';
 
-  setLeftBody(`<div style="padding:4px 0;max-width:1100px">
-    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:120px">
-        <div style="font-size:13px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Teile gesamt</div>
-        <div style="font-size:20px;font-weight:600">${_profitData.length}</div>
-      </div>
-      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:120px">
-        <div style="font-size:13px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Mit Herst.-kosten</div>
-        <div style="font-size:20px;font-weight:600">${withCost.length}</div>
-      </div>
-      <div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:150px">
-        <div style="font-size:13px;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Gesamtmarge</div>
-        <div style="font-size:20px;font-weight:600;color:${marginColor(totalMargin)}">${withBoth.length ? fmtCHF(totalMargin) : '—'}</div>
-      </div>
+  const projects = [...new Set(_profitData.map(i => i.project_number))].sort();
+
+  const kpi = (label, val, sub, color='var(--t1)') =>
+    `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;min-width:130px;flex:1">
+      <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">${label}</div>
+      <div style="font-size:20px;font-weight:600;color:${color}">${val}</div>
+      ${sub ? `<div style="font-size:11px;color:var(--t4);margin-top:3px">${sub}</div>` : ''}
+    </div>`;
+
+  setLeftBody(`<div style="padding:4px 0;max-width:1200px">
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      ${kpi('Teile gesamt', _profitData.length, `${withPrice.length} mit VP`)}
+      ${kpi('Kalkulierbar', withBoth.length, `Herst.-kosten + VP vorhanden`)}
+      ${kpi('Ø Marge', avgMargPct != null ? avgMargPct.toFixed(0)+'%' : '—', `VP vs. Ø Herst.-kosten`, mc(avgMargPct))}
+      ${kpi('Verkaufte Teile', withSales.length, `${withSales.reduce((s,i)=>s+(i.order_qty||0),0)} Stk. total`)}
+      ${kpi('Umsatz (Aufträge)', totalRev > 0 ? fmtCHF(totalRev) : '—', 'nicht stornierte Aufträge')}
+      ${kpi('Theor. Marge', withBoth.filter(i=>i.theor_gain!=null).length ? fmtCHF(totalTheor) : '—', 'Marge × Stk. verk.', mc(totalTheor > 0 ? 20 : totalTheor < 0 ? -1 : null))}
     </div>
+
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-      <input class="fi" id="profit-search" placeholder="Suche: Nummer, Name, Projekt …"
+      <input class="fi" id="profit-search" placeholder="Nummer, Name, Projekt …"
         oninput="_profitState.text=this.value;_renderProfitRows()"
-        style="max-width:280px;font-size:13px;padding:5px 10px">
-      <select class="fs" id="profit-margin-filter" onchange="_profitState.margin=this.value;_renderProfitRows()"
-        style="max-width:180px;font-size:13px;padding:5px 8px">
+        style="max-width:240px;font-size:13px">
+      <select class="fs" id="profit-project-filter" onchange="_profitState.project=this.value;_renderProfitRows()" style="font-size:13px">
+        <option value="">Alle Projekte</option>
+        ${projects.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+      </select>
+      <select class="fs" id="profit-type-filter" onchange="_profitState.type=this.value;_renderProfitRows()" style="font-size:13px">
+        <option value="">Alle Typen</option>
+        <option value="prt">Parts</option>
+        <option value="asm">Baugruppen</option>
+      </select>
+      <select class="fs" id="profit-margin-filter" onchange="_profitState.margin=this.value;_renderProfitRows()" style="font-size:13px">
         <option value="">Alle Marge</option>
-        <option value="pos">Positiv</option>
+        <option value="pos">Positiv (≥ 0)</option>
         <option value="neg">Negativ</option>
         <option value="missing">Unvollständig</option>
       </select>
-      <select class="fs" id="profit-type-filter" onchange="_profitState.type=this.value;_renderProfitRows()"
-        style="max-width:160px;font-size:13px;padding:5px 8px">
-        <option value="">Alle Typen</option>
-        <option value="prt">🔩 Parts</option>
-        <option value="asm">📦 Baugruppen</option>
-      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;color:var(--t2)">
+        <input type="checkbox" id="profit-sold-filter" onchange="_profitState.sold=this.checked;_renderProfitRows()" style="accent-color:var(--blue)">
+        Nur verkaufte
+      </label>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead>
-        <tr style="border-bottom:2px solid var(--line)" id="profit-thead"></tr>
-      </thead>
+
+    <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:2px solid var(--line)" id="profit-thead"></tr></thead>
       <tbody id="profit-tbody"></tbody>
-    </table>
-    <div style="margin-top:10px;font-size:13px;color:var(--t3)">
-      Herstellungskosten = Filamentkosten (g × CHF/kg) + Maschinenkosten (h × CHF/h) aus den Druckparametern der letzten Revision.
-    </div>
+      <tfoot id="profit-tfoot"></tfoot>
+    </table></div>
   </div>`);
 
   _renderProfitRows();
@@ -2031,70 +2039,90 @@ function _profitSortBy(col) {
 }
 
 function _renderProfitRows() {
-  const { sort, dir, text, margin, type } = _profitState;
+  const { sort, dir, text, margin, type, project, sold } = _profitState;
   const q = text.toLowerCase();
-  const marginColor = m => m == null ? 'var(--t3)' : m < 0 ? 'var(--red)' : m < 1 ? 'var(--yellow)' : 'var(--green)';
-  const marginBg    = m => m == null ? '' : m < 0 ? 'background:rgba(241,120,120,.08)' : m < 1 ? 'background:rgba(239,177,74,.08)' : 'background:rgba(91,211,138,.08)';
+  const mc  = m => m == null ? 'var(--t3)' : m < 0 ? 'var(--red)' : m < 20 ? 'var(--amber)' : 'var(--green)';
+  const mbg = m => m == null ? '' : m < 0 ? 'background:rgba(241,120,120,.06)' : m < 20 ? 'background:rgba(239,177,74,.06)' : '';
 
   let rows = _profitData.filter(i => {
-    if (q && !i.item_number.toLowerCase().includes(q) && !i.name.toLowerCase().includes(q) && !i.project_number.toLowerCase().includes(q) && !(i.project_name||'').toLowerCase().includes(q)) return false;
-    if (type && i.item_type !== type) return false;
+    if (q && !i.item_number.toLowerCase().includes(q) && !i.name.toLowerCase().includes(q)
+           && !i.project_number.toLowerCase().includes(q) && !(i.project_name||'').toLowerCase().includes(q)
+           && !(i.classification||'').toLowerCase().includes(q)) return false;
+    if (type    && i.item_type !== type) return false;
+    if (project && i.project_number !== project) return false;
+    if (sold    && !(i.order_qty > 0)) return false;
     if (margin === 'pos'     && !(i.margin != null && i.margin >= 0)) return false;
     if (margin === 'neg'     && !(i.margin != null && i.margin < 0))  return false;
     if (margin === 'missing' && i.margin != null) return false;
     return true;
   });
 
-  const val = i => ({
-    project:      i.project_number,
-    number:       i.item_number,
-    name:         i.name,
-    cost:         i.manufacturing_cost ? i.manufacturing_cost.total : -Infinity,
-    price:        i.default_price ?? -Infinity,
-    margin:       i.margin ?? -Infinity,
-    margin_pct:   i.margin_pct ?? -Infinity,
-    order_qty:    i.order_qty ?? -Infinity,
-    order_revenue:i.order_revenue ?? -Infinity,
-    order_profit: i.order_profit ?? -Infinity,
+  const sortVal = i => ({
+    project:       i.project_number,
+    number:        i.item_number,
+    name:          i.name,
+    weight:        i.weight_g ?? -Infinity,
+    avg_price:     i.avg_calc_cost ?? -Infinity,
+    price:         i.default_price ?? -Infinity,
+    margin_pct:    i.margin_pct ?? -Infinity,
+    order_qty:     i.order_qty ?? -Infinity,
+    order_revenue: i.order_revenue ?? -Infinity,
+    theor_gain:    i.theor_gain ?? -Infinity,
   })[sort] ?? '';
 
   rows.sort((a, b) => {
-    const av = val(a), bv = val(b);
+    const av = sortVal(a), bv = sortVal(b);
     return dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
   });
 
   const arrow = col => sort === col ? (dir === 1 ? ' ▲' : ' ▼') : '';
-  const th = (label, col, align='left') =>
+  const th = (label, col, align='left', title='') =>
     `<th style="text-align:${align};padding:6px 8px;color:${sort===col?'var(--t1)':'var(--t3)'};font-weight:600;cursor:pointer;user-select:none;white-space:nowrap"
-      onclick="_profitSortBy('${col}')">${label}${arrow(col)}</th>`;
+      onclick="_profitSortBy('${col}')"${title?` title="${title}"`:''}>${label}${arrow(col)}</th>`;
 
   document.getElementById('profit-thead').innerHTML =
-    th('Projekt','project') + th('Nummer','number') + th('Name','name') +
-    th('Herst.-kosten','cost','right') + th('Verkaufspreis','price','right') +
-    th('Marge','margin','right') + th('%','margin_pct','right') +
-    th('Stk. verkauft','order_qty','right') + th('Umsatz','order_revenue','right') + th('Gewinn total','order_profit','right');
+    th('Projekt','project') + th('Nummer','number') + th('Name / Klasse','name') +
+    th('Gew.','weight','right','Gewicht (g)') +
+    th('Ø Herst.-kosten','avg_price','right','Gewichteter Ø der kalkulierten Kosten aus Aufträgen (Material + Druck + Arbeit)') +
+    th('VP','price','right','Aktueller Verkaufspreis') +
+    th('Marge %','margin_pct','right','(VP − Ø Herst.-kosten) / Ø Herst.-kosten') +
+    th('Stk.','order_qty','right','Stück verkauft') +
+    th('Umsatz','order_revenue','right') +
+    th('Theor. Marge','theor_gain','right','Marge × Stk. verkauft');
+
+  // Summary footer
+  const sumRev   = rows.reduce((s,i) => s + (i.order_revenue||0), 0);
+  const sumTheor = rows.filter(i=>i.theor_gain!=null).reduce((s,i) => s + i.theor_gain, 0);
+  const sumQty   = rows.reduce((s,i) => s + (i.order_qty||0), 0);
+  const hasTheor = rows.some(i => i.theor_gain != null);
+
+  document.getElementById('profit-tfoot').innerHTML = rows.length > 1 ? `
+    <tr style="border-top:2px solid var(--line);background:var(--bg2);font-size:13px;font-weight:600">
+      <td colspan="7" style="padding:6px 8px;color:var(--t3)">Total (${rows.length} Einträge)</td>
+      <td style="padding:6px 8px;text-align:right;font-family:var(--mono)">${sumQty > 0 ? fmtN(sumQty,0) : '—'}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:var(--mono)">${sumRev > 0 ? fmtCHF(sumRev) : '—'}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:var(--mono);color:${mc(sumTheor > 0 ? 20 : sumTheor < 0 ? -1 : null)}">${hasTheor ? fmtCHF(sumTheor) : '—'}</td>
+    </tr>` : '';
 
   document.getElementById('profit-tbody').innerHTML = rows.length ? rows.map(i => {
-    const mc = i.manufacturing_cost;
-    const cost = mc ? mc.total : null;
-    const costDetail = mc ? `<span style="font-size:13px;color:var(--t3)">`
-      + (mc.filament > 0 ? `Fil. ${fmtN(mc.filament)}` : '')
-      + (mc.filament > 0 && mc.machine > 0 ? ' + ' : '')
-      + (mc.machine > 0 ? `Mach. ${fmtN(mc.machine)}` : '') + `</span>` : '';
-    const opColor = i.order_profit == null ? 'var(--t3)' : i.order_profit < 0 ? 'var(--red)' : i.order_profit === 0 ? 'var(--t3)' : 'var(--green)';
-    return `<tr style="border-bottom:1px solid var(--line);cursor:pointer;${marginBg(i.margin)}" onclick="openProjectAndItem(${i.project_db_id},${i.id})" title="Im PLM öffnen">
+    const pct     = i.margin_pct;
+    const pctBar  = pct != null ? `<div style="height:3px;border-radius:2px;margin-top:3px;width:${Math.min(Math.abs(pct),100)}%;background:${mc(pct)}"></div>` : '';
+    const tgColor = i.theor_gain == null ? 'var(--t3)' : i.theor_gain < 0 ? 'var(--red)' : i.theor_gain > 0 ? 'var(--green)' : 'var(--t3)';
+    const classChip = i.classification ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--bg3);color:var(--t3);border:1px solid var(--line2);margin-left:4px">${esc(i.classification)}</span>` : '';
+    const orderCount = i.order_qty > 0 ? `<span style="font-size:10px;color:var(--t4)" title="${i.order_qty} Stk. aus Aufträgen (gewichteter Ø)"> n=${fmtN(i.order_qty,0)}</span>` : '';
+    return `<tr style="border-bottom:1px solid var(--line);cursor:pointer;${mbg(pct)}" onclick="openProjectAndItem(${i.project_db_id},${i.id})" title="Im PLM öffnen">
       <td style="padding:5px 8px;font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.project_number)}</td>
-      <td style="padding:5px 8px;font-size:13px;white-space:nowrap">${_itemChip(i.item_type,16)} ${esc(i.item_number)}</td>
-      <td style="padding:5px 8px;font-size:13px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${cost != null ? `${fmtCHF(cost)}<br>${costDetail}` : '<span style="color:var(--t3)">—</span>'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t3)">—</span>'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:${marginColor(i.margin)}">${i.margin != null ? fmtCHF(i.margin) : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${marginColor(i.margin)}">${i.margin_pct != null ? i.margin_pct.toFixed(0)+'%' : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_qty ? fmtN(i.order_qty, 0) : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_revenue ? fmtCHF(i.order_revenue) : '—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:${i.order_profit != null ? 600 : 400};color:${opColor}">${i.order_profit != null ? fmtCHF(i.order_profit) : '—'}</td>
+      <td style="padding:5px 8px;font-size:13px;white-space:nowrap">${_itemChip(i.item_type,15)} <span style="font-family:var(--mono)">${esc(i.item_number)}</span></td>
+      <td style="padding:5px 8px;max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}${classChip}</div></td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:var(--t3)">${i.weight_g != null ? fmtN(i.weight_g,1) : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${i.avg_calc_cost != null ? fmtCHF(i.avg_calc_cost)+orderCount : '<span style="color:var(--t4)">—</span>'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t4)">—</span>'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:${mc(pct)};min-width:70px">${pct != null ? pct.toFixed(0)+'%' : '—'}${pctBar}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_qty || '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_revenue ? 'var(--t2)' : 'var(--t4)'}">${i.order_revenue ? fmtCHF(i.order_revenue) : '—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:${i.theor_gain != null ? 600 : 400};color:${tgColor}">${i.theor_gain != null ? fmtCHF(i.theor_gain) : '—'}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Einträge</td></tr>';
+  }).join('') : `<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--t3)">Keine Einträge</td></tr>`;
 }
 
 // ── CUSTOMERS ─────────────────────────────────────────────────
@@ -3865,9 +3893,18 @@ function renderLineItems(items, parentType, parentId, taxRate, discountPct, incl
           const mc = i.manufacturing_cost;
           const costTotal = mc ? mc.total * i.quantity : null;
           const margin = (costTotal != null) ? lineTotal - costTotal : null;
-          const marginColor = margin == null ? '' : margin < 0 ? 'color:var(--red)' : margin < lineTotal * 0.15 ? 'color:var(--yellow)' : 'color:var(--green)';
-          const costHint = mc ? `<div style="font-size:13px;margin-top:2px;color:var(--t3)">Herst.: ${fmtChf(mc.total)}${mc.from_bom?' <span style="color:var(--teal)">(BOM)</span>':''}${i.quantity>1?` × ${i.quantity} = ${fmtChf(costTotal)}`:''}
-            <span style="margin-left:6px;${marginColor}">Marge ${fmtChf(margin)}</span></div>` : '';
+          const marginPct = (margin != null && costTotal > 0) ? (margin / costTotal * 100) : null;
+          const marginColor = margin == null ? '' : margin < 0 ? 'color:var(--red)' : marginPct != null && marginPct < 15 ? 'color:var(--amber)' : 'color:var(--green)';
+          const breakdown = mc ? [
+            mc.material > 0 ? `Mat. ${fmtChf(mc.material)}` : '',
+            mc.machine  > 0 ? `Druck ${fmtChf(mc.machine)}` : '',
+            mc.work     > 0 ? `Arbeit ${fmtChf(mc.work)}` : '',
+          ].filter(Boolean).join(' + ') : '';
+          const costHint = mc ? `<div style="font-size:11px;margin-top:3px;color:var(--t3)">
+            Herst./Stk.: <span style="font-family:var(--mono)">${fmtChf(mc.total)}</span>${breakdown ? ` <span style="color:var(--t4)">(${breakdown})</span>` : ''}
+            ${i.quantity>1 ? ` · Total: <span style="font-family:var(--mono)">${fmtChf(costTotal)}</span>` : ''}
+            · Marge: <span style="font-family:var(--mono);font-weight:600;${marginColor}">${fmtChf(margin)}${marginPct != null ? ` (${marginPct.toFixed(0)}%)` : ''}</span>
+          </div>` : '';
           return `<tr style="border-bottom:1px solid var(--line)" onclick="openLineItemModal('${parentType}',${parentId},${i.id})">
             <td style="padding:3px 4px;width:28px" onclick="event.stopPropagation()">
               <div style="display:flex;flex-direction:column;gap:1px">
