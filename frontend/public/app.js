@@ -6091,12 +6091,13 @@ async function openRawMatDetail(id) {
     </div>
     <div id="rm-moves" hidden>
       ${movements.length ? `<div class="tbl-wrap"><table>
-        <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th style="text-align:right">Preis/Stk</th><th>Notiz</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th style="text-align:right">Preis/Stk</th><th>Lot</th><th>Notiz</th></tr></thead>
         <tbody>${movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:11px;color:var(--t4)">${m.created_at?.slice(0,16)||'—'}</td>
           <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${item.unit}</td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3)">${m.unit_price!=null?fmtChf(m.unit_price):'—'}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--t4)">${esc(m.lot_number||'—')}</td>
           <td style="font-size:13px;color:var(--t3)">${esc(m.notes||'')}</td>
         </tr>`).join('')}</tbody>
       </table></div>`
@@ -6228,7 +6229,9 @@ function openRawMatAdjust(id, type) {
         <div class="fg"><label class="fl">Menge *</label><input class="fi" type="number" id="adj-qty" min="0.001" step="any" placeholder="0"></div>
         <div class="fg"><label class="fl">Notiz</label><input class="fi" id="adj-notes" placeholder="z.B. neue Spule, Lieferschein-Nr."></div>
       </div>
-      ${type==='in' ? `<div class="form-row">
+      ${type==='in' ? `<div class="form-row cols2">
+        <div class="fg"><label class="fl">Lotnummer (optional)</label>
+          <input class="fi" id="adj-lot" placeholder="z.B. LOT-2025-042"></div>
         <div class="fg"><label class="fl">Einkaufspreis / Einheit (optional)</label>
           <input class="fi" type="number" id="adj-price" min="0" step="0.01" placeholder="z.B. 24.90"></div>
       </div>` : ''}
@@ -6245,7 +6248,8 @@ async function saveRawMatAdjust(id, type) {
   if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
   const notes = document.getElementById('adj-notes')?.value.trim();
   const unit_price = parseFloat(document.getElementById('adj-price')?.value) || null;
-  const r = await api(`/api/raw-materials/${id}/adjust`, 'POST', { qty, type, notes, unit_price });
+  const lot_number = document.getElementById('adj-lot')?.value.trim() || null;
+  const r = await api(`/api/raw-materials/${id}/adjust`, 'POST', { qty, type, notes, unit_price, lot_number });
   _hideDynModal();
   toast(`Gebucht — neuer Bestand: ${fmtN(r.stock_qty,0)}`, 'ok');
   await renderRawMaterials();

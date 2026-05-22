@@ -475,6 +475,7 @@ async function initDb() {
   migrate('ALTER TABLE raw_materials ADD COLUMN lot_number TEXT DEFAULT \'\'');
   migrate('ALTER TABLE raw_materials ADD COLUMN dimensions TEXT DEFAULT \'\'');
   migrate('ALTER TABLE raw_material_movements ADD COLUMN unit_price REAL');
+  migrate("ALTER TABLE raw_material_movements ADD COLUMN lot_number TEXT DEFAULT ''");
 
   db.run(`CREATE TABLE IF NOT EXISTS time_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2976,14 +2977,16 @@ app.delete('/api/raw-materials/:id', (req, res) => {
 });
 
 app.post('/api/raw-materials/:id/adjust', (req, res) => {
-  const { qty, type, notes, unit_price } = req.body;
+  const { qty, type, notes, unit_price, lot_number } = req.body;
   const mat = get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]);
   if (!mat) return res.status(404).json({ error: 'Nicht gefunden' });
   const delta = type === 'out' ? -Math.abs(parseFloat(qty)) : Math.abs(parseFloat(qty));
   const newQty = Math.max(0, mat.stock_qty + delta);
   run(`UPDATE raw_materials SET stock_qty=?,updated_at=datetime('now') WHERE id=?`, [newQty, req.params.id]);
-  run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,unit_price) VALUES (?,?,?,?,?)',
-    [req.params.id, Math.abs(parseFloat(qty)), type, notes||'', unit_price||null]);
+  // Update main lot_number if a new one is provided on incoming booking
+  if (type === 'in' && lot_number) run(`UPDATE raw_materials SET lot_number=? WHERE id=?`, [lot_number, req.params.id]);
+  run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,unit_price,lot_number) VALUES (?,?,?,?,?,?)',
+    [req.params.id, Math.abs(parseFloat(qty)), type, notes||'', unit_price||null, lot_number||'']);
   res.json({ stock_qty: newQty });
 });
 
