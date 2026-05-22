@@ -2113,7 +2113,7 @@ async function renderCustomers() {
       ${hasFilter?`<button class="btn btn-ghost btn-sm" onclick="_clearCustomerFilter()" title="Filter zurücksetzen">✕</button>`:''}
     </div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Nummer</th><th>Name</th><th>E-Mail</th><th>Telefon</th><th>Adresse</th><th></th></tr></thead>
+      <thead><tr><th>Nummer</th><th>Name</th><th>Aufträge</th><th>E-Mail</th><th>Telefon</th><th>Adresse</th><th></th></tr></thead>
       <tbody id="_customer-tbody"></tbody>
     </table></div>`);
   _render_customerRows();
@@ -2130,11 +2130,12 @@ function _render_customerRows() {
   el.innerHTML = rows.map(c=>`<tr onclick="openCustomerDetail(${c.id})">
     <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${c.number}</td>
     <td style="font-weight:500">${esc(c.name)}</td>
+    <td style="text-align:center">${c.order_count > 0 ? `<span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:12px;padding:1px 8px;font-family:var(--mono)">${c.order_count}</span>` : '<span style="color:var(--t4)">—</span>'}</td>
     <td style="color:var(--t2)">${c.email||'—'}</td>
     <td style="color:var(--t2)">${c.phone||'—'}</td>
     <td style="color:var(--t3);font-size:13px">${[c.street,c.postal_code&&c.city?c.postal_code+' '+c.city:'',c.country].filter(Boolean).join(', ')||'—'}</td>
     <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delCustomer(${c.id})">✕</button></td>
-  </tr>`).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
 
 async function openCustomerDetail(id) {
