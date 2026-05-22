@@ -1167,6 +1167,20 @@ app.post('/api/revisions/:revId/bom', (req, res) => {
   } catch (e) { res.status(400).json({ error: 'Already in BOM or invalid' }); }
 });
 
+app.put('/api/bom/:id/quantity', (req, res) => {
+  const { quantity, unit } = req.body;
+  run('UPDATE bom SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
+  saveDb();
+  res.json({ success: true });
+});
+
+app.put('/api/revisions/:revId/bom-reorder', (req, res) => {
+  const { order } = req.body; // array of bom ids in new order
+  order.forEach((id, idx) => run('UPDATE bom SET position=? WHERE id=? AND parent_rev_id=?', [idx+1, id, req.params.revId]));
+  saveDb();
+  res.json({ success: true });
+});
+
 app.delete('/api/bom/:id', (req, res) => {
   const bom = get('SELECT b.*, i.item_number FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.id=?', [req.params.id]);
   if (bom) log('revision', bom.parent_rev_id, 'BOM Entfernt', bom.item_number + ' x' + bom.quantity);

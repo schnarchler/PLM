@@ -476,6 +476,7 @@ tr.row-active { outline: 1px solid rgba(99,179,237,.25); outline-offset: -1px; }
 .bom-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .bom-row:last-child { border-bottom: none; }
 .bom-row:hover { background: var(--bg2); }
+.bom-draggable { cursor: default; user-select: none; transition: opacity .15s; }
 .bom-num { font-family: var(--mono); font-size: 13px; color: var(--blue); width: 160px; flex-shrink: 0; font-weight: 500; }
 .bom-qty { font-family: var(--mono); font-size: 13px; color: var(--t2); width: 60px; text-align: right; flex-shrink: 0; }
 
