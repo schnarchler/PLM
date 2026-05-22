@@ -965,6 +965,11 @@ function dtClass(originalName, dsType) {
   return 'dt-' + dsType;
 }
 
+function _cleanDsName(name) {
+  // Strip trailing _NNN or _NN before extension: file_001.step → file.step
+  return name.replace(/(_\d{1,4})(\.[^.]+)$/, '$2');
+}
+
 function renderDatasets(datasets, revId, locked) {
   if (!datasets.length) return `<div style="color:var(--t3);font-size:13px">Noch keine Dateien angehängt.</div>`;
   const groups = {};
@@ -975,7 +980,7 @@ function renderDatasets(datasets, revId, locked) {
         <div class="ds-row">
           <span class="ds-type ${dtClass(f.original_name, type)}">${fileLabel(f.original_name, type)}</span>
           <div class="ds-info">
-            <div class="ds-name">${esc(f.original_name)}</div>
+            <div class="ds-name">${esc(_cleanDsName(f.original_name))}</div>
             <div class="ds-meta">v${f.version} · ${fmtSize(f.file_size)} · ${fmtDate(f.uploaded_at)}${f.notes?' · '+esc(f.notes):''}</div>
           </div>
           <a href="${API}/api/datasets/${f.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
