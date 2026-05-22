@@ -2934,36 +2934,25 @@ async function confirmMoveItem(itemId) {
   }
 }
 
-async function saveItemWeight(itemId, input) {
+async function _saveItemField(itemId, input, field) {
   const val = input.value.trim();
-  const weight = val === '' ? null : parseFloat(val);
+  const parsed = val === '' ? null : parseFloat(val);
   try {
     const item = await api('/api/items/' + itemId);
     await api('/api/items/' + itemId, 'PUT', {
       name: item.name, description: item.description,
-      source_url: item.source_url || null, default_price: item.default_price ?? null,
-      weight_g: weight, classification: item.classification || null
+      source_url: item.source_url || null,
+      default_price: field === 'default_price' ? parsed : (item.default_price ?? null),
+      weight_g: field === 'weight_g' ? parsed : (item.weight_g ?? null),
+      classification: item.classification || null
     });
     input.style.borderColor = 'var(--green)';
     setTimeout(() => { input.style.borderColor = ''; }, 1200);
-  } catch { input.style.borderColor = 'var(--red)'; }
+  } catch(e) { input.style.borderColor = 'var(--red)'; toast('Fehler: ' + e, 'err'); }
 }
 
-async function saveItemPrice(itemId, input) {
-  const val = input.value.trim();
-  const price = val === '' ? null : parseFloat(val);
-  try {
-    const item = await api('/api/items/' + itemId);
-    await api('/api/items/' + itemId, 'PUT', {
-      name: item.name, description: item.description,
-      source_url: item.source_url || null, default_price: price
-    });
-    input.style.borderColor = 'var(--green)';
-    setTimeout(() => input.style.borderColor = '', 1200);
-  } catch(e) {
-    toast('Fehler: ' + e, 'err');
-  }
-}
+async function saveItemWeight(itemId, input) { return _saveItemField(itemId, input, 'weight_g'); }
+async function saveItemPrice(itemId, input)  { return _saveItemField(itemId, input, 'default_price'); }
 
 // ── ITEM CRUD ─────────────────────────────────────────────────
 async function openEditItemModal(id) {
@@ -3306,39 +3295,6 @@ async function loadPsConfig() {
   ]);
   state._psConfigLoaded = true;
 }
-function _refreshRawMaterials() {
-  state._psConfigLoaded = false; // force reload on next psModal open
-}
-function _populatePsSelects() {
-  const matSel = document.getElementById('ps-mat-preset');
-  if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen (füllt Felder automatisch aus) —</option>' +
-    state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
-  const nozSel = document.getElementById('ps-nozzle');
-  if (nozSel) nozSel.innerHTML = '<option value="">—</option>' +
-    state.nozzles.map(n=>`<option value="${n.size}">${n.size} mm</option>`).join('');
-  const prSel = document.getElementById('ps-printer');
-  if (prSel) prSel.innerHTML = '<option value="">— kein —</option>' +
-    state.printers.map(p=>`<option value="${esc(p.name)}" data-cost="${p.cost_per_hour}">${esc(p.name)} (${p.cost_per_hour} CHF/h)</option>`).join('');
-}
-async function openPsModal(revId, ps) {
-  await loadPsConfig();
-  _populatePsSelects();
-  set('ps-rev-id',revId);
-  set('ps-mat',ps.material||''); set('ps-col',ps.color||''); set('ps-layer',ps.layer_height||'');
-  set('ps-infill',ps.infill||''); set('ps-temp',ps.print_temp||'');
-  set('ps-bed',ps.bed_temp||''); set('ps-notes',ps.notes||'');
-  document.getElementById('ps-sup').value = ps.supports||'';
-  document.getElementById('ps-nozzle').value = ps.nozzle||'';
-  document.getElementById('ps-printer').value = ps.printer||'';
-  document.getElementById('ps-mat-preset').value = '';
-  set('ps-cost-hr', ps.printer_cost_hr || state.settings.default_machine_cost_hr || '');
-  set('ps-fil-price', ps.filament_price_kg || state.settings.default_filament_price_kg || '');
-  set('ps-fil-weight', ps.filament_weight_total||'');
-  set('ps-duration', ps.print_duration||'');
-  document.getElementById('cost-preview').style.display = 'none';
-  calcCost();
-  openModal('psModal');
-}
 async function applyDimRawMat(val) {
   if (!val) return;
   const rm = (state.rawMaterials||[]).find(m => m.id == val);
@@ -3378,25 +3334,6 @@ async function applyDimRawMat(val) {
       </div>
     </div>
   </div>`);
-}
-function applyMaterialPreset(presetId) {
-  if (!presetId) return;
-  const m = state.materialPresets.find(x => x.id == presetId);
-  if (!m) return;
-  set('ps-mat', m.name);
-  set('ps-temp', m.print_temp||'');
-  set('ps-bed', m.bed_temp||'');
-  if (m.nozzle) document.getElementById('ps-nozzle').value = m.nozzle;
-  if (m.filament_price_kg) set('ps-fil-price', m.filament_price_kg);
-  document.getElementById('ps-mat-preset').value = '';
-  calcCost();
-}
-function onPsPrinterChange(sel) {
-  const opt = sel.options[sel.selectedIndex];
-  if (opt && opt.dataset.cost !== undefined && opt.dataset.cost !== '') {
-    set('ps-cost-hr', opt.dataset.cost);
-    calcCost();
-  }
 }
 function _buildRmOptions(mats) {
   let opts = '<option value="">— kein Rohmaterial —</option>';
@@ -3463,9 +3400,6 @@ function _populateDimSelects() {
       const label = [m.material_type, m.color, m.dimensions].filter(Boolean).join(' · ');
       return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}" data-unit="${esc(m.unit)}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${m.unit}</option>`;
     }).join('');
-  const matSel = document.getElementById('dim-man-preset') || null;
-  if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen —</option>' +
-    state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
   const nozSel = document.getElementById('dim-man-nozzle');
   if (nozSel) nozSel.innerHTML = '<option value="">—</option>' +
     state.nozzles.map(n=>`<option value="${n.size}">${n.size} mm</option>`).join('');
@@ -3473,55 +3407,12 @@ function _populateDimSelects() {
   if (prSel) prSel.innerHTML = '<option value="">— kein —</option>' +
     state.printers.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
 }
-function applyDimPreset(presetId) {
-  if (!presetId) return;
-  const m = state.materialPresets.find(x => x.id == presetId);
-  if (!m) return;
-  set('dim-man-mat', m.name);
-  set('dim-man-temp', m.print_temp||'');
-  set('dim-man-bed', m.bed_temp||'');
-  if (m.nozzle) document.getElementById('dim-man-nozzle').value = m.nozzle;
-  const _dmp = document.getElementById('dim-man-preset'); if (_dmp) _dmp.value = '';
-}
 function dimTab(tab) {
   ['3mf','manual'].forEach(t => {
     document.getElementById('dim-section-'+t).style.display = t===tab ? '' : 'none';
     document.getElementById('dim-tab-'+t).classList.toggle('active', t===tab);
     document.getElementById('dim-tab-'+t).classList.toggle('btn-ghost', t!==tab);
   });
-}
-
-function calcCost() {
-  const filPrice = parseFloat(V('ps-fil-price')) || 0;
-  const filWeight = parseFloat(V('ps-fil-weight')) || 0;
-  const duration = parseFloat(V('ps-duration')) || 0;
-  const costHr = parseFloat(V('ps-cost-hr')) || 0;
-  if (!filPrice && !costHr) { document.getElementById('cost-preview').style.display='none'; return; }
-  const matCost = (filWeight / 1000) * filPrice;
-  const machCost = duration * costHr;
-  const waste = 0;
-  const total = matCost + machCost;
-  document.getElementById('cr-mat').textContent = fmtN(matCost) + ' CHF';
-  document.getElementById('cr-mach').textContent = fmtN(machCost) + ' CHF';
-  document.getElementById('cr-total').textContent = fmtN(total) + ' CHF';
-  document.getElementById('cost-preview').style.display = 'block';
-}
-
-async function savePrintSettings() {
-  const revId = V('ps-rev-id');
-  await api('/api/revisions/'+revId+'/print-settings','PUT',{
-    material:V('ps-mat'),color:V('ps-col'),layer_height:V('ps-layer'),infill:V('ps-infill'),
-    supports:document.getElementById('ps-sup').value,
-    nozzle:document.getElementById('ps-nozzle').value,
-    print_temp:V('ps-temp'),bed_temp:V('ps-bed'),
-    printer:document.getElementById('ps-printer').value,notes:V('ps-notes'),
-    printer_cost_hr: parseFloat(V('ps-cost-hr'))||null,
-    filament_price_kg: parseFloat(V('ps-fil-price'))||null,
-    filament_weight_total: parseFloat(V('ps-fil-weight'))||null,
-    print_duration: parseFloat(V('ps-duration'))||null,
-  });
-  toast('Druckparameter gespeichert','ok'); closeModal('psModal');
-  if (state.item) await switchRev(state.item.id, parseInt(revId));
 }
 
 // ── CUSTOMERS CRUD ────────────────────────────────────────────
@@ -4942,7 +4833,6 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   document.getElementById('dim-man-sup').value = '';
   document.getElementById('dim-man-nozzle').value = '';
   document.getElementById('dim-man-printer').value = '';
-  const _dmp = document.getElementById('dim-man-preset'); if (_dmp) _dmp.value = '';
   document.getElementById('dim-rawmat').value = '';
   set('dim-rawmat-id', '');
 
@@ -6820,7 +6710,7 @@ async function openNormteilDetail(id) {
             <span style="font-size:15px">${dsIcon(f.ds_type)}</span>
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.original_name)}</span>
             <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${fmtSize(f.file_size||0)}</span>
-            <a class="btn btn-ghost btn-sm btn-icon" href="/api/std-part-files/${f.id}/download" title="Herunterladen">⬇</a>
+            <a class="btn btn-ghost btn-sm btn-icon" href="/api/standard-part-files/${f.id}/download" title="Herunterladen">⬇</a>
             <button class="btn btn-red btn-sm btn-icon" onclick="delNtFile(${f.id},${id})">✕</button>
           </div>`).join('')}
       </div>` : `<div style="color:var(--t3);font-size:13px">Noch keine Dateien</div>`}
@@ -6840,7 +6730,7 @@ async function uploadNtFiles(stdPartId, input) {
 }
 
 async function delNtFile(fileId, stdPartId) {
-  await api(`/api/std-part-files/${fileId}`, 'DELETE');
+  await api(`/api/standard-part-files/${fileId}`, 'DELETE');
   toast('Datei gelöscht', 'ok');
   openNormteilDetail(stdPartId);
 }
