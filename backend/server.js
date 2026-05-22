@@ -524,26 +524,26 @@ function nextCounter(key) {
 }
 
 function padN(n, key, def) { return String(n).padStart(parseInt(getSetting(key, String(def)))||def, '0'); }
-function nextProjectNumber() { return padN(nextCounter('project'), 'pad_project', 4); }
+function nextProjectNumber() { return padN(nextCounter('project'), 'pad_project', 3); }
 function getSetting(key, def='') { return get('SELECT value FROM settings WHERE key=?', [key])?.value ?? def; }
 function nextCustomerNumber() {
   const pre = getSetting('prefix_customer','KD');
-  return pre + '-' + padN(nextCounter('customer'), 'pad_customer', 4);
+  return pre + '-' + padN(nextCounter('customer'), 'pad_customer', 3);
 }
 function nextOrderNumber() {
   const pre = getSetting('prefix_order','AUF');
   const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
-  return pre + '-' + yr + padN(nextCounter('order'), 'pad_order', 4);
+  return pre + '-' + yr + padN(nextCounter('order'), 'pad_order', 3);
 }
 function nextQuoteNumber() {
   const pre = getSetting('prefix_quote','ANG');
   const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
-  return pre + '-' + yr + padN(nextCounter('quote'), 'pad_quote', 4);
+  return pre + '-' + yr + padN(nextCounter('quote'), 'pad_quote', 3);
 }
 function nextDeliveryNumber() {
   const pre = getSetting('prefix_delivery','LS');
   const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
-  return pre + '-' + yr + padN(nextCounter('delivery'), 'pad_delivery', 4);
+  return pre + '-' + yr + padN(nextCounter('delivery'), 'pad_delivery', 3);
 }
 function nextSupplierNumber() { return 'LF-' + String(nextCounter('supplier')).padStart(4, '0'); }
 
