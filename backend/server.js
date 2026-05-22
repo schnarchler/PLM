@@ -439,6 +439,17 @@ async function initDb() {
   )`);
   migrate('ALTER TABLE print_settings ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
 
+  db.run(`CREATE TABLE IF NOT EXISTS std_part_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    std_part_id INTEGER NOT NULL REFERENCES standard_parts(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    file_size INTEGER,
+    ds_type TEXT DEFAULT 'DOC',
+    notes TEXT DEFAULT '',
+    uploaded_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   db.run(`CREATE TABLE IF NOT EXISTS standard_parts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     designation TEXT NOT NULL,
@@ -2881,7 +2892,38 @@ app.put('/api/standard-parts/:id', (req, res) => {
 });
 
 app.delete('/api/standard-parts/:id', (req, res) => {
+  // delete associated files from disk
+  const files = all('SELECT * FROM std_part_files WHERE std_part_id=?', [req.params.id]);
+  files.forEach(f => { try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {} });
   run('DELETE FROM standard_parts WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+app.get('/api/standard-parts/:id/files', (req, res) => {
+  res.json(all('SELECT * FROM std_part_files WHERE std_part_id=? ORDER BY uploaded_at DESC', [req.params.id]));
+});
+
+app.post('/api/standard-parts/:id/files', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const dsType = guessType(req.file.originalname);
+  const id = runGetId('INSERT INTO std_part_files (std_part_id,filename,original_name,file_size,ds_type,notes) VALUES (?,?,?,?,?,?)',
+    [req.params.id, req.file.filename, req.file.originalname, req.file.size, dsType, req.body.notes||'']);
+  res.json(get('SELECT * FROM std_part_files WHERE id=?', [id]));
+});
+
+app.get('/api/std-part-files/:id/download', (req, res) => {
+  const f = get('SELECT * FROM std_part_files WHERE id=?', [req.params.id]);
+  if (!f) return res.status(404).json({ error: 'Not found' });
+  const fp = path.join(FILES_DIR, f.filename);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  res.download(fp, f.original_name);
+});
+
+app.delete('/api/std-part-files/:id', (req, res) => {
+  const f = get('SELECT * FROM std_part_files WHERE id=?', [req.params.id]);
+  if (!f) return res.status(404).json({ error: 'Not found' });
+  try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {}
+  run('DELETE FROM std_part_files WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
 
@@ -2947,6 +2989,29 @@ app.post('/api/raw-materials/:id/adjust', (req, res) => {
 
 app.get('/api/raw-materials/:id/movements', (req, res) => {
   res.json(all('SELECT * FROM raw_material_movements WHERE raw_material_id=? ORDER BY created_at DESC LIMIT 50', [req.params.id]));
+});
+
+app.post('/api/checkout/normteile', (req, res) => {
+  const normteileDir = path.join(getCheckoutDir(), 'normteile');
+  try {
+    if (!fs.existsSync(normteileDir)) fs.mkdirSync(normteileDir, { recursive: true });
+  } catch(e) { return res.status(500).json({ error: 'Ordner konnte nicht erstellt werden: ' + e.message }); }
+
+  const files = all(`SELECT spf.*, sp.designation
+    FROM std_part_files spf JOIN standard_parts sp ON spf.std_part_id=sp.id
+    ORDER BY sp.standard, sp.std_number, spf.original_name`);
+
+  if (!files.length) return res.json({ copied: [], dir: normteileDir, message: 'Keine Dateien vorhanden' });
+
+  const copied = [], errors = [];
+  for (const f of files) {
+    const src = path.join(FILES_DIR, f.filename);
+    // sanitize filename: keep original name as-is (user controls it)
+    const dst = path.join(normteileDir, f.original_name);
+    try { fs.copyFileSync(src, dst); copied.push({ name: f.original_name, designation: f.designation }); }
+    catch(e) { errors.push(f.original_name); }
+  }
+  res.json({ copied, errors, dir: normteileDir });
 });
 
 app.get('/api/raw-materials/:id/prices', (req, res) => {
