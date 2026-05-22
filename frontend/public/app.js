@@ -5729,7 +5729,10 @@ async function doCheckin(folder, btn) {
     await loadCheckouts();
     _hideDynModal();
     const count = r.uploaded?.length || 0;
-    toast(`Eingecheckt — ${count} Datei${count!==1?'en':''} hochgeladen, Ordner gelöscht`, 'ok');
+    const msg = count > 0
+      ? `Eingecheckt — ${count} Datei${count!==1?'en':''} hochgeladen, Ordner gelöscht`
+      : `Eingecheckt — Ordner gelöscht (REL-Element, keine Dateien hochgeladen)`;
+    toast(msg, 'ok');
     if (state.project) renderProjectTree(state.project);
     if (state.item) { const fresh = await api('/api/items/'+state.item.id); renderItemDetail(fresh, state.activeRevId); }
   } catch(e) {

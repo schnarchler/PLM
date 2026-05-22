@@ -1090,9 +1090,20 @@ app.put('/api/revisions/:id/status', (req, res) => {
     run("UPDATE revisions SET status=?,eco_reason=?,updated_at=datetime('now') WHERE id=?", [status, eco_reason || '', rev.id]);
     const lastRev = get('SELECT rev FROM revisions WHERE item_id=? ORDER BY rowid DESC LIMIT 1', [rev.item_id]);
     const newRev = nextRev(lastRev ? lastRev.rev : '0');
-    run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
+    const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
       [rev.item_id, newRev, 'DFT', 'ECO: ' + (eco_reason || '')]);
-    log('revision', rev.id, 'ECO', 'New revision ' + newRev + ' created');
+    // Copy datasets from current revision to new DFT revision
+    const datasets = all('SELECT * FROM datasets WHERE revision_id=?', [rev.id]);
+    for (const ds of datasets) {
+      try {
+        const ext = path.extname(ds.filename);
+        const newFile = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+        fs.copyFileSync(path.join(FILES_DIR, ds.filename), path.join(FILES_DIR, newFile));
+        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
+          [newRevId, ds.ds_type, newFile, ds.original_name, ds.file_size, ds.version, 'Kopiert von ' + rev.rev]);
+      } catch {}
+    }
+    log('revision', rev.id, 'ECO', `Neue Revision ${newRev} erstellt, ${datasets.length} Datei(en) kopiert`);
   } else {
     run("UPDATE revisions SET status=?,updated_at=datetime('now') WHERE id=?", [status, rev.id]);
   }
@@ -1267,9 +1278,11 @@ app.post('/api/items/:id/checkout', (req, res) => {
       return res.json({ folder: null, files: [], warning: 'Keine Dateien vorhanden (Quelldateien fehlen im Datenverzeichnis)' });
     }
 
+    const activeRev = getActiveRevision(item.id);
     fs.writeFileSync(path.join(outDir, '.checkout.json'), JSON.stringify({
       item_id: item.id, item_number: item.item_number, item_name: item.name,
-      item_type: item.item_type, checked_out: new Date().toISOString(), files: copied
+      item_type: item.item_type, checked_out: new Date().toISOString(), files: copied,
+      rev_status: activeRev?.status || null
     }, null, 2));
 
     const nonRel = copied.filter(f => !f.readonly);
@@ -1443,8 +1456,9 @@ app.post('/api/checkout/checkin', (req, res) => {
     } catch {}
 
     const uploaded = [];
+    const wasRel = meta?.rev_status === 'REL' || meta?.rev_status === 'OBS';
 
-    if (meta?.item_id) {
+    if (meta?.item_id && !wasRel) {
       // Find or create active revision
       let rev = get("SELECT * FROM revisions WHERE item_id=? AND status NOT IN ('REL','OBS') ORDER BY id DESC LIMIT 1", [meta.item_id]);
       if (!rev) {
