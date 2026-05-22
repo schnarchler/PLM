@@ -245,6 +245,7 @@ async function gotoView(v) {
   else if (v === 'search') renderSearchView();
   else if (v === 'profit') await renderProfitOverview();
   else if (v === 'inventory') await renderInventory();
+  else if (v === 'rawmaterials') await renderRawMaterials();
 }
 
 // ── PROJECTS LIST ─────────────────────────────────────────────
@@ -3263,12 +3264,21 @@ async function doStepBomImport(revId) {
 // ── PRINT SETTINGS ────────────────────────────────────────────
 async function loadPsConfig() {
   if (state._psConfigLoaded) return;
-  [state.printers, state.nozzles, state.materialPresets] = await Promise.all([
-    api('/api/printers'), api('/api/nozzles'), api('/api/material-presets')
+  [state.printers, state.nozzles, state.materialPresets, state.rawMaterials] = await Promise.all([
+    api('/api/printers'), api('/api/nozzles'), api('/api/material-presets'), api('/api/raw-materials')
   ]);
   state._psConfigLoaded = true;
 }
+function _refreshRawMaterials() {
+  state._psConfigLoaded = false; // force reload on next psModal open
+}
 function _populatePsSelects() {
+  const rmSel = document.getElementById('ps-rawmat');
+  if (rmSel) rmSel.innerHTML = '<option value="">— kein Rohmaterial zuweisen —</option>' +
+    (state.rawMaterials||[]).map(m => {
+      const label = [m.material_type, m.color, m.brand].filter(Boolean).join(' · ');
+      return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${m.unit}</option>`;
+    }).join('');
   const matSel = document.getElementById('ps-mat-preset');
   if (matSel) matSel.innerHTML = '<option value="">— Vorlage auswählen (füllt Felder automatisch aus) —</option>' +
     state.materialPresets.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
@@ -3290,6 +3300,7 @@ async function openPsModal(revId, ps) {
   document.getElementById('ps-nozzle').value = ps.nozzle||'';
   document.getElementById('ps-printer').value = ps.printer||'';
   document.getElementById('ps-mat-preset').value = '';
+  document.getElementById('ps-rawmat').value = ps.raw_material_id || '';
   set('ps-cost-hr', ps.printer_cost_hr || state.settings.default_machine_cost_hr || '');
   set('ps-fil-price', ps.filament_price_kg || state.settings.default_filament_price_kg || '');
   set('ps-fil-weight', ps.filament_weight_total||'');
@@ -3297,6 +3308,14 @@ async function openPsModal(revId, ps) {
   document.getElementById('cost-preview').style.display = 'none';
   calcCost();
   openModal('psModal');
+}
+function applyRawMaterial(val) {
+  if (!val) return;
+  const sel = document.getElementById('ps-rawmat');
+  const opt = sel?.options[sel.selectedIndex];
+  if (!opt) return;
+  if (opt.dataset.mat) set('ps-mat', opt.dataset.mat);
+  if (opt.dataset.col) set('ps-col', opt.dataset.col);
 }
 function applyMaterialPreset(presetId) {
   if (!presetId) return;
@@ -3375,6 +3394,7 @@ async function savePrintSettings() {
     filament_price_kg: parseFloat(V('ps-fil-price'))||null,
     filament_weight_total: parseFloat(V('ps-fil-weight'))||null,
     print_duration: parseFloat(V('ps-duration'))||null,
+    raw_material_id: parseInt(document.getElementById('ps-rawmat')?.value)||null,
   });
   toast('Druckparameter gespeichert','ok'); closeModal('psModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
@@ -3988,6 +4008,11 @@ async function loadStats() {
   if (el2) el2.textContent = s.deliveries||0;
   const el3 = document.getElementById('badge-inventory');
   if (el3) el3.textContent = s.inventory||0;
+  // raw material badge: count low/empty items
+  api('/api/raw-materials').then(mats => {
+    const badge = document.getElementById('badge-rawmat');
+    if (badge) badge.textContent = mats.length || '—';
+  }).catch(() => {});
 }
 
 // ── API ───────────────────────────────────────────────────────
@@ -5893,4 +5918,221 @@ async function deductFromInventory() {
   _hideDynModal();
   toast('Abgebucht', 'ok');
   renderInventory();
+}
+
+// ── RAW MATERIALS ─────────────────────────────────────────────
+async function renderRawMaterials() {
+  setLeftHeader('Rohmaterial', `<button class="btn btn-primary btn-sm" onclick="openRawMatModal()">+ Material</button>`);
+  closeDetail();
+  const items = await api('/api/raw-materials');
+
+  // Update badge
+  const low = items.filter(i => i.min_qty > 0 && i.stock_qty <= i.min_qty);
+  const badge = document.getElementById('badge-rawmat');
+  if (badge) badge.textContent = low.length || items.length || '—';
+
+  if (!items.length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">🧵</div><div class="empty-text">Noch kein Rohmaterial erfasst</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openRawMatModal()">Erstes Material anlegen</button></div></div>`);
+    return;
+  }
+
+  const _statusDot = item => {
+    if (item.stock_qty <= 0) return `<span style="color:var(--red);font-size:13px">●</span>`;
+    if (item.min_qty > 0 && item.stock_qty <= item.min_qty) return `<span style="color:var(--amber);font-size:13px">●</span>`;
+    return `<span style="color:var(--green);font-size:13px">●</span>`;
+  };
+
+  const rows = items.map(i => `
+    <tr onclick="openRawMatDetail(${i.id})" style="cursor:pointer">
+      <td>${_statusDot(i)}</td>
+      <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.material_type||'—')}</td>
+      <td style="font-size:13px">${esc(i.name)}</td>
+      <td style="color:var(--t3);font-size:13px">${esc(i.color||'—')}</td>
+      <td style="color:var(--t3);font-size:13px">${esc(i.brand||'—')}</td>
+      <td style="font-family:var(--mono);font-size:13px;text-align:right">${fmtN(i.stock_qty,0)} ${i.unit}</td>
+    </tr>`).join('');
+
+  setLeftBody(`<div class="tbl-wrap"><table>
+    <thead><tr><th></th><th>Typ</th><th>Name</th><th>Farbe</th><th>Marke</th><th style="text-align:right">Bestand</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`);
+}
+
+async function openRawMatDetail(id) {
+  const [item, movements] = await Promise.all([
+    api(`/api/raw-materials`).then(all => all.find(x => x.id === id)),
+    api(`/api/raw-materials/${id}/movements`)
+  ]);
+  if (!item) return;
+
+  const isLow = item.min_qty > 0 && item.stock_qty <= item.min_qty;
+  const isEmpty = item.stock_qty <= 0;
+  const statusColor = isEmpty ? 'var(--red)' : isLow ? 'var(--amber)' : 'var(--green)';
+  const statusLabel = isEmpty ? 'Leer' : isLow ? 'Niedrig' : 'OK';
+
+  setRightPanel(`
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(item.material_type||'')}</div>
+        <div style="font-size:15px;font-weight:600">${esc(item.name)}</div>
+        ${item.brand ? `<div style="font-size:13px;color:var(--t3)">${esc(item.brand)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="openRawMatModal(${id})">✎ Bearbeiten</button>
+        <button class="btn btn-red btn-sm" onclick="delRawMat(${id})">🗑</button>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:16px">
+      <div style="text-align:center">
+        <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${statusColor}">${fmtN(item.stock_qty,0)}</div>
+        <div style="font-size:13px;color:var(--t3)">${item.unit}</div>
+      </div>
+      <div style="flex:1">
+        ${item.color ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
+        ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">Abmessungen:</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
+        ${item.lot_number ? `<div style="font-size:13px"><span style="color:var(--t4)">Lot:</span> <span style="font-family:var(--mono)">${esc(item.lot_number)}</span></div>` : ''}
+        ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${item.unit}</div>` : ''}
+        <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn btn-primary btn-sm" onclick="openRawMatAdjust(${id},'in')">+ Einbuchen</button>
+        <button class="btn btn-ghost btn-sm" onclick="openRawMatAdjust(${id},'out')">− Ausbuchen</button>
+      </div>
+    </div>
+
+    ${item.notes ? `<div style="font-size:13px;color:var(--t3);margin-bottom:16px">${esc(item.notes)}</div>` : ''}
+
+    <div class="sep-label">Bewegungen</div>
+    ${movements.length ? `<div class="tbl-wrap"><table>
+      <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th>Notiz</th></tr></thead>
+      <tbody>${movements.map(m => `<tr>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--t4)">${m.created_at?.slice(0,16)||'—'}</td>
+        <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
+        <td style="font-family:var(--mono);font-size:13px;text-align:right">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${item.unit}</td>
+        <td style="font-size:13px;color:var(--t3)">${esc(m.notes||'')}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`
+    : `<div style="color:var(--t3);font-size:13px">Noch keine Buchungen</div>`}
+  `);
+}
+
+function openRawMatModal(id) {
+  const existing = id ? null : null; // loaded async below
+  _showDynModal(`
+    <div class="modal-head"><div class="modal-title">${id ? 'Material bearbeiten' : 'Neues Material'}</div></div>
+    <div class="modal-body" id="rawmat-modal-body">Lädt…</div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveRawMat(${id||''})">Speichern</button>
+    </div>`);
+  _loadRawMatForm(id);
+}
+
+async function _loadRawMatForm(id) {
+  let item = {};
+  if (id) {
+    const all = await api('/api/raw-materials');
+    item = all.find(x => x.id === id) || {};
+  }
+  document.getElementById('rawmat-modal-body').innerHTML = `
+    <div class="form-row cols2">
+      <div class="fg"><label class="fl">Materialtyp *</label>
+        <input class="fi" id="rm-type" list="rm-type-list" value="${esc(item.material_type||'')}" placeholder="PLA, PETG, ABS, TPU …">
+        <datalist id="rm-type-list">
+          <option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option>
+          <option>TPU</option><option>Nylon</option><option>HIPS</option><option>PC</option>
+          <option>Aluminium</option><option>Stahl</option><option>Holz</option><option>Sonstiges</option>
+        </datalist>
+      </div>
+      <div class="fg"><label class="fl">Farbe</label><input class="fi" id="rm-col" value="${esc(item.color||'')}" placeholder="z.B. Schwarz, Galaxy Black"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label class="fl">Name *</label><input class="fi" id="rm-name" value="${esc(item.name||'')}" placeholder="z.B. PETG Schwarz 1kg"></div>
+    </div>
+    <div class="form-row cols3">
+      <div class="fg"><label class="fl">Marke / Hersteller</label><input class="fi" id="rm-brand" value="${esc(item.brand||'')}" placeholder="z.B. Prusament"></div>
+      <div class="fg"><label class="fl">Lotnummer</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="z.B. LOT-2024-001"></div>
+      <div class="fg"><label class="fl">Einheit</label>
+        <select class="fs" id="rm-unit">
+          ${['Stk','g','kg','m','cm','mm','ml','l'].map(u=>`<option ${(item.unit||'Stk')===u?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label class="fl">Abmessungen / Grösse</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="fi" id="rm-dim" value="${esc(item.dimensions||'')}" placeholder="z.B. 2x20x200mm, 1000g, Ø12mm, 1m" style="flex:1">
+          <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:15px" title="Durchmesserzeichen einfügen" onclick="const el=document.getElementById('rm-dim');const s=el.selectionStart,e=el.selectionEnd;el.value=el.value.slice(0,s)+'Ø'+el.value.slice(e);el.selectionStart=el.selectionEnd=s+1;el.focus()">Ø</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row cols2">
+      <div class="fg"><label class="fl">Anfangsbestand${id?' (aktuell: '+fmtN(item.stock_qty,0)+' '+item.unit+')':''}</label>
+        <input class="fi" type="number" id="rm-stock" value="${id?'':''}" placeholder="${id?'— nicht ändern (über Buchung)':'0'}" ${id?'disabled':''} min="0" step="any">
+      </div>
+      <div class="fg"><label class="fl">Mindestbestand (Warnung)</label>
+        <input class="fi" type="number" id="rm-min" value="${item.min_qty||''}" placeholder="0" min="0" step="any">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="rm-notes" rows="2">${esc(item.notes||'')}</textarea></div>
+    </div>`;
+}
+
+async function saveRawMat(id) {
+  const name = document.getElementById('rm-name')?.value.trim();
+  if (!name) { toast('Name erforderlich', 'err'); return; }
+  const body = {
+    name,
+    material_type: document.getElementById('rm-type')?.value.trim(),
+    color: document.getElementById('rm-col')?.value.trim(),
+    brand: document.getElementById('rm-brand')?.value.trim(),
+    lot_number: document.getElementById('rm-lot')?.value.trim(),
+    dimensions: document.getElementById('rm-dim')?.value.trim(),
+    min_qty: parseFloat(document.getElementById('rm-min')?.value)||0,
+    unit: document.getElementById('rm-unit')?.value,
+    notes: document.getElementById('rm-notes')?.value.trim(),
+  };
+  if (!id) body.stock_qty = parseFloat(document.getElementById('rm-stock')?.value)||0;
+  if (id) await api(`/api/raw-materials/${id}`, 'PUT', body);
+  else await api('/api/raw-materials', 'POST', body);
+  _hideDynModal();
+  _refreshRawMaterials();
+  toast('Gespeichert', 'ok');
+  await renderRawMaterials();
+}
+
+function openRawMatAdjust(id, type) {
+  _showDynModal(`
+    <div class="modal-head"><div class="modal-title">${type==='in'?'+ Einbuchen':'− Ausbuchen'}</div></div>
+    <div class="modal-body">
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">Menge *</label><input class="fi" type="number" id="adj-qty" min="0.001" step="any" placeholder="0"></div>
+        <div class="fg"><label class="fl">Notiz</label><input class="fi" id="adj-notes" placeholder="z.B. neue Spule, Druck XY"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveRawMatAdjust(${id},'${type}')">Buchen</button>
+    </div>`);
+}
+
+async function saveRawMatAdjust(id, type) {
+  const qty = parseFloat(document.getElementById('adj-qty')?.value);
+  if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
+  const notes = document.getElementById('adj-notes')?.value.trim();
+  const r = await api(`/api/raw-materials/${id}/adjust`, 'POST', { qty, type, notes });
+  _hideDynModal();
+  toast(`Gebucht — neuer Bestand: ${fmtN(r.stock_qty,0)}`, 'ok');
+  await renderRawMaterials();
+  openRawMatDetail(id);
+}
+
+async function delRawMat(id) {
+  if (!confirm('Material und alle Buchungen löschen?')) return;
+  await api(`/api/raw-materials/${id}`, 'DELETE');
+  _refreshRawMaterials();
+  closeDetail();
+  renderRawMaterials();
 }

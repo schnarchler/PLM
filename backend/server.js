@@ -415,6 +415,31 @@ async function initDb() {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS raw_materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    material_type TEXT DEFAULT '',
+    color TEXT DEFAULT '',
+    brand TEXT DEFAULT '',
+    stock_qty REAL DEFAULT 0,
+    min_qty REAL DEFAULT 0,
+    unit TEXT DEFAULT 'g',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS raw_material_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    raw_material_id INTEGER NOT NULL REFERENCES raw_materials(id) ON DELETE CASCADE,
+    qty REAL NOT NULL,
+    type TEXT NOT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  migrate('ALTER TABLE print_settings ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)');
+  migrate('ALTER TABLE raw_materials ADD COLUMN lot_number TEXT DEFAULT \'\'');
+  migrate('ALTER TABLE raw_materials ADD COLUMN dimensions TEXT DEFAULT \'\'');
+
   db.run(`CREATE TABLE IF NOT EXISTS time_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER REFERENCES orders(id),
@@ -1038,20 +1063,21 @@ app.put('/api/revisions/:id/status', (req, res) => {
 
 app.put('/api/revisions/:id/print-settings', (req, res) => {
   const { material, color, layer_height, infill, supports, nozzle, print_temp, bed_temp, printer, notes,
-    printer_cost_hr, filament_price_kg, filament_weight_total, part_weight, print_duration } = req.body;
+    printer_cost_hr, filament_price_kg, filament_weight_total, part_weight, print_duration, raw_material_id } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
   if (!rev) return res.status(404).json({ error: 'Not found' });
-  run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(revision_id) DO UPDATE SET
     material=excluded.material, color=excluded.color, layer_height=excluded.layer_height,
     infill=excluded.infill, supports=excluded.supports, nozzle=excluded.nozzle,
     print_temp=excluded.print_temp, bed_temp=excluded.bed_temp, printer=excluded.printer, notes=excluded.notes,
     printer_cost_hr=excluded.printer_cost_hr, filament_price_kg=excluded.filament_price_kg,
     filament_weight_total=excluded.filament_weight_total, part_weight=excluded.part_weight,
-    print_duration=excluded.print_duration`,
+    print_duration=excluded.print_duration, raw_material_id=excluded.raw_material_id`,
     [rev.id, material, color, layer_height, infill, supports, nozzle, print_temp, bed_temp, printer, notes,
-     printer_cost_hr||null, filament_price_kg||null, filament_weight_total||null, part_weight||null, print_duration||null]);
+     printer_cost_hr||null, filament_price_kg||null, filament_weight_total||null, part_weight||null, print_duration||null,
+     raw_material_id||null]);
   log('revision', rev.id, 'Druckparameter gespeichert', [material, printer].filter(Boolean).join(', '));
   res.json(get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]));
 });
@@ -2801,6 +2827,50 @@ app.post('/api/inventory/:id/movement', (req, res) => {
 // ==============================================================
 // TIME ENTRIES
 // ==============================================================
+// ==============================================================
+// RAW MATERIALS
+// ==============================================================
+app.get('/api/raw-materials', (req, res) => {
+  const mats = all('SELECT * FROM raw_materials ORDER BY material_type, color, name');
+  res.json(mats);
+});
+
+app.post('/api/raw-materials', (req, res) => {
+  const { name, material_type, color, brand, stock_qty, min_qty, unit, notes, lot_number, dimensions } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name erforderlich' });
+  const id = runGetId('INSERT INTO raw_materials (name,material_type,color,brand,stock_qty,min_qty,unit,notes,lot_number,dimensions) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'']);
+  res.json(get('SELECT * FROM raw_materials WHERE id=?', [id]));
+});
+
+app.put('/api/raw-materials/:id', (req, res) => {
+  const { name, material_type, color, brand, min_qty, unit, notes, lot_number, dimensions } = req.body;
+  run(`UPDATE raw_materials SET name=?,material_type=?,color=?,brand=?,min_qty=?,unit=?,notes=?,lot_number=?,dimensions=?,updated_at=datetime('now') WHERE id=?`,
+    [name, material_type||'', color||'', brand||'', parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', req.params.id]);
+  res.json(get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]));
+});
+
+app.delete('/api/raw-materials/:id', (req, res) => {
+  run('DELETE FROM raw_materials WHERE id=?', [req.params.id]);
+  res.json({ success: true });
+});
+
+app.post('/api/raw-materials/:id/adjust', (req, res) => {
+  const { qty, type, notes } = req.body;
+  const mat = get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]);
+  if (!mat) return res.status(404).json({ error: 'Nicht gefunden' });
+  const delta = type === 'out' ? -Math.abs(parseFloat(qty)) : Math.abs(parseFloat(qty));
+  const newQty = Math.max(0, mat.stock_qty + delta);
+  run(`UPDATE raw_materials SET stock_qty=?,updated_at=datetime('now') WHERE id=?`, [newQty, req.params.id]);
+  run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes) VALUES (?,?,?,?)',
+    [req.params.id, Math.abs(parseFloat(qty)), type, notes||'']);
+  res.json({ stock_qty: newQty });
+});
+
+app.get('/api/raw-materials/:id/movements', (req, res) => {
+  res.json(all('SELECT * FROM raw_material_movements WHERE raw_material_id=? ORDER BY created_at DESC LIMIT 50', [req.params.id]));
+});
+
 app.get('/api/time-entries', (req, res) => {
   const { order_id, item_id } = req.query;
   if (item_id) return res.json(all('SELECT * FROM time_entries WHERE item_id=? ORDER BY date DESC, id DESC', [item_id]));
