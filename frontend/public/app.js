@@ -657,7 +657,8 @@ function renderItemDetail(item, activeRevId) {
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
     <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>
     ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}
-    <button class="tab" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Where-Used</button>`;
+    <button class="tab" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Where-Used</button>
+    <button class="tab" onclick="switchTab(this,'it-erp');loadErpUsage(${item.id})">Aufträge</button>`;
   document.getElementById('dp-tabs').innerHTML = tabs;
   if (!isDOC) {
     const activeCheckout = state.checkouts.find(c => c.item_id === item.id);
@@ -729,6 +730,9 @@ function renderItemDetail(item, activeRevId) {
     </div>` : ''}
     <div id="it-whereused" style="display:none">
       <div id="it-whereused-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
+    </div>
+    <div id="it-erp" style="display:none">
+      <div id="it-erp-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
     </div>`;
   setTimeout(() => {
     document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
@@ -1939,14 +1943,14 @@ function _exportProfitCsv() {
   const csvNum = v => v == null ? '' : String(v).replace('.', ',');
   const csvStr = s => '"' + String(s||'').replace(/"/g, '""') + '"';
   const lines = [
-    ['Projekt','Nummer','Typ','Name','Klassifizierung','Gewicht (g)','Ø Herst.-kosten (CHF)','Verkaufspreis (CHF)','Marge (%)','Stk. verkauft','Umsatz (CHF)','Theor. Marge (CHF)'].join(';'),
+    ['Projekt','Nummer','Typ','Name','Klassifizierung','Gewicht (g)','Ø Herst.-kosten (CHF)','Ø VP (CHF)','Marge (%)','Stk. verkauft','Umsatz (CHF)','Theor. Marge (CHF)'].join(';'),
     ...rows.map(i => [
       csvStr(i.project_number), csvStr(i.item_number),
       csvStr(i.item_type === 'asm' ? 'Baugruppe' : 'Part'),
       csvStr(i.name), csvStr(i.classification||''),
       csvNum(i.weight_g != null ? i.weight_g : null),
       csvNum(i.avg_calc_cost != null ? i.avg_calc_cost.toFixed(2) : null),
-      csvNum(i.default_price != null ? i.default_price.toFixed(2) : null),
+      csvNum(i.avg_unit_price != null ? i.avg_unit_price.toFixed(2) : null),
       csvNum(i.margin_pct != null ? i.margin_pct.toFixed(1) : null),
       csvNum(i.order_qty || 0),
       csvNum(i.order_revenue != null ? i.order_revenue.toFixed(2) : null),
@@ -1970,8 +1974,8 @@ async function renderProfitOverview() {
   _profitData = await api('/api/profit-overview');
   _profitState = { sort: 'number', dir: 1, text: '', margin: '', type: '', project: '', sold: false };
 
-  const withPrice  = _profitData.filter(i => i.default_price != null);
-  const withBoth   = _profitData.filter(i => i.avg_calc_cost != null && i.default_price != null);
+  const withPrice  = _profitData.filter(i => i.avg_unit_price != null);
+  const withBoth   = _profitData.filter(i => i.avg_calc_cost != null && i.avg_unit_price != null);
   const withSales  = _profitData.filter(i => i.order_qty > 0);
   const avgMargPct = withBoth.length ? (withBoth.reduce((s,i) => s + (i.margin_pct||0), 0) / withBoth.length) : null;
   const totalRev   = _profitData.reduce((s,i) => s + (i.order_revenue||0), 0);
@@ -1990,7 +1994,7 @@ async function renderProfitOverview() {
   setLeftBody(`<div style="padding:4px 0;max-width:1200px">
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
       ${kpi('Teile gesamt', _profitData.length, `${withPrice.length} mit VP`)}
-      ${kpi('Kalkulierbar', withBoth.length, `Herst.-kosten + VP vorhanden`)}
+      ${kpi('Kalkulierbar', withBoth.length, `Ø Herst.-kosten + Ø VP vorhanden`)}
       ${kpi('Ø Marge', avgMargPct != null ? avgMargPct.toFixed(0)+'%' : '—', `VP vs. Ø Herst.-kosten`, mc(avgMargPct))}
       ${kpi('Verkaufte Teile', withSales.length, `${withSales.reduce((s,i)=>s+(i.order_qty||0),0)} Stk. total`)}
       ${kpi('Umsatz (Aufträge)', totalRev > 0 ? fmtCHF(totalRev) : '—', 'nicht stornierte Aufträge')}
@@ -2063,7 +2067,7 @@ function _renderProfitRows() {
     name:          i.name,
     weight:        i.weight_g ?? -Infinity,
     avg_price:     i.avg_calc_cost ?? -Infinity,
-    price:         i.default_price ?? -Infinity,
+    price:         i.avg_unit_price ?? -Infinity,
     margin_pct:    i.margin_pct ?? -Infinity,
     order_qty:     i.order_qty ?? -Infinity,
     order_revenue: i.order_revenue ?? -Infinity,
@@ -2084,7 +2088,7 @@ function _renderProfitRows() {
     th('Projekt','project') + th('Nummer','number') + th('Name / Klasse','name') +
     th('Gew.','weight','right','Gewicht (g)') +
     th('Ø Herst.-kosten','avg_price','right','Gewichteter Ø der kalkulierten Kosten aus Aufträgen (Material + Druck + Arbeit)') +
-    th('VP','price','right','Aktueller Verkaufspreis') +
+    th('Ø VP','price','right','Gewichteter Ø Verkaufspreis aus nicht-stornierten Aufträgen') +
     th('Marge %','margin_pct','right','(VP − Ø Herst.-kosten) / Ø Herst.-kosten') +
     th('Stk.','order_qty','right','Stück verkauft') +
     th('Umsatz','order_revenue','right') +
@@ -2116,7 +2120,7 @@ function _renderProfitRows() {
       <td style="padding:5px 8px;max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}${classChip}</div></td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:var(--t3)">${i.weight_g != null ? fmtN(i.weight_g,1) : '—'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${i.avg_calc_cost != null ? fmtCHF(i.avg_calc_cost)+orderCount : '<span style="color:var(--t4)">—</span>'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${i.default_price != null ? fmtCHF(i.default_price) : '<span style="color:var(--t4)">—</span>'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px">${i.avg_unit_price != null ? fmtCHF(i.avg_unit_price) : '<span style="color:var(--t4)">—</span>'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:600;color:${mc(pct)};min-width:70px">${pct != null ? pct.toFixed(0)+'%' : '—'}${pctBar}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_qty ? 'var(--t2)' : 'var(--t4)'}">${i.order_qty || '—'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:${i.order_revenue ? 'var(--t2)' : 'var(--t4)'}">${i.order_revenue ? fmtCHF(i.order_revenue) : '—'}</td>
@@ -5611,6 +5615,44 @@ async function loadWhereUsed(itemId) {
         <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(r.project_number)}</span>
       </div>`).join('')}
   </div>`;
+}
+
+async function loadErpUsage(itemId) {
+  const el = document.getElementById('it-erp-list');
+  if (!el) return;
+  const { orders, quotes, deliveries } = await api(`/api/items/${itemId}/erp-usage`).catch(() => ({ orders:[], quotes:[], deliveries:[] }));
+
+  const oSt = { DRAFT:'st-DFT', CONFIRMED:'st-REV', DELIVERED:'st-REL', INVOICED:'st-ECO', CANCELLED:'st-OBS' };
+  const qSt = { DRAFT:'st-DFT', SENT:'st-REV', ACCEPTED:'st-REL', DECLINED:'st-OBS' };
+  const dSt = { DRAFT:'st-DFT', READY:'st-REV', DELIVERED:'st-REL' };
+  const oLbl = { DRAFT:'Entwurf', CONFIRMED:'Bestätigt', DELIVERED:'Geliefert', INVOICED:'Fakturiert', CANCELLED:'Storniert' };
+  const qLbl = { DRAFT:'Entwurf', SENT:'Versendet', ACCEPTED:'Akzeptiert', DECLINED:'Abgelehnt' };
+  const dLbl = { DRAFT:'Entwurf', READY:'Bereit', DELIVERED:'Geliefert' };
+
+  const row = (label, id, num, title, status, stMap, lblMap, date, qty, unit, price, cb) =>
+    `<div onclick="${cb}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      <span style="font-size:10px;color:var(--t4);min-width:44px">${label}</span>
+      <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(num)}</span>
+      <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title||'—')}</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--t3);flex-shrink:0">${fmtN(qty,0)} ${esc(unit||'Stk')}</span>
+      ${price != null ? `<span style="font-family:var(--mono);font-size:12px;color:var(--t2);flex-shrink:0">${fmtCHF(price)}</span>` : ''}
+      <span class="status ${stMap[status]||'st-DFT'}" style="font-size:11px;flex-shrink:0">${lblMap[status]||status}</span>
+      ${date ? `<span style="font-size:11px;color:var(--t4);flex-shrink:0">${date}</span>` : ''}
+    </div>`;
+
+  const none = '<div style="color:var(--t4);font-size:13px;padding:4px 0">—</div>';
+
+  const section = (title, items, renderFn) => items.length ? `
+    <div style="font-size:11px;text-transform:uppercase;color:var(--t3);letter-spacing:.06em;margin:12px 0 5px">${title}</div>
+    <div style="display:flex;flex-direction:column;gap:4px">${items.map(renderFn).join('')}</div>` : '';
+
+  const html = [
+    section('Aufträge', orders, o => row('AUFTRAG', o.id, o.number, o.title, o.status, oSt, oLbl, o.order_date, o.quantity, o.unit, o.unit_price, `gotoView('orders');openOrderDetail(${o.id})`)),
+    section('Angebote', quotes, q => row('ANGEBOT', q.id, q.number, q.title, q.status, qSt, qLbl, q.quote_date, q.quantity, q.unit, q.unit_price, `gotoView('quotes');openQuoteDetail(${q.id})`)),
+    section('Produktion', deliveries, d => row('PROD', d.id, d.number, d.title, d.status, dSt, dLbl, d.delivery_date, d.quantity, d.unit, null, `gotoView('deliveries');openDeliveryDetail(${d.id})`)),
+  ].join('');
+
+  el.innerHTML = html || '<div style="color:var(--t3);font-size:13px;padding:8px 0">Dieses Teil wurde noch in keinem Auftrag, Angebot oder Produktionsauftrag verwendet.</div>';
 }
 
 async function loadItemTimeEntries(itemId) {

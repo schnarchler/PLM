@@ -980,6 +980,26 @@ app.get('/api/items/:id/where-used', (req, res) => {
   res.json(rows);
 });
 
+app.get('/api/items/:id/erp-usage', (req, res) => {
+  const id = req.params.id;
+  const orders = all(`
+    SELECT o.id, o.number, o.title, o.status, o.order_date,
+      oi.quantity, oi.unit, oi.unit_price
+    FROM order_items oi JOIN orders o ON oi.order_id = o.id
+    WHERE oi.item_id = ? ORDER BY o.order_date DESC, o.id DESC`, [id]);
+  const quotes = all(`
+    SELECT q.id, q.number, q.title, q.status, q.quote_date,
+      qi.quantity, qi.unit, qi.unit_price
+    FROM quote_items qi JOIN quotes q ON qi.quote_id = q.id
+    WHERE qi.item_id = ? ORDER BY q.quote_date DESC, q.id DESC`, [id]);
+  const deliveries = all(`
+    SELECT d.id, d.number, d.title, d.status, d.delivery_date,
+      di.quantity, di.unit
+    FROM delivery_items di JOIN deliveries d ON di.delivery_id = d.id
+    WHERE di.item_id = ? ORDER BY d.delivery_date DESC, d.id DESC`, [id]);
+  res.json({ orders, quotes, deliveries });
+});
+
 app.put('/api/items/:id/move', (req, res) => {
   const { target_project_id } = req.body;
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
@@ -2118,14 +2138,15 @@ app.get('/api/profit-overview', (req, res) => {
     WHERE i.item_type IN ('prt','asm')
     ORDER BY p.number, i.item_number`);
 
-  // Revenue + qty per item from non-cancelled orders
+  // Revenue, qty and weighted-avg unit_price per item from non-cancelled orders
   const revenueStats = all(`
     SELECT oi.item_id,
       SUM(oi.quantity) as total_qty,
-      SUM(oi.quantity * COALESCE(oi.unit_price, 0)) as total_revenue
+      SUM(oi.quantity * COALESCE(oi.unit_price, 0)) as total_revenue,
+      SUM(oi.quantity * COALESCE(oi.unit_price, 0)) / NULLIF(SUM(oi.quantity), 0) as avg_unit_price
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
-    WHERE o.status NOT IN ('CANCELLED') AND oi.item_id IS NOT NULL
+    WHERE o.status NOT IN ('CANCELLED') AND oi.item_id IS NOT NULL AND oi.unit_price IS NOT NULL
     GROUP BY oi.item_id`);
   const revenueById = {};
   revenueStats.forEach(s => { revenueById[s.item_id] = s; });
@@ -2152,9 +2173,10 @@ app.get('/api/profit-overview', (req, res) => {
     i.order_qty     = rev ? (rev.total_qty || 0) : 0;
     i.order_revenue = rev ? (rev.total_revenue || 0) : 0;
     const cs = costSumById[i.id];
-    i.avg_calc_cost = (cs && cs.qty > 0) ? cs.weightedSum / cs.qty : null;
+    i.avg_calc_cost  = (cs && cs.qty > 0) ? cs.weightedSum / cs.qty : null;
+    i.avg_unit_price = rev?.avg_unit_price ?? null;
     const cost  = i.avg_calc_cost;
-    const price = i.default_price;
+    const price = i.avg_unit_price;
     i.margin     = (cost != null && price != null) ? price - cost : null;
     i.margin_pct = (i.margin != null && cost > 0) ? (i.margin / cost * 100) : null;
     i.theor_gain = (i.margin != null && i.order_qty > 0) ? i.margin * i.order_qty : null;
