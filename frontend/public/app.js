@@ -3699,7 +3699,7 @@ async function openQuoteDetail(id) {
       </div>
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px">
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'quote')">📄 Angebot PDF</button>
-        ${q.status !== 'ACCEPTED' ? `<button class="btn btn-green btn-sm" onclick="convertQuoteToOrder(${id})">➜ In Auftrag umwandeln</button>` : ''}
+        <button class="btn btn-green btn-sm" onclick="convertQuoteToOrder(${id})" ${q.status==='ACCEPTED'?'disabled style="opacity:.4;cursor:not-allowed" title="Bereits umgewandelt"':''}>➜ In Auftrag umwandeln</button>
         <button class="btn btn-ghost btn-sm" onclick="switchTab(document.querySelector('[onclick*=qd-info]'), 'qd-info')">⚙ Details / Bearbeiten</button>
       </div>
     </div>
@@ -3719,7 +3719,7 @@ async function openQuoteDetail(id) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openQuoteModal(${id})">✏️ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'quote')">&#128196; Angebot PDF</button>
-        ${q.status !== 'ACCEPTED' ? `<button class="btn btn-green btn-sm" onclick="convertQuoteToOrder(${id})">➜ In Auftrag umwandeln</button>` : ''}
+        <button class="btn btn-green btn-sm" onclick="convertQuoteToOrder(${id})" ${q.status==='ACCEPTED'?'disabled style="opacity:.4;cursor:not-allowed" title="Bereits umgewandelt"':''}>➜ In Auftrag umwandeln</button>
         ${q.status==='DRAFT' ? `<button class="btn btn-red btn-sm" onclick="delQuote(${id})">🗑 Löschen</button>` : ''}
       </div>
     </div>`;
