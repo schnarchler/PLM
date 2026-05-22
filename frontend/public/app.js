@@ -251,11 +251,11 @@ async function gotoView(v) {
 
 // ── PROJECTS LIST ─────────────────────────────────────────────
 async function renderProjectsList() {
-  setLeftHeader('Projekte', `<button class="btn btn-primary btn-sm" onclick="openModal('projectModal')">+ Projekt</button>`);
+  setLeftHeader('Projekte', `<button class="btn btn-primary btn-sm" onclick="openNewProjectModal()">+ Projekt</button>`);
   const projects = await api('/api/projects');
   state.projects = projects;
   if (!projects.length) {
-    setLeftBody(`<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">Noch keine Projekte</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openModal('projectModal')">Erstes Projekt anlegen</button></div></div>`);
+    setLeftBody(`<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">Noch keine Projekte</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openNewProjectModal()">Erstes Projekt anlegen</button></div></div>`);
     return;
   }
   const statChip = (val, label, color) => val
@@ -1567,11 +1567,11 @@ async function renderSettings() {
 
         <div class="sep-label" style="margin-top:20px">Stellen Geschäftsnummern</div>
         <div class="form-row cols2">
-          <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-pad-order" type="number" min="1" max="8" placeholder="4"></div>
-          <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-pad-quote" type="number" min="1" max="8" placeholder="4"></div>
-          <div class="fg"><label class="fl">Produktion</label><input class="fi" id="adm-pad-delivery" type="number" min="1" max="8" placeholder="4"></div>
-          <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-pad-customer" type="number" min="1" max="8" placeholder="4"></div>
-          <div class="fg"><label class="fl">Projekte</label><input class="fi" id="adm-pad-project" type="number" min="1" max="8" placeholder="4"></div>
+          <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-pad-order" type="number" min="1" max="8" placeholder="3"></div>
+          <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-pad-quote" type="number" min="1" max="8" placeholder="3"></div>
+          <div class="fg"><label class="fl">Produktion</label><input class="fi" id="adm-pad-delivery" type="number" min="1" max="8" placeholder="3"></div>
+          <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-pad-customer" type="number" min="1" max="8" placeholder="3"></div>
+          <div class="fg"><label class="fl">Projekte</label><input class="fi" id="adm-pad-project" type="number" min="1" max="8" placeholder="3"></div>
           <div class="fg" style="display:flex;align-items:center;gap:10px;padding-top:20px">
             <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)">
               <input type="checkbox" id="adm-num-yearly" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
@@ -2518,6 +2518,12 @@ let editingProjectId = null;
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+function openNewProjectModal() {
+  editingProjectId = null;
+  set('pm-name', ''); set('pm-desc', ''); set('pm-customer', '');
+  openModal('projectModal');
+}
+
 async function saveProject() {
   const name = V('pm-name'); if (!name) return toast('Name fehlt','err');
   const body = { name, description: V('pm-desc'), customer: V('pm-customer') };
@@ -2618,11 +2624,11 @@ async function _doSaveAdminSettings() {
     prefix_quote:    gv('adm-prefix-quote')    || 'ANG',
     prefix_delivery: gv('adm-prefix-delivery') || 'LS',
     prefix_customer: gv('adm-prefix-customer') || 'KD',
-    pad_order:       gi('adm-pad-order',    4),
-    pad_quote:       gi('adm-pad-quote',    4),
-    pad_delivery:    gi('adm-pad-delivery', 4),
-    pad_customer:    gi('adm-pad-customer', 4),
-    pad_project:     gi('adm-pad-project',  4),
+    pad_order:       gi('adm-pad-order',    3),
+    pad_quote:       gi('adm-pad-quote',    3),
+    pad_delivery:    gi('adm-pad-delivery', 3),
+    pad_customer:    gi('adm-pad-customer', 3),
+    pad_project:     gi('adm-pad-project',  3),
     num_yearly:      document.getElementById('adm-num-yearly')?.checked ? '1' : '0',
     num_sep:         gv('adm-num-sep')  || '-',
     seg_asm:         gv('adm-seg-asm')  || 'asm',
@@ -2774,11 +2780,11 @@ async function _loadDelTab() {
   fv('adm-prefix-quote',    settings.prefix_quote    || 'ANG');
   fv('adm-prefix-delivery', settings.prefix_delivery || 'LS');
   fv('adm-prefix-customer', settings.prefix_customer || 'KD');
-  fv('adm-pad-order',       settings.pad_order       || '4');
-  fv('adm-pad-quote',       settings.pad_quote       || '4');
-  fv('adm-pad-delivery',    settings.pad_delivery    || '4');
-  fv('adm-pad-customer',    settings.pad_customer    || '4');
-  fv('adm-pad-project',     settings.pad_project     || '4');
+  fv('adm-pad-order',       settings.pad_order       || '3');
+  fv('adm-pad-quote',       settings.pad_quote       || '3');
+  fv('adm-pad-delivery',    settings.pad_delivery    || '3');
+  fv('adm-pad-customer',    settings.pad_customer    || '3');
+  fv('adm-pad-project',     settings.pad_project     || '3');
   fv('adm-seg-asm',         settings.seg_asm         || 'asm');
   fv('adm-seg-prt',         settings.seg_prt         || 'prt');
   fv('adm-seg-doc',         settings.seg_doc         || 'doc');
