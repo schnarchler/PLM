@@ -1433,15 +1433,60 @@ app.post('/api/checkout/checkin', (req, res) => {
   try {
     const { folder } = req.body;
     if (!folder) return res.status(400).json({ error: 'Kein Ordner angegeben' });
-    // Read metadata before deleting
+    if (!fs.existsSync(folder)) return res.status(404).json({ error: 'Ordner nicht gefunden: ' + folder });
+
+    // Read metadata
     let meta = null;
     try {
       const metaPath = path.join(folder, '.checkout.json');
       if (fs.existsSync(metaPath)) meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
     } catch {}
+
+    const uploaded = [];
+
+    if (meta?.item_id) {
+      // Find or create active revision
+      let rev = get("SELECT * FROM revisions WHERE item_id=? AND status NOT IN ('REL','OBS') ORDER BY id DESC LIMIT 1", [meta.item_id]);
+      if (!rev) {
+        const lastRev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY id DESC LIMIT 1', [meta.item_id]);
+        const nextRevStr = lastRev ? String(parseInt(lastRev.rev || '1') + 1) : '2';
+        const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
+          [meta.item_id, nextRevStr, 'DFT', 'Neue Revision durch Check-in']);
+        rev = get('SELECT * FROM revisions WHERE id=?', [newRevId]);
+      }
+      const item = get('SELECT item_number FROM items WHERE id=?', [meta.item_id]);
+
+      // Upload all non-hidden files from folder
+      for (const fname of fs.readdirSync(folder)) {
+        if (fname.startsWith('.')) continue;
+        const src = path.join(folder, fname);
+        try {
+          if (!fs.statSync(src).isFile()) continue;
+        } catch { continue; }
+        const ext  = path.extname(fname).toLowerCase();
+        const stored = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+        fs.copyFileSync(src, path.join(FILES_DIR, stored));
+        const stat = fs.statSync(src);
+        const dsType = guessType(fname);
+        const base = item ? `${item.item_number}_rev${rev.rev}` : path.basename(fname, ext);
+        const displayName = base + ext;
+
+        // Replace existing dataset with same name if present
+        const existingDs = get('SELECT * FROM datasets WHERE revision_id=? AND original_name=?', [rev.id, displayName]);
+        if (existingDs) {
+          try { fs.unlinkSync(path.join(FILES_DIR, existingDs.filename)); } catch {}
+          run('DELETE FROM datasets WHERE id=?', [existingDs.id]);
+        }
+        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
+          [rev.id, dsType, stored, displayName, stat.size, '1', 'Check-in']);
+        uploaded.push(displayName);
+      }
+    }
+
+    // Delete folder
     deleteFolderRecursive(folder);
-    if (meta) log('item', meta.item_id, 'Eingecheckt', `${meta.files?.length || 0} Dateien aus ${folder}`);
-    res.json({ success: true });
+    if (meta) log('item', meta.item_id, 'Eingecheckt', `${uploaded.length} Datei(en) hochgeladen, Ordner gelöscht`);
+    res.json({ success: true, uploaded });
   } catch (err) {
     res.status(500).json({ error: 'Einchecken fehlgeschlagen: ' + err.message });
   }

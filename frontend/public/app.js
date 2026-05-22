@@ -5686,16 +5686,17 @@ function _showCheckoutResult(r) {
 }
 
 async function doCheckin(folder, btn) {
-  if (!confirm('Checkout-Ordner löschen? Alle darin enthaltenen Dateien werden entfernt.')) return;
+  if (!confirm('Dateien in PLM hochladen und Checkout-Ordner löschen?')) return;
   const orig = btn?.innerHTML;
   if (btn) { btn.innerHTML = '⏳…'; btn.disabled = true; }
   try {
-    await api('/api/checkout/checkin', 'POST', { folder });
+    const r = await api('/api/checkout/checkin', 'POST', { folder });
     await loadCheckouts();
     _hideDynModal();
-    toast('Eingecheckt — Ordner gelöscht', 'ok');
+    const count = r.uploaded?.length || 0;
+    toast(`Eingecheckt — ${count} Datei${count!==1?'en':''} hochgeladen, Ordner gelöscht`, 'ok');
     if (state.project) renderProjectTree(state.project);
-    if (state.item) renderItemDetail(state.item, state.activeRevId);
+    if (state.item) { const fresh = await api('/api/items/'+state.item.id); renderItemDetail(fresh, state.activeRevId); }
   } catch(e) {
     if (btn) { btn.innerHTML = orig; btn.disabled = false; }
     toast('Fehler beim Einchecken: ' + (e.message||''), 'err');
