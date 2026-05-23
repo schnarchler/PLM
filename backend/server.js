@@ -1267,7 +1267,7 @@ function collectCheckoutDatasets(itemId, types, visited = new Set()) {
       return allowedExts.has(ext);                            // only subtypes → match by ext
     });
   }
-  const result = datasets.map(d => ({ ...d, item_number: item.item_number, item_name: item.name, rev_status: rev.status }));
+  const result = datasets.map(d => ({ ...d, item_number: item.item_number, item_name: item.name, rev_number: rev.rev, rev_status: rev.status }));
   if (item.item_type === 'asm') {
     const children = all('SELECT child_item_id FROM bom WHERE parent_rev_id=?', [rev.id]);
     for (const b of children) {
@@ -1330,13 +1330,16 @@ app.post('/api/items/:id/checkout', (req, res) => {
     for (const ds of datasets) {
       const src = path.join(FILES_DIR, ds.filename);
       if (!fs.existsSync(src)) continue;
-      let name = ds.original_name;
+      const ext = path.extname(ds.original_name);
+      const safeNum  = ds.item_number.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeName = (ds.item_name || '').replace(/[^a-zA-Z0-9äöüÄÖÜß _-]/g, '_').replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+      const base = safeName ? `${safeNum}_${safeName}_rev${ds.rev_number}` : `${safeNum}_rev${ds.rev_number}`;
+      let name = base + ext;
       if (usedNames[name] !== undefined) {
         usedNames[name]++;
-        const ext = path.extname(name);
-        name = `${path.basename(name, ext)}_${usedNames[name]}${ext}`;
+        name = `${base}_${usedNames[name]}${ext}`;
       } else {
-        usedNames[ds.original_name] = 0;
+        usedNames[name] = 0;
       }
       const dest = path.join(outDir, name);
       fs.copyFileSync(src, dest);
