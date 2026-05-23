@@ -524,6 +524,8 @@ async function initDb() {
 
   // Add new columns to existing databases (safe try/catch)
   try { db.run('ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE orders ADD COLUMN estimated_hours REAL DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE orders ADD COLUMN include_hours INTEGER DEFAULT 0'); } catch {}
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -1729,11 +1731,11 @@ app.get('/api/orders', (req, res) => {
 });
 
 app.post('/api/orders', (req, res) => {
-  const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, status } = req.body;
+  const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, status } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextOrderNumber();
-  const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, status||'DRAFT']);
+  const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
   res.json(get('SELECT * FROM orders WHERE id=?', [id]));
 });
 
@@ -1749,11 +1751,11 @@ app.get('/api/orders/:id', (req, res) => {
 });
 
 app.put('/api/orders/:id', (req, res) => {
-  const { customer_id, customer_name_free, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax } = req.body;
+  const { customer_id, customer_name_free, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours } = req.body;
   run(`UPDATE orders SET customer_id=?,customer_name_free=?,title=?,status=?,notes=?,order_date=?,delivery_date=?,
-    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,updated_at=datetime('now') WHERE id=?`,
+    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,estimated_hours=?,include_hours=?,updated_at=datetime('now') WHERE id=?`,
     [customer_id||null, customer_name_free||null, title, status, notes, order_date, delivery_date,
-     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, req.params.id]);
+     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, req.params.id]);
   res.json(get('SELECT * FROM orders WHERE id=?', [req.params.id]));
 });
 

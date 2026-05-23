@@ -2552,9 +2552,36 @@ async function openOrderDetail(id) {
     <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>`;
   const items = o.items || [];
   const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
+  const estHours = o.estimated_hours || 0;
+  const hoursCost = estHours * hourlyRate;
+  const orderHoursSection = estHours > 0 ? (() => {
+    const discAmt = subtotal * (o.discount_pct||0) / 100;
+    const net = subtotal - discAmt;
+    const grandNet = o.include_hours ? net + hoursCost : net;
+    const tax = o.include_tax ? grandNet * (o.tax_rate||0) / 100 : 0;
+    const grandTotal = grandNet + tax;
+    return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:13px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-weight:600;color:var(--t2)">Arbeitszeit</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:13px" onclick="openOrderModal(${id})">✏️ Ändern</button>
+      </div>
+      <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+        <span style="color:var(--t3)">${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h</span>
+        <span style="font-family:var(--mono);font-weight:600;color:${o.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>
+        <span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${o.include_hours?'rgba(91,211,138,.12)':'var(--bg2)'};color:${o.include_hours?'var(--green)':'var(--t3)'}">${o.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
+      </div>
+      ${o.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
+        <div style="text-align:right;font-size:13px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
+          <span style="font-family:var(--mono);font-weight:700;font-size:13px;color:var(--green);margin-left:8px">${fmtCHF(grandTotal)}</span>
+        </div>
+      </div>` : ''}
+    </div>`;
+  })() : '';
   document.getElementById('dp-body').innerHTML = `
     <div id="od-pos">
       ${renderLineItems(items, 'order', id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
+      ${orderHoursSection}
       ${_renderBillableTimeSection(timeEntries, o.tax_rate??0, o.discount_pct||0, !!o.include_tax, subtotal)}
       <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('order',${id})">+ Position</button>
     </div>
@@ -2566,6 +2593,7 @@ async function openOrderDetail(id) {
         <div><div class="ps-label">Datum</div>${o.order_date||'—'}</div>
         <div><div class="ps-label">Lieferdatum</div><span id="od-delivery-date">${o.delivery_date||'—'}</span></div>
         <div><div class="ps-label">MwSt.</div>${o.tax_rate??0} % ${o.include_tax?'<span style="color:var(--green);font-size:13px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:13px">(ohne)</span>'}</div>
+        ${estHours>0?`<div><div class="ps-label">Arbeitszeit</div>${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h = <span style="font-family:var(--mono);color:${o.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>${o.include_hours?' <span style="color:var(--green);font-size:13px">(eingerechnet)</span>':' <span style="color:var(--t3);font-size:13px">(nicht eingerechnet)</span>'}</div>`:''}
         ${(o.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${o.discount_pct} %</div>`:''}
         ${o.payment_terms?`<div style="grid-column:span 2"><div class="ps-label">Zahlungsbedingungen</div>${esc(o.payment_terms)}</div>`:''}
         ${o.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(o.notes)}</span></div>`:''}
@@ -3946,6 +3974,8 @@ async function openOrderModal(id) {
     set('om-date',o.order_date||''); set('om-delivery',o.delivery_date||''); set('om-notes',o.notes||'');
     set('om-tax',o.tax_rate??''); set('om-disc',o.discount_pct??0); set('om-terms',o.payment_terms||'');
     document.getElementById('om-include-tax').checked = !!o.include_tax;
+    set('om-hours', o.estimated_hours||0);
+    document.getElementById('om-include-hours').checked = !!o.include_hours;
     document.getElementById('om-title').textContent='Auftrag bearbeiten';
   } else {
     ['om-title-f','om-date','om-delivery','om-notes','om-terms'].forEach(f=>set(f,''));
@@ -3953,7 +3983,9 @@ async function openOrderModal(id) {
     set('om-tax', state.settings.default_tax_rate ?? '');
     set('om-disc',0);
     set('om-terms', state.settings.default_payment_terms || '');
+    set('om-hours', 0);
     document.getElementById('om-include-tax').checked = false;
+    document.getElementById('om-include-hours').checked = false;
     document.getElementById('om-title').textContent='Neuer Auftrag';
   }
   set('om-id',id||''); openModal('orderModal');
@@ -3964,7 +3996,8 @@ async function saveOrder() {
   const body={title,...getCustBody('om'),status:document.getElementById('om-status').value,
     notes:V('om-notes'),order_date:V('om-date')||null,delivery_date:V('om-delivery')||null,
     tax_rate:parseFloat(V('om-tax'))||0, discount_pct:parseFloat(V('om-disc'))||0,
-    payment_terms:V('om-terms'), include_tax:document.getElementById('om-include-tax').checked?1:0};
+    payment_terms:V('om-terms'), include_tax:document.getElementById('om-include-tax').checked?1:0,
+    estimated_hours:parseFloat(V('om-hours'))||0, include_hours:document.getElementById('om-include-hours').checked?1:0};
   if (editingOrderId) {
     await api(`/api/orders/${editingOrderId}`,'PUT',body);
     toast('Gespeichert','ok'); closeModal('orderModal');
@@ -5447,8 +5480,8 @@ async function generateDoc(id, type) {
     return html;
   }).join('');
 
-  // Quote-level Arbeitszeit row (only if include_hours=true)
-  const quoteWorkHours = isQuote && d.include_hours && (d.estimated_hours||0) > 0 ? parseFloat(d.estimated_hours) : 0;
+  // Document-level Arbeitszeit row (include_hours=true for both quotes and orders)
+  const quoteWorkHours = d.include_hours && (d.estimated_hours||0) > 0 ? parseFloat(d.estimated_hours) : 0;
   const quoteWorkCost  = quoteWorkHours > 0 && hourlyRate > 0 ? quoteWorkHours * hourlyRate : 0;
   const quoteWorkRow   = quoteWorkCost > 0
     ? '<tr style="border-bottom:1px solid #e5e7eb">'
