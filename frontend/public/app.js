@@ -2685,7 +2685,23 @@ async function onSearch(q) {
     const noHits = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer für „${esc(q)}"</div></div>`;
     const total = (r.projects?.length||0)+(r.items?.length||0)+(r.datasets?.length||0)+(r.orders?.length||0)+(r.quotes?.length||0)+(r.customers?.length||0)+(r.deliveries?.length||0);
 
+    // Sort items: prt/asm first, then doc, then by item_number
+    const typeOrder = { prt: 0, asm: 1, doc: 2 };
+    const sortedItems = (r.items||[]).slice().sort((a, b) =>
+      (typeOrder[a.item_type] ?? 9) - (typeOrder[b.item_type] ?? 9) || a.item_number.localeCompare(b.item_number));
+
     const html = total ? `
+      ${sortedItems.length ? section('PLM Items', sortedItems.length) + `<div class="tbl-wrap"><table>
+        <thead><tr><th>Nummer</th><th>Name</th><th>Typ</th><th>Klasse</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
+        <tbody>${sortedItems.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</td>
+          <td>${esc(i.name)}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${i.item_type||'—'}</td>
+          <td>${i.classification ? _classChip(i.classification, 10) : '<span style="color:var(--t4)">—</span>'}</td>
+          <td style="color:var(--t3)">${i.project_name}</td>
+          <td style="font-family:var(--mono);font-size:13px">${i.latest_revision?.rev||'—'}</td>
+          <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.orders?.length ? section('Aufträge', r.orders.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Lieferdatum</th></tr></thead>
         <tbody>${r.orders.map(o=>`<tr style="cursor:pointer" onclick="gotoView('orders');openOrderDetail(${o.id})">
@@ -2720,16 +2736,6 @@ async function onSearch(q) {
       ${r.projects?.length ? section('Projekte', r.projects.length) + `<div class="card-grid">${r.projects.map(p=>`
         <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>
         <div class="card-num">${p.number}</div><div class="card-name">${esc(p.name)}</div></div>`).join('')}</div>` : ''}
-      ${r.items?.length ? section('PLM Items', r.items.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Nummer</th><th>Name</th><th>Klasse</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
-        <tbody>${r.items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</td>
-          <td>${esc(i.name)}</td>
-          <td>${i.classification ? _classChip(i.classification, 10) : '<span style="color:var(--t4)">—</span>'}</td>
-          <td style="color:var(--t3)">${i.project_name}</td>
-          <td style="font-family:var(--mono);font-size:13px">${i.latest_revision?.rev||'—'}</td>
-          <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.datasets?.length ? section('Dateien', r.datasets.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Datei</th><th>Item</th><th>Projekt</th><th>Rev</th><th>Grösse</th><th></th></tr></thead>
         <tbody>${r.datasets.map(d=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${d.project_id},${d.item_id})">

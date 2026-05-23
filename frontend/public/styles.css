@@ -294,7 +294,7 @@ body {
 }
 
 /* ── TABLE ── */
-.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg1); }
+.tbl-wrap { overflow-x: clip; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg1); }
 table { width: 100%; border-collapse: collapse; }
 thead th {
   text-align: left;
