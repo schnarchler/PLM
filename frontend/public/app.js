@@ -5405,6 +5405,7 @@ async function generateDoc(id, type) {
   // fmtP: unrounded price for line items; fmtCHF only for the grand total (5-Rappen rounding)
   const fmtP = v => 'CHF ' + fmtN(parseFloat(v) || 0);
 
+  const hourlyRate = d.hourly_rate || 0;
   const hasDiscount = (d.discount_pct||0) > 0 || (d.positions||[]).some(p=>(p.discount_pct||0)>0);
   const cols = hasDiscount ? 5 : 4;
   const rows = (d.positions||[]).map(p => {
@@ -5431,9 +5432,21 @@ async function generateDoc(id, type) {
     return html;
   }).join('');
 
+  // Quote-level Arbeitszeit row (only if include_hours=true)
+  const quoteWorkHours = isQuote && d.include_hours && (d.estimated_hours||0) > 0 ? parseFloat(d.estimated_hours) : 0;
+  const quoteWorkCost  = quoteWorkHours > 0 && hourlyRate > 0 ? quoteWorkHours * hourlyRate : 0;
+  const quoteWorkRow   = quoteWorkCost > 0
+    ? '<tr style="border-bottom:1px solid #e5e7eb">'
+      +'<td style="padding:8px 6px">Arbeitszeit</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+fmtN(quoteWorkHours,2)+' h</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+fmtP(hourlyRate)+'/h</td>'
+      +(hasDiscount?'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>':'')
+      +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtP(quoteWorkCost)+'</td>'
+      +'</tr>'
+    : '';
+
   // Billable time entries (only for invoices/orders, not quotes)
   const billableTime = !isQuote && d.billable_time?.length ? d.billable_time : [];
-  const hourlyRate = !isQuote ? (d.hourly_rate || 0) : 0;
   const timeRows = billableTime.map(t => {
     const hrs = parseFloat(t.hours) || 0;
     const cost = hrs * hourlyRate;
@@ -5446,8 +5459,10 @@ async function generateDoc(id, type) {
       +'</tr>';
   }).join('');
   const timeTotal = billableTime.reduce((s, t) => s + (parseFloat(t.hours)||0) * hourlyRate, 0);
-  // Grand total including time
-  const grandTotal = (d.total || 0) + timeTotal;
+  // Grand total including quote-level Arbeitszeit + billable time + tax
+  const allWorkTotal = quoteWorkCost + timeTotal;
+  const workTaxExtra = d.include_tax ? allWorkTotal * (d.tax_rate || 0) / 100 : 0;
+  const grandTotal = (d.total || 0) + allWorkTotal + workTaxExtra;
 
   const html = `<!DOCTYPE html>
 <html lang="de-CH">
@@ -5520,16 +5535,17 @@ async function generateDoc(id, type) {
     ${hasDiscount ? '<th style="text-align:right">Rabatt</th>' : ''}
     <th style="text-align:right">Total</th>
   </tr></thead>
-  <tbody>${rows || `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}${timeRows}</tbody>
+  <tbody>${rows || `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}${quoteWorkRow}${timeRows}</tbody>
 </table>
 
 <div class="totals">
   ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>'+fmtP(d.subtotal)+'</span></div>'
     +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-'+fmtP(d.discount_amount)+'</span></div>' : ''}
   <div class="total-row"><span>Positionen Netto</span><span>${fmtP(d.net)}</span></div>
-  ${billableTime.length && hourlyRate > 0 ? '<div class="total-row"><span>Arbeitszeit</span><span>'+fmtP(timeTotal)+'</span></div>' : ''}
-  ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate ?? 0)+'%</span><span>'+fmtP(d.tax_amount)+'</span></div>' : ''}
-  <div class="total-gross"><span>Gesamtbetrag</span><span>${fmtCHF(billableTime.length && hourlyRate > 0 ? grandTotal : d.total)}</span></div>
+  ${quoteWorkCost > 0 ? '<div class="total-row"><span>Arbeitszeit</span><span>'+fmtP(quoteWorkCost)+'</span></div>' : ''}
+  ${billableTime.length && hourlyRate > 0 ? '<div class="total-row"><span>Arbeitszeit (verrechenbar)</span><span>'+fmtP(timeTotal)+'</span></div>' : ''}
+  ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate ?? 0)+'%</span><span>'+fmtP(d.tax_amount + workTaxExtra)+'</span></div>' : ''}
+  <div class="total-gross"><span>Gesamtbetrag</span><span>${fmtCHF(grandTotal)}</span></div>
 </div>
 
 <div class="footer">
