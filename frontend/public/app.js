@@ -1498,8 +1498,6 @@ async function renderSettings() {
         </div>
         <div class="form-row cols3">
           ${fi('hourly_rate','Stundensatz (CHF/h)',s.hourly_rate,'z.B. 120','number')}
-          ${fi('default_filament_price_kg','Filamentpreis (CHF/kg)',s.default_filament_price_kg,'','number')}
-          ${fi('default_machine_cost_hr','Maschinenkosten (CHF/h)',s.default_machine_cost_hr,'','number')}
         </div>
         <div class="sep-label">Dokument-Fussnoten</div>
         <div class="form-row">
@@ -1812,7 +1810,7 @@ async function saveSettings() {
     'company_country','company_phone','company_email','company_website',
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
-    'default_filament_price_kg','default_machine_cost_hr','hourly_rate',
+    'hourly_rate',
     'invoice_footer','quote_footer','receipt_footer','receipt_line_width','checkout_dir'];
   const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes'];
   const body = {};
@@ -2182,7 +2180,7 @@ async function renderProfitOverview() {
     </div>
 
     <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="border-bottom:2px solid var(--line)" id="profit-thead"></tr></thead>
+      <thead style="position:sticky;top:0;z-index:2;background:var(--bg1)"><tr style="border-bottom:2px solid var(--line)" id="profit-thead"></tr></thead>
       <tbody id="profit-tbody"></tbody>
       <tfoot id="profit-tfoot"></tfoot>
     </table></div>
@@ -5236,6 +5234,7 @@ async function delDelivery(id) {
 
 async function openDeliveryItemModal(deliveryId, itemId) {
   await loadPsConfig();
+  if (!state.rawMaterials?.length) state.rawMaterials = await api('/api/raw-materials').catch(() => []);
   _populateDimSelects();
   dimTab('3mf');
   set('dim-delivery-id', deliveryId);
