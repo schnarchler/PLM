@@ -216,7 +216,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadCheckouts();
   _renderRecent();
   setupUploadDrag();
-  api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal(d.data_dir); }).catch(() => {});
+  api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal(''); }).catch(() => {});
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
     if (res && !e.target.closest('#li-plm-results') && e.target.id !== 'li-plm-search') res.style.display = 'none';
@@ -1767,8 +1767,10 @@ async function renderSettings() {
   loadAndRenderPrinterConfig();
   api('/api/data-path').then(d => {
     document.getElementById('st-datapath-info').innerHTML =
-      `DB: <code style="user-select:all">${d.db_path}</code><br>Dateien: <code style="user-select:all">${d.files_dir}</code>`;
+      `DB: <code style="user-select:all">${d.db_path}</code><br>Dateien: <code style="user-select:all">${d.files_dir}</code>`
+      + (d.config_file ? `<br><span style="color:var(--t4);font-size:12px">Konfigdatei: <code style="user-select:all">${d.config_file}</code></span>` : '');
     document.getElementById('st-data-dir').value = d.data_dir;
+    if (!d.configured) _showFirstRunModal(d.data_dir);
   });
   api('/api/settings').then(s => {
     const el = document.getElementById('st-checkout-dir');

@@ -3,22 +3,41 @@ const AdmZip   = require('adm-zip');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
-const os       = require('os');
 const cors     = require('cors');
 const crypto   = require('crypto');
 const initSqlJs = require('sql.js');
 
 const app  = express();
 const PORT = process.env.PLM_PORT || 3000;
-const CONFIG_PATH = path.join(os.homedir(), '.config', 'plm', 'config.json');
+
+// plm.config liegt an der PLM-Wurzel (eine Ebene über backend/)
+// Format: Schlüssel=Wert, Zeilen mit # werden ignoriert
+const PLM_CONFIG_PATH = path.join(__dirname, '..', 'plm.config');
 
 function loadConfig() {
-  try { return fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {}; }
-  catch { return {}; }
+  try {
+    if (!fs.existsSync(PLM_CONFIG_PATH)) return {};
+    const result = {};
+    for (const line of fs.readFileSync(PLM_CONFIG_PATH, 'utf8').split('\n')) {
+      const t = line.trim();
+      if (!t || t.startsWith('#')) continue;
+      const eq = t.indexOf('=');
+      if (eq > 0) result[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
+    }
+    return result;
+  } catch { return {}; }
 }
 function saveConfig(obj) {
-  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(obj, null, 2));
+  let lines = [];
+  try {
+    if (fs.existsSync(PLM_CONFIG_PATH)) lines = fs.readFileSync(PLM_CONFIG_PATH, 'utf8').split('\n');
+  } catch {}
+  for (const [key, value] of Object.entries(obj)) {
+    const idx = lines.findIndex(l => l.trim().startsWith(key + '='));
+    if (idx >= 0) lines[idx] = `${key}=${value}`;
+    else lines.push(`${key}=${value}`);
+  }
+  fs.writeFileSync(PLM_CONFIG_PATH, lines.join('\n'));
 }
 
 const _config = loadConfig();
@@ -2313,7 +2332,7 @@ app.put('/api/settings', (req, res) => {
 // -- DATA PATH -------------------------------------------------
 app.get('/api/data-path', (req, res) => {
   const cfg = loadConfig();
-  res.json({ data_dir: DATA_DIR, db_path: DB_PATH, files_dir: FILES_DIR, configured: !!cfg.data_dir });
+  res.json({ data_dir: DATA_DIR, db_path: DB_PATH, files_dir: FILES_DIR, config_file: PLM_CONFIG_PATH, configured: !!cfg.data_dir });
 });
 
 app.put('/api/data-path', (req, res) => {
