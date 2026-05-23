@@ -6119,7 +6119,7 @@ function openCheckoutModal(itemId, itemNumber, itemType) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px">
         ${CHECKOUT_TYPES.map(t => `
           <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--line3)'" onmouseout="this.style.borderColor='var(--line2)'">
-            <input type="checkbox" class="co-type" value="${t.key}" ${t.key==='CAD'?'checked':''} style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer;flex-shrink:0">
+            <input type="checkbox" class="co-type" value="${t.key}" checked style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer;flex-shrink:0">
             <div>
               <div style="font-size:13px;font-weight:500">${t.label}</div>
               ${t.hint?`<div style="font-size:13px;color:var(--t4);font-family:var(--mono)">${t.hint}</div>`:''}
@@ -6127,7 +6127,7 @@ function openCheckoutModal(itemId, itemNumber, itemType) {
           </label>`).join('')}
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
-        <input type="checkbox" id="co-all" style="accent-color:var(--blue);width:14px;height:14px" onchange="document.querySelectorAll('.co-type').forEach(c=>c.checked=this.checked)">
+        <input type="checkbox" id="co-all" checked style="accent-color:var(--blue);width:14px;height:14px" onchange="document.querySelectorAll('.co-type').forEach(c=>c.checked=this.checked)">
         <span style="font-size:13px;color:var(--t3)">Alle Typen auswählen</span>
       </label>
     </div>
