@@ -1105,7 +1105,7 @@ app.put('/api/revisions/:id/status', (req, res) => {
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
   if (!rev) return res.status(404).json({ error: 'Not found' });
 
-  const validTransitions = { DFT:['REV'], REV:['DFT','REL'], REL:['ECO','OBS'], ECO:['DFT'], OBS:[] };
+  const validTransitions = { DFT:['REV'], REV:['DFT','REL'], REL:['ECO','OBS'], ECO:['OBS'], OBS:[] };
   if (!validTransitions[rev.status]?.includes(status))
     return res.status(400).json({ error: 'Cannot transition from ' + rev.status + ' to ' + status });
 
@@ -1136,7 +1136,6 @@ app.put('/api/revisions/:id/status', (req, res) => {
     const newRev = nextRev(lastRev ? lastRev.rev : '0');
     const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
       [rev.item_id, newRev, 'DFT', 'ECO: ' + (eco_reason || '')]);
-    // Copy datasets from current revision to new DFT revision
     const datasets = all('SELECT * FROM datasets WHERE revision_id=?', [rev.id]);
     for (const ds of datasets) {
       try {
@@ -1173,6 +1172,12 @@ app.delete('/api/revisions/:id', (req, res) => {
   run('DELETE FROM bom WHERE parent_rev_id=?', [rev.id]);
   run('DELETE FROM revisions WHERE id=?', [rev.id]);
   log('revision', rev.id, 'Gelöscht', `DFT Rev ${rev.rev} von Item ${rev.item_id}`);
+  // If the previous revision is ECO, revert it back to REL
+  const ecoRev = get("SELECT id FROM revisions WHERE item_id=? AND status='ECO' ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1", [rev.item_id]);
+  if (ecoRev) {
+    run("UPDATE revisions SET status='REL', updated_at=datetime('now') WHERE id=?", [ecoRev.id]);
+    log('revision', ecoRev.id, 'REL', 'ECO zurückgesetzt nach Löschen der DFT-Revision');
+  }
   res.json({ ok: true });
 });
 
@@ -1264,13 +1269,16 @@ function getCheckoutDir() {
   return path.resolve(dir);
 }
 
-function collectCheckoutDatasets(itemId, types, visited = new Set()) {
+function collectCheckoutDatasets(itemId, types, visited = new Set(), mode = 'latest') {
   if (visited.has(itemId)) return [];
   visited.add(itemId);
   const item = get('SELECT * FROM items WHERE id=?', [itemId]);
   if (!item) return [];
-  // Latest revision = highest rev number
-  const rev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1', [itemId]);
+  // Select revision: 'released' = REL revision; 'latest' = highest rev number
+  const rev = mode === 'released'
+    ? (get("SELECT * FROM revisions WHERE item_id=? AND status='REL' ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1", [itemId])
+       || get('SELECT * FROM revisions WHERE item_id=? ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1', [itemId]))
+    : get('SELECT * FROM revisions WHERE item_id=? ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1', [itemId]);
   if (!rev) return [];
   let datasets = all('SELECT * FROM datasets WHERE revision_id=?', [rev.id]);
   if (types && types.length) {
@@ -1293,7 +1301,7 @@ function collectCheckoutDatasets(itemId, types, visited = new Set()) {
   if (item.item_type === 'asm') {
     const children = all('SELECT child_item_id FROM bom WHERE parent_rev_id=?', [rev.id]);
     for (const b of children) {
-      result.push(...collectCheckoutDatasets(b.child_item_id, types, visited));
+      result.push(...collectCheckoutDatasets(b.child_item_id, types, visited, mode));
     }
   }
   return result;
@@ -1333,14 +1341,15 @@ function deleteFolderRecursive(dirPath) {
 
 app.post('/api/items/:id/checkout', (req, res) => {
   try {
-    const { types } = req.body;
+    const { types, mode } = req.body;
     const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
     if (!item) return res.status(404).json({ error: 'Not found' });
 
     const checkoutDir = getCheckoutDir();
     fs.mkdirSync(checkoutDir, { recursive: true });
 
-    const datasets = collectCheckoutDatasets(item.id, types && types.length ? types : null);
+    const revMode = mode === 'released' ? 'released' : 'latest';
+    const datasets = collectCheckoutDatasets(item.id, types && types.length ? types : null, new Set(), revMode);
     if (!datasets.length) return res.json({ folder: null, files: [], warning: 'Keine Dateien gefunden — sind Dateien in den Revisionen hochgeladen?' });
 
     const safe = item.item_number.replace(/[^a-zA-Z0-9_-]/g, '_');

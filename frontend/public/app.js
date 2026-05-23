@@ -666,7 +666,7 @@ function renderItemDetail(item, activeRevId) {
     if (activeCheckout) window._itemDetailCheckoutFolder = activeCheckout.folder;
     const coBtn = activeCheckout
       ? `<button class="btn btn-amber btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="doCheckin(window._itemDetailCheckoutFolder,this)">⬆ Einchecken</button>`
-      : `<button class="btn btn-teal btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}')">⬇ Auschecken</button>`;
+      : `<button class="btn btn-teal btn-sm" style="font-size:13px;padding:2px 8px;flex-shrink:0;margin-left:4px" onclick="openCheckoutModal(${item.id},'${esc(item.item_number)}','${item.item_type}',${(item.revisions||[]).some(r=>r.status==='REL')})">⬇ Auschecken</button>`;
     document.getElementById('dp-title').innerHTML += coBtn;
   }
 
@@ -983,12 +983,12 @@ async function _bomDrop(e, revId) {
 function renderRevDetail(rev, item) {
   const isASM = item.item_type === 'asm';
   const isDOC = item.item_type === 'doc';
-  const locked = rev.status === 'REL' || rev.status === 'OBS';
+  const locked = rev.status === 'REL' || rev.status === 'OBS' || rev.status === 'ECO';
   const wfMap = {
     DFT: [{s:'REV',label:'→ In Review',cls:'btn-amber'}],
     REV: [{s:'DFT',label:'← Zurück zu Entwurf',cls:'btn-ghost'},{s:'REL',label:'✓ Freigeben',cls:'btn-green'}],
     REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
-    ECO: [{s:'DFT',label:'Neue Rev anlegen',cls:'btn-amber'}],
+    ECO: [{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
     OBS: []
   };
   const wfBtns = (wfMap[rev.status]||[]).map(b =>
@@ -3299,7 +3299,7 @@ const statusHints = {
   REV: 'Revision wird zur Prüfung eingereicht.',
   DFT: 'Revision zurück auf Entwurf setzen.',
   REL: 'Revision freigeben. Alle vorherigen REL-Revisionen werden auf OBS gesetzt.',
-  ECO: 'Engineering Change Order starten. Eine neue Revision wird automatisch in DFT angelegt.',
+  ECO: 'Engineering Change Order starten. Die aktuelle Revision wird gesperrt (ECO). Eine neue DFT-Revision wird automatisch angelegt.',
   OBS: 'Revision als veraltet markieren.'
 };
 
@@ -3354,7 +3354,10 @@ async function doStatusChange() {
   if (state.item) {
     const item = await api(`/api/items/${state.item.id}`);
     state.item = item;
-    const newRev = status === 'ECO' ? item.revisions?.[0] : item.revisions?.find(r => r.id === state.activeRevId) || item.revisions?.[0];
+    // After ECO: navigate to the newly created DFT revision (newest), otherwise stay on current rev
+    const newRev = status === 'ECO'
+      ? (item.revisions?.find(r => r.status === 'DFT') || item.revisions?.[0])
+      : (item.revisions?.find(r => r.id === parseInt(revId)) || item.revisions?.find(r => r.id === state.activeRevId) || item.revisions?.[0]);
     state.activeRevId = newRev?.id;
     renderItemDetail(item, newRev?.id);
   }
@@ -6167,7 +6170,7 @@ const CHECKOUT_TYPES = [
   { key: 'OTHER',       label: 'Sonstige',         hint: '' },
 ];
 
-function openCheckoutModal(itemId, itemNumber, itemType) {
+function openCheckoutModal(itemId, itemNumber, itemType, hasRel) {
   const isAsm = itemType === 'asm';
   _showDynModal(`<div class="modal" style="max-width:460px">
     <div class="modal-head">
@@ -6178,6 +6181,17 @@ function openCheckoutModal(itemId, itemNumber, itemType) {
       ${isAsm ? `<div style="background:rgba(142,163,255,.08);border:1px solid rgba(142,163,255,.2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:14px;font-size:13px;color:var(--t2)">
         Baugruppe: alle Parts aus der BOM werden rekursiv mitgeladen, damit die CAD-Verlinkungen bestehen bleiben.
       </div>` : ''}
+      <div style="font-size:13px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Revision</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:7px;padding:7px 12px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);cursor:pointer;flex:1">
+          <input type="radio" name="co-revmode" value="latest" checked style="accent-color:var(--blue);width:14px;height:14px;cursor:pointer;flex-shrink:0">
+          <div><div style="font-size:13px;font-weight:500">Neueste Revision</div></div>
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;padding:7px 12px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);cursor:pointer;flex:1${hasRel ? '' : ';opacity:.4;pointer-events:none'}">
+          <input type="radio" name="co-revmode" value="released" ${hasRel ? '' : 'disabled'} style="accent-color:var(--green);width:14px;height:14px;cursor:pointer;flex-shrink:0">
+          <div><div style="font-size:13px;font-weight:500">Freigegeben (REL)</div></div>
+        </label>
+      </div>
       <div style="font-size:13px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Dateitypen auswählen</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px">
         ${CHECKOUT_TYPES.map(t => `
@@ -6204,13 +6218,15 @@ function openCheckoutModal(itemId, itemNumber, itemType) {
 async function doCheckout(itemId) {
   const types = [...document.querySelectorAll('.co-type:checked')].map(c => c.value);
   if (!types.length) { toast('Mindestens einen Dateityp wählen', 'err'); return; }
+  const modeEl = document.querySelector('input[name="co-revmode"]:checked');
+  const mode = modeEl ? modeEl.value : 'latest';
 
   const btn = document.querySelector('.modal-foot .btn-teal');
   const orig = btn?.textContent;
   if (btn) { btn.textContent = '⏳ Wird kopiert…'; btn.disabled = true; }
 
   try {
-    const r = await api(`/api/items/${itemId}/checkout`, 'POST', { types });
+    const r = await api(`/api/items/${itemId}/checkout`, 'POST', { types, mode });
     _hideDynModal();
     if (r.warning) { toast(r.warning, 'err'); return; }
     await loadCheckouts();
