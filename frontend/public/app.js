@@ -6268,7 +6268,7 @@ async function showCheckoutList() {
               </div>
               <div style="font-family:var(--mono);font-size:13px;color:var(--t3);margin-bottom:6px">${g.new_files.map(f=>`${esc(f.name)} <span style="color:var(--t4)">[${f.ds_type}]</span>`).join(' · ')}</div>
               <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
-                onclick="importCheckoutFiles(${JSON.stringify(g).replace(/"/g,'&quot;')})">⬇ Zu Bauteil hinzufügen</button>
+                onclick="importCheckoutFiles(_scanResult.item_files[${gi}])">⬇ Zu Bauteil hinzufügen</button>
             </div>`).join('')}
           ${_scanResult.root_files.map((f, fi) => `
             <div style="background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);padding:10px 12px">
@@ -6278,9 +6278,9 @@ async function showCheckoutList() {
               </div>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
-                  onclick="importNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ Als neues Bauteil erfassen (mit Datei)</button>
+                  onclick="importNewItem(_scanResult.root_files[${fi}])">+ Als neues Bauteil erfassen (mit Datei)</button>
                 <button class="btn btn-sm btn-ghost"
-                  onclick="attachCheckoutFileToItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">+ An Bauteil anhängen</button>
+                  onclick="attachCheckoutFileToItem(_scanResult.root_files[${fi}])">+ An Bauteil anhängen</button>
               </div>
             </div>`).join('')}
         </div>
@@ -6332,6 +6332,7 @@ async function importCheckoutFiles(g) {
 
 let _importProjects = [];
 async function importNewItem(f) {
+  window._importFile = f;
   _importProjects = await api('/api/projects').catch(() => []);
   const extMap = { par:'prt', psm:'prt', asm:'asm', dft:'doc', pdf:'doc' };
   const ext = f.name.split('.').pop().toLowerCase();
@@ -6366,12 +6367,14 @@ async function importNewItem(f) {
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="showCheckoutList()">Zurück</button>
-      <button class="btn btn-primary" onclick="_doImportNewItem(${JSON.stringify(f).replace(/"/g,'&quot;')})">Bauteil erstellen</button>
+      <button class="btn btn-primary" onclick="_doImportNewItem()">Bauteil erstellen</button>
     </div>
   </div>`);
 }
 
-async function _doImportNewItem(f) {
+async function _doImportNewItem() {
+  const f = window._importFile;
+  if (!f) { toast('Datei nicht mehr verfügbar', 'err'); return; }
   const project_id = document.getElementById('imp-project')?.value;
   const item_type  = document.getElementById('imp-type')?.value;
   const name       = document.getElementById('imp-name')?.value?.trim();
@@ -6389,6 +6392,7 @@ async function _doImportNewItem(f) {
 }
 
 async function attachCheckoutFileToItem(f) {
+  window._atfFile = f;
   _showDynModal(`<div class="modal" style="max-width:480px">
     <div class="modal-head">
       <div class="modal-title">An Bauteil anhängen</div>
@@ -6414,7 +6418,7 @@ async function attachCheckoutFileToItem(f) {
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="showCheckoutList()">Zurück</button>
-      <button class="btn btn-primary" onclick="_doAttachCheckoutFile(${JSON.stringify(f).replace(/"/g,'&quot;')})">Anhängen</button>
+      <button class="btn btn-primary" onclick="_doAttachCheckoutFile()">Anhängen</button>
     </div>
   </div>`);
 }
@@ -6449,19 +6453,31 @@ function _atfSelect(id, number, name) {
   document.getElementById('atf-search').value = '';
 }
 
-async function _doAttachCheckoutFile(f) {
+async function _doAttachCheckoutFile() {
+  const f = window._atfFile;
+  if (!f) { toast('Datei nicht mehr verfügbar', 'err'); return; }
   const itemId = document.getElementById('atf-item-id')?.value;
   if (!itemId) { toast('Bauteil auswählen', 'err'); return; }
-  const folder = f.path.includes('/') ? f.path.substring(0, f.path.lastIndexOf('/')) : '.';
-  await api('/api/checkout/import', 'POST', {
-    mode: 'item',
-    item_id: parseInt(itemId),
-    folder,
-    files: [{ name: f.name, ds_type: f.ds_type }]
-  });
-  toast(`${esc(f.name)} angehängt`, 'ok');
-  await loadCheckouts();
-  showCheckoutList();
+  const sep = f.path?.includes('\\') ? '\\' : '/';
+  const lastSep = Math.max(f.path?.lastIndexOf('/') ?? -1, f.path?.lastIndexOf('\\') ?? -1);
+  const folder = (f.path && lastSep >= 0) ? f.path.substring(0, lastSep) : '.';
+  try {
+    const r = await api('/api/checkout/import', 'POST', {
+      mode: 'item',
+      item_id: parseInt(itemId),
+      folder,
+      files: [{ name: f.name, ds_type: f.ds_type }]
+    });
+    if (!r.count) {
+      toast('Datei nicht gefunden – Pfad prüfen', 'err');
+      return;
+    }
+    toast(`${esc(f.name)} angehängt (Rev ${r.rev})`, 'ok');
+    await loadCheckouts();
+    showCheckoutList();
+  } catch(e) {
+    toast('Fehler beim Anhängen', 'err');
+  }
 }
 
 async function createNewItemFromCheckout() {
