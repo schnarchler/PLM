@@ -216,6 +216,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadCheckouts();
   _renderRecent();
   setupUploadDrag();
+  api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal(d.data_dir); }).catch(() => {});
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
     if (res && !e.target.closest('#li-plm-results') && e.target.id !== 'li-plm-search') res.style.display = 'none';
@@ -1823,6 +1824,47 @@ async function saveSettings() {
   });
   state.settings = await api('/api/settings','PUT',body);
   toast('Einstellungen gespeichert','ok');
+}
+
+function _showFirstRunModal(suggestedPath) {
+  const id = 'first-run-modal';
+  if (document.getElementById(id)) return;
+  const overlay = document.createElement('div');
+  overlay.id = id;
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:var(--bg2);border-radius:var(--r);padding:32px;max-width:520px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.4)">
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">Willkommen bei PLM</div>
+      <div style="font-size:14px;color:var(--t2);margin-bottom:20px">
+        Bitte wähle, wo die Daten (Datenbank und Dateien) gespeichert werden sollen.
+        Der Pfad wird dauerhaft in <code style="font-family:var(--mono);font-size:12px">~/.config/plm/config.json</code> gespeichert und kann später unter Einstellungen geändert werden.
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:13px;color:var(--t3);display:block;margin-bottom:4px">Datenverzeichnis</label>
+        <input id="fr-data-dir" class="fi" style="width:100%;box-sizing:border-box" value="${esc(suggestedPath)}" placeholder="/absoluter/pfad/zum/datenverzeichnis">
+      </div>
+      <div id="fr-msg" style="font-size:13px;min-height:18px;margin-bottom:16px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="document.getElementById('first-run-modal').remove()">Später</button>
+        <button class="btn btn-primary" onclick="_saveFirstRunPath()">Speichern &amp; Server neu starten</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function _saveFirstRunPath() {
+  const input = document.getElementById('fr-data-dir');
+  const msg   = document.getElementById('fr-msg');
+  if (!input?.value.trim()) return;
+  try {
+    const r = await api('/api/data-path', 'PUT', { data_dir: input.value.trim() });
+    msg.textContent = r.message || 'Gespeichert';
+    msg.style.color = 'var(--green)';
+    setTimeout(() => document.getElementById('first-run-modal')?.remove(), 2500);
+  } catch(e) {
+    msg.textContent = 'Fehler beim Speichern';
+    msg.style.color = 'var(--red)';
+  }
 }
 
 async function saveDataPath() {
