@@ -1154,6 +1154,26 @@ app.put('/api/revisions/:id/status', (req, res) => {
   res.json(get('SELECT * FROM revisions WHERE id=?', [rev.id]));
 });
 
+app.delete('/api/revisions/:id', (req, res) => {
+  const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
+  if (!rev) return res.status(404).json({ error: 'Not found' });
+  if (rev.status !== 'DFT')
+    return res.status(400).json({ error: 'Nur DFT-Revisionen können gelöscht werden.' });
+  const others = all('SELECT id FROM revisions WHERE item_id=? AND id!=?', [rev.item_id, rev.id]);
+  if (!others.length)
+    return res.status(400).json({ error: 'Letzte Revision kann nicht gelöscht werden — lösche das Item.' });
+  const datasets = all('SELECT filename FROM datasets WHERE revision_id=?', [rev.id]);
+  for (const ds of datasets) {
+    try { fs.unlinkSync(path.join(FILES_DIR, ds.filename)); } catch {}
+  }
+  run('DELETE FROM datasets WHERE revision_id=?', [rev.id]);
+  run('DELETE FROM print_settings WHERE revision_id=?', [rev.id]);
+  run('DELETE FROM bom WHERE parent_rev_id=?', [rev.id]);
+  run('DELETE FROM revisions WHERE id=?', [rev.id]);
+  log('revision', rev.id, 'Gelöscht', `DFT Rev ${rev.rev} von Item ${rev.item_id}`);
+  res.json({ ok: true });
+});
+
 app.put('/api/revisions/:id/print-settings', (req, res) => {
   const { material, color, layer_height, infill, supports, nozzle, print_temp, bed_temp, printer, notes,
     printer_cost_hr, filament_price_kg, filament_weight_total, part_weight, print_duration, raw_material_id } = req.body;
