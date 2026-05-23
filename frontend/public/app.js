@@ -1664,7 +1664,8 @@ async function renderSettings() {
         <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px">
           <button class="adm-del-tab active" data-deltab="teile"    onclick="_admDelTab('teile')"    style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-1px;font-weight:600">Teile</button>
           <button class="adm-del-tab"        data-deltab="projekte" onclick="_admDelTab('projekte')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Projekte</button>
-          <button class="adm-del-tab"        data-deltab="auftraege" onclick="_admDelTab('auftraege')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Aufträge</button>
+          <button class="adm-del-tab"        data-deltab="auftraege"  onclick="_admDelTab('auftraege')"  style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Aufträge</button>
+          <button class="adm-del-tab"        data-deltab="produktion" onclick="_admDelTab('produktion')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Produktion</button>
         </div>
         <div id="adm-del-teile">
           <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Freigegebene (REL/OBS) Bauteile, Baugruppen und Dokumente</div>
@@ -1679,6 +1680,10 @@ async function renderSettings() {
           <div id="st-del-orders" style="display:flex;flex-direction:column;gap:4px"></div>
           <div style="font-size:13px;color:var(--t3);margin:10px 0 6px">Angebote (nicht Entwurf)</div>
           <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+        <div id="adm-del-produktion" style="display:none">
+          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Produktionsaufträge (nicht Entwurf)</div>
+          <div id="st-del-deliveries" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
 
         <div class="sep-label" style="margin-top:28px">Nummernpräfixe</div>
@@ -2922,10 +2927,11 @@ async function _saveClassifications() {
 }
 
 async function _loadDelTab() {
-  const [projects, orders, quotes, settings, counters] = await Promise.all([
+  const [projects, orders, quotes, deliveries, settings, counters] = await Promise.all([
     api('/api/projects').catch(()=>[]),
     api('/api/orders').catch(()=>[]),
     api('/api/quotes').catch(()=>[]),
+    api('/api/deliveries').catch(()=>[]),
     api('/api/settings').catch(()=>({})),
     api('/api/counters').catch(()=>({}))
   ]);
@@ -3026,6 +3032,21 @@ async function _loadDelTab() {
         </div>`).join('')
       : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Angebote</div>';
   }
+
+  const delEl = document.getElementById('st-del-deliveries');
+  if (delEl) {
+    const DST = { DRAFT:'Entwurf', READY:'Bereit', DELIVERED:'Geliefert' };
+    const DST_CLS = { DRAFT:'st-DFT', READY:'st-REV', DELIVERED:'st-REL' };
+    const locked = deliveries.filter(d => d.status !== 'DRAFT');
+    delEl.innerHTML = locked.length
+      ? locked.map(d => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+          <span class="status ${DST_CLS[d.status]||'st-DFT'}" style="font-size:13px">${DST[d.status]||d.status}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</span>
+          <span style="flex:1;font-size:13px">${esc(d.title)}</span>
+          <button class="btn btn-red btn-sm" onclick="_forceDelDelivery(${d.id},'${esc(d.number)}')">Löschen</button>
+        </div>`).join('')
+      : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Produktionsaufträge</div>';
+  }
 }
 
 async function _forceDelItem(id, number) {
@@ -3044,6 +3065,12 @@ async function _forceDelQuote(id, number) {
   if (!confirm(`Angebot ${number} unwiderruflich löschen?`)) return;
   await api(`/api/quotes/${id}`,'DELETE');
   toast('Angebot gelöscht','ok'); _loadDelTab(); loadStats();
+}
+
+async function _forceDelDelivery(id, number) {
+  if (!confirm(`Produktionsauftrag ${number} unwiderruflich löschen?`)) return;
+  await api(`/api/deliveries/${id}`,'DELETE');
+  toast('Produktionsauftrag gelöscht','ok'); _loadDelTab(); loadStats();
 }
 
 // ── ITEM MOVE ─────────────────────────────────────────────────
