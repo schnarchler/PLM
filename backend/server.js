@@ -2920,6 +2920,8 @@ app.get('/api/quotes/:id/quote-data', (req, res) => {
   q.positions = all('SELECT qi.*,i.item_number,i.item_type FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
   attachSubItems(q.positions);
   computeTotals(q);
+  const hrRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
+  q.hourly_rate = hrRow ? parseFloat(hrRow.value) || 0 : 0;
   res.json(q);
 });
 
