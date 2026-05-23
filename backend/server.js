@@ -40,6 +40,16 @@ function saveConfig(obj) {
   fs.writeFileSync(PLM_CONFIG_PATH, lines.join('\n'));
 }
 
+if (!fs.existsSync(PLM_CONFIG_PATH)) {
+  fs.writeFileSync(PLM_CONFIG_PATH,
+    '# PLM Konfiguration - Datenpfad fuer diesen PC anpassen\n' +
+    '# Leerzeilen und Zeilen mit # werden ignoriert\n' +
+    '# Beispiele:\n' +
+    '#   Windows: data_dir=D:\\Proton Drive\\My files\\plm-data\n' +
+    '#   Linux:   data_dir=/home/user/plm-data\n' +
+    'data_dir=\n');
+  console.log('plm.config erstellt: ' + PLM_CONFIG_PATH);
+}
 const _config = loadConfig();
 const DATA_DIR    = process.env.PLM_DATA_DIR
   ? path.resolve(process.env.PLM_DATA_DIR)
