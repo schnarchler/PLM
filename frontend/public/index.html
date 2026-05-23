@@ -444,9 +444,14 @@
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Rohmaterial <span style="color:var(--t3)">(optional)</span></label>
-          <select class="fs" id="li-rawmat" onchange="_onRmSelect(this.value)">
-            <option value="">— kein Rohmaterial —</option>
-          </select>
+          <div style="position:relative">
+            <input class="fi" id="li-rawmat-search" placeholder="Farbe, Material oder Name…" autocomplete="off"
+              oninput="_rmSearch(this.value,'li-rawmat-results','li-rawmat')"
+              onfocus="_rmSearch(this.value,'li-rawmat-results','li-rawmat')"
+              onblur="setTimeout(()=>document.getElementById('li-rawmat-results').style.display='none',200)">
+            <div id="li-rawmat-results" style="display:none;position:absolute;z-index:400;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto"></div>
+          </div>
+          <input type="hidden" id="li-rawmat">
         </div>
         <div class="fg"><label class="fl">Arbeitszeit (h) <span style="color:var(--t3)">(optional)</span></label>
           <input class="fi" type="number" id="li-hours" min="0" step="0.25" placeholder="0" oninput="_calcLiCost()">

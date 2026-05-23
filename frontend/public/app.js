@@ -3537,11 +3537,66 @@ async function applyDimRawMat(val) {
   </div>`);
 }
 function _buildRmOptions(mats) {
+  // Legacy: used for dim-rawmat select (Produktion)
   let opts = '<option value="">— kein Rohmaterial —</option>';
   for (const m of mats) {
-    opts += `<option value="${m.id}" data-unit="${esc(m.unit)}" data-rmweight="${m.weight_g||''}">${esc(m.name)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`;
+    const label = [m.color, m.material_type, m.brand].filter(Boolean).join(' · ') || m.name;
+    opts += `<option value="${m.id}">${esc(label)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`;
   }
   return opts;
+}
+
+// Searchable raw material picker (for li-rawmat in quotes/orders)
+function _rmSearch(q, resultsId, hiddenId) {
+  const res = document.getElementById(resultsId);
+  if (!res) return;
+  const mats = (state.rawMaterials||[]).filter(m => m.stock_qty > 0 || !q);
+  const ql = (q||'').toLowerCase();
+  const filtered = ql
+    ? mats.filter(m => (m.color||'').toLowerCase().includes(ql)
+        || (m.material_type||'').toLowerCase().includes(ql)
+        || (m.name||'').toLowerCase().includes(ql)
+        || (m.brand||'').toLowerCase().includes(ql))
+    : mats;
+  if (!filtered.length) {
+    res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>';
+    res.style.display = 'block';
+    return;
+  }
+  res.innerHTML = [
+    '<div onclick="_rmSelectItem(\'\',\'\',\''+resultsId+'\',\''+hiddenId+'\')" style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--t4)" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">— kein Rohmaterial —</div>',
+    ...filtered.map(m => {
+      const label = [m.color, m.material_type, m.brand].filter(Boolean).join(' · ') || m.name;
+      const stock = `${fmtN(m.stock_qty,0)} ${m.unit}`;
+      return `<div onclick="_rmSelectItem('${m.id}','${esc(label).replace(/'/g,"\\'")}','${resultsId}','${hiddenId}')"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <span style="flex:1;font-size:13px">${esc(label)}${m.weight_g?` <span style="color:var(--t4);font-size:12px">${fmtN(m.weight_g,0)}g</span>`:''}</span>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--t3)">${stock}</span>
+      </div>`;
+    })
+  ].join('');
+  res.style.display = 'block';
+}
+
+function _rmSelectItem(id, label, resultsId, hiddenId) {
+  _rmSetValue(hiddenId, id, label);
+  document.getElementById(resultsId).style.display = 'none';
+  if (hiddenId === 'li-rawmat') _onRmSelect(id);
+}
+
+function _rmSetValue(hiddenId, id, label) {
+  const hidden = document.getElementById(hiddenId);
+  if (hidden) hidden.value = id || '';
+  const search = document.getElementById(hiddenId + '-search');
+  if (!search) return;
+  if (label) { search.value = label; return; }
+  if (id) {
+    const m = (state.rawMaterials||[]).find(m => m.id == id);
+    search.value = m ? ([m.color, m.material_type, m.brand].filter(Boolean).join(' · ') || m.name) : '';
+  } else {
+    search.value = '';
+  }
 }
 
 // Called when a raw material is selected in the quote line item modal
@@ -4399,9 +4454,7 @@ function openLineItemModal(parentType, parentId, itemId) {
   if (!state.printers?.length)
     _liLoadPromises.push(api('/api/printers').then(p => { state.printers = p; }).catch(()=>{}));
   Promise.all(_liLoadPromises).then(() => {
-    const rmSel = document.getElementById('li-rawmat');
-    if (rmSel) rmSel.innerHTML = '<option value="">— kein Rohmaterial —</option>' +
-      (state.rawMaterials||[]).map(m => `<option value="${m.id}" data-unit="${esc(m.unit)}">${esc(m.name)} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`).join('');
+    // li-rawmat is now a hidden input + search field — no innerHTML needed
     const prSel = document.getElementById('li-printer');
     if (prSel) prSel.innerHTML = '<option value="">— kein Drucker —</option>' +
       (state.printers||[]).map(p => `<option value="${esc(p.name)}" data-cost="${p.cost_per_hour}">${esc(p.name)} (${fmtChf(p.cost_per_hour)}/h)</option>`).join('');
@@ -4411,11 +4464,10 @@ function openLineItemModal(parentType, parentId, itemId) {
   document.getElementById('li-plm-results').style.display = 'none';
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-cost-hint').style.display = 'none';
-  // Populate raw material dropdown
-  const rmSel = document.getElementById('li-rawmat');
-  if (rmSel) {
-    rmSel.innerHTML = _buildRmOptions(state.rawMaterials||[]);
-  }
+  // Reset raw material search field
+  const rmSearch = document.getElementById('li-rawmat-search');
+  if (rmSearch) rmSearch.value = '';
+  set('li-rawmat', '');
 
   if (itemId) {
     const src = parentType === 'order' ? state.orders : (state.quotes||[]);
@@ -4438,7 +4490,7 @@ function openLineItemModal(parentType, parentId, itemId) {
           if (!fullItem) return;
           window._liItem = fullItem;
           setTimeout(() => {
-            if (li.raw_material_id) document.getElementById('li-rawmat').value = li.raw_material_id;
+            if (li.raw_material_id) _rmSetValue('li-rawmat', li.raw_material_id);
             if (li.printer_name)    document.getElementById('li-printer').value = li.printer_name;
             _calcLiCost();
           }, 50);
@@ -4464,7 +4516,7 @@ function openLineItemModal(parentType, parentId, itemId) {
       } else {
         document.getElementById('li-plm-selected').style.display = 'none';
         setTimeout(() => {
-          if (li.raw_material_id) document.getElementById('li-rawmat').value = li.raw_material_id;
+          if (li.raw_material_id) _rmSetValue('li-rawmat', li.raw_material_id);
           if (li.printer_name)    document.getElementById('li-printer').value = li.printer_name;
           if (li.raw_material_id || li.printer_name || li.estimated_hours || li.estimated_print_hours)
             _calcLiCost();
@@ -4476,6 +4528,7 @@ function openLineItemModal(parentType, parentId, itemId) {
     set('li-qty',1); set('li-price',0); set('li-disc',0);
     document.getElementById('li-unit').value = 'Stk';
     document.getElementById('li-plm-selected').style.display = 'none';
+    _rmSetValue('li-rawmat', '', '');
   }
   openModal('lineItemModal');
 }
@@ -6748,12 +6801,14 @@ async function deductFromInventory() {
 let _rmSort = 'material';
 function _rmSetSort(s) { _rmSort = s; renderRawMaterials(); }
 
+let _rmShowAll = false;
 async function renderRawMaterials() {
   setLeftHeader('Rohmaterial', `
-    <div style="display:flex;gap:4px;align-items:center">
+    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
       <span style="font-size:11px;color:var(--t4)">Sortierung:</span>
       ${['material','color','price'].map(s => `<button class="btn btn-sm ${_rmSort===s?'btn-primary':'btn-ghost'}" onclick="_rmSetSort('${s}')">${s==='material'?'Material':s==='color'?'Farbe':'Preis'}</button>`).join('')}
-      <button class="btn btn-primary btn-sm" onclick="openRawMatModal()" style="margin-left:4px">+ Material</button>
+      <button class="btn btn-sm ${_rmShowAll?'btn-primary':'btn-ghost'}" onclick="_rmShowAll=!_rmShowAll;renderRawMaterials()" title="Leere anzeigen/ausblenden" style="margin-left:4px">${_rmShowAll?'Alle':'Aktive'}</button>
+      <button class="btn btn-primary btn-sm" onclick="openRawMatModal()">+ Material</button>
     </div>`);
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
@@ -6775,7 +6830,10 @@ async function renderRawMaterials() {
     return;
   }
 
-  const rows = items.map(i => {
+  const displayed = _rmShowAll ? items : items.filter(i => i.stock_qty > 0);
+  const hiddenCount = items.length - displayed.length;
+
+  const rows = displayed.map(i => {
     const empty    = i.stock_qty <= 0;
     const low      = !empty && i.min_qty > 0 && i.stock_qty <= i.min_qty;
     const dotCol   = empty ? 'var(--red)' : low ? 'var(--amber)' : 'var(--green)';
@@ -6806,7 +6864,8 @@ async function renderRawMaterials() {
       <th>Lots</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-  </table></div>`);
+  </table></div>
+  ${hiddenCount > 0 ? `<div style="padding:8px 4px;font-size:12px;color:var(--t4);text-align:center">${hiddenCount} leere ausgeblendet — <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="_rmShowAll=true;renderRawMaterials()">alle anzeigen</button></div>` : ''}`);
 }
 
 async function openRawMatDetail(id) {
@@ -7027,10 +7086,12 @@ async function saveRawMat(id) {
   state.rawMaterials = await api('/api/raw-materials').catch(() => state.rawMaterials);
   state._psConfigLoaded = false;
   const newOpts = _buildRmOptions(state.rawMaterials);
-  ['li-rawmat','dim-rawmat','bqm-rawmat'].forEach(id => {
+  // Refresh select-based dropdowns (dim-rawmat, bqm-rawmat)
+  ['dim-rawmat','bqm-rawmat'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = newOpts;
   });
+  // li-rawmat is search-based — no innerHTML needed
   toast('Gespeichert', 'ok');
   await renderRawMaterials();
 }
