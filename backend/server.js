@@ -3,19 +3,21 @@ const AdmZip   = require('adm-zip');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
+const os       = require('os');
 const cors     = require('cors');
 const crypto   = require('crypto');
 const initSqlJs = require('sql.js');
 
 const app  = express();
 const PORT = process.env.PLM_PORT || 3000;
-const CONFIG_PATH = path.join(__dirname, 'config.json');
+const CONFIG_PATH = path.join(os.homedir(), '.config', 'plm', 'config.json');
 
 function loadConfig() {
   try { return fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {}; }
   catch { return {}; }
 }
 function saveConfig(obj) {
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(obj, null, 2));
 }
 
@@ -2310,7 +2312,8 @@ app.put('/api/settings', (req, res) => {
 
 // -- DATA PATH -------------------------------------------------
 app.get('/api/data-path', (req, res) => {
-  res.json({ data_dir: DATA_DIR, db_path: DB_PATH, files_dir: FILES_DIR });
+  const cfg = loadConfig();
+  res.json({ data_dir: DATA_DIR, db_path: DB_PATH, files_dir: FILES_DIR, configured: !!cfg.data_dir });
 });
 
 app.put('/api/data-path', (req, res) => {
