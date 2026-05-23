@@ -718,6 +718,19 @@ function getActiveRevision(itemId) {
   return get("SELECT * FROM revisions WHERE item_id=? AND status='REL' ORDER BY rowid DESC LIMIT 1", [itemId])
     || getLatestRevision(itemId);
 }
+// Recursively sum dev hours (time_entries) for an item and all its BOM children
+function calcDevHours(itemId, visited = new Set()) {
+  if (visited.has(itemId)) return 0;
+  visited.add(itemId);
+  const direct = get('SELECT COALESCE(SUM(hours),0) as total FROM time_entries WHERE item_id=?', [itemId]);
+  let total = direct?.total || 0;
+  const rev = getLatestRevision(itemId);
+  if (rev) {
+    const children = all('SELECT child_item_id FROM bom WHERE parent_rev_id=?', [rev.id]);
+    for (const c of children) total += calcDevHours(c.child_item_id, visited);
+  }
+  return total;
+}
 function calcManufacturingCost(revisionId) {
   if (!revisionId) return null;
   const ps = get('SELECT * FROM print_settings WHERE revision_id=?', [revisionId]);
@@ -951,7 +964,7 @@ app.get('/api/items/:id', (req, res) => {
     rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
     if (item.item_type === 'asm') {
       rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
-      rev.bom.forEach(b => { b.child_active_rev = getActiveRevision(b.child_item_id); });
+      rev.bom.forEach(b => { b.child_active_rev = getActiveRevision(b.child_item_id); b.dev_hours = calcDevHours(b.child_item_id); });
       rev.bom_std = all('SELECT bs.*, sp.designation, sp.name as sp_name, sp.material, sp.size, sp.unit_price, sp.standard, sp.std_number FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.parent_rev_id=? ORDER BY bs.position', [rev.id]);
     }
   });
@@ -1106,6 +1119,7 @@ app.get('/api/revisions/:id', (req, res) => {
   rev.item = get('SELECT * FROM items WHERE id=?', [rev.item_id]);
   if (rev.item && rev.item.item_type === 'asm') {
     rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
+    rev.bom.forEach(b => { b.dev_hours = calcDevHours(b.child_item_id); });
   }
   res.json(rev);
 });
