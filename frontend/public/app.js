@@ -860,6 +860,9 @@ function renderBomList(rev, item, locked) {
   if (!plmRows.length && !stdRows.length)
     return '<div style="padding:12px;color:var(--t3);font-size:13px;text-align:center">Noch keine Positionen</div>';
 
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
+  const totalDevHours = plmRows.reduce((s, b) => s + (b.dev_hours || 0), 0);
+
   const plmHtml = plmRows.map((b, idx) => `
     <div class="bom-row${locked ? '' : ' bom-draggable'}" data-bom-id="${b.id}" data-rev-id="${rev.id}"
       ${locked ? '' : 'draggable="true" ondragstart="_bomDragStart(event)" ondragover="_bomDragOver(event)" ondrop="_bomDrop(event,'+rev.id+')" ondragend="_bomDragEnd()"'}>
@@ -869,6 +872,7 @@ function renderBomList(rev, item, locked) {
       <span class="bom-num">${esc(b.item_number)}</span>
       <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</span>
       ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0;font-size:11px">rev${b.child_active_rev.rev}</span>` : ''}
+      ${(b.dev_hours||0) > 0 ? `<span style="font-size:11px;font-family:var(--mono);color:var(--amber);flex-shrink:0" title="Entwicklungszeit">⏱ ${fmtN(b.dev_hours,2)} h</span>` : ''}
       ${locked
         ? `<span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>`
         : `<span class="bom-qty" style="display:flex;align-items:center;gap:4px">
@@ -906,7 +910,17 @@ function renderBomList(rev, item, locked) {
     </div>`).join('')}
     </div>` : '';
 
-  return plmHtml + stdHtml;
+  const devSummary = totalDevHours > 0 ? (() => {
+    const cost = hourlyRate > 0 ? totalDevHours * hourlyRate : null;
+    return `<div style="padding:7px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;font-size:13px;background:rgba(245,158,11,.05)">
+      <span style="color:var(--amber)">⏱</span>
+      <span style="color:var(--t3)">Entwicklungszeit Total:</span>
+      <span style="font-family:var(--mono);font-weight:600;color:var(--amber)">${fmtN(totalDevHours,2)} h</span>
+      ${cost !== null ? `<span style="color:var(--t4)">·</span><span style="font-family:var(--mono);color:var(--t2)">${fmtCHF(cost)}</span>` : ''}
+    </div>`;
+  })() : '';
+
+  return plmHtml + stdHtml + devSummary;
 }
 
 async function saveBomQty(bomId, revId, qty, unit, itemId) {
