@@ -4780,7 +4780,7 @@ function _render_deliveryRows() {
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.delivery_date||'—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Druckansicht">&#128196;</button>
-      <button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>
+      ${d.status === 'DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>` : ''}
     </td>
   </tr>`).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
 }
@@ -4811,7 +4811,9 @@ async function openDeliveryDetail(id) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openDeliveryModal(${id})">✏️ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${id})">&#128196; Druckansicht</button>
-        <button class="btn btn-red btn-sm" onclick="delDelivery(${id})">🗑 Löschen</button>
+        ${d.status === 'DRAFT'
+          ? `<button class="btn btn-red btn-sm" onclick="delDelivery(${id})">🗑 Löschen</button>`
+          : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Löschen nur unter Einstellungen → Admin</span>`}
       </div>
     </div>`;
   _markActiveRow(id);
