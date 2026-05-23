@@ -635,7 +635,7 @@ async function openItemDetail(itemId) {
   showDetail();
 }
 function itemIsEditable(item) {
-  return !(item.revisions||[]).some(r => r.status === 'REL' || r.status === 'OBS');
+  return !(item.revisions||[]).some(r => r.status === 'REL' || r.status === 'OBS' || r.status === 'ECO');
 }
 
 
@@ -1054,10 +1054,13 @@ function renderRevDetail(rev, item) {
       </div>
     </div>
 
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px">
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       ${itemIsEditable(item)
         ? `<button class="btn btn-red btn-sm" onclick="deleteItem(${item.id})">🗑 Item löschen</button>`
-        : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Löschen nur unter Einstellungen → Admin</span>`}
+        : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Item-Löschen nur unter Einstellungen → Admin</span>`}
+      ${rev.status === 'DFT'
+        ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red)" onclick="deleteRevision(${rev.id},${item.id})">Revision löschen</button>`
+        : ''}
     </div>`;
 }
 
@@ -3249,6 +3252,18 @@ async function deleteItem(id) {
   await api(`/api/items/${id}`,'DELETE');
   toast('Item gelöscht','ok'); closeDetail();
   if (state.project) openProject(state.project.id);
+}
+
+async function deleteRevision(revId, itemId) {
+  if (!confirm('Diese Revision (DFT) und alle zugehörigen Dateien löschen?')) return;
+  try {
+    await api(`/api/revisions/${revId}`, 'DELETE');
+    toast('Revision gelöscht', 'ok');
+    const fresh = await api(`/api/items/${itemId}`);
+    openItemDetail(fresh.id);
+  } catch(e) {
+    toast(e.message || 'Fehler beim Löschen', 'err');
+  }
 }
 
 // ── REVISION / STATUS ─────────────────────────────────────────
