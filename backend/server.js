@@ -2270,6 +2270,16 @@ app.get('/api/projects/:id/items-for-bom', (req, res) => {
   res.json(items);
 });
 
+app.get('/api/items-for-bom', (req, res) => {
+  const q = req.query.q ? '%' + req.query.q + '%' : '%';
+  const items = all(`SELECT i.*, p.number as project_number, p.name as project_name
+    FROM items i JOIN projects p ON i.project_id=p.id
+    WHERE i.item_type IN ('asm','prt') AND (i.item_number LIKE ? OR i.name LIKE ? OR p.number LIKE ?)
+    ORDER BY p.number, i.item_number LIMIT 40`, [q, q, q]);
+  items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
+  res.json(items);
+});
+
 // ==============================================================
 // SETTINGS
 // ==============================================================

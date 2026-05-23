@@ -253,7 +253,19 @@
       <div id="bom-pane-item">
         <div class="form-row">
           <div class="fg"><label class="fl">Teil / Baugruppe *</label>
-            <select class="fs" id="bom-child-id"><option value="">— wählen —</option></select>
+            <div style="position:relative">
+              <input class="fi" id="bom-child-search" placeholder="Teilenummer oder Name suchen (alle Projekte)…" autocomplete="off"
+                oninput="_bomItemSearch(this.value)"
+                onblur="setTimeout(()=>{const r=document.getElementById('bom-child-results');if(r)r.style.display='none'},200)">
+              <div id="bom-child-results" style="display:none;position:absolute;z-index:400;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:240px;overflow-y:auto"></div>
+            </div>
+            <input type="hidden" id="bom-child-id">
+            <div id="bom-child-badge" style="display:none;margin-top:6px;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:6px 10px;font-size:13px;display:flex;align-items:center;gap:8px">
+              <span id="bom-child-badge-chip"></span>
+              <span id="bom-child-badge-num" style="font-family:var(--mono);color:var(--blue)"></span>
+              <span id="bom-child-badge-name" style="flex:1;color:var(--t2)"></span>
+              <button class="btn btn-icon btn-ghost btn-sm" onclick="_bomClearItem()">✕</button>
+            </div>
           </div>
         </div>
       </div>

@@ -3373,17 +3373,67 @@ function setBomTab(tab) {
   document.getElementById('bom-modal-tab').value = tab;
 }
 
+let _bomSearchTimer;
+async function _bomItemSearch(q) {
+  clearTimeout(_bomSearchTimer);
+  const res = document.getElementById('bom-child-results');
+  if (!q || q.length < 1) { res.style.display = 'none'; return; }
+  _bomSearchTimer = setTimeout(async () => {
+    const items = await api('/api/items-for-bom?q=' + encodeURIComponent(q)).catch(() => []);
+    if (!items.length) {
+      res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>';
+      res.style.display = 'block'; return;
+    }
+    res.innerHTML = items.map(i => {
+      const rev = i.latest_revision;
+      const sameProject = state.item && i.project_id === state.item.project_id;
+      return `<div onclick="_bomSelectItem(${i.id})"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        ${_itemChip(i.item_type, 16)}
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        <span style="font-size:12px;color:${sameProject?'var(--t4)':'var(--teal)'};font-family:var(--mono)">${esc(i.project_number)}</span>
+        ${rev ? `<span class="status st-${rev.status}" style="font-size:11px">rev${rev.rev}</span>` : ''}
+      </div>`;
+    }).join('');
+    res.style.display = 'block';
+  }, 200);
+}
+
+function _bomSelectItem(itemId) {
+  const res = document.getElementById('bom-child-results');
+  if (res) res.style.display = 'none';
+  // fetch from already-loaded search results via API items-all (already in DOM)
+  const rows = document.querySelectorAll('#bom-child-results div[onclick]');
+  // Find item details from the search result data — re-fetch lightweight
+  api('/api/items-for-bom?q=_id_' + itemId).then(() => {}).catch(() => {});
+  // Read from search results list that's still in DOM
+  const search = document.getElementById('bom-child-search');
+  if (search) search.value = '';
+  document.getElementById('bom-child-id').value = itemId;
+  // Show badge — fetch item info
+  api('/api/items/' + itemId).then(item => {
+    const badge = document.getElementById('bom-child-badge');
+    document.getElementById('bom-child-badge-chip').innerHTML = _itemChip(item.item_type, 16);
+    document.getElementById('bom-child-badge-num').textContent = item.item_number;
+    document.getElementById('bom-child-badge-name').textContent = item.name + (item.project?.name ? ' · ' + item.project.name : '');
+    badge.style.display = 'flex';
+  }).catch(() => {});
+}
+
+function _bomClearItem() {
+  document.getElementById('bom-child-id').value = '';
+  document.getElementById('bom-child-search').value = '';
+  document.getElementById('bom-child-badge').style.display = 'none';
+}
+
 async function openBomModal(revId, projectId) {
   set('bom-rev-id', revId); set('bom-qty','1'); set('bom-notes','');
-  const [items, stdParts] = await Promise.all([
-    api(`/api/projects/${projectId}/items-for-bom`),
-    api('/api/standard-parts')
-  ]);
-  document.getElementById('bom-child-id').innerHTML = '<option value="">— wählen —</option>' +
-    items.map(i=>`<option value="${i.id}">${i.item_number} · ${esc(i.name)}</option>`).join('');
+  _bomClearItem();
+  const stdParts = await api('/api/standard-parts');
   document.getElementById('bom-std-id').innerHTML = '<option value="">— wählen —</option>' +
     stdParts.map(s=>`<option value="${s.id}">${esc(s.designation)}${s.material?' · '+esc(s.material):''}</option>`).join('');
-  // reset to PLM-Item tab
   if (!document.getElementById('bom-modal-tab')) {
     const h = document.createElement('input'); h.type='hidden'; h.id='bom-modal-tab'; h.value='item';
     document.getElementById('bom-rev-id').after(h);
