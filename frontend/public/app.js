@@ -735,12 +735,85 @@ function renderItemDetail(item, activeRevId) {
     </div>
     <div id="it-erp" style="display:none">
       <div id="it-erp-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
-    </div>`;
+    </div>
+    ${renderVariantsSection(item)}`;
   setTimeout(() => {
     document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
       if (!c._stlInit) { c._stlInit = true; initSTLViewer(c.id, c.dataset.stlUrl); }
     });
   }, 0);
+}
+
+function renderVariantsSection(item) {
+  const variants = item.variants || [];
+  const chips = variants.map(v =>
+    `<div style="display:inline-flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-sm);padding:3px 8px;cursor:pointer"
+       onclick="openItemDetail(${v.id})">
+      ${_itemChip(v.item_type, 14)}
+      <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(v.item_number)}</span>
+      <span style="font-size:13px;color:var(--t2)">${esc(v.name)}</span>
+      <button onclick="event.stopPropagation();unlinkVariant(${item.id})" title="Aus Variantengruppe entfernen"
+        style="background:none;border:none;cursor:pointer;color:var(--t4);font-size:13px;padding:0 0 0 4px;line-height:1" hidden>✕</button>
+    </div>`).join('');
+
+  return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4)">Varianten</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:1px 7px" onclick="openLinkVariantModal(${item.id})">+ Verknüpfen</button>
+      ${item.variant_group_id ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:1px 7px;color:var(--red)" onclick="unlinkVariant(${item.id})">Aus Gruppe entfernen</button>` : ''}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${chips || '<span style="font-size:13px;color:var(--t4)">Keine Varianten verknüpft</span>'}
+    </div>
+  </div>`;
+}
+
+let _variantSearchTimer;
+async function openLinkVariantModal(itemId) {
+  window._linkVariantItemId = itemId;
+  document.getElementById('lv-search').value = '';
+  document.getElementById('lv-results').innerHTML = '';
+  openModal('linkVariantModal');
+  document.getElementById('lv-search').focus();
+}
+
+async function _variantSearch(q) {
+  clearTimeout(_variantSearchTimer);
+  const res = document.getElementById('lv-results');
+  if (!q) { res.innerHTML = ''; return; }
+  _variantSearchTimer = setTimeout(async () => {
+    const items = await api('/api/items-for-bom?q=' + encodeURIComponent(q)).catch(() => []);
+    const sourceId = window._linkVariantItemId;
+    const filtered = items.filter(i => i.id !== sourceId);
+    if (!filtered.length) { res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; return; }
+    res.innerHTML = filtered.map(i => `
+      <div onclick="doLinkVariant(${i.id})"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        ${_itemChip(i.item_type, 16)}
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        <span style="font-size:12px;color:var(--t4);font-family:var(--mono)">${esc(i.project_number)}</span>
+      </div>`).join('');
+  }, 200);
+}
+
+async function doLinkVariant(otherId) {
+  const id = window._linkVariantItemId;
+  await api(`/api/items/${id}/link-variant`, 'POST', { other_item_id: otherId });
+  toast('Variante verknüpft', 'ok');
+  closeModal('linkVariantModal');
+  const fresh = await api('/api/items/' + id);
+  state.item = fresh;
+  renderItemDetail(fresh, state.activeRevId);
+}
+
+async function unlinkVariant(itemId) {
+  await api(`/api/items/${itemId}/variant-group`, 'DELETE');
+  toast('Aus Variantengruppe entfernt', 'ok');
+  const fresh = await api('/api/items/' + itemId);
+  state.item = fresh;
+  renderItemDetail(fresh, state.activeRevId);
 }
 
 function parseSTL(buf) {

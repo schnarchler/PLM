@@ -536,6 +536,7 @@ async function initDb() {
   try { db.run('ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN estimated_hours REAL DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN include_hours INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -971,6 +972,9 @@ app.get('/api/items/:id', (req, res) => {
   item.changelog = all("SELECT * FROM changelog WHERE entity_type='item' AND entity_id=? ORDER BY created_at DESC", [item.id]);
   item.children = all('SELECT * FROM items WHERE parent_id=?', [item.id]);
   item.effective_weight_g = getEffectiveWeight(item.id);
+  item.variants = item.variant_group_id
+    ? all('SELECT id,item_number,name,item_type FROM items WHERE variant_group_id=? AND id!=? ORDER BY item_number', [item.variant_group_id, item.id])
+    : [];
   res.json(item);
 });
 
@@ -1011,6 +1015,40 @@ app.put('/api/items/:id', (req, res) => {
     [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, classification||null, weight_g != null ? parseFloat(weight_g) : null, req.params.id]);
   log('item', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
+});
+
+app.post('/api/items/:id/link-variant', (req, res) => {
+  const { other_item_id } = req.body;
+  const a = get('SELECT id,variant_group_id FROM items WHERE id=?', [req.params.id]);
+  const b = get('SELECT id,variant_group_id FROM items WHERE id=?', [other_item_id]);
+  if (!a || !b || a.id === b.id) return res.status(400).json({ error: 'Invalid items' });
+
+  let groupId;
+  if (a.variant_group_id && b.variant_group_id) {
+    // merge: move all of b's group into a's group
+    groupId = a.variant_group_id;
+    run('UPDATE items SET variant_group_id=? WHERE variant_group_id=?', [groupId, b.variant_group_id]);
+  } else if (a.variant_group_id) {
+    groupId = a.variant_group_id;
+    run('UPDATE items SET variant_group_id=? WHERE id=?', [groupId, b.id]);
+  } else if (b.variant_group_id) {
+    groupId = b.variant_group_id;
+    run('UPDATE items SET variant_group_id=? WHERE id=?', [groupId, a.id]);
+  } else {
+    const maxRow = get('SELECT COALESCE(MAX(variant_group_id),0)+1 as next FROM items');
+    groupId = maxRow.next;
+    run('UPDATE items SET variant_group_id=? WHERE id IN (?,?)', [groupId, a.id, b.id]);
+  }
+  log('item', a.id, 'Variante verknüpft', 'mit Item ' + b.id + ' (Gruppe ' + groupId + ')');
+  res.json({ ok: true, group_id: groupId });
+});
+
+app.delete('/api/items/:id/variant-group', (req, res) => {
+  const item = get('SELECT id,variant_group_id FROM items WHERE id=?', [req.params.id]);
+  if (!item || !item.variant_group_id) return res.status(400).json({ error: 'Not in a group' });
+  run('UPDATE items SET variant_group_id=NULL WHERE id=?', [item.id]);
+  log('item', item.id, 'Variante entfernt', 'aus Gruppe ' + item.variant_group_id);
+  res.json({ ok: true });
 });
 
 app.get('/api/items/:id/where-used', (req, res) => {
