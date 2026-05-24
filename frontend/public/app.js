@@ -3478,8 +3478,10 @@ function setBomTab(tab) {
   document.getElementById('bom-pane-std').style.display  = tab === 'std'  ? '' : 'none';
   document.getElementById('bom-tab-item').className = 'btn btn-sm ' + (tab === 'item' ? 'btn-primary' : 'btn-ghost');
   document.getElementById('bom-tab-std').className  = 'btn btn-sm ' + (tab === 'std'  ? 'btn-primary' : 'btn-ghost');
-  document.getElementById('bom-modal-tab').value = tab;
 }
+
+window._bomBasket = [];
+window._bomSearchCache = {};
 
 let _bomSearchTimer;
 async function _bomItemSearch(q) {
@@ -3488,6 +3490,7 @@ async function _bomItemSearch(q) {
   if (!q || q.length < 1) { res.style.display = 'none'; return; }
   _bomSearchTimer = setTimeout(async () => {
     const items = await api('/api/items-for-bom?q=' + encodeURIComponent(q)).catch(() => []);
+    items.forEach(i => { window._bomSearchCache[i.id] = i; });
     if (!items.length) {
       res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>';
       res.style.display = 'block'; return;
@@ -3495,14 +3498,16 @@ async function _bomItemSearch(q) {
     res.innerHTML = items.map(i => {
       const rev = i.latest_revision;
       const sameProject = state.item && i.project_id === state.item.project_id;
+      const inBasket = window._bomBasket.some(b => b.type === 'item' && b.id === i.id);
       return `<div onclick="_bomSelectItem(${i.id})"
-        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);${inBasket?'opacity:.4;pointer-events:none':''}"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         ${_itemChip(i.item_type, 16)}
         <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
         <span style="flex:1;font-size:13px">${esc(i.name)}</span>
         <span style="font-size:12px;color:${sameProject?'var(--t4)':'var(--teal)'};font-family:var(--mono)">${esc(i.project_number)}</span>
         ${rev ? `<span class="status st-${rev.status}" style="font-size:11px">rev${rev.rev}</span>` : ''}
+        ${inBasket ? '<span style="font-size:11px;color:var(--green)">✓</span>' : ''}
       </div>`;
     }).join('');
     res.style.display = 'block';
@@ -3510,60 +3515,92 @@ async function _bomItemSearch(q) {
 }
 
 function _bomSelectItem(itemId) {
-  const res = document.getElementById('bom-child-results');
-  if (res) res.style.display = 'none';
-  // fetch from already-loaded search results via API items-all (already in DOM)
-  const rows = document.querySelectorAll('#bom-child-results div[onclick]');
-  // Find item details from the search result data — re-fetch lightweight
-  api('/api/items-for-bom?q=_id_' + itemId).then(() => {}).catch(() => {});
-  // Read from search results list that's still in DOM
-  const search = document.getElementById('bom-child-search');
-  if (search) search.value = '';
-  document.getElementById('bom-child-id').value = itemId;
-  // Show badge — fetch item info
-  api('/api/items/' + itemId).then(item => {
-    const badge = document.getElementById('bom-child-badge');
-    document.getElementById('bom-child-badge-chip').innerHTML = _itemChip(item.item_type, 16);
-    document.getElementById('bom-child-badge-num').textContent = item.item_number;
-    document.getElementById('bom-child-badge-name').textContent = item.name + (item.project?.name ? ' · ' + item.project.name : '');
-    badge.style.display = 'flex';
-  }).catch(() => {});
+  document.getElementById('bom-child-results').style.display = 'none';
+  document.getElementById('bom-child-search').value = '';
+  if (window._bomBasket.some(b => b.type === 'item' && b.id === itemId)) return;
+  const i = window._bomSearchCache[itemId];
+  if (!i) return;
+  window._bomBasket.push({ type: 'item', id: itemId, item_number: i.item_number, name: i.name, item_type: i.item_type, quantity: 1, unit: 'pcs' });
+  _renderBomBasket();
 }
 
-function _bomClearItem() {
-  document.getElementById('bom-child-id').value = '';
-  document.getElementById('bom-child-search').value = '';
-  document.getElementById('bom-child-badge').style.display = 'none';
+function _bomAddStdToBasket() {
+  const sel = document.getElementById('bom-std-id');
+  const id = parseInt(sel.value);
+  if (!id) return toast('Normteil wählen', 'err');
+  if (window._bomBasket.some(b => b.type === 'std' && b.id === id)) return toast('Bereits in der Liste', 'err');
+  const text = sel.options[sel.selectedIndex]?.text || '';
+  window._bomBasket.push({ type: 'std', id, name: text, quantity: 1, unit: 'pcs' });
+  sel.value = '';
+  _renderBomBasket();
+}
+
+function _bomRemove(i) { window._bomBasket.splice(i, 1); _renderBomBasket(); }
+function _bomSetQty(i, v) { window._bomBasket[i].quantity = Math.max(1, Math.round(parseFloat(v) || 1)); }
+function _bomSetUnit(i, v) { window._bomBasket[i].unit = v; }
+
+function _renderBomBasket() {
+  const el = document.getElementById('bom-basket-area');
+  if (!el) return;
+  const btn = document.getElementById('bom-save-btn');
+  const n = window._bomBasket.length;
+  if (btn) btn.textContent = n ? `Alle hinzufügen (${n})` : 'Hinzufügen';
+  if (!n) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--t4);text-align:center;padding:12px 0;border:1px dashed var(--line2);border-radius:var(--r)">Noch keine Positionen — oben suchen und auswählen</div>';
+    return;
+  }
+  const units = ['pcs','set','m','mm','g','kg'];
+  el.innerHTML = '<div style="border:1px solid var(--line);border-radius:var(--r);overflow:hidden">' +
+    window._bomBasket.map((b, i) => `
+      <div style="display:flex;align-items:center;gap:7px;padding:6px 10px;${i > 0 ? 'border-top:1px solid var(--line)' : ''}">
+        <button class="btn btn-icon btn-ghost btn-sm" onclick="_bomRemove(${i})" style="color:var(--red);flex-shrink:0">✕</button>
+        ${b.type === 'item'
+          ? `${_itemChip(b.item_type, 14)}<span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(b.item_number)}</span>`
+          : `<span style="font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);padding:1px 5px;border-radius:3px;flex-shrink:0">N</span>`}
+        <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(b.name)}</span>
+        <input type="number" value="${b.quantity}" min="1" step="1"
+          style="width:52px;font-size:13px;font-family:var(--mono);text-align:right;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 5px;color:var(--t1);flex-shrink:0"
+          onkeydown="if(event.key==='.'||event.key===',')event.preventDefault()"
+          onchange="_bomSetQty(${i},this.value)" oninput="_bomSetQty(${i},this.value)">
+        <select style="font-size:13px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 4px;color:var(--t1);flex-shrink:0" onchange="_bomSetUnit(${i},this.value)">
+          ${units.map(u => `<option${u === b.unit ? ' selected' : ''}>${u}</option>`).join('')}
+        </select>
+      </div>`).join('') +
+  '</div>';
 }
 
 async function openBomModal(revId, projectId) {
-  set('bom-rev-id', revId); set('bom-qty','1'); set('bom-notes','');
-  _bomClearItem();
+  set('bom-rev-id', revId);
+  window._bomBasket = [];
+  window._bomSearchCache = {};
+  document.getElementById('bom-child-search').value = '';
+  document.getElementById('bom-child-results').style.display = 'none';
   const stdParts = await api('/api/standard-parts');
-  document.getElementById('bom-std-id').innerHTML = '<option value="">— wählen —</option>' +
+  document.getElementById('bom-std-id').innerHTML = '<option value="">— Normteil wählen —</option>' +
     stdParts.map(s=>`<option value="${s.id}">${esc(s.designation)}${s.material?' · '+esc(s.material):''}</option>`).join('');
-  if (!document.getElementById('bom-modal-tab')) {
-    const h = document.createElement('input'); h.type='hidden'; h.id='bom-modal-tab'; h.value='item';
-    document.getElementById('bom-rev-id').after(h);
-  }
   setBomTab('item');
+  _renderBomBasket();
   openModal('bomModal');
 }
 
 async function doBomAdd() {
+  if (!window._bomBasket.length) return toast('Keine Positionen ausgewählt', 'err');
   const revId = V('bom-rev-id');
-  const tab = document.getElementById('bom-modal-tab')?.value || 'item';
-  const qty = parseFloat(V('bom-qty')) || 1;
-  const unit = V('bom-unit'); const notes = V('bom-notes');
-  if (tab === 'std') {
-    const stdId = document.getElementById('bom-std-id').value;
-    if (!stdId) return toast('Normteil wählen', 'err');
-    await api(`/api/revisions/${revId}/bom-std`, 'POST', { std_part_id: parseInt(stdId), quantity: qty, unit, notes });
-  } else {
-    const childId = V('bom-child-id'); if (!childId) return toast('Item wählen','err');
-    await api(`/api/revisions/${revId}/bom`,'POST',{child_item_id:parseInt(childId),quantity:qty,unit,notes});
+  let added = 0;
+  for (const b of window._bomBasket) {
+    try {
+      if (b.type === 'std') {
+        await api(`/api/revisions/${revId}/bom-std`, 'POST', { std_part_id: b.id, quantity: b.quantity, unit: b.unit, notes: '' });
+      } else {
+        await api(`/api/revisions/${revId}/bom`, 'POST', { child_item_id: b.id, quantity: b.quantity, unit: b.unit, notes: '' });
+      }
+      added++;
+    } catch(e) {
+      toast(`Fehler bei "${b.item_number || b.name}": ${e.message || 'unbekannt'}`, 'err');
+    }
   }
-  toast('Position hinzugefügt','ok'); closeModal('bomModal');
+  if (added) toast(`${added} Position${added > 1 ? 'en' : ''} hinzugefügt`, 'ok');
+  closeModal('bomModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
   refreshProjectTree();
 }
