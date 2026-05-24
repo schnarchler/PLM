@@ -289,6 +289,28 @@
   </div>
 </div>
 
+<div class="overlay" id="poItemEditModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title">Position bearbeiten</div><button class="btn btn-icon btn-ghost" onclick="closeModal('poItemEditModal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="poie-po-id">
+      <input type="hidden" id="poie-item-id">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Bezeichnung *</label><input class="fi" id="poie-desc"></div>
+      </div>
+      <div class="form-row" style="display:flex;gap:10px">
+        <div class="fg" style="flex:1"><label class="fl">Menge</label><input class="fi" id="poie-qty" type="number" min="0.001" step="any"></div>
+        <div class="fg" style="flex:1"><label class="fl">Einheit</label><input class="fi" id="poie-unit"></div>
+        <div class="fg" style="flex:1"><label class="fl">Preis / Einheit</label><input class="fi" id="poie-price" type="number" min="0" step="0.01" placeholder="—"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Notizen</label><input class="fi" id="poie-notes"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="savePoItemEdit()">Speichern</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="poItemModal">
   <div class="modal" style="max-width:480px">
     <div class="modal-head"><div class="modal-title">Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('poItemModal')">✕</button></div>
