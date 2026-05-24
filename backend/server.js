@@ -563,6 +563,7 @@ async function initDb() {
   try { db.run('ALTER TABLE orders ADD COLUMN estimated_hours REAL DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN include_hours INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -3243,7 +3244,12 @@ app.delete('/api/suppliers/:id', (req, res) => {
 // ==============================================================
 function poWithItems(po) {
   if (!po) return null;
-  po.items = all('SELECT poi.*, ii.name as inv_name, ii.stock_qty FROM purchase_order_items poi LEFT JOIN inventory_items ii ON poi.inventory_item_id=ii.id WHERE poi.po_id=? ORDER BY poi.position,poi.id', [po.id]);
+  po.items = all(`SELECT poi.*, ii.name as inv_name, ii.stock_qty,
+    rm.name as rm_name, rm.unit as rm_unit
+    FROM purchase_order_items poi
+    LEFT JOIN inventory_items ii ON poi.inventory_item_id=ii.id
+    LEFT JOIN raw_materials rm ON poi.raw_material_id=rm.id
+    WHERE poi.po_id=? ORDER BY poi.position,poi.id`, [po.id]);
   return po;
 }
 
@@ -3288,11 +3294,17 @@ app.put('/api/purchase-orders/:id/status', (req, res) => {
   run(`UPDATE purchase_orders SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
   if (status === 'RECEIVED') {
     const items = all('SELECT * FROM purchase_order_items WHERE po_id=?', [req.params.id]);
+    const poNum = get('SELECT number FROM purchase_orders WHERE id=?', [req.params.id])?.number || '';
     for (const item of items) {
       if (item.inventory_item_id && item.quantity > 0) {
-        run('UPDATE inventory_items SET stock_qty=stock_qty+?,updated_at=datetime(\'now\') WHERE id=?', [item.quantity, item.inventory_item_id]);
+        run(`UPDATE inventory_items SET stock_qty=stock_qty+?,updated_at=datetime('now') WHERE id=?`, [item.quantity, item.inventory_item_id]);
         runGetId('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
-          [item.inventory_item_id, 'IN', item.quantity, get('SELECT number FROM purchase_orders WHERE id=?',[req.params.id])?.number||'', 'Wareneingang EK']);
+          [item.inventory_item_id, 'IN', item.quantity, poNum, 'Wareneingang EK']);
+      }
+      if (item.raw_material_id && item.quantity > 0) {
+        run(`UPDATE raw_materials SET stock_qty=stock_qty+?,updated_at=datetime('now') WHERE id=?`, [item.quantity, item.raw_material_id]);
+        run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,unit_price) VALUES (?,?,?,?,?)',
+          [item.raw_material_id, item.quantity, 'in', 'Wareneingang ' + poNum, item.unit_price || null]);
       }
     }
   }
@@ -3306,11 +3318,11 @@ app.delete('/api/purchase-orders/:id', (req, res) => {
 });
 
 app.post('/api/purchase-orders/:id/items', (req, res) => {
-  const { description, quantity, unit, unit_price, inventory_item_id, notes } = req.body;
+  const { description, quantity, unit, unit_price, inventory_item_id, raw_material_id, notes } = req.body;
   if (!description) return res.status(400).json({ error: 'description required' });
   const pos = (get('SELECT MAX(position) as m FROM purchase_order_items WHERE po_id=?', [req.params.id])?.m || 0) + 1;
-  const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,notes,position) VALUES (?,?,?,?,?,?,?,?)',
-    [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, notes||'', pos]);
+  const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,raw_material_id,notes,position) VALUES (?,?,?,?,?,?,?,?,?)',
+    [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, raw_material_id||null, notes||'', pos]);
   res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [iid]));
 });
 

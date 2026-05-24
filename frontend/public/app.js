@@ -8262,7 +8262,9 @@ async function openPoDetail(id) {
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${fmtN(i.quantity,0)} ${esc(i.unit)}</td>
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${i.unit_price != null ? fmtCHF(i.unit_price) : '—'}</td>
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${i.unit_price != null ? fmtCHF(i.quantity * i.unit_price) : '—'}</td>
-      ${i.inv_name ? `<td style="padding:5px 8px;border:1px solid var(--line);font-size:12px;color:var(--t3)">${esc(i.inv_name)}</td>` : '<td style="padding:5px 8px;border:1px solid var(--line)"></td>'}
+      <td style="padding:5px 8px;border:1px solid var(--line);font-size:12px;color:var(--t3)">
+        ${i.inv_name ? esc(i.inv_name) : i.rm_name ? `🧵 ${esc(i.rm_name)}` : ''}
+      </td>
       ${editable ? `<td style="padding:5px 8px;border:1px solid var(--line)"><button class="btn btn-ghost btn-sm" style="color:var(--red);padding:1px 5px" onclick="deletePoItem(${po.id},${i.id})">✕</button></td>` : '<td style="border:1px solid var(--line)"></td>'}
     </tr>`).join('');
 
@@ -8360,9 +8362,10 @@ async function openPoItemModal(poId) {
   document.getElementById('poi-unit').value = 'Stk';
   document.getElementById('poi-price').value = '';
   document.getElementById('poi-notes').value = '';
-  const invItems = await api('/api/inventory').catch(() => []);
-  document.getElementById('poi-inv-id').innerHTML = '<option value="">— kein —</option>' +
-    invItems.map(i => `<option value="${i.id}">${esc(i.name)}${i.sku?' ('+i.sku+')':''}</option>`).join('');
+  const [invItems, rawMats] = await Promise.all([api('/api/inventory').catch(() => []), api('/api/raw-materials').catch(() => [])]);
+  document.getElementById('poi-link-id').innerHTML = '<option value="">— kein —</option>' +
+    (invItems.length ? `<optgroup label="Lagerartikel">${invItems.map(i => `<option value="inv:${i.id}">${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join('')}</optgroup>` : '') +
+    (rawMats.length ? `<optgroup label="Rohmaterial">${rawMats.map(r => `<option value="rm:${r.id}">${esc(r.name)}${r.material_type?' · '+esc(r.material_type):''}${r.color?' · '+esc(r.color):''}</option>`).join('')}</optgroup>` : '');
   openModal('poItemModal');
 }
 
@@ -8370,12 +8373,16 @@ async function savePoItem() {
   const poId = document.getElementById('poi-po-id').value;
   const desc = document.getElementById('poi-desc').value.trim();
   if (!desc) return toast('Bezeichnung eingeben', 'err');
+  const link = document.getElementById('poi-link-id').value;
+  const invId = link.startsWith('inv:') ? link.slice(4) : null;
+  const rmId  = link.startsWith('rm:')  ? link.slice(3) : null;
   await api(`/api/purchase-orders/${poId}/items`, 'POST', {
     description: desc,
     quantity: document.getElementById('poi-qty').value,
     unit: document.getElementById('poi-unit').value,
     unit_price: document.getElementById('poi-price').value || null,
-    inventory_item_id: document.getElementById('poi-inv-id').value || null,
+    inventory_item_id: invId,
+    raw_material_id: rmId,
     notes: document.getElementById('poi-notes').value,
   });
   toast('Position hinzugefügt', 'ok');
