@@ -654,7 +654,8 @@ function renderItemDetail(item, activeRevId) {
     + (item.classification ? ' ' + _classChip(item.classification) : '')
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument generieren">&#128196;</button>`;
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument generieren">&#128196;</button>`
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Vergleichen">⇄</button>`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
@@ -5545,6 +5546,152 @@ async function moveDeliveryItem(itemId, deliveryId, direction) {
   const d = await api(`/api/deliveries/${deliveryId}`);
   document.getElementById('dd-pos').innerHTML = renderDeliveryItems(d.items||[], deliveryId) +
     `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${deliveryId})">+ Position</button>`;
+}
+
+// -- ITEMVERGLEICH ---------------------------------------------
+let _compareSearchTimer;
+function openItemCompareSearch(itemId) {
+  window._compareBaseId = itemId;
+  document.getElementById('cmp-search').value = '';
+  document.getElementById('cmp-results').innerHTML = '';
+  openModal('itemCompareModal');
+  document.getElementById('cmp-search').focus();
+}
+
+function _compareSearch(q) {
+  clearTimeout(_compareSearchTimer);
+  const el = document.getElementById('cmp-results');
+  if (!q) { el.innerHTML = ''; return; }
+  _compareSearchTimer = setTimeout(async () => {
+    const items = await api('/api/items-for-bom?q=' + encodeURIComponent(q)).catch(() => []);
+    const base = window._compareBaseId;
+    const filtered = items.filter(i => i.id !== base);
+    if (!filtered.length) { el.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; return; }
+    el.innerHTML = filtered.map(i => `
+      <div onclick="runItemCompare(${base},${i.id})"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
+        onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        ${_itemChip(i.item_type,16)}
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
+        <span style="flex:1;font-size:13px">${esc(i.name)}</span>
+        <span style="font-size:12px;color:var(--t4);font-family:var(--mono)">${esc(i.project_number)}</span>
+      </div>`).join('');
+  }, 200);
+}
+
+async function runItemCompare(idA, idB) {
+  closeModal('itemCompareModal');
+  const [a, b] = await Promise.all([api('/api/items/' + idA), api('/api/items/' + idB)]);
+  _renderCompare(a, b);
+}
+
+function _renderCompare(a, b) {
+  const revA = a.revisions?.[0], revB = b.revisions?.[0];
+
+  const metaRow = (label, vA, vB) => {
+    const diff = String(vA||'') !== String(vB||'');
+    const hi = diff ? 'background:#fef3c7' : '';
+    return `<tr>
+      <td style="color:#6b7280;font-weight:600;width:110px;padding:5px 8px;border:1px solid #e5e7eb;font-size:13px">${label}</td>
+      <td style="padding:5px 8px;border:1px solid #e5e7eb;font-size:13px;${hi}">${vA||'—'}</td>
+      <td style="padding:5px 8px;border:1px solid #e5e7eb;font-size:13px;${hi}">${vB||'—'}</td>
+    </tr>`;
+  };
+
+  const metaHtml = `<table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+    <thead><tr>
+      <th style="padding:6px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;width:110px">Eigenschaft</th>
+      <th style="padding:6px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:13px;color:#1d4ed8;font-weight:700">${escHtml(a.item_number)}</th>
+      <th style="padding:6px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:13px;color:#16a34a;font-weight:700">${escHtml(b.item_number)}</th>
+    </tr></thead>
+    <tbody>
+      ${metaRow('Name', escHtml(a.name), escHtml(b.name))}
+      ${metaRow('Typ', a.item_type.toUpperCase(), b.item_type.toUpperCase())}
+      ${metaRow('Projekt', a.project?.number, b.project?.number)}
+      ${metaRow('Klasse', a.classification, b.classification)}
+      ${metaRow('Gewicht (g)', a.effective_weight_g != null ? fmtN(a.effective_weight_g,1) : null, b.effective_weight_g != null ? fmtN(b.effective_weight_g,1) : null)}
+      ${metaRow('Preis (CHF)', a.default_price != null ? fmtN(a.default_price,2) : null, b.default_price != null ? fmtN(b.default_price,2) : null)}
+      ${metaRow('Akt. Revision', revA ? 'rev'+revA.rev+' ('+revA.status+')' : null, revB ? 'rev'+revB.rev+' ('+revB.status+')' : null)}
+    </tbody></table>`;
+
+  // BOM diff (only if both are ASM)
+  let bomHtml = '';
+  if (a.item_type === 'asm' && b.item_type === 'asm') {
+    const bomA = revA?.bom || [], bomB = revB?.bom || [];
+    const mapA = new Map(bomA.map(r => [r.child_item_id, r]));
+    const mapB = new Map(bomB.map(r => [r.child_item_id, r]));
+    const allIds = new Set([...mapA.keys(), ...mapB.keys()]);
+
+    const rows = [...allIds].map(id => {
+      const ra = mapA.get(id), rb = mapB.get(id);
+      const item = ra || rb;
+      const onlyA = ra && !rb, onlyB = !ra && rb;
+      const qtyDiff = ra && rb && ra.quantity !== rb.quantity;
+      const bg = onlyA ? '#fef2f2' : onlyB ? '#f0fdf4' : qtyDiff ? '#fef3c7' : '';
+      return `<tr style="background:${bg}">
+        <td style="font-family:monospace;font-size:12px;padding:4px 8px;border:1px solid #e5e7eb;color:#1d4ed8">${escHtml(item.item_number)}</td>
+        <td style="font-size:13px;padding:4px 8px;border:1px solid #e5e7eb">${escHtml(item.name)}</td>
+        <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${ra ? fmtN(ra.quantity,0)+' '+ra.unit : '<span style="color:#d1d5db">—</span>'}</td>
+        <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${rb ? fmtN(rb.quantity,0)+' '+rb.unit : '<span style="color:#d1d5db">—</span>'}</td>
+        <td style="padding:4px 8px;border:1px solid #e5e7eb;font-size:12px;color:${onlyA?'#dc2626':onlyB?'#16a34a':qtyDiff?'#d97706':'#9ca3af'}">${onlyA?'nur A':onlyB?'nur B':qtyDiff?'Mengenabw.':'='}</td>
+      </tr>`;
+    }).join('');
+
+    bomHtml = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:16px 0 6px">Stückliste</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
+      <thead><tr>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Teilenummer</th>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Name</th>
+        <th style="padding:5px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:11px;color:#1d4ed8">Menge A</th>
+        <th style="padding:5px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:11px;color:#16a34a">Menge B</th>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;color:#6b7280">Diff</th>
+      </tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" style="padding:8px;color:#9ca3af;text-align:center;border:1px solid #e5e7eb">Beide BOMs leer</td></tr>'}</tbody>
+    </table>
+    <div style="display:flex;gap:16px;font-size:12px;color:#6b7280">
+      <span style="background:#fef2f2;padding:2px 8px;border-radius:4px">Rot = nur in A</span>
+      <span style="background:#f0fdf4;padding:2px 8px;border-radius:4px">Grün = nur in B</span>
+      <span style="background:#fef3c7;padding:2px 8px;border-radius:4px">Gelb = Mengenabweichung</span>
+    </div>`;
+  }
+
+  // Datasets diff
+  const dsA = (revA?.datasets || []).map(d => d.ds_type + ':' + (d.original_filename || d.filename));
+  const dsB = (revB?.datasets || []).map(d => d.ds_type + ':' + (d.original_filename || d.filename));
+  const allDs = [...new Set([...dsA, ...dsB])].sort();
+  const dsHtml = allDs.length ? `
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:16px 0 6px">Dateien (aktive Revision)</div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Datei</th>
+        <th style="padding:5px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:11px;color:#1d4ed8;width:60px">A</th>
+        <th style="padding:5px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:11px;color:#16a34a;width:60px">B</th>
+      </tr></thead>
+      <tbody>${allDs.map(f => {
+        const inA = dsA.includes(f), inB = dsB.includes(f);
+        const bg = !inA ? '#f0fdf4' : !inB ? '#fef2f2' : '';
+        const [typ, name] = f.split(':');
+        return `<tr style="background:${bg}">
+          <td style="padding:4px 8px;border:1px solid #e5e7eb;font-size:12px;font-family:monospace">${escHtml(typ)} · ${escHtml(name)}</td>
+          <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb">${inA?'✓':''}</td>
+          <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb">${inB?'✓':''}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : '';
+
+  const html = `<!DOCTYPE html><html lang="de-CH"><head><meta charset="UTF-8">
+    <title>Vergleich ${escHtml(a.item_number)} ↔ ${escHtml(b.item_number)}</title>
+    <style>body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:24px}
+    h1{font-size:16px;font-weight:700;margin:0 0 16px;color:#111827}
+    @media print{body{padding:12px}}</style>
+    </head><body>
+    <h1>Vergleich ↔</h1>
+    ${metaHtml}${bomHtml}${dsHtml}
+    <div style="margin-top:20px;font-size:12px;color:#d1d5db;text-align:right">${new Date().toLocaleDateString('de-CH')}</div>
+    </body></html>`;
+  const w = window.open('', '_blank', 'width=1000,height=750');
+  w.document.write(html);
+  w.document.close();
 }
 
 // -- DOKUMENTVORLAGEN ------------------------------------------
