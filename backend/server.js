@@ -3302,11 +3302,26 @@ app.put('/api/purchase-orders/:id/status', (req, res) => {
           [item.inventory_item_id, 'IN', item.quantity, poNum, 'Wareneingang EK']);
       }
       if (item.raw_material_id && item.quantity > 0) {
-        const lotNr = (lot_numbers && lot_numbers[item.id]) || '';
-        run(`UPDATE raw_materials SET stock_qty=stock_qty+?,updated_at=datetime('now')${lotNr ? ",lot_number=?" : ''} WHERE id=?`,
-          lotNr ? [item.quantity, lotNr, item.raw_material_id] : [item.quantity, item.raw_material_id]);
-        run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,unit_price,lot_number) VALUES (?,?,?,?,?,?)',
-          [item.raw_material_id, item.quantity, 'in', 'Wareneingang ' + poNum, item.unit_price || null, lotNr || null]);
+        const lotData = lot_numbers && lot_numbers[item.id];
+        // Update total stock qty once
+        run(`UPDATE raw_materials SET stock_qty=stock_qty+?,updated_at=datetime('now') WHERE id=?`, [item.quantity, item.raw_material_id]);
+        if (Array.isArray(lotData) && lotData.length) {
+          // Group units by lot number → one movement per unique lot
+          const grouped = {};
+          lotData.forEach(l => { const k = l || ''; grouped[k] = (grouped[k] || 0) + 1; });
+          let lastLot = '';
+          for (const [lot, qty] of Object.entries(grouped)) {
+            run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,unit_price,lot_number) VALUES (?,?,?,?,?,?)',
+              [item.raw_material_id, qty, 'in', 'Wareneingang ' + poNum, item.unit_price || null, lot || null]);
+            if (lot) lastLot = lot;
+          }
+          if (lastLot) run(`UPDATE raw_materials SET lot_number=? WHERE id=?`, [lastLot, item.raw_material_id]);
+        } else {
+          const lotNr = (typeof lotData === 'string' ? lotData : '') || '';
+          if (lotNr) run(`UPDATE raw_materials SET lot_number=? WHERE id=?`, [lotNr, item.raw_material_id]);
+          run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,unit_price,lot_number) VALUES (?,?,?,?,?,?)',
+            [item.raw_material_id, item.quantity, 'in', 'Wareneingang ' + poNum, item.unit_price || null, lotNr || null]);
+        }
       }
     }
   }

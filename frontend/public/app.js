@@ -8540,14 +8540,7 @@ async function setPoStatus(poId, status) {
       // Ask for lot numbers via modal
       window._poReceiveId = poId;
       window._poReceiveRmItems = rmItems;
-      document.getElementById('po-receive-rows').innerHTML = rmItems.map(i => `
-        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600">🧵 ${esc(i.rm_name)}</div>
-            <div style="font-size:12px;color:var(--t3)">${esc(i.description)} · ${fmtN(i.quantity,2)} ${esc(i.unit)}</div>
-          </div>
-          <input class="fi" id="lot-${i.id}" placeholder="Lot-Nr. (optional)" style="width:160px;font-family:var(--mono);font-size:13px">
-        </div>`).join('');
+      document.getElementById('po-receive-rows').innerHTML = '';
       document.getElementById('lot-all').value = '';
       _setLotMode(rmItems.length > 1 ? 'same' : 'individual');
       const invLinked = (po.items||[]).filter(i => i.inventory_item_id).length;
@@ -8572,9 +8565,27 @@ function _setLotMode(mode) {
   document.getElementById('po-receive-rows').style.display  = mode === 'individual' ? '' : 'none';
   document.getElementById('lot-mode-same').className       = 'btn btn-sm ' + (mode === 'same' ? 'btn-primary' : 'btn-ghost');
   document.getElementById('lot-mode-individual').className = 'btn btn-sm ' + (mode === 'individual' ? 'btn-primary' : 'btn-ghost');
-  if (mode === 'same') {
-    setTimeout(() => document.getElementById('lot-all')?.focus(), 50);
-  }
+  if (mode === 'individual') _renderIndividualLotRows();
+  else setTimeout(() => document.getElementById('lot-all')?.focus(), 50);
+}
+
+function _renderIndividualLotRows() {
+  const rmItems = window._poReceiveRmItems || [];
+  document.getElementById('po-receive-rows').innerHTML = rmItems.map(i => {
+    const units = Math.max(1, Math.round(i.quantity));
+    const unitInputs = units === 1
+      ? `<input class="fi" id="lot-${i.id}-0" placeholder="Lot-Nr. (optional)" style="font-family:var(--mono);font-size:13px">`
+      : Array.from({length: units}, (_, u) =>
+          `<div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <span style="font-size:12px;color:var(--t4);width:56px;flex-shrink:0">Nr. ${u+1}</span>
+            <input class="fi" id="lot-${i.id}-${u}" placeholder="Lot-Nr. (optional)" style="font-family:var(--mono);font-size:13px">
+          </div>`).join('');
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <div style="font-size:13px;font-weight:600;margin-bottom:2px">🧵 ${esc(i.rm_name)}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:4px">${esc(i.description)} · ${fmtN(i.quantity,2)} ${esc(i.unit)}</div>
+      ${unitInputs}
+    </div>`;
+  }).join('');
 }
 
 async function confirmPoReceive() {
@@ -8583,11 +8594,15 @@ async function confirmPoReceive() {
   const lot_numbers = {};
   if (window._lotMode === 'same') {
     const sharedLot = document.getElementById('lot-all')?.value.trim();
-    if (sharedLot) rmItems.forEach(i => { lot_numbers[i.id] = sharedLot; });
+    // send as string → backend uses full item.quantity in one movement
+    rmItems.forEach(i => { if (sharedLot) lot_numbers[i.id] = sharedLot; });
   } else {
     rmItems.forEach(i => {
-      const val = document.getElementById('lot-' + i.id)?.value.trim();
-      if (val) lot_numbers[i.id] = val;
+      const units = Math.max(1, Math.round(i.quantity));
+      // collect array of lot strings (one per unit)
+      const arr = Array.from({length: units}, (_, u) =>
+        document.getElementById(`lot-${i.id}-${u}`)?.value.trim() || '');
+      lot_numbers[i.id] = arr;
     });
   }
   closeModal('poReceiveModal');
