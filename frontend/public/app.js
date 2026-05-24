@@ -8208,6 +8208,104 @@ async function delRawMat(id) {
   renderRawMaterials();
 }
 
+// ── BESTELLUNGS-PDF ───────────────────────────────────────────
+async function generatePoDoc(id) {
+  const po = await api('/api/purchase-orders/' + id);
+  const s = state.settings || {};
+  const today = new Date().toLocaleDateString('de-CH');
+  const total = (po.items||[]).reduce((sum, i) => sum + (i.unit_price != null ? i.quantity * i.unit_price : 0), 0);
+
+  const companyLines = [s.company_street, [s.company_postal_code, s.company_city].filter(Boolean).join(' ')].filter(Boolean);
+
+  const supAddrLines = po.supplier_address ? po.supplier_address.split(/\r?\n/).filter(Boolean) : [];
+
+  const itemRows = (po.items||[]).map((i, idx) => `
+    <tr style="${idx % 2 === 0 ? 'background:#fafafa' : ''}">
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">${escHtml(i.description)}${i.notes?`<div style="font-size:11px;color:#9ca3af;margin-top:1px">${escHtml(i.notes)}</div>`:''}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;white-space:nowrap">${fmtN(i.quantity, 2)} ${escHtml(i.unit)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right">${i.unit_price != null ? fmtN(i.unit_price, 2) : '—'}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;font-weight:${i.unit_price != null ? '600' : '400'}">${i.unit_price != null ? fmtN(i.quantity * i.unit_price, 2) : '—'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="de-CH"><head><meta charset="UTF-8">
+  <title>Bestellung ${escHtml(po.number)}</title>
+  <style>
+    body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:32px}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #1d4ed8}
+    .company-name{font-size:20px;font-weight:700;color:#1d4ed8}
+    .doc-label{font-size:26px;font-weight:700;color:#111827;margin-bottom:4px}
+    .meta{color:#6b7280;font-size:13px;line-height:1.7}
+    .addr-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:3px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#f3f4f6;padding:7px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;text-align:left;border-bottom:2px solid #e5e7eb}
+    th.r{text-align:right}
+    @media print{body{padding:16px}}
+  </style></head><body>
+
+  <div class="header">
+    <div>
+      <div class="company-name">${escHtml(s.company_name||'')}</div>
+      <div style="font-size:13px;color:#6b7280;margin-top:2px;line-height:1.6">
+        ${companyLines.map(l=>escHtml(l)).join('<br>')}
+        ${s.company_phone?'<br>'+escHtml(s.company_phone):''}
+        ${s.company_email?'<br>'+escHtml(s.company_email):''}
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="doc-label">Bestellung</div>
+      <div style="font-family:monospace;font-size:14px;color:#1d4ed8;margin-bottom:4px">${escHtml(po.number)}</div>
+      <div class="meta">
+        Datum: ${today}<br>
+        ${po.expected_date?'Lieferdatum bis: <strong>'+po.expected_date+'</strong><br>':''}
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:48px;margin-bottom:28px">
+    <div>
+      <div class="addr-label">Lieferant</div>
+      <div style="font-weight:600;font-size:13px">${escHtml(po.supplier_name||'—')}</div>
+      ${po.supplier_address ? `<div style="margin-top:3px;line-height:1.7;color:#374151">${supAddrLines.map(l=>escHtml(l)).join('<br>')}</div>` : ''}
+      ${po.supplier_email ? `<div style="margin-top:3px;color:#6b7280">${escHtml(po.supplier_email)}</div>` : ''}
+      ${po.supplier_phone ? `<div style="color:#6b7280">${escHtml(po.supplier_phone)}</div>` : ''}
+    </div>
+    <div>
+      <div class="addr-label">Von</div>
+      <div style="font-weight:600;font-size:13px">${escHtml(s.company_name||'')}</div>
+      ${companyLines.length ? `<div style="margin-top:3px;line-height:1.7;color:#374151">${companyLines.map(l=>escHtml(l)).join('<br>')}</div>` : ''}
+    </div>
+  </div>
+
+  ${po.notes ? `<div style="margin-bottom:16px;padding:10px 14px;background:#eff6ff;border-radius:6px;font-size:13px;color:#374151">${escHtml(po.notes)}</div>` : ''}
+
+  <table>
+    <thead><tr>
+      <th>Bezeichnung</th>
+      <th class="r" style="width:100px">Menge</th>
+      <th class="r" style="width:90px">EP (CHF)</th>
+      <th class="r" style="width:90px">Total (CHF)</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+    ${total > 0 ? `<tfoot><tr>
+      <td colspan="3" style="padding:8px 10px;text-align:right;font-size:13px;font-weight:700;color:#6b7280;border-top:2px solid #e5e7eb">Total CHF</td>
+      <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:15px;font-weight:700;border-top:2px solid #e5e7eb">${fmtN(total,2)}</td>
+    </tr></tfoot>` : ''}
+  </table>
+
+  <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280">
+    Bitte bestätigen Sie diese Bestellung und teilen Sie uns die voraussichtliche Lieferzeit mit.
+    ${s.company_email?'<br>Rückfragen an: '+escHtml(s.company_email):''}
+  </div>
+
+  <div style="margin-top:16px;font-size:12px;color:#d1d5db;text-align:right">${escHtml(po.number)} · ${today}</div>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank', 'width=950,height=750');
+  w.document.write(html);
+  w.document.close();
+}
+
 // ── EINKAUF / BESTELLWESEN ────────────────────────────────────
 const PO_ST = { DRAFT:'Entwurf', ORDERED:'Bestellt', RECEIVED:'Erhalten', CANCELLED:'Storniert' };
 const PO_ST_CLS = { DRAFT:'st-DFT', ORDERED:'st-REV', RECEIVED:'st-REL', CANCELLED:'st-OBS' };
@@ -8219,13 +8317,16 @@ async function renderPurchasing() {
 
   const poRows = pos.map(po => {
     const total = po.total > 0 ? `<span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${fmtCHF(po.total)}</span>` : '';
-    return `<div onclick="openPoDetail(${po.id})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
-      <span class="status ${PO_ST_CLS[po.status]||'st-DFT'}" style="font-size:11px;flex-shrink:0">${PO_ST[po.status]||po.status}</span>
-      <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(po.number)}</span>
-      <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.supplier_name||'—')}</span>
-      <span style="font-size:12px;color:var(--t4)">${po.item_count} Pos.</span>
-      ${total}
-      <span style="font-size:12px;color:var(--t4)">${po.order_date||''}</span>
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      <div onclick="openPoDetail(${po.id})" style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer;min-width:0">
+        <span class="status ${PO_ST_CLS[po.status]||'st-DFT'}" style="font-size:11px;flex-shrink:0">${PO_ST[po.status]||po.status}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(po.number)}</span>
+        <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.supplier_name||'—')}</span>
+        <span style="font-size:12px;color:var(--t4)">${po.item_count} Pos.</span>
+        ${total}
+        <span style="font-size:12px;color:var(--t4)">${po.order_date||''}</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generatePoDoc(${po.id})" title="PDF" style="flex-shrink:0;padding:2px 6px">&#128196;</button>
     </div>`;
   }).join('');
 
@@ -8280,6 +8381,7 @@ async function openPoDetail(id) {
       ${canOrder ? `<button class="btn btn-primary btn-sm" onclick="setPoStatus(${po.id},'ORDERED')">Bestellen →</button>` : ''}
       ${canReceive ? `<button class="btn btn-green btn-sm" onclick="setPoStatus(${po.id},'RECEIVED')">✓ Als erhalten markieren</button>` : ''}
       ${po.status !== 'CANCELLED' && po.status !== 'RECEIVED' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="setPoStatus(${po.id},'CANCELLED')">Stornieren</button>` : ''}
+      <button class="btn btn-ghost btn-sm" onclick="generatePoDoc(${po.id})" title="PDF">&#128196; PDF</button>
       <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto" onclick="deletePo(${po.id})">Löschen</button>
     </div>
     <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--t3);margin-bottom:14px">
