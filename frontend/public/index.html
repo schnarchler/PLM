@@ -242,6 +242,21 @@
 </div>
 
 <!-- BOM Add Modal -->
+<div class="overlay" id="linkVariantModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title">Variante verknüpfen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('linkVariantModal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Item suchen und als Variante verknüpfen. Beide Items werden Teil derselben Variantengruppe.</div>
+      <div style="position:relative">
+        <input class="fi" id="lv-search" placeholder="Teilenummer oder Name…" autocomplete="off"
+          oninput="_variantSearch(this.value)"
+          onkeydown="if(event.key==='Escape')closeModal('linkVariantModal')">
+      </div>
+      <div id="lv-results" style="margin-top:8px;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="bomModal">
   <div class="modal" style="max-width:520px">
     <div class="modal-head"><div class="modal-title">Stückliste – Positionen hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('bomModal')">✕</button></div>
