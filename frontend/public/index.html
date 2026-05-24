@@ -243,53 +243,38 @@
 
 <!-- BOM Add Modal -->
 <div class="overlay" id="bomModal">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-head"><div class="modal-title">Stückliste – Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('bomModal')">✕</button></div>
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head"><div class="modal-title">Stückliste – Positionen hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('bomModal')">✕</button></div>
     <div class="modal-body">
-      <div style="display:flex;gap:4px;margin-bottom:14px;background:var(--bg1);border-radius:var(--r-sm);padding:3px">
+      <div style="display:flex;gap:4px;margin-bottom:12px;background:var(--bg1);border-radius:var(--r-sm);padding:3px">
         <button id="bom-tab-item" onclick="setBomTab('item')" class="btn btn-sm btn-primary" style="flex:1">PLM-Item</button>
         <button id="bom-tab-std"  onclick="setBomTab('std')"  class="btn btn-sm btn-ghost"   style="flex:1">⚙ Normteil</button>
       </div>
       <div id="bom-pane-item">
-        <div class="form-row">
-          <div class="fg"><label class="fl">Teil / Baugruppe *</label>
+        <div class="form-row" style="margin-bottom:0">
+          <div class="fg">
             <div style="position:relative">
-              <input class="fi" id="bom-child-search" placeholder="Teilenummer oder Name suchen (alle Projekte)…" autocomplete="off"
+              <input class="fi" id="bom-child-search" placeholder="Teilenummer oder Name suchen — Enter oder anklicken zum Hinzufügen…" autocomplete="off"
                 oninput="_bomItemSearch(this.value)"
+                onkeydown="if(event.key==='Escape'){document.getElementById('bom-child-results').style.display='none'}"
                 onblur="setTimeout(()=>{const r=document.getElementById('bom-child-results');if(r)r.style.display='none'},200)">
-              <div id="bom-child-results" style="display:none;position:absolute;z-index:400;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:240px;overflow-y:auto"></div>
-            </div>
-            <input type="hidden" id="bom-child-id">
-            <div id="bom-child-badge" style="display:none;margin-top:6px;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:6px 10px;font-size:13px;display:flex;align-items:center;gap:8px">
-              <span id="bom-child-badge-chip"></span>
-              <span id="bom-child-badge-num" style="font-family:var(--mono);color:var(--blue)"></span>
-              <span id="bom-child-badge-name" style="flex:1;color:var(--t2)"></span>
-              <button class="btn btn-icon btn-ghost btn-sm" onclick="_bomClearItem()">✕</button>
+              <div id="bom-child-results" style="display:none;position:absolute;z-index:400;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto"></div>
             </div>
           </div>
         </div>
       </div>
       <div id="bom-pane-std" style="display:none">
-        <div class="form-row">
-          <div class="fg"><label class="fl">Normteil *</label>
-            <select class="fs" id="bom-std-id"><option value="">— wählen —</option></select>
-          </div>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="fg" style="flex:1"><select class="fs" id="bom-std-id"><option value="">— Normteil wählen —</option></select></div>
+          <button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-bottom:1px" onclick="_bomAddStdToBasket()">+ Zur Liste</button>
         </div>
       </div>
-      <div class="form-row cols2">
-        <div class="fg"><label class="fl">Menge</label><input class="fi" id="bom-qty" type="number" value="1" min="0.001" step="1"></div>
-        <div class="fg"><label class="fl">Einheit</label>
-          <select class="fs" id="bom-unit"><option>pcs</option><option>set</option><option>m</option><option>mm</option><option>g</option><option>kg</option></select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="fg"><label class="fl">Notizen</label><input class="fi" id="bom-notes" placeholder="optional"></div>
-      </div>
+      <div id="bom-basket-area" style="margin-top:12px"></div>
       <input type="hidden" id="bom-rev-id">
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('bomModal')">Abbrechen</button>
-      <button class="btn btn-primary" onclick="doBomAdd()">Hinzufügen</button>
+      <button class="btn btn-primary" id="bom-save-btn" onclick="doBomAdd()">Hinzufügen</button>
     </div>
   </div>
 </div>
