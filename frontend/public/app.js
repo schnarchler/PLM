@@ -7516,12 +7516,28 @@ async function deductFromInventory() {
 
 // ── RAW MATERIALS ─────────────────────────────────────────────
 let _rmSort = 'material';
-function _rmSetSort(s) { _rmSort = s; renderRawMaterials(); }
+function _rmSetSort(s) {
+  _rmSort = s;
+  if (window._rmAllItems) {
+    const getPrice = i => (i.lots||[]).filter(l=>l.lot_number).map(l=>l.unit_price??Infinity).sort((a,b)=>a-b)[0] ?? Infinity;
+    if (s === 'color') window._rmAllItems.sort((a,b) => (a.color||'').localeCompare(b.color||'') || (a.material_type||'').localeCompare(b.material_type||''));
+    else if (s === 'price') window._rmAllItems.sort((a,b) => getPrice(a) - getPrice(b));
+    else window._rmAllItems.sort((a,b) => (a.material_type||'').localeCompare(b.material_type||'') || (a.color||'').localeCompare(b.color||''));
+    _renderRawMaterialsTable();
+  } else {
+    renderRawMaterials();
+  }
+}
 
 let _rmShowAll = false;
+let _rmSearch = '';
+function _rmSetSearch(v) { _rmSearch = v; _renderRawMaterialsTable(); }
 async function renderRawMaterials() {
   setLeftHeader('Rohmaterial', `
     <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+      <input class="fi" id="rm-search-input" placeholder="Suchen…" value="${esc(_rmSearch)}"
+        oninput="_rmSetSearch(this.value)" autocomplete="off"
+        style="width:140px;height:28px;padding:2px 8px;font-size:13px">
       <span style="font-size:11px;color:var(--t4)">Sortierung:</span>
       ${['material','color','price'].map(s => `<button class="btn btn-sm ${_rmSort===s?'btn-primary':'btn-ghost'}" onclick="_rmSetSort('${s}')">${s==='material'?'Material':s==='color'?'Farbe':'Preis'}</button>`).join('')}
       <button class="btn btn-sm ${_rmShowAll?'btn-primary':'btn-ghost'}" onclick="_rmShowAll=!_rmShowAll;renderRawMaterials()" title="Leere anzeigen/ausblenden" style="margin-left:4px">${_rmShowAll?'Alle':'Aktive'}</button>
@@ -7530,6 +7546,7 @@ async function renderRawMaterials() {
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
   const items = await api('/api/raw-materials');
+  state.rawMaterials = items;
 
   // Update badge
   const low = items.filter(i => i.min_qty > 0 && i.stock_qty <= i.min_qty);
@@ -7547,8 +7564,21 @@ async function renderRawMaterials() {
     return;
   }
 
-  const displayed = _rmShowAll ? items : items.filter(i => i.stock_qty > 0);
-  const hiddenCount = items.length - displayed.length;
+  window._rmAllItems = items;
+  _renderRawMaterialsTable();
+}
+
+function _renderRawMaterialsTable() {
+  const items = window._rmAllItems || [];
+  if (!items.length) return;
+
+  const q = _rmSearch.toLowerCase();
+  const filtered = q
+    ? items.filter(i => [i.material_type, i.color, i.brand, i.name, i.dimensions].some(f => (f||'').toLowerCase().includes(q)))
+    : items;
+
+  const displayed = _rmShowAll ? filtered : filtered.filter(i => i.stock_qty > 0);
+  const hiddenCount = filtered.length - displayed.length;
 
   const rows = displayed.map(i => {
     const empty    = i.stock_qty <= 0;
@@ -7569,6 +7599,8 @@ async function renderRawMaterials() {
     </tr>`;
   }).join('');
 
+  const noMatch = filtered.length === 0 && q;
+
   setLeftBody(`<div class="tbl-wrap"><table>
     <thead><tr>
       <th></th>
@@ -7580,9 +7612,12 @@ async function renderRawMaterials() {
       <th></th>
       <th>Lots</th>
     </tr></thead>
-    <tbody>${rows}</tbody>
+    <tbody>${noMatch ? `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--t4)">Keine Treffer für „${esc(q)}"</td></tr>` : rows}</tbody>
   </table></div>
   ${hiddenCount > 0 ? `<div style="padding:8px 4px;font-size:12px;color:var(--t4);text-align:center">${hiddenCount} leere ausgeblendet — <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="_rmShowAll=true;renderRawMaterials()">alle anzeigen</button></div>` : ''}`);
+  // restore focus to search input if it was active
+  const si = document.getElementById('rm-search-input');
+  if (si && document.activeElement === si) { const v = si.value; si.value = ''; si.value = v; }
 }
 
 async function openRawMatDetail(id) {
@@ -7692,11 +7727,9 @@ function openRawMatModal(id) {
 }
 
 async function _loadRawMatForm(id) {
-  let item = {};
-  if (id) {
-    const all = await api('/api/raw-materials');
-    item = all.find(x => x.id === id) || {};
-  }
+  const all = await api('/api/raw-materials').catch(() => state.rawMaterials || []);
+  state.rawMaterials = all;
+  const item = id ? (all.find(x => x.id === id) || {}) : {};
   document.getElementById('rawmat-modal-body').innerHTML = `
     <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
       Felder ausfüllen → Name wird automatisch vorgeschlagen (oder manuell überschreiben).
