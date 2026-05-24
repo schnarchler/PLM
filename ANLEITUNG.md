@@ -18,11 +18,12 @@
 12. [Rohmaterial](#12-rohmaterial)
 13. [Kunden](#13-kunden)
 14. [Lager](#14-lager)
-15. [Kalkulation](#15-kalkulation)
-16. [Suche](#16-suche)
-17. [Changelog](#17-changelog)
-18. [Einstellungen](#18-einstellungen)
-19. [Tastaturkürzel](#19-tastaturkürzel)
+15. [Einkauf / Bestellwesen](#15-einkauf--bestellwesen)
+16. [Kalkulation](#16-kalkulation)
+17. [Suche](#17-suche)
+18. [Changelog](#18-changelog)
+19. [Einstellungen](#19-einstellungen)
+20. [Tastaturkürzel](#20-tastaturkürzel)
 
 ---
 
@@ -30,9 +31,9 @@
 
 PLM & ERP ist ein lokales System zur Verwaltung von Konstruktionsprojekten und Geschäftsvorgängen. Es läuft vollständig im eigenen Netzwerk — ohne Internet oder Cloud-Abhängigkeit.
 
-**PLM** verwaltet: Projekte, Baugruppen, Parts, Dokumente, Revisionen, Stücklisten, Dateien, Zeiten, Normteile.
+**PLM** verwaltet: Projekte, Baugruppen, Parts, Dokumente, Revisionen, Stücklisten, Dateien, Zeiten, Normteile, Varianten.
 
-**ERP** verwaltet: Kunden, Angebote mit Kalkulation, Aufträge, Produktion, Lager, Rohmaterial.
+**ERP** verwaltet: Kunden, Angebote mit Kalkulation, Aufträge, Produktion, Lager, Rohmaterial, Einkauf/Bestellwesen.
 
 ---
 
@@ -77,6 +78,7 @@ cd PLM && bash start-plm.sh
 | **Produktion** | Aktive Produktionsaufträge |
 | **Freigabe** | Bauteile in Prüfung (REV-Status) |
 | **Lager** | Artikel unter Mindestbestand |
+| **Einkauf** | Offene Bestellungen (Entwurf + Bestellt) |
 
 **Fällige Produktionsaufträge:** Aufträge mit Lieferdatum in den nächsten 14 Tagen. Überfällige erscheinen rot.
 
@@ -104,6 +106,12 @@ Baugruppe:         0028-asm-001
 Part in BG:        0028-asm-001-prt-001
 Part im Projekt:   0028-prt-001
 Dokument:          0028-doc-001
+Aufträge:          AUF-2026-0001
+Angebote:          ANG-2026-0001
+Produktion:        LS-2026-0001
+Einkauf:           EK-2026-0001
+Kunden:            KD-0001
+Lieferanten:       LF-0001
 ```
 
 ### 5.3 Item-Typen
@@ -122,7 +130,12 @@ Dokument:          0028-doc-001
 - Dateien (Datasets): CAD, PDF, Bilder, GCode
 - Freigabe-Workflow
 
-**Weitere Tabs:** Changelog, Zeiten, Where-Used
+**Weitere Tabs:** Changelog, Zeiten, Where-Used, Varianten
+
+**Schaltflächen im Titel:**
+- **↪** — Item in anderen Projektbereich verschieben
+- **📄** — Dokumentvorlage generieren (Datenblatt, Stückliste, Prüfprotokoll)
+- **⇄** — Dieses Item mit einem anderen vergleichen
 
 ### 5.5 Gewicht
 
@@ -151,9 +164,45 @@ In der aktiven Revision einer ASM:
 
 Tab **Where-Used** in der Bauteil-Detailansicht zeigt alle Baugruppen in denen dieses Teil verbaut ist.
 
-### 5.10 Varianten (z.B. M3, M4, M5)
+Die Ansicht gruppiert nach Baugruppe: Pro ASM werden alle Revisionen aufgelistet in denen das Teil vorkommt, mit farbigem Status-Chip (DFT / REV / REL / ECO / OBS). Klick auf einen Revisions-Chip öffnet direkt diese Revision in der Detailansicht.
 
-Separate Parts mit eigenem Suffix anlegen: `Halterung M3`, `Halterung M4`. Jede Variante hat eigene Revisionen, Dateien und Freigaben.
+### 5.10 Variantenverwaltung
+
+Teile die in mehreren Ausführungen existieren (z.B. `Halterung M3`, `Halterung M4`, `Halterung M5`) können als Varianten verknüpft werden.
+
+**Varianten verknüpfen:**
+1. Item öffnen → Tab **Varianten**
+2. **+ Variante verknüpfen** → anderes Item suchen → **Verknüpfen**
+3. Alle verknüpften Items werden als Chips angezeigt
+
+**Zwischen Varianten navigieren:** Klick auf einen Varianten-Chip öffnet direkt dieses Item.
+
+**Variante entfernen:** Chip → **✕** — entfernt nur dieses Item aus der Gruppe, andere bleiben verknüpft.
+
+> Varianten teilen eine interne Gruppen-ID. Werden zwei bereits existierende Gruppen verknüpft, werden alle Mitglieder in eine gemeinsame Gruppe zusammengeführt.
+
+### 5.11 Dokumentvorlagen
+
+**📄** (Dokument-Symbol im Titel) öffnet das Vorlagen-Modal:
+
+| Vorlage | Inhalt |
+|---------|--------|
+| **Datenblatt** | Item-Metadaten, aktive Revision, Klassifizierung, Gewicht, Verkaufspreis |
+| **Stückliste** | BOM der aktiven Revision mit Menge und Einheit |
+| **Prüfprotokoll** | Formular mit Prüfpunkten, Unterschriftsfeldern und Datum |
+
+Klick auf eine Vorlage öffnet ein Druckfenster im Browser → **Drucken** oder **Als PDF speichern**.
+
+### 5.12 Itemvergleich
+
+**⇄** (Vergleich-Symbol im Titel) öffnet die Vergleichsansicht.
+
+1. Erstes Item ist bereits vorgewählt
+2. Zweites Item suchen → **Vergleichen**
+3. Beide Items werden nebeneinander dargestellt:
+   - Metadaten (Nummer, Name, Typ, Klassifizierung, Gewicht, Preis)
+   - BOM-Vergleich: Positionen die nur in A, nur in B oder in beiden vorkommen
+   - Dateien beider Items
 
 ---
 
@@ -201,8 +250,10 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 | **DFT** | Blau | Entwurf |
 | **REV** | Amber | In Prüfung |
 | **REL** | Grün | Freigegeben |
-| **ECO** | Lila | Engineering Change |
+| **ECO** | Lila | Engineering Change — ECO-Revision gesperrt, neue DFT wird erstellt |
 | **OBS** | Grau | Abgelöst |
+
+Bei ECO: Dateien der freigegebenen Revision werden in die neue DFT-Revision kopiert. Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
 
 Freigegebene Bauteile löschen nur über **Einstellungen → Admin**.
 
@@ -364,7 +415,98 @@ Navigation → **Lager**
 
 ---
 
-## 15. Kalkulation
+## 15. Einkauf / Bestellwesen
+
+Navigation → **Einkauf** — verwaltet Lieferanten und Bestellungen bei externen Lieferanten.
+
+### 15.1 Lieferanten
+
+Navigation → Einkauf → Tab **Lieferanten** — jeder Lieferant erhält eine automatische Nummer (`LF-0001`).
+
+**Felder:** Name, Kontaktperson, E-Mail, Telefon, Adresse, Notizen.
+
+In der Detailansicht des Lieferanten sind alle verknüpften Bestellungen aufgelistet.
+
+### 15.2 Bestellungen
+
+Navigation → Einkauf → Tab **Bestellungen** — Bestellnummer nach Schema `EK-2026-0001`.
+
+**Status-Workflow:**
+
+```
+ENTWURF ──► BESTELLT ──► ERHALTEN
+                └──► STORNIERT
+```
+
+| Status | Bedeutung |
+|--------|-----------|
+| **Entwurf** | In Vorbereitung, noch nicht versendet |
+| **Bestellt** | An Lieferant übermittelt |
+| **Erhalten** | Wareneingang gebucht |
+| **Storniert** | Abgebrochen |
+
+### 15.3 Bestellung erstellen
+
+1. Einkauf → **+ Bestellung**
+2. Lieferant wählen (aus Lieferantenliste) oder als Freitext eingeben
+3. Bestelldatum und erwartetes Lieferdatum eintragen
+4. Positionen hinzufügen (siehe 15.4)
+5. Status auf **Bestellt** setzen wenn versendet
+
+### 15.4 Positionen
+
+**+ Position** — öffnet das Positions-Modal:
+
+| Feld | Beschreibung |
+|------|-------------|
+| Beschreibung | Artikelbezeichnung (Pflichtfeld) |
+| Menge | Bestellmenge |
+| Einheit | Stk, kg, m, … |
+| Einzelpreis | CHF pro Einheit |
+| Verknüpfung | Optional: Lagerartikel oder Rohmaterial |
+| Notizen | Interne Bemerkung |
+
+**Verknüpfung:** Eine Position kann mit einem **Lagerartikel** oder einem **Rohmaterial** verknüpft werden. Die Verknüpfung wird in der Bestellübersicht angezeigt (Artikelname und aktueller Bestand).
+
+Positionen können solange bearbeitet oder gelöscht werden, wie die Bestellung noch nicht den Status **Erhalten** hat. Klick auf **✏ Bearbeiten** öffnet das Bearbeitungs-Modal für eine einzelne Position.
+
+### 15.5 Bestellungs-PDF
+
+**📄 Bestellung PDF** — generiert ein druckbares Bestelldokument mit:
+- Firmenadresse (aus Einstellungen)
+- Lieferantenadresse
+- Bestellnummer, Datum
+- Positionstabelle mit Menge, Einheit, Beschreibung, Einzelpreis, Gesamtpreis
+- Gesamtsumme
+
+### 15.6 Wareneingang
+
+Wenn die Bestellung ankommt → **✓ Als erhalten markieren**.
+
+**Lagerartikel:** Bestand wird automatisch um die bestellte Menge erhöht.
+
+**Rohmaterial:** Vor dem Einbuchen erscheint ein Modal zur Lot-Nummer-Erfassung.
+
+#### Lot-Modus wählen
+
+Sind mehrere Rohmaterial-Positionen in der Bestellung, kann gewählt werden:
+
+| Modus | Beschreibung |
+|-------|-------------|
+| **Gleiche Lot-Nr. für alle** | Eine Lotnummer gilt für alle Rohmaterial-Positionen |
+| **Individuelle Lot-Nr.** | Jede Position erhält eine eigene Lotnummer |
+
+#### Lot-Nr. pro Stück (bei Menge > 1)
+
+Im Modus **Individuelle Lot-Nr.**: Wenn eine Position eine Menge > 1 hat, wird für jedes einzelne Stück ein separates Eingabefeld angezeigt (Nr. 1, Nr. 2, …).
+
+Stücke mit identischer Lotnummer werden zu einer gemeinsamen Buchung zusammengefasst. Unterschiedliche Lotnummern erzeugen separate Bewegungen in der Buchungshistorie.
+
+**Einbuchen:** Nach Bestätigung wird der Bestand des Rohmaterials aktualisiert und ein Eintrag in der Buchungshistorie erstellt (Typ: Wareneingang, mit Bestellnummer und Lotnummer).
+
+---
+
+## 16. Kalkulation
 
 Navigation → **Kalkulation** — Übersicht aller Parts mit Kostenvergleich.
 
@@ -379,7 +521,7 @@ Navigation → **Kalkulation** — Übersicht aller Parts mit Kostenvergleich.
 
 ---
 
-## 16. Suche
+## 17. Suche
 
 **Öffnen:** Suchfeld oben — oder `Ctrl+K`
 
@@ -389,7 +531,7 @@ Durchsucht gleichzeitig: Projekte, PLM-Items, Normteile, Aufträge, Angebote, Pr
 
 ---
 
-## 17. Changelog
+## 18. Changelog
 
 Navigation → **Changelog** — vollständige Änderungshistorie aller Aktionen.
 
@@ -397,12 +539,12 @@ Filterbar nach Zeitraum, exportierbar als CSV.
 
 ---
 
-## 18. Einstellungen
+## 19. Einstellungen
 
 Navigation → Einstellungen (Zahnrad-Symbol)
 
 ### Firma
-Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen und Angeboten.
+Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen, Angeboten und Bestellungs-PDFs.
 
 ### Kalkulation
 - Stundenansatz (CHF/h) — für Arbeitszeitkalkulation in Angeboten
@@ -432,11 +574,11 @@ Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren.
 **Vorsicht — Änderungen können Daten dauerhaft beschädigen.**
 
 - Freigegebene Bauteile, Projekte mit Inhalt, abgeschlossene Aufträge/Angebote löschen
-- Nummerierungsstruktur: Präfixe, Stellen, Revisionsformat
+- Nummerierungsstruktur: Präfixe, Stellen, Revisionsformat (auch für Einkauf EK und Lieferanten LF)
 
 ---
 
-## 19. Tastaturkürzel
+## 20. Tastaturkürzel
 
 | Kürzel | Aktion |
 |--------|--------|
@@ -464,8 +606,12 @@ Dokumente:     0028-doc-001
 Aufträge:      AUF-2026-0001
 Angebote:      ANG-2026-0001
 Produktion:    LS-2026-0001
+Einkauf:       EK-2026-0001
 Kunden:        KD-0001
+Lieferanten:   LF-0001
 ```
+
+Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** konfigurierbar.
 
 ---
 

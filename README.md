@@ -16,7 +16,8 @@ cd backend && npm install && node server.js
 Doppelklick auf **`START-PLM.bat`**
 
 → Browser öffnet sich auf `http://localhost:3000`  
-Beim ersten Start werden alle Node-Pakete automatisch installiert.
+Beim ersten Start werden alle Node-Pakete automatisch installiert.  
+`plm.config` wird automatisch erstellt wenn sie fehlt.
 
 ---
 
@@ -33,7 +34,9 @@ Dokument:             0028-doc-001
 Aufträge:             AUF-2026-0001
 Angebote:             ANG-2026-0001
 Produktion:           LS-2026-0001
+Einkauf:              EK-2026-0001
 Kunden:               KD-0001
+Lieferanten:          LF-0001
 ```
 
 Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** konfigurierbar.
@@ -53,11 +56,11 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 | DFT | Entwurf – in Bearbeitung |
 | REV | In Prüfung |
 | REL | Freigegeben – produktiv |
-| ECO | Engineering Change – Änderung läuft |
+| ECO | Engineering Change – ECO-Revision gesperrt, neue DFT wird erstellt |
 | OBS | Obsolete – abgelöst, archiviert |
 
-Alte REL-Revisionen werden bei neuer Freigabe automatisch auf OBS gesetzt,
-bleiben aber vollständig abrufbar (inkl. aller Dateien).
+Bei ECO: Dateien der freigegebenen Revision werden in die neue DFT-Revision kopiert.  
+Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
 
 ---
 
@@ -69,26 +72,38 @@ bleiben aber vollständig abrufbar (inkl. aller Dateien).
 - Beliebige Hierarchietiefe (ASM in ASM)
 - Revisionsverwaltung rev1, rev2, … (alle alten Revisionen bleiben erhalten)
 - Freigabe-Workflow: DFT → REV → REL → ECO → neue Rev
-- Stückliste (BOM) pro Revision mit Mengen und Einheiten – inkl. Normteile
+- Stückliste (BOM) pro Revision – mehrere Positionen gleichzeitig hinzufügen (Warenkorb)
+- Normteile in BOM einsetzbar
 - Dateien (Datasets) pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
-- Gewicht pro Part (direkt inline editierbar)
-- Konstruktions-/Entwicklungszeiten pro Bauteil erfassbar
-- **Klassifizierung** – farbige Chips (z.B. Normteil, Kaufteil, Eigenentwicklung), konfigurierbar unter Einstellungen → PLM
-- **Where-Used** – zeigt in welchen Baugruppen ein Bauteil verbaut ist
+- Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar
+- **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
+- **Where-Used** – zeigt alle Revisionen der Baugruppen in denen ein Teil verbaut ist
+- **Variantenverwaltung** – Items als Varianten verknüpfen; Navigation zwischen Varianten direkt im Detail
+- **Dokumentvorlagen** – PDF-Vorlagen aus dem Item-Detail: Datenblatt, Stückliste, Prüfprotokoll
+- **Itemvergleich** – zwei Items nebeneinander vergleichen (Metadaten, BOM-Diff, Dateien)
 - **BOM-Import aus STEP** – Stückliste automatisch aus Solid Edge STEP-Export einlesen
-- **Normteilverwaltung** – eigene Datenbank für Normteile (DIN/ISO/EN) mit Dateien, in BOM einsetzbar, Auschecken in festen `normteile/`-Ordner
-- Checkout/Check-in Funktion für CAD-Dateien (siehe unten)
+- **Normteilverwaltung** – eigene Datenbank für Normteile (DIN/ISO/EN) mit Dateien
+- Checkout/Check-in Funktion für CAD-Dateien
 - Vollständige Änderungshistorie / Audit-Trail
 
 ### ERP
 - Kundenverwaltung (KD-0001)
 - Kunde als Freitext eingeben möglich
 - Angebote mit PDF-Export und automatischer Kostenkalkulation
-- Aufträge mit Rechnungs-PDF
+- Aufträge mit Rechnungs-PDF inkl. Arbeitszeit als Position
 - Angebot → Auftrag umwandeln
 - PLM-Items in Positionen verknüpfen
 - Lagerbestandsprüfung beim Abbuchen
+
+### Einkauf / Bestellwesen
+- **Lieferantenverwaltung** (LF-0001) mit Kontakt, Adresse, verknüpften Lagerartikeln
+- **Einkaufsbestellungen** (EK-2026-001): ENTWURF → BESTELLT → ERHALTEN / STORNIERT
+- Positionen mit Menge, Einheit, Einzelpreis — verknüpfbar mit Lagerartikel oder Rohmaterial
+- **Bestellungs-PDF** direkt druckbar / an Lieferant sendbar
+- **Wareneingang**: automatische Einbuchung von Lagerartikel und Rohmaterial
+- Bei Rohmaterial: Lot-Nr.-Abfrage pro Material, wählbar ob gleiche oder individuelle Lot-Nr.
+- Bei Menge > 1: Lot-Nr. pro Einheit einzeln erfassbar
 
 ### Angebots-Kalkulation
 Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet werden:
@@ -98,29 +113,30 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - **Aus BOM** – Button „📦 Aus BOM kalkullieren" expandiert eine Baugruppe in Einzelpositionen
 
 ### Rohmaterial
-- Eigene Verwaltung mit Materialtyp, Farbe, Abmessungen, Gewicht, Druckparametern (Temp/Bett)
+- Eigene Verwaltung mit Materialtyp, Farbe, Abmessungen, Gewicht, Druckparametern
 - Lot-Tracking: jede Einbuchung mit Lotnummer und Einkaufspreis
 - Remaining-Qty pro Lot, aufgebrauchte Lots durchgestrichen/ausgeblendet
-- Bei Auswahl in Produktion: Drucktemperatur und Betttemperatur werden automatisch übernommen
+- Bei Auswahl in Produktion: Drucktemperatur und Betttemperatur automatisch übernommen
 
 ### Normteile
 - Katalog für genormte Bauteile (DIN, ISO, EN, …)
 - Auto-Bezeichnung aus Norm + Nummer + Größe + Material
 - Dateien (STEP, PDF, …) pro Normteil hinterlegbar
-- Als BOM-Positionen in Baugruppen einsetzbar (Tab **⚙ Normteil** im BOM-Modal)
+- Als BOM-Positionen in Baugruppen einsetzbar
 - **⬇ Auschecken** – alle Normteil-Dateien in festen `normteile/`-Ordner kopieren
 
-### Produktion (ehem. Lieferscheine)
+### Produktion
 - Eigenständig oder mit Auftrag verknüpft
 - Rohmaterial pro Position zuweisbar (übernimmt Druckparameter)
 - Druckparameter direkt aus 3MF-Datei auslesen (PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio)
-- Druckansicht als Produktionsblatt mit Unterschriftsfeldern
+- **Lieferschein-PDF** mit Positionen, Druckparametern, Unterschriftsfeldern
 - Belegdruck auf **Pipsta Classic Thermodrucker**
 
 ### Dashboard & Suche
 - Dashboard mit offenen Aufträgen, Angeboten, fälligen Produktionsaufträgen, ablaufenden Angeboten
 - Globale Suche (`Ctrl+K`) über Projekte, PLM-Items, Aufträge, Angebote, Produktion, Kunden
 - Suche nach Klassifizierung über Schnellfilter-Chips
+- PLM-Items (PRT/ASM) erscheinen in der Suche zuerst
 
 ### Navigation
 - **Ctrl+K** – Suche öffnen
@@ -168,10 +184,6 @@ Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis**
 ### Normteile auschecken
 
 Navigation → Normteile → **⬇ Auschecken** — kopiert alle Normteil-STEP-Dateien in `<checkout-pfad>/normteile/`. Ordnername ist immer gleich → einmalig in Solid Edge als Suchpfad konfigurieren.
-
-### Varianten (z.B. M3, M4, M5)
-
-Separate Parts mit eigenem Suffix: `Halterung M3`, `Halterung M4` usw. Jede Variante hat eigene Revisionen und Dateien.
 
 ---
 
@@ -221,6 +233,7 @@ PLM/
 │       ├── index.html     ← HTML-Grundstruktur
 │       ├── app.js         ← Single-Page-App
 │       └── styles.css     ← Design-System (Dark Theme)
+├── plm.config             ← Datenpfad-Konfiguration (wird auto-erstellt)
 ├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md
