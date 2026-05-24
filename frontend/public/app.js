@@ -7530,12 +7530,12 @@ function _rmSetSort(s) {
 }
 
 let _rmShowAll = false;
-let _rmSearch = '';
-function _rmSetSearch(v) { _rmSearch = v; _renderRawMaterialsTable(); }
+let _rmQ = '';
+function _rmSetSearch(v) { _rmQ = v; _renderRawMaterialsTable(); }
 async function renderRawMaterials() {
   setLeftHeader('Rohmaterial', `
     <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-      <input class="fi" id="rm-search-input" placeholder="Suchen…" value="${esc(_rmSearch)}"
+      <input class="fi" id="rm-search-input" placeholder="Suchen…" value="${esc(_rmQ)}"
         oninput="_rmSetSearch(this.value)" autocomplete="off"
         style="width:140px;height:28px;padding:2px 8px;font-size:13px">
       <span style="font-size:11px;color:var(--t4)">Sortierung:</span>
@@ -7572,7 +7572,7 @@ function _renderRawMaterialsTable() {
   const items = window._rmAllItems || [];
   if (!items.length) return;
 
-  const q = _rmSearch.toLowerCase();
+  const q = _rmQ.toLowerCase();
   const filtered = q
     ? items.filter(i => [i.material_type, i.color, i.brand, i.name, i.dimensions].some(f => (f||'').toLowerCase().includes(q)))
     : items;
