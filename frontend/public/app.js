@@ -4792,25 +4792,25 @@ function setLeftHeader(title, actionsHtml) {
 }
 function setLeftBody(html) { document.getElementById('left-body').innerHTML = html; }
 
+let _loadStatsTimer;
 async function loadStats() {
-  const s = await api('/api/stats');
-  document.getElementById('badge-projects').textContent = s.projects||0;
-  document.getElementById('badge-customers').textContent = s.customers||0;
-  document.getElementById('badge-orders').textContent = s.orders||0;
-  const el = document.getElementById('badge-quotes');
-  if (el) el.textContent = s.quotes||0;
-  const el2 = document.getElementById('badge-deliveries');
-  if (el2) el2.textContent = s.deliveries||0;
-  const el3 = document.getElementById('badge-inventory');
-  if (el3) el3.textContent = s.inventory||0;
-  api('/api/raw-materials').then(mats => {
-    const b = document.getElementById('badge-rawmat');
-    if (b) b.textContent = mats.length || '—';
-  }).catch(() => {});
-  api('/api/standard-parts').then(parts => {
-    const b = document.getElementById('badge-normteile');
-    if (b) b.textContent = parts.length || '—';
-  }).catch(() => {});
+  clearTimeout(_loadStatsTimer);
+  _loadStatsTimer = setTimeout(async () => {
+    const s = await api('/api/stats');
+    document.getElementById('badge-projects').textContent = s.projects||0;
+    document.getElementById('badge-customers').textContent = s.customers||0;
+    document.getElementById('badge-orders').textContent = s.orders||0;
+    const el = document.getElementById('badge-quotes');
+    if (el) el.textContent = s.quotes||0;
+    const el2 = document.getElementById('badge-deliveries');
+    if (el2) el2.textContent = s.deliveries||0;
+    const el3 = document.getElementById('badge-inventory');
+    if (el3) el3.textContent = s.inventory||0;
+    const br = document.getElementById('badge-rawmat');
+    if (br) br.textContent = s.raw_materials ?? '—';
+    const bn = document.getElementById('badge-normteile');
+    if (bn) bn.textContent = s.standard_parts ?? '—';
+  }, 800);
 }
 
 // ── API ───────────────────────────────────────────────────────

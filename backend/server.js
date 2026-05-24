@@ -718,18 +718,23 @@ function getActiveRevision(itemId) {
   return get("SELECT * FROM revisions WHERE item_id=? AND status='REL' ORDER BY rowid DESC LIMIT 1", [itemId])
     || getLatestRevision(itemId);
 }
-// Recursively sum dev hours (time_entries) for an item and all its BOM children
-function calcDevHours(itemId, visited = new Set()) {
-  if (visited.has(itemId)) return 0;
-  visited.add(itemId);
-  const direct = get('SELECT COALESCE(SUM(hours),0) as total FROM time_entries WHERE item_id=?', [itemId]);
-  let total = direct?.total || 0;
-  const rev = getLatestRevision(itemId);
-  if (rev) {
-    const children = all('SELECT child_item_id FROM bom WHERE parent_rev_id=?', [rev.id]);
-    for (const c of children) total += calcDevHours(c.child_item_id, visited);
-  }
-  return total;
+// Recursively sum dev hours (time_entries) for an item and all its BOM children via CTE
+function calcDevHours(itemId) {
+  const row = get(`
+    WITH RECURSIVE tree(item_id) AS (
+      SELECT ?
+      UNION ALL
+      SELECT b.child_item_id
+      FROM bom b
+      JOIN tree t ON b.parent_rev_id = (
+        SELECT id FROM revisions WHERE item_id = t.item_id ORDER BY rowid DESC LIMIT 1
+      )
+    )
+    SELECT COALESCE(SUM(te.hours), 0) as total
+    FROM time_entries te
+    WHERE te.item_id IN (SELECT item_id FROM tree)
+  `, [itemId]);
+  return row?.total || 0;
 }
 function calcManufacturingCost(revisionId) {
   if (!revisionId) return null;
@@ -896,16 +901,11 @@ app.get('/api/projects/:id', (req, res) => {
   p.items = all('SELECT * FROM items WHERE project_id=? ORDER BY item_type, item_number DESC', [p.id]);
   p.items.forEach(item => {
     item.latest_revision = getLatestRevision(item.id);
-    item.active_revision = getActiveRevision(item.id);
-    item.revisions = all('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid DESC', [item.id]);
-    if (item.latest_revision) {
-      item.latest_revision.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [item.latest_revision.id]);
-      if (item.item_type === 'asm') {
-        item.latest_revision.bom = all(
-          'SELECT b.child_item_id, b.quantity, b.unit, b.position FROM bom b WHERE b.parent_rev_id=? ORDER BY b.position',
-          [item.latest_revision.id]
-        );
-      }
+    if (item.latest_revision && item.item_type === 'asm') {
+      item.latest_revision.bom = all(
+        'SELECT b.child_item_id, b.quantity, b.unit, b.position FROM bom b WHERE b.parent_rev_id=? ORDER BY b.position',
+        [item.latest_revision.id]
+      );
     }
   });
   p.changelog = all("SELECT * FROM changelog WHERE entity_type='project' AND entity_id=? ORDER BY created_at DESC LIMIT 20", [p.id]);
@@ -2094,9 +2094,11 @@ app.get('/api/stats', (req, res) => {
     orders:     count('SELECT COUNT(*) as c FROM orders'),
     quotes:     count('SELECT COUNT(*) as c FROM quotes'),
     deliveries: count('SELECT COUNT(*) as c FROM deliveries'),
-    inventory:  count('SELECT COUNT(*) as c FROM inventory_items'),
-    by_status:  all("SELECT status, COUNT(*) as count FROM revisions GROUP BY status"),
-    recent_items: recentItems,
+    inventory:     count('SELECT COUNT(*) as c FROM inventory_items'),
+    raw_materials: count('SELECT COUNT(*) as c FROM raw_materials'),
+    standard_parts:count('SELECT COUNT(*) as c FROM standard_parts'),
+    by_status:     all("SELECT status, COUNT(*) as count FROM revisions GROUP BY status"),
+    recent_items:  recentItems,
     recent_projects: all('SELECT * FROM projects ORDER BY updated_at DESC LIMIT 5'),
   });
 });
