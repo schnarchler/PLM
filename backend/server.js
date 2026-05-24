@@ -336,7 +336,33 @@ async function initDb() {
     key TEXT PRIMARY KEY,
     value INTEGER DEFAULT 0
   )`);
-  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0),('delivery',0),('supplier',0)`);
+  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0),('delivery',0),('supplier',0),('purchase_order',0)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS purchase_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    number TEXT UNIQUE,
+    supplier_id INTEGER REFERENCES suppliers(id),
+    supplier_name_free TEXT,
+    status TEXT DEFAULT 'DRAFT',
+    order_date TEXT,
+    expected_date TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS purchase_order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    po_id INTEGER NOT NULL REFERENCES purchase_orders(id),
+    description TEXT NOT NULL,
+    quantity REAL DEFAULT 1,
+    unit TEXT DEFAULT 'Stk',
+    unit_price REAL,
+    inventory_item_id INTEGER REFERENCES inventory_items(id),
+    received_qty REAL DEFAULT 0,
+    notes TEXT,
+    position INTEGER DEFAULT 0
+  )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -584,6 +610,11 @@ function nextDeliveryNumber() {
   return pre + '-' + yr + padN(nextCounter('delivery'), 'pad_delivery', 3);
 }
 function nextSupplierNumber() { return 'LF-' + String(nextCounter('supplier')).padStart(4, '0'); }
+function nextPoNumber() {
+  const pre = getSetting('prefix_po','EK');
+  const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
+  return pre + '-' + yr + padN(nextCounter('purchase_order'), 'pad_po', 3);
+}
 
 function parseIni(content) {
   const s = {};
@@ -2137,6 +2168,7 @@ app.get('/api/stats', (req, res) => {
     inventory:     count('SELECT COUNT(*) as c FROM inventory_items'),
     raw_materials: count('SELECT COUNT(*) as c FROM raw_materials'),
     standard_parts:count('SELECT COUNT(*) as c FROM standard_parts'),
+    open_pos:      count("SELECT COUNT(*) as c FROM purchase_orders WHERE status IN ('DRAFT','ORDERED')"),
     by_status:     all("SELECT status, COUNT(*) as count FROM revisions GROUP BY status"),
     recent_items:  recentItems,
     recent_projects: all('SELECT * FROM projects ORDER BY updated_at DESC LIMIT 5'),
@@ -3204,6 +3236,87 @@ app.delete('/api/suppliers/:id', (req, res) => {
   run('UPDATE inventory_items SET supplier_id=NULL WHERE supplier_id=?', [req.params.id]);
   run('DELETE FROM suppliers WHERE id=?', [req.params.id]);
   res.json({ success: true });
+});
+
+// ==============================================================
+// PURCHASE ORDERS (Einkauf)
+// ==============================================================
+function poWithItems(po) {
+  if (!po) return null;
+  po.items = all('SELECT poi.*, ii.name as inv_name, ii.stock_qty FROM purchase_order_items poi LEFT JOIN inventory_items ii ON poi.inventory_item_id=ii.id WHERE poi.po_id=? ORDER BY poi.position,poi.id', [po.id]);
+  return po;
+}
+
+app.get('/api/purchase-orders', (req, res) => {
+  const rows = all(`SELECT po.*, COALESCE(s.name, po.supplier_name_free) as supplier_name,
+    COUNT(poi.id) as item_count,
+    COALESCE(SUM(poi.quantity * poi.unit_price), 0) as total
+    FROM purchase_orders po
+    LEFT JOIN suppliers s ON po.supplier_id=s.id
+    LEFT JOIN purchase_order_items poi ON poi.po_id=po.id
+    GROUP BY po.id ORDER BY po.id DESC`);
+  res.json(rows);
+});
+
+app.post('/api/purchase-orders', (req, res) => {
+  const { supplier_id, supplier_name_free, order_date, expected_date, notes } = req.body;
+  const number = nextPoNumber();
+  const id = runGetId('INSERT INTO purchase_orders (number,supplier_id,supplier_name_free,order_date,expected_date,notes) VALUES (?,?,?,?,?,?)',
+    [number, supplier_id||null, supplier_name_free||'', order_date||null, expected_date||null, notes||'']);
+  res.json(poWithItems(get('SELECT * FROM purchase_orders WHERE id=?', [id])));
+});
+
+app.get('/api/purchase-orders/:id', (req, res) => {
+  const po = get(`SELECT po.*, COALESCE(s.name, po.supplier_name_free) as supplier_name, s.email as supplier_email, s.phone as supplier_phone, s.address as supplier_address
+    FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=?`, [req.params.id]);
+  if (!po) return res.status(404).json({ error: 'Not found' });
+  res.json(poWithItems(po));
+});
+
+app.put('/api/purchase-orders/:id', (req, res) => {
+  const { supplier_id, supplier_name_free, order_date, expected_date, notes } = req.body;
+  run(`UPDATE purchase_orders SET supplier_id=?,supplier_name_free=?,order_date=?,expected_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+    [supplier_id||null, supplier_name_free||'', order_date||null, expected_date||null, notes||'', req.params.id]);
+  const po = get(`SELECT po.*, COALESCE(s.name, po.supplier_name_free) as supplier_name FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=?`, [req.params.id]);
+  res.json(poWithItems(po));
+});
+
+app.put('/api/purchase-orders/:id/status', (req, res) => {
+  const { status } = req.body;
+  const valid = ['DRAFT','ORDERED','RECEIVED','CANCELLED'];
+  if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  run(`UPDATE purchase_orders SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
+  if (status === 'RECEIVED') {
+    const items = all('SELECT * FROM purchase_order_items WHERE po_id=?', [req.params.id]);
+    for (const item of items) {
+      if (item.inventory_item_id && item.quantity > 0) {
+        run('UPDATE inventory_items SET stock_qty=stock_qty+?,updated_at=datetime(\'now\') WHERE id=?', [item.quantity, item.inventory_item_id]);
+        runGetId('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
+          [item.inventory_item_id, 'IN', item.quantity, get('SELECT number FROM purchase_orders WHERE id=?',[req.params.id])?.number||'', 'Wareneingang EK']);
+      }
+    }
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/purchase-orders/:id', (req, res) => {
+  run('DELETE FROM purchase_order_items WHERE po_id=?', [req.params.id]);
+  run('DELETE FROM purchase_orders WHERE id=?', [req.params.id]);
+  res.json({ ok: true });
+});
+
+app.post('/api/purchase-orders/:id/items', (req, res) => {
+  const { description, quantity, unit, unit_price, inventory_item_id, notes } = req.body;
+  if (!description) return res.status(400).json({ error: 'description required' });
+  const pos = (get('SELECT MAX(position) as m FROM purchase_order_items WHERE po_id=?', [req.params.id])?.m || 0) + 1;
+  const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,notes,position) VALUES (?,?,?,?,?,?,?,?)',
+    [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, notes||'', pos]);
+  res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [iid]));
+});
+
+app.delete('/api/purchase-orders/:id/items/:itemId', (req, res) => {
+  run('DELETE FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
+  res.json({ ok: true });
 });
 
 // ==============================================================

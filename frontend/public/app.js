@@ -248,6 +248,7 @@ async function gotoView(v) {
   else if (v === 'inventory') await renderInventory();
   else if (v === 'rawmaterials') await renderRawMaterials();
   else if (v === 'normteile') await renderNormteile();
+  else if (v === 'purchasing') await renderPurchasing();
 }
 
 // ── PROJECTS LIST ─────────────────────────────────────────────
@@ -4923,6 +4924,8 @@ async function loadStats() {
     if (br) br.textContent = s.raw_materials ?? '—';
     const bn = document.getElementById('badge-normteile');
     if (bn) bn.textContent = s.standard_parts ?? '—';
+    const bp = document.getElementById('badge-purchasing');
+    if (bp) bp.textContent = s.open_pos ?? '—';
   }, 800);
 }
 
@@ -8203,4 +8206,277 @@ async function delRawMat(id) {
   _refreshRawMaterials();
   closeDetail();
   renderRawMaterials();
+}
+
+// ── EINKAUF / BESTELLWESEN ────────────────────────────────────
+const PO_ST = { DRAFT:'Entwurf', ORDERED:'Bestellt', RECEIVED:'Erhalten', CANCELLED:'Storniert' };
+const PO_ST_CLS = { DRAFT:'st-DFT', ORDERED:'st-REV', RECEIVED:'st-REL', CANCELLED:'st-OBS' };
+
+async function renderPurchasing() {
+  setLeftHeader('Einkauf', `<button class="btn btn-primary btn-sm" onclick="openPoModal()">+ Bestellung</button><button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="openSupplierModal()">+ Lieferant</button>`);
+  const [pos, suppliers] = await Promise.all([api('/api/purchase-orders'), api('/api/suppliers')]);
+  state._poSuppliers = suppliers;
+
+  const poRows = pos.map(po => {
+    const total = po.total > 0 ? `<span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${fmtCHF(po.total)}</span>` : '';
+    return `<div onclick="openPoDetail(${po.id})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      <span class="status ${PO_ST_CLS[po.status]||'st-DFT'}" style="font-size:11px;flex-shrink:0">${PO_ST[po.status]||po.status}</span>
+      <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(po.number)}</span>
+      <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.supplier_name||'—')}</span>
+      <span style="font-size:12px;color:var(--t4)">${po.item_count} Pos.</span>
+      ${total}
+      <span style="font-size:12px;color:var(--t4)">${po.order_date||''}</span>
+    </div>`;
+  }).join('');
+
+  const supRows = suppliers.map(s => `
+    <div onclick="openSupplierDetail(${s.id})" style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(s.number)}</span>
+      <span style="flex:1;font-size:13px">${esc(s.name)}</span>
+      ${s.email ? `<span style="font-size:12px;color:var(--t4)">${esc(s.email)}</span>` : ''}
+    </div>`).join('');
+
+  setLeftBody(`
+    <div style="display:flex;flex-direction:column;gap:12px;max-width:860px">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4);margin-bottom:6px">Bestellungen</div>
+        <div style="display:flex;flex-direction:column;gap:4px">${poRows || '<div style="color:var(--t3);font-size:13px">Noch keine Bestellungen</div>'}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4);margin-bottom:6px">Lieferanten</div>
+        <div style="display:flex;flex-direction:column;gap:4px">${supRows || '<div style="color:var(--t3);font-size:13px">Noch keine Lieferanten</div>'}</div>
+      </div>
+    </div>`);
+}
+
+async function openPoDetail(id) {
+  const po = await api('/api/purchase-orders/' + id);
+  const editable = po.status === 'DRAFT';
+  const canOrder = po.status === 'DRAFT';
+  const canReceive = po.status === 'ORDERED';
+  const total = (po.items||[]).reduce((s,i) => s + (i.unit_price != null ? i.quantity * i.unit_price : 0), 0);
+
+  const itemRows = (po.items||[]).map(i => `
+    <tr>
+      <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px">${esc(i.description)}</td>
+      <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${fmtN(i.quantity,0)} ${esc(i.unit)}</td>
+      <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${i.unit_price != null ? fmtCHF(i.unit_price) : '—'}</td>
+      <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${i.unit_price != null ? fmtCHF(i.quantity * i.unit_price) : '—'}</td>
+      ${i.inv_name ? `<td style="padding:5px 8px;border:1px solid var(--line);font-size:12px;color:var(--t3)">${esc(i.inv_name)}</td>` : '<td style="padding:5px 8px;border:1px solid var(--line)"></td>'}
+      ${editable ? `<td style="padding:5px 8px;border:1px solid var(--line)"><button class="btn btn-ghost btn-sm" style="color:var(--red);padding:1px 5px" onclick="deletePoItem(${po.id},${i.id})">✕</button></td>` : '<td style="border:1px solid var(--line)"></td>'}
+    </tr>`).join('');
+
+  document.getElementById('dp-title').innerHTML =
+    `<span class="status ${PO_ST_CLS[po.status]||'st-DFT'}" style="font-size:11px">${PO_ST[po.status]||po.status}</span>`
+    + `<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(po.number)}</span>`
+    + `<strong>${esc(po.supplier_name||'Kein Lieferant')}</strong>`;
+
+  document.getElementById('dp-tabs').innerHTML = '';
+  document.getElementById('dp-body').innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoModal(${po.id})">✏ Bearbeiten</button>` : ''}
+      ${canOrder ? `<button class="btn btn-primary btn-sm" onclick="setPoStatus(${po.id},'ORDERED')">Bestellen →</button>` : ''}
+      ${canReceive ? `<button class="btn btn-green btn-sm" onclick="setPoStatus(${po.id},'RECEIVED')">✓ Als erhalten markieren</button>` : ''}
+      ${po.status !== 'CANCELLED' && po.status !== 'RECEIVED' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="setPoStatus(${po.id},'CANCELLED')">Stornieren</button>` : ''}
+      <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto" onclick="deletePo(${po.id})">Löschen</button>
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--t3);margin-bottom:14px">
+      ${po.order_date ? `<span>Bestellt: <strong style="color:var(--t1)">${po.order_date}</strong></span>` : ''}
+      ${po.expected_date ? `<span>Erwartet: <strong style="color:var(--t1)">${po.expected_date}</strong></span>` : ''}
+      ${po.supplier_email ? `<span>${esc(po.supplier_email)}</span>` : ''}
+      ${po.supplier_phone ? `<span>${esc(po.supplier_phone)}</span>` : ''}
+    </div>
+    ${po.notes ? `<div style="font-size:13px;color:var(--t3);margin-bottom:14px;padding:8px 10px;background:var(--bg2);border-radius:var(--r-sm)">${esc(po.notes)}</div>` : ''}
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
+      <thead><tr>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">Bezeichnung</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">Menge</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">EP</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">Total</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">Lager</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px"></th>
+      </tr></thead>
+      <tbody>${itemRows}</tbody>
+      ${total > 0 ? `<tfoot><tr>
+        <td colspan="3" style="padding:5px 8px;border:1px solid var(--line);text-align:right;font-size:13px;font-weight:600;color:var(--t3)">Total</td>
+        <td style="padding:5px 8px;border:1px solid var(--line);font-family:var(--mono);font-weight:700;text-align:right">${fmtCHF(total)}</td>
+        <td colspan="2" style="border:1px solid var(--line)"></td>
+      </tr></tfoot>` : ''}
+    </table>
+    ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoItemModal(${po.id})">+ Position</button>` : ''}`;
+
+  showDetail();
+}
+
+async function openPoModal(id) {
+  const suppliers = state._poSuppliers || await api('/api/suppliers');
+  document.getElementById('po-supplier-id').innerHTML = '<option value="">— Freie Eingabe —</option>' +
+    suppliers.map(s => `<option value="${s.id}">${esc(s.number)} ${esc(s.name)}</option>`).join('');
+
+  if (id) {
+    const po = await api('/api/purchase-orders/' + id);
+    document.getElementById('po-modal-title').textContent = 'Bestellung bearbeiten';
+    document.getElementById('po-edit-id').value = id;
+    document.getElementById('po-supplier-id').value = po.supplier_id || '';
+    document.getElementById('po-supplier-name').value = po.supplier_name_free || '';
+    document.getElementById('po-order-date').value = po.order_date || '';
+    document.getElementById('po-expected-date').value = po.expected_date || '';
+    document.getElementById('po-notes').value = po.notes || '';
+    document.getElementById('po-supplier-free').style.display = po.supplier_id ? 'none' : 'block';
+  } else {
+    document.getElementById('po-modal-title').textContent = 'Bestellung erstellen';
+    document.getElementById('po-edit-id').value = '';
+    document.getElementById('po-supplier-id').value = '';
+    document.getElementById('po-supplier-name').value = '';
+    document.getElementById('po-order-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('po-expected-date').value = '';
+    document.getElementById('po-notes').value = '';
+    document.getElementById('po-supplier-free').style.display = 'block';
+  }
+  openModal('poModal');
+}
+
+async function savePo() {
+  const id = document.getElementById('po-edit-id').value;
+  const body = {
+    supplier_id: document.getElementById('po-supplier-id').value || null,
+    supplier_name_free: document.getElementById('po-supplier-name').value,
+    order_date: document.getElementById('po-order-date').value,
+    expected_date: document.getElementById('po-expected-date').value,
+    notes: document.getElementById('po-notes').value,
+  };
+  const po = id ? await api(`/api/purchase-orders/${id}`, 'PUT', body) : await api('/api/purchase-orders', 'POST', body);
+  toast(id ? 'Gespeichert' : 'Bestellung erstellt', 'ok');
+  closeModal('poModal');
+  await renderPurchasing();
+  openPoDetail(po.id);
+  loadStats();
+}
+
+async function openPoItemModal(poId) {
+  document.getElementById('poi-po-id').value = poId;
+  document.getElementById('poi-desc').value = '';
+  document.getElementById('poi-qty').value = '1';
+  document.getElementById('poi-unit').value = 'Stk';
+  document.getElementById('poi-price').value = '';
+  document.getElementById('poi-notes').value = '';
+  const invItems = await api('/api/inventory').catch(() => []);
+  document.getElementById('poi-inv-id').innerHTML = '<option value="">— kein —</option>' +
+    invItems.map(i => `<option value="${i.id}">${esc(i.name)}${i.sku?' ('+i.sku+')':''}</option>`).join('');
+  openModal('poItemModal');
+}
+
+async function savePoItem() {
+  const poId = document.getElementById('poi-po-id').value;
+  const desc = document.getElementById('poi-desc').value.trim();
+  if (!desc) return toast('Bezeichnung eingeben', 'err');
+  await api(`/api/purchase-orders/${poId}/items`, 'POST', {
+    description: desc,
+    quantity: document.getElementById('poi-qty').value,
+    unit: document.getElementById('poi-unit').value,
+    unit_price: document.getElementById('poi-price').value || null,
+    inventory_item_id: document.getElementById('poi-inv-id').value || null,
+    notes: document.getElementById('poi-notes').value,
+  });
+  toast('Position hinzugefügt', 'ok');
+  closeModal('poItemModal');
+  openPoDetail(parseInt(poId));
+}
+
+async function deletePoItem(poId, itemId) {
+  await api(`/api/purchase-orders/${poId}/items/${itemId}`, 'DELETE');
+  openPoDetail(poId);
+}
+
+async function setPoStatus(poId, status) {
+  if (status === 'RECEIVED') {
+    const po = await api('/api/purchase-orders/' + poId);
+    const linked = (po.items||[]).filter(i => i.inventory_item_id);
+    if (linked.length && !confirm(`${linked.length} Position(en) werden ins Lager gebucht. Fortfahren?`)) return;
+  }
+  await api(`/api/purchase-orders/${poId}/status`, 'PUT', { status });
+  toast(PO_ST[status] || status, 'ok');
+  await renderPurchasing();
+  openPoDetail(poId);
+  loadStats();
+}
+
+async function deletePo(id) {
+  if (!confirm('Bestellung löschen?')) return;
+  await api(`/api/purchase-orders/${id}`, 'DELETE');
+  toast('Gelöscht', 'ok');
+  closeDetail();
+  renderPurchasing();
+  loadStats();
+}
+
+async function openSupplierDetail(id) {
+  const s = await api('/api/suppliers/' + id);
+  document.getElementById('dp-title').innerHTML =
+    `<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(s.number)}</span><strong>${esc(s.name)}</strong>`;
+  document.getElementById('dp-tabs').innerHTML = '';
+  document.getElementById('dp-body').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-ghost btn-sm" onclick="openSupplierModal(${id})">✏ Bearbeiten</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto" onclick="deleteSupplier(${id})">Löschen</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;margin-bottom:14px">
+      ${s.contact_person ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Kontakt</span>${esc(s.contact_person)}</div>` : ''}
+      ${s.email ? `<div><span style="color:var(--t3);width:100px;display:inline-block">E-Mail</span>${esc(s.email)}</div>` : ''}
+      ${s.phone ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Telefon</span>${esc(s.phone)}</div>` : ''}
+      ${s.address ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Adresse</span>${esc(s.address)}</div>` : ''}
+      ${s.notes ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Notizen</span>${esc(s.notes)}</div>` : ''}
+    </div>
+    ${(s.inventory_items||[]).length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4);margin-bottom:6px">Lagerartikel</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        ${s.inventory_items.map(i=>`<div style="font-size:13px;padding:5px 8px;background:var(--bg2);border-radius:var(--r-sm)">${esc(i.name)}${i.sku?` <span style="color:var(--t4);font-family:var(--mono)">${esc(i.sku)}</span>`:''}</div>`).join('')}
+      </div>` : ''}`;
+  showDetail();
+}
+
+async function openSupplierModal(id) {
+  document.getElementById('sup-edit-id').value = id || '';
+  if (id) {
+    const s = await api('/api/suppliers/' + id);
+    document.getElementById('sup-modal-title').textContent = 'Lieferant bearbeiten';
+    document.getElementById('sup-name').value = s.name;
+    document.getElementById('sup-contact').value = s.contact_person || '';
+    document.getElementById('sup-phone').value = s.phone || '';
+    document.getElementById('sup-email').value = s.email || '';
+    document.getElementById('sup-address').value = s.address || '';
+    document.getElementById('sup-notes').value = s.notes || '';
+  } else {
+    document.getElementById('sup-modal-title').textContent = 'Lieferant erstellen';
+    ['sup-name','sup-contact','sup-phone','sup-email','sup-address','sup-notes'].forEach(i => { document.getElementById(i).value = ''; });
+  }
+  openModal('supplierModal');
+}
+
+async function saveSupplier() {
+  const id = document.getElementById('sup-edit-id').value;
+  const body = {
+    name: document.getElementById('sup-name').value.trim(),
+    contact_person: document.getElementById('sup-contact').value,
+    phone: document.getElementById('sup-phone').value,
+    email: document.getElementById('sup-email').value,
+    address: document.getElementById('sup-address').value,
+    notes: document.getElementById('sup-notes').value,
+  };
+  if (!body.name) return toast('Name eingeben', 'err');
+  const s = id
+    ? await api('/api/suppliers/' + id, 'PUT', body)
+    : await api('/api/suppliers', 'POST', body);
+  toast(id ? 'Gespeichert' : 'Lieferant erstellt', 'ok');
+  closeModal('supplierModal');
+  state._poSuppliers = null;
+  await renderPurchasing();
+  openSupplierDetail(s.id);
+}
+
+async function deleteSupplier(id) {
+  if (!confirm('Lieferant löschen?')) return;
+  await api('/api/suppliers/' + id, 'DELETE');
+  toast('Gelöscht', 'ok');
+  closeDetail();
+  renderPurchasing();
 }
