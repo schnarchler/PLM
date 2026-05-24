@@ -3328,6 +3328,14 @@ app.post('/api/purchase-orders/:id/items', (req, res) => {
   res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [iid]));
 });
 
+app.put('/api/purchase-orders/:id/items/:itemId', (req, res) => {
+  const { description, quantity, unit, unit_price, notes } = req.body;
+  if (!description) return res.status(400).json({ error: 'description required' });
+  run(`UPDATE purchase_order_items SET description=?,quantity=?,unit=?,unit_price=?,notes=? WHERE id=? AND po_id=?`,
+    [description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, notes||'', req.params.itemId, req.params.id]);
+  res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [req.params.itemId]));
+});
+
 app.delete('/api/purchase-orders/:id/items/:itemId', (req, res) => {
   run('DELETE FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
   res.json({ ok: true });

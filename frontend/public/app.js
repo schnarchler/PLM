@@ -8366,7 +8366,10 @@ async function openPoDetail(id) {
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:12px;color:var(--t3)">
         ${i.inv_name ? esc(i.inv_name) : i.rm_name ? `🧵 ${esc(i.rm_name)}` : ''}
       </td>
-      ${editable ? `<td style="padding:5px 8px;border:1px solid var(--line)"><button class="btn btn-ghost btn-sm" style="color:var(--red);padding:1px 5px" onclick="deletePoItem(${po.id},${i.id})">✕</button></td>` : '<td style="border:1px solid var(--line)"></td>'}
+      ${editable ? `<td style="padding:4px 6px;border:1px solid var(--line);white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" style="padding:1px 5px" onclick="openPoItemEditModal(${po.id},${i.id})">✏</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red);padding:1px 5px" onclick="deletePoItem(${po.id},${i.id})">✕</button>
+      </td>` : '<td style="border:1px solid var(--line)"></td>'}
     </tr>`).join('');
 
   document.getElementById('dp-title').innerHTML =
@@ -8495,6 +8498,38 @@ async function savePoItem() {
 async function deletePoItem(poId, itemId) {
   await api(`/api/purchase-orders/${poId}/items/${itemId}`, 'DELETE');
   openPoDetail(poId);
+}
+
+async function openPoItemEditModal(poId, itemId) {
+  const po = await api('/api/purchase-orders/' + poId);
+  const item = (po.items||[]).find(i => i.id === itemId);
+  if (!item) return;
+  document.getElementById('poie-po-id').value = poId;
+  document.getElementById('poie-item-id').value = itemId;
+  document.getElementById('poie-desc').value = item.description;
+  document.getElementById('poie-qty').value = item.quantity;
+  document.getElementById('poie-unit').value = item.unit;
+  document.getElementById('poie-price').value = item.unit_price ?? '';
+  document.getElementById('poie-notes').value = item.notes || '';
+  openModal('poItemEditModal');
+  document.getElementById('poie-desc').focus();
+}
+
+async function savePoItemEdit() {
+  const poId = document.getElementById('poie-po-id').value;
+  const itemId = document.getElementById('poie-item-id').value;
+  const desc = document.getElementById('poie-desc').value.trim();
+  if (!desc) return toast('Bezeichnung eingeben', 'err');
+  await api(`/api/purchase-orders/${poId}/items/${itemId}`, 'PUT', {
+    description: desc,
+    quantity: document.getElementById('poie-qty').value,
+    unit: document.getElementById('poie-unit').value,
+    unit_price: document.getElementById('poie-price').value || null,
+    notes: document.getElementById('poie-notes').value,
+  });
+  toast('Gespeichert', 'ok');
+  closeModal('poItemEditModal');
+  openPoDetail(parseInt(poId));
 }
 
 async function setPoStatus(poId, status) {
