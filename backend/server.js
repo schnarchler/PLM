@@ -1053,14 +1053,16 @@ app.delete('/api/items/:id/variant-group', (req, res) => {
 
 app.get('/api/items/:id/where-used', (req, res) => {
   const rows = all(`
-    SELECT DISTINCT i.id, i.item_number, i.name, i.item_type, i.classification,
-      r.rev, r.status, p.id as project_id, p.number as project_number, p.name as project_name
+    SELECT i.id, i.item_number, i.name, i.item_type, i.classification,
+      r.id as rev_id, r.rev, r.status,
+      p.id as project_id, p.number as project_number, p.name as project_name,
+      b.quantity, b.unit
     FROM bom b
     JOIN revisions r ON b.parent_rev_id = r.id
     JOIN items i ON r.item_id = i.id
     JOIN projects p ON i.project_id = p.id
     WHERE b.child_item_id = ?
-    ORDER BY p.number, i.item_number`, [req.params.id]);
+    ORDER BY p.number, i.item_number, CAST(r.rev AS INTEGER)`, [req.params.id]);
   res.json(rows);
 });
 
