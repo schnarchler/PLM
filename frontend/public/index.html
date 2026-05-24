@@ -93,6 +93,11 @@
       Produktion
       <span class="badge" id="badge-deliveries">—</span>
     </button>
+    <button class="nav-item" id="ni-purchasing" onclick="gotoView('purchasing')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      Einkauf
+      <span class="badge" id="badge-purchasing">—</span>
+    </button>
     <button class="nav-item" id="ni-profit" onclick="gotoView('profit')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
       Kalkulation
@@ -242,6 +247,79 @@
 </div>
 
 <!-- BOM Add Modal -->
+<div class="overlay" id="poModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head"><div class="modal-title" id="po-modal-title">Bestellung erstellen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('poModal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="po-edit-id">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Lieferant</label>
+          <select class="fs" id="po-supplier-id" onchange="document.getElementById('po-supplier-free').style.display=this.value?'none':'block'">
+            <option value="">— Freie Eingabe —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="po-supplier-free">
+        <div class="fg"><label class="fl">Lieferant (freie Eingabe)</label><input class="fi" id="po-supplier-name" placeholder="Lieferantenname"></div>
+      </div>
+      <div class="form-row" style="display:flex;gap:10px">
+        <div class="fg"><label class="fl">Bestelldatum</label><input class="fi" type="date" id="po-order-date"></div>
+        <div class="fg"><label class="fl">Erwartetes Lieferdatum</label><input class="fi" type="date" id="po-expected-date"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Notizen</label><textarea class="fi" id="po-notes" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="savePo()">Speichern</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="poItemModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title">Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('poItemModal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="poi-po-id">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Bezeichnung *</label><input class="fi" id="poi-desc" placeholder="Was wird bestellt?"></div>
+      </div>
+      <div class="form-row" style="display:flex;gap:10px">
+        <div class="fg" style="flex:1"><label class="fl">Menge</label><input class="fi" id="poi-qty" type="number" min="0.001" step="any" value="1"></div>
+        <div class="fg" style="flex:1"><label class="fl">Einheit</label><input class="fi" id="poi-unit" value="Stk"></div>
+        <div class="fg" style="flex:1"><label class="fl">Preis / Einheit</label><input class="fi" id="poi-price" type="number" min="0" step="0.01" placeholder="—"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Lagerartikel verknüpfen (optional)</label>
+          <select class="fs" id="poi-inv-id"><option value="">— kein —</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Notizen</label><input class="fi" id="poi-notes" placeholder=""></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="savePoItem()">Hinzufügen</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="supplierModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title" id="sup-modal-title">Lieferant</div><button class="btn btn-icon btn-ghost" onclick="closeModal('supplierModal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="sup-edit-id">
+      <div class="form-row"><div class="fg"><label class="fl">Name *</label><input class="fi" id="sup-name"></div></div>
+      <div class="form-row" style="display:flex;gap:10px">
+        <div class="fg"><label class="fl">Kontaktperson</label><input class="fi" id="sup-contact"></div>
+        <div class="fg"><label class="fl">Telefon</label><input class="fi" id="sup-phone"></div>
+      </div>
+      <div class="form-row" style="display:flex;gap:10px">
+        <div class="fg"><label class="fl">E-Mail</label><input class="fi" id="sup-email"></div>
+      </div>
+      <div class="form-row"><div class="fg"><label class="fl">Adresse</label><textarea class="fi" id="sup-address" rows="2"></textarea></div></div>
+      <div class="form-row"><div class="fg"><label class="fl">Notizen</label><textarea class="fi" id="sup-notes" rows="2"></textarea></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="saveSupplier()">Speichern</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="itemCompareModal">
   <div class="modal" style="max-width:480px">
     <div class="modal-head"><div class="modal-title">Vergleichen mit…</div><button class="btn btn-icon btn-ghost" onclick="closeModal('itemCompareModal')">✕</button></div>
