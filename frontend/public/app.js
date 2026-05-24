@@ -653,7 +653,8 @@ function renderItemDetail(item, activeRevId) {
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(item.name)}</strong>`
     + (item.classification ? ' ' + _classChip(item.classification) : '')
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`;
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument generieren">&#128196;</button>`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
@@ -5544,6 +5545,201 @@ async function moveDeliveryItem(itemId, deliveryId, direction) {
   const d = await api(`/api/deliveries/${deliveryId}`);
   document.getElementById('dd-pos').innerHTML = renderDeliveryItems(d.items||[], deliveryId) +
     `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${deliveryId})">+ Position</button>`;
+}
+
+// -- DOKUMENTVORLAGEN ------------------------------------------
+function openDocTemplateModal(itemId) {
+  window._docTemplateItem = state.item;
+  const isASM = state.item?.item_type === 'asm';
+  document.getElementById('dtpl-cards').innerHTML = [
+    { type:'datenblatt', label:'Datenblatt', desc:'Allgemeine Informationen, Revisionen, Dateien und Varianten' },
+    isASM ? { type:'stueckliste', label:'Stückliste', desc:'Vollständige BOM-Tabelle mit Mengen, Preisen und Entwicklungszeit' } : null,
+    { type:'pruefprotokoll', label:'Prüfprotokoll', desc:'Leeres Prüfprotokoll mit Item-Kopf und Unterschriftszeilen' },
+  ].filter(Boolean).map(t => `
+    <div onclick="generateItemTemplate('${t.type}')" style="padding:14px 16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      <div style="font-weight:600;font-size:14px;color:var(--t1);margin-bottom:3px">${t.label}</div>
+      <div style="font-size:13px;color:var(--t3)">${t.desc}</div>
+    </div>`).join('');
+  openModal('docTemplateModal');
+}
+
+function generateItemTemplate(type) {
+  closeModal('docTemplateModal');
+  const item = window._docTemplateItem;
+  if (!item) return;
+  const s = state.settings || {};
+  const today = new Date().toLocaleDateString('de-CH');
+  const rev = item.revisions?.[0];
+
+  const companyLines = [s.company_street, [s.company_postal_code, s.company_city].filter(Boolean).join(' ')].filter(Boolean);
+  const hdr = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #1d4ed8">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#1d4ed8">${escHtml(s.company_name||'')}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px;line-height:1.6">${companyLines.map(l=>escHtml(l)).join(' · ')}${s.company_phone?' · '+escHtml(s.company_phone):''}${s.company_email?' · '+escHtml(s.company_email):''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:2px">${escHtml(item.item_type.toUpperCase())}</div>
+        <div style="font-family:monospace;font-size:15px;font-weight:700;color:#1d4ed8">${escHtml(item.item_number)}</div>
+        <div style="font-size:12px;color:#6b7280">${today}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:22px">
+      <div style="font-size:20px;font-weight:700;color:#111827">${escHtml(item.name)}</div>
+      ${item.description ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">${escHtml(item.description)}</div>` : ''}
+    </div>`;
+
+  const css = `body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:28px}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px}
+    th{background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;text-align:left;border:1px solid #e5e7eb;color:#6b7280}
+    td{padding:6px 10px;border:1px solid #e5e7eb;font-size:13px;vertical-align:top}
+    .sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:18px 0 6px}
+    .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600}
+    @media print{body{padding:14px}}`;
+
+  let body = '';
+
+  if (type === 'datenblatt') {
+    const infoRows = [
+      ['Typ', item.item_type.toUpperCase()],
+      ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : '—'],
+      ['Klassifikation', item.classification || '—'],
+      ['Gewicht', item.effective_weight_g != null ? fmtN(item.effective_weight_g, 1) + ' g' : '—'],
+      ['Verkaufspreis', item.default_price != null ? 'CHF ' + fmtN(item.default_price, 2) : '—'],
+      ['Quelle', item.source_url || '—'],
+    ];
+    body += `<div class="sec">Allgemein</div>
+      <table><tbody>${infoRows.map(([k,v])=>`<tr><td style="width:140px;color:#6b7280;font-weight:600">${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('')}</tbody></table>`;
+
+    if ((item.revisions||[]).length) {
+      body += `<div class="sec">Revisionen</div><table>
+        <thead><tr><th>Rev</th><th>Status</th><th>Beschreibung</th><th>Erstellt</th></tr></thead>
+        <tbody>${item.revisions.map(r=>`<tr>
+          <td style="font-family:monospace;font-weight:700">rev${r.rev}</td>
+          <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">${r.status}</span></td>
+          <td>${escHtml(r.description||'')}</td>
+          <td style="color:#6b7280;font-size:12px">${r.created_at?r.created_at.slice(0,10):''}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    const allDatasets = (item.revisions||[]).flatMap(r=>(r.datasets||[]).map(d=>({...d, rev:r.rev, revStatus:r.status})));
+    if (allDatasets.length) {
+      body += `<div class="sec">Dateien</div><table>
+        <thead><tr><th>Rev</th><th>Typ</th><th>Dateiname</th><th>Grösse</th><th>Datum</th></tr></thead>
+        <tbody>${allDatasets.map(d=>`<tr>
+          <td style="font-family:monospace">rev${d.rev}</td>
+          <td style="color:#6b7280">${escHtml(d.ds_type||'')}</td>
+          <td style="font-family:monospace;font-size:12px">${escHtml(d.original_filename||d.filename)}</td>
+          <td style="color:#6b7280">${d.file_size ? Math.round(d.file_size/1024)+' KB' : '—'}</td>
+          <td style="color:#6b7280;font-size:12px">${d.uploaded_at?d.uploaded_at.slice(0,10):''}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    if ((item.variants||[]).length) {
+      body += `<div class="sec">Varianten</div><table>
+        <thead><tr><th>Teilenummer</th><th>Name</th><th>Typ</th></tr></thead>
+        <tbody>${item.variants.map(v=>`<tr>
+          <td style="font-family:monospace;color:#1d4ed8">${escHtml(v.item_number)}</td>
+          <td>${escHtml(v.name)}</td>
+          <td>${escHtml(v.item_type.toUpperCase())}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+  } else if (type === 'stueckliste') {
+    const bom = rev?.bom || [];
+    const bomStd = rev?.bom_std || [];
+    const totalPrice = bom.reduce((s,b) => s + (b.default_price != null ? b.default_price * b.quantity : 0), 0);
+    const totalDev = bom.reduce((s,b) => s + (b.dev_hours||0), 0);
+
+    body += `<div style="display:flex;gap:20px;margin-bottom:16px;font-size:13px;color:#6b7280">
+      <span>Revision: <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
+      <span class="badge" style="background:#dbeafe;color:#1d4ed8">${rev?.status||''}</span>
+    </div>`;
+
+    if (bom.length) {
+      body += `<div class="sec">Stückliste – Parts</div><table>
+        <thead><tr><th style="width:30px">Pos</th><th>Teilenummer</th><th>Name</th><th>Rev</th><th style="text-align:right">Menge</th><th>Einh.</th><th style="text-align:right">VP (CHF)</th><th style="text-align:right">⏱ Entw.h</th></tr></thead>
+        <tbody>${bom.map((b,i)=>`<tr>
+          <td style="color:#9ca3af">${b.position||i+1}</td>
+          <td style="font-family:monospace;color:#1d4ed8">${escHtml(b.item_number)}</td>
+          <td>${escHtml(b.name)}</td>
+          <td style="font-family:monospace;font-size:12px">${b.child_active_rev ? 'rev'+b.child_active_rev.rev : '—'}</td>
+          <td style="text-align:right;font-family:monospace">${fmtN(b.quantity,0)}</td>
+          <td>${escHtml(b.unit||'pcs')}</td>
+          <td style="text-align:right;font-family:monospace">${b.default_price != null ? fmtN(b.default_price * b.quantity, 2) : '—'}</td>
+          <td style="text-align:right;font-family:monospace;color:#d97706">${(b.dev_hours||0) > 0 ? fmtN(b.dev_hours,2) : '—'}</td>
+        </tr>`).join('')}
+        <tr style="background:#f9fafb;font-weight:700">
+          <td colspan="6" style="text-align:right;color:#6b7280">Total</td>
+          <td style="text-align:right;font-family:monospace">${totalPrice > 0 ? fmtN(totalPrice,2) : '—'}</td>
+          <td style="text-align:right;font-family:monospace;color:#d97706">${totalDev > 0 ? fmtN(totalDev,2) : '—'}</td>
+        </tr></tbody></table>`;
+    }
+
+    if (bomStd.length) {
+      body += `<div class="sec">Normteile</div><table>
+        <thead><tr><th>Bezeichnung</th><th>Norm</th><th>Material</th><th style="text-align:right">Menge</th><th>Einh.</th></tr></thead>
+        <tbody>${bomStd.map(b=>`<tr>
+          <td>${escHtml(b.designation)}</td>
+          <td style="font-family:monospace;font-size:12px">${escHtml(b.standard||'')} ${escHtml(b.std_number||'')}</td>
+          <td>${escHtml(b.material||'')}</td>
+          <td style="text-align:right;font-family:monospace">${fmtN(b.quantity,0)}</td>
+          <td>${escHtml(b.unit||'pcs')}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    if (!bom.length && !bomStd.length) body += '<div style="color:#9ca3af;font-size:13px">Keine Positionen.</div>';
+
+  } else if (type === 'pruefprotokoll') {
+    const checkRows = [
+      'Masshaltigkeit / Abmessungen',
+      'Oberflächenqualität',
+      'Materialprüfung',
+      'Funktionsprüfung',
+      'Kennzeichnung / Beschriftung',
+      'Verpackung / Versand',
+      '', '', '',
+    ];
+    body += `<div style="display:flex;gap:20px;margin-bottom:16px;font-size:13px;color:#6b7280">
+      <span>Revision: <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
+      <span class="badge" style="background:#dbeafe;color:#1d4ed8">${rev?.status||''}</span>
+      ${item.effective_weight_g != null ? `<span>Gewicht: <strong>${fmtN(item.effective_weight_g,1)} g</strong></span>` : ''}
+      ${item.classification ? `<span>Klasse: <strong>${escHtml(item.classification)}</strong></span>` : ''}
+    </div>
+    <div class="sec">Prüfpunkte</div>
+    <table>
+      <thead><tr><th style="width:28px">Nr</th><th>Prüfpunkt</th><th style="width:120px">Soll</th><th style="width:120px">Ist</th><th style="width:36px">OK</th><th style="width:120px">Bemerkung</th></tr></thead>
+      <tbody>${checkRows.map((c,i)=>`<tr style="height:28px">
+        <td style="color:#9ca3af;font-size:12px">${c ? i+1 : ''}</td>
+        <td>${escHtml(c)}</td><td></td><td></td>
+        <td style="text-align:center;font-size:16px"></td>
+        <td></td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div class="sec" style="margin-top:24px">Prüfentscheid</div>
+    <div style="display:flex;gap:24px;margin-bottom:28px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> Freigegeben</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> Nacharbeit</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> Ausschuss</label>
+    </div>
+    <div style="display:flex;gap:32px;margin-top:16px">
+      <div style="flex:1"><div style="font-size:12px;color:#6b7280;margin-bottom:4px">Geprüft durch</div><div style="border-bottom:1px solid #9ca3af;height:36px"></div></div>
+      <div style="flex:1"><div style="font-size:12px;color:#6b7280;margin-bottom:4px">Freigegeben durch</div><div style="border-bottom:1px solid #9ca3af;height:36px"></div></div>
+      <div style="flex:1"><div style="font-size:12px;color:#6b7280;margin-bottom:4px">Datum</div><div style="border-bottom:1px solid #9ca3af;height:36px"></div></div>
+    </div>`;
+  }
+
+  const templateLabels = { datenblatt:'Datenblatt', stueckliste:'Stückliste', pruefprotokoll:'Prüfprotokoll' };
+  const html = `<!DOCTYPE html><html lang="de-CH"><head><meta charset="UTF-8">
+    <title>${templateLabels[type]||type} – ${escHtml(item.item_number)}</title>
+    <style>${css}</style></head><body>
+    ${hdr}${body}
+    <div style="margin-top:28px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:12px;color:#d1d5db;text-align:right">${escHtml(item.item_number)} · ${templateLabels[type]||type} · ${today}</div>
+    <script>window.onload=()=>window.print();<\/script>
+    </body></html>`;
+  const w = window.open('', '_blank', 'width=950,height=750');
+  w.document.write(html);
+  w.document.close();
 }
 
 // -- PDF GENERATION (Rechnung + Angebot) -----------------------
