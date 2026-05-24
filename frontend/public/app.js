@@ -8397,7 +8397,7 @@ async function openPoDetail(id) {
         <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">Menge</th>
         <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">EP</th>
         <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">Total</th>
-        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">Lager</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">Verknüpfung</th>
         <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px"></th>
       </tr></thead>
       <tbody>${itemRows}</tbody>
@@ -8500,11 +8500,46 @@ async function deletePoItem(poId, itemId) {
 async function setPoStatus(poId, status) {
   if (status === 'RECEIVED') {
     const po = await api('/api/purchase-orders/' + poId);
-    const linked = (po.items||[]).filter(i => i.inventory_item_id);
-    if (linked.length && !confirm(`${linked.length} Position(en) werden ins Lager gebucht. Fortfahren?`)) return;
+    const rmItems = (po.items||[]).filter(i => i.raw_material_id);
+    if (rmItems.length) {
+      // Ask for lot numbers via modal
+      window._poReceiveId = poId;
+      window._poReceiveRmItems = rmItems;
+      document.getElementById('po-receive-rows').innerHTML = rmItems.map(i => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">🧵 ${esc(i.rm_name)}</div>
+            <div style="font-size:12px;color:var(--t3)">${esc(i.description)} · ${fmtN(i.quantity,2)} ${esc(i.unit)}</div>
+          </div>
+          <input class="fi" id="lot-${i.id}" placeholder="Lot-Nr. (optional)" style="width:160px;font-family:var(--mono);font-size:13px">
+        </div>`).join('');
+      const invLinked = (po.items||[]).filter(i => i.inventory_item_id).length;
+      document.getElementById('po-receive-inv-hint').textContent = invLinked
+        ? `${invLinked} Lagerartikel werden ohne Lot-Nr. eingebucht.` : '';
+      openModal('poReceiveModal');
+      return;
+    }
+    const invLinked = (po.items||[]).filter(i => i.inventory_item_id).length;
+    if (invLinked && !confirm(`${invLinked} Lagerartikel werden eingebucht. Fortfahren?`)) return;
   }
   await api(`/api/purchase-orders/${poId}/status`, 'PUT', { status });
   toast(PO_ST[status] || status, 'ok');
+  await renderPurchasing();
+  openPoDetail(poId);
+  loadStats();
+}
+
+async function confirmPoReceive() {
+  const poId = window._poReceiveId;
+  const rmItems = window._poReceiveRmItems || [];
+  const lot_numbers = {};
+  rmItems.forEach(i => {
+    const val = document.getElementById('lot-' + i.id)?.value.trim();
+    if (val) lot_numbers[i.id] = val;
+  });
+  closeModal('poReceiveModal');
+  await api(`/api/purchase-orders/${poId}/status`, 'PUT', { status: 'RECEIVED', lot_numbers });
+  toast('Erhalten', 'ok');
   await renderPurchasing();
   openPoDetail(poId);
   loadStats();
