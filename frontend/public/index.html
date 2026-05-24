@@ -242,6 +242,19 @@
 </div>
 
 <!-- BOM Add Modal -->
+<div class="overlay" id="itemCompareModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title">Vergleichen mit…</div><button class="btn btn-icon btn-ghost" onclick="closeModal('itemCompareModal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Zweites Item suchen für den Vergleich.</div>
+      <input class="fi" id="cmp-search" placeholder="Teilenummer oder Name…" autocomplete="off"
+        oninput="_compareSearch(this.value)"
+        onkeydown="if(event.key==='Escape')closeModal('itemCompareModal')">
+      <div id="cmp-results" style="margin-top:8px;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;max-height:320px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="docTemplateModal">
   <div class="modal" style="max-width:440px">
     <div class="modal-head"><div class="modal-title">Dokument generieren</div><button class="btn btn-icon btn-ghost" onclick="closeModal('docTemplateModal')">✕</button></div>
