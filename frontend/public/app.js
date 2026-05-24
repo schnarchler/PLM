@@ -314,9 +314,9 @@ async function openProject(id) {
   openProjectDetail(p);
 }
 
-async function openProjectAndItem(projectId, itemId) {
+async function openProjectAndItem(projectId, itemId, revId) {
   await openProject(projectId);
-  await openItemDetail(itemId);
+  await openItemDetail(itemId, revId);
 }
 
 async function gotoPlmItem(itemId) {
@@ -620,7 +620,7 @@ async function delDoc(id, projectId) {
 }
 
 // ── ITEM DETAIL ───────────────────────────────────────────────
-async function openItemDetail(itemId) {
+async function openItemDetail(itemId, revId) {
   // highlight tree row
   document.querySelectorAll('.tree-row').forEach(r => r.classList.remove('selected'));
   const tr = document.getElementById('tr-' + itemId);
@@ -628,7 +628,8 @@ async function openItemDetail(itemId) {
 
   const item = await api(`/api/items/${itemId}`);
   state.item = item;
-  state.activeRevId = item.revisions?.[0]?.id || null;
+  const preferredRev = revId ? item.revisions?.find(r => r.id === revId) : null;
+  state.activeRevId = preferredRev?.id || item.revisions?.[0]?.id || null;
   _trackRecent('item', item.id, item.name, item.item_number, item.item_type);
 
   renderItemDetail(item, state.activeRevId);
@@ -6166,15 +6167,37 @@ async function loadWhereUsed(itemId) {
     el.innerHTML = '<div style="color:var(--t3);font-size:13px;padding:8px 0">Dieses Teil wird in keiner Baugruppe verwendet.</div>';
     return;
   }
-  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px">
-    ${rows.map(r => `
-      <div onclick="openProjectAndItem(${r.project_id},${r.id})" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
-        ${_itemChip(r.item_type, 16)}
-        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(r.item_number)}</span>
-        <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</span>
-        ${_classChip(r.classification, 10)}
-        <span class="status st-${r.status}" style="font-size:11px">rev${r.rev}</span>
-        <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(r.project_number)}</span>
+
+  // Group rows by parent item id
+  const grouped = [];
+  const seen = new Map();
+  for (const r of rows) {
+    if (!seen.has(r.id)) {
+      const entry = { ...r, revs: [] };
+      seen.set(r.id, entry);
+      grouped.push(entry);
+    }
+    seen.get(r.id).revs.push({ rev_id: r.rev_id, rev: r.rev, status: r.status, quantity: r.quantity, unit: r.unit });
+  }
+
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">
+    ${grouped.map(g => `
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden">
+        <div onclick="openProjectAndItem(${g.project_id},${g.id})" style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          ${_itemChip(g.item_type, 16)}
+          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(g.item_number)}</span>
+          <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}</span>
+          ${_classChip(g.classification, 10)}
+          <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(g.project_number)}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;padding:5px 10px 8px;border-top:1px solid var(--line)">
+          ${g.revs.map(rv => `
+            <span class="status st-${rv.status}" style="font-size:11px;cursor:pointer" title="${fmtN(rv.quantity,0)} ${esc(rv.unit||'Stk')}"
+              onclick="openProjectAndItem(${g.project_id},${g.id},${rv.rev_id})">
+              rev${rv.rev}
+            </span>`).join('')}
+          <span style="font-size:12px;color:var(--t4);align-self:center;margin-left:2px">${g.revs.length} Revision${g.revs.length > 1 ? 'en' : ''}</span>
+        </div>
       </div>`).join('')}
   </div>`;
 }
