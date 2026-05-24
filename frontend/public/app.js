@@ -8548,6 +8548,8 @@ async function setPoStatus(poId, status) {
           </div>
           <input class="fi" id="lot-${i.id}" placeholder="Lot-Nr. (optional)" style="width:160px;font-family:var(--mono);font-size:13px">
         </div>`).join('');
+      document.getElementById('lot-all').value = '';
+      _setLotMode(rmItems.length > 1 ? 'same' : 'individual');
       const invLinked = (po.items||[]).filter(i => i.inventory_item_id).length;
       document.getElementById('po-receive-inv-hint').textContent = invLinked
         ? `${invLinked} Lagerartikel werden ohne Lot-Nr. eingebucht.` : '';
@@ -8564,14 +8566,30 @@ async function setPoStatus(poId, status) {
   loadStats();
 }
 
+function _setLotMode(mode) {
+  window._lotMode = mode;
+  document.getElementById('po-receive-same').style.display = mode === 'same' ? '' : 'none';
+  document.getElementById('po-receive-rows').style.display  = mode === 'individual' ? '' : 'none';
+  document.getElementById('lot-mode-same').className       = 'btn btn-sm ' + (mode === 'same' ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('lot-mode-individual').className = 'btn btn-sm ' + (mode === 'individual' ? 'btn-primary' : 'btn-ghost');
+  if (mode === 'same') {
+    setTimeout(() => document.getElementById('lot-all')?.focus(), 50);
+  }
+}
+
 async function confirmPoReceive() {
   const poId = window._poReceiveId;
   const rmItems = window._poReceiveRmItems || [];
   const lot_numbers = {};
-  rmItems.forEach(i => {
-    const val = document.getElementById('lot-' + i.id)?.value.trim();
-    if (val) lot_numbers[i.id] = val;
-  });
+  if (window._lotMode === 'same') {
+    const sharedLot = document.getElementById('lot-all')?.value.trim();
+    if (sharedLot) rmItems.forEach(i => { lot_numbers[i.id] = sharedLot; });
+  } else {
+    rmItems.forEach(i => {
+      const val = document.getElementById('lot-' + i.id)?.value.trim();
+      if (val) lot_numbers[i.id] = val;
+    });
+  }
   closeModal('poReceiveModal');
   await api(`/api/purchase-orders/${poId}/status`, 'PUT', { status: 'RECEIVED', lot_numbers });
   toast('Erhalten', 'ok');
