@@ -203,12 +203,15 @@ def _try_spooler(data):
 
 def send_to_printer(data):
     errors = []
-    for fn, name in [(_try_winusb, 'WinUSB'), (_try_pyusb, 'PyUSB'), (_try_spooler, 'Spooler')]:
+    for fn, label in [(_try_winusb, 'WinUSB'), (_try_pyusb, 'PyUSB'), (_try_spooler, 'Spooler')]:
         try:
             return fn(data)
         except Exception as ex:
-            errors.append(f'{name}: {ex}')
-    raise RuntimeError(' | '.join(errors))
+            errors.append(f'{label}: {ex}')
+    # Alle drei fehlgeschlagen — prüfen ob es ein "nicht gefunden"-Fehler ist
+    not_found = all(any(kw in e.lower() for kw in ('nicht gefunden', 'not found', 'no device', 'kein'))
+                    for e in errors)
+    raise RuntimeError('\n'.join(errors), not_found)
 
 # ── HTTP Handler ───────────────────────────────────────────────
 class Handler(BaseHTTPRequestHandler):
@@ -241,6 +244,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if self.path == '/quit':
+            resp = json.dumps({'ok': True}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', len(resp))
+            self._cors()
+            self.end_headers()
+            self.wfile.write(resp)
+            threading.Thread(target=_server.shutdown, daemon=True).start()
+            return
         if self.path != '/print':
             self.send_error(404); return
         length  = int(self.headers.get('Content-Length', 0))
@@ -249,8 +262,13 @@ class Handler(BaseHTTPRequestHandler):
             escpos = build_escpos(payload)
             method = send_to_printer(escpos)
             resp   = json.dumps({'ok': True, 'method': method}).encode()
+        except RuntimeError as ex:
+            args      = ex.args
+            details   = args[0] if args else str(ex)
+            not_found = args[1] if len(args) > 1 else False
+            resp = json.dumps({'ok': False, 'error': details, 'not_found': not_found}).encode()
         except Exception as ex:
-            resp = json.dumps({'ok': False, 'error': str(ex)}).encode()
+            resp = json.dumps({'ok': False, 'error': str(ex), 'not_found': False}).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', len(resp))
@@ -259,13 +277,15 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(resp)
 
 # ── Start ──────────────────────────────────────────────────────
+_server = None
 if __name__ == '__main__':
-    server = HTTPServer(('127.0.0.1', PORT), Handler)
-    url    = f'http://localhost:{PORT}'
+    _server = HTTPServer(('127.0.0.1', PORT), Handler)
+    url     = f'http://localhost:{PORT}'
     print(f'Pipsta-Tool läuft auf {url}')
-    print('Beenden mit Ctrl+C')
+    print('Beenden mit Ctrl+C oder über den Browser-Button')
     threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:
-        server.serve_forever()
+        _server.serve_forever()
     except KeyboardInterrupt:
-        print('\nBeendet.')
+        pass
+    print('Beendet.')
