@@ -6577,7 +6577,19 @@ async function loadErpUsage(itemId) {
     <div style="font-size:11px;text-transform:uppercase;color:var(--t3);letter-spacing:.06em;margin:12px 0 5px">${title}</div>
     <div style="display:flex;flex-direction:column;gap:4px">${items.map(renderFn).join('')}</div>` : '';
 
-  const html = [
+  const activeOrders = orders.filter(o => ['CONFIRMED','DELIVERED','INVOICED'].includes(o.status));
+  const totalQty = activeOrders.reduce((s, o) => s + (parseFloat(o.quantity) || 0), 0);
+  const totalRev = activeOrders.reduce((s, o) => s + ((parseFloat(o.quantity)||0) * (parseFloat(o.unit_price)||0)), 0);
+
+  const summaryHtml = (orders.length > 0) ? `
+    <div style="display:flex;gap:12px;align-items:center;padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:4px;flex-wrap:wrap">
+      <span style="font-size:11px;text-transform:uppercase;color:var(--t4);letter-spacing:.06em">Total Aufträge</span>
+      <span style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">${fmtCHF(totalRev)}</span>
+      <span style="font-size:12px;color:var(--t3)">${fmtN(totalQty,0)} Stk · ${activeOrders.length} Auftrag${activeOrders.length!==1?'e':''}</span>
+      ${orders.length !== activeOrders.length ? `<span style="font-size:11px;color:var(--t4)">(nur bestätigte/gelieferte/fakturierte)</span>` : ''}
+    </div>` : '';
+
+  const html = summaryHtml + [
     section('Aufträge', orders, o => row('AUFTRAG', o.id, o.number, o.title, o.status, oSt, oLbl, o.order_date, o.quantity, o.unit, o.unit_price, `gotoView('orders');openOrderDetail(${o.id})`)),
     section('Angebote', quotes, q => row('ANGEBOT', q.id, q.number, q.title, q.status, qSt, qLbl, q.quote_date, q.quantity, q.unit, q.unit_price, `gotoView('quotes');openQuoteDetail(${q.id})`)),
     section('Produktion', deliveries, d => row('PROD', d.id, d.number, d.title, d.status, dSt, dLbl, d.delivery_date, d.quantity, d.unit, null, `gotoView('deliveries');openDeliveryDetail(${d.id})`)),
