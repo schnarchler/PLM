@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Pipsta Freitext-Drucker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg0:#1a1b1e; --bg1:#222327; --bg2:#2a2b30; --bg3:#313238;
+    --line:#3a3b42; --t1:#e8e9ec; --t2:#b8bac4; --t3:#888a96; --t4:#555764;
+    --blue:#4f9ef8; --green:#4caf6e; --red:#e05252; --amber:#e8a830;
+    --r:6px; --mono:'Courier New',monospace;
+  }
+  html, body { height: 100%; background: var(--bg0); color: var(--t1); font-family: system-ui, sans-serif; font-size: 14px; }
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ── Topbar ── */
+  .topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; background: var(--bg1); border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .topbar-title { font-size: 15px; font-weight: 600; color: var(--t1); display: flex; align-items: center; gap: 8px; }
+  .topbar-title svg { color: var(--blue); }
+  .spacer { flex: 1; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--t4); display: inline-block; }
+  .status-dot.ok { background: var(--green); }
+  .status-dot.err { background: var(--red); }
+  #server-status { font-size: 12px; color: var(--t3); display: flex; align-items: center; gap: 6px; }
+
+  /* ── Main layout ── */
+  .main { display: flex; flex: 1; overflow: hidden; gap: 0; }
+
+  /* ── Editor panel ── */
+  .editor-panel {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 14px; gap: 10px; overflow: hidden;
+    border-right: 1px solid var(--line);
+  }
+  .panel-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--t4); margin-bottom: 2px; }
+
+  .format-bar { display: flex; gap: 5px; flex-wrap: wrap; }
+  .fmt-btn {
+    padding: 3px 9px; font-size: 12px; border-radius: 4px; border: 1px solid var(--line);
+    background: var(--bg2); color: var(--t2); cursor: pointer; font-family: var(--mono);
+    transition: background .1s;
+  }
+  .fmt-btn:hover { background: var(--bg3); color: var(--t1); }
+  .fmt-btn title { display: none; }
+
+  #editor {
+    flex: 1; resize: none; background: var(--bg2); border: 1px solid var(--line);
+    border-radius: var(--r); color: var(--t1); font-family: var(--mono); font-size: 13px;
+    padding: 10px; line-height: 1.55; outline: none; tab-size: 2;
+  }
+  #editor:focus { border-color: var(--blue); }
+  #editor::placeholder { color: var(--t4); }
+
+  .hint-box {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 8px 10px; font-size: 11px; color: var(--t3); line-height: 1.7;
+  }
+  .hint-box code { font-family: var(--mono); color: var(--blue); font-size: 11px; }
+
+  /* ── Preview panel ── */
+  .preview-panel {
+    width: 280px; flex-shrink: 0; display: flex; flex-direction: column;
+    padding: 14px; gap: 8px; overflow: hidden;
+  }
+  .preview-wrap {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    background: #f5f3ee; border-radius: var(--r);
+    padding: 10px; display: flex; justify-content: center;
+  }
+  #preview {
+    font-family: var(--mono); font-size: 12px; color: #111;
+    white-space: pre; line-height: 1.45; width: 100%;
+  }
+
+  /* ── Options bar ── */
+  .options-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; background: var(--bg1); border-top: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .opt-group { display: flex; align-items: center; gap: 6px; }
+  .opt-label { font-size: 12px; color: var(--t3); white-space: nowrap; }
+  input[type=text], select {
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 4px;
+    color: var(--t1); font-size: 13px; padding: 4px 8px; outline: none;
+    font-family: inherit;
+  }
+  input[type=text]:focus, select:focus { border-color: var(--blue); }
+  select option { background: var(--bg2); }
+  .cb-group { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .cb-group input { cursor: pointer; accent-color: var(--blue); }
+  .cb-group label { font-size: 12px; color: var(--t2); cursor: pointer; }
+
+  /* ── Print button ── */
+  .btn-print {
+    background: var(--blue); color: #fff; border: none; border-radius: var(--r);
+    padding: 7px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; gap: 7px; transition: opacity .15s;
+    white-space: nowrap; margin-left: auto;
+  }
+  .btn-print:hover { opacity: .88; }
+  .btn-print:disabled { opacity: .4; cursor: not-allowed; }
+
+  #print-result {
+    font-size: 12px; padding: 3px 8px; border-radius: 4px;
+    display: none; align-items: center; gap: 5px; white-space: nowrap;
+  }
+  #print-result.ok  { display: flex; background: rgba(76,175,110,.15); color: var(--green); }
+  #print-result.err { display: flex; background: rgba(224, 82,82,.15);  color: var(--red);  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg1); }
+  ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-title">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+      <rect x="6" y="14" width="12" height="8"/>
+    </svg>
+    Pipsta Freitext-Drucker
+  </div>
+  <div class="spacer"></div>
+  <div id="server-status">
+    <span class="status-dot" id="srv-dot"></span>
+    <span id="srv-text">Verbinde…</span>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Editor -->
+  <div class="editor-panel">
+    <div>
+      <div class="panel-label">Text</div>
+      <div class="format-bar" style="margin-top:6px">
+        <button class="fmt-btn" onclick="insert('!')" title="Fettschrift">!fett</button>
+        <button class="fmt-btn" onclick="insert('>')" title="Zentriert">&gt;zentriert</button>
+        <button class="fmt-btn" onclick="insert('~')" title="Kleine Schrift">~klein</button>
+        <button class="fmt-btn" onclick="insertLine('---')" title="Trennlinie">───</button>
+        <button class="fmt-btn" onclick="insertLine('===')" title="Doppellinie">=══</button>
+        <button class="fmt-btn" onclick="clearEditor()" style="color:var(--t4);margin-left:auto">✕ Leeren</button>
+      </div>
+    </div>
+    <textarea id="editor" placeholder="Text eingeben…&#10;&#10;!Fettzeile&#10;Normale Zeile&#10;>Zentrierte Zeile&#10;~Kleine Schrift&#10;---" spellcheck="false"></textarea>
+    <div class="hint-box">
+      <code>!text</code> Fett &nbsp;·&nbsp;
+      <code>&gt;text</code> Zentriert &nbsp;·&nbsp;
+      <code>~text</code> Klein &nbsp;·&nbsp;
+      <code>---</code> oder <code>===</code> Trennlinie &nbsp;·&nbsp;
+      Leerzeile = Abstand
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-panel">
+    <div class="panel-label">Vorschau</div>
+    <div class="preview-wrap">
+      <div id="preview"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Options bar -->
+<div class="options-bar">
+  <div class="opt-group">
+    <span class="opt-label">Kopf:</span>
+    <input type="text" id="opt-header" placeholder="leer = kein Kopf" style="width:150px">
+  </div>
+  <div class="opt-group">
+    <span class="opt-label">Fuss:</span>
+    <input type="text" id="opt-footer" placeholder="leer = kein Fuss" style="width:140px">
+  </div>
+  <div class="opt-group">
+    <span class="opt-label">Breite:</span>
+    <select id="opt-width">
+      <option value="32" selected>32 Zeichen</option>
+      <option value="42">42 Zeichen</option>
+      <option value="48">48 Zeichen</option>
+    </select>
+  </div>
+  <label class="cb-group">
+    <input type="checkbox" id="opt-datetime">
+    <label for="opt-datetime">Datum/Zeit</label>
+  </label>
+  <div id="print-result"></div>
+  <button class="btn-print" id="btn-print" onclick="doPrint()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+      <rect x="6" y="14" width="12" height="8"/>
+    </svg>
+    Drucken
+  </button>
+</div>
+
+<script>
+const SERVER = 'http://localhost:8765';
+
+// ── Vorschau ───────────────────────────────────────────────────
+function parseLines(text, width) {
+  return text.split('\n').map(raw => {
+    const trimmed = raw.trimEnd();
+    if (trimmed === '---' || trimmed === '===') return { separator: true };
+    if (trimmed === '')                          return { text: '' };
+    if (trimmed.startsWith('!'))  return { text: trimmed.slice(1), bold: true };
+    if (trimmed.startsWith('>'))  return { text: trimmed.slice(1), centered: true };
+    if (trimmed.startsWith('~'))  return { text: trimmed.slice(1), small: true };
+    return { text: trimmed };
+  });
+}
+
+function buildPayload() {
+  const width   = parseInt(document.getElementById('opt-width').value, 10);
+  const header  = document.getElementById('opt-header').value.trim();
+  const footer  = document.getElementById('opt-footer').value.trim();
+  const showDt  = document.getElementById('opt-datetime').checked;
+  const text    = document.getElementById('editor').value;
+  return { line_width: width, header, footer, show_datetime: showDt, lines: parseLines(text, width) };
+}
+
+function renderPreview() {
+  const { line_width: w, header, footer, show_datetime: showDt, lines } = buildPayload();
+  const sep = '-'.repeat(w);
+  const parts = [];
+
+  if (header) parts.push(`<b>${esc(center(header, w))}</b>`);
+  if (showDt) {
+    const now = new Date();
+    const dt  = `${pad2(now.getDate())}.${pad2(now.getMonth()+1)}.${now.getFullYear()}  ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    parts.push(`<small>${esc(center(dt, w))}</small>`);
+  }
+  if (header || showDt) parts.push(esc(sep));
+
+  for (const l of lines) {
+    if (l.separator) { parts.push(esc(sep)); continue; }
+    if (!l.text && l.text !== 0) { parts.push(''); continue; }
+    let t = l.text;
+    if (l.centered) t = center(t, w);
+    let html = esc(t);
+    if (l.bold)  html = `<b>${html}</b>`;
+    if (l.small) html = `<small>${html}</small>`;
+    parts.push(html);
+  }
+
+  if (footer) {
+    parts.push(esc(sep));
+    parts.push(`<small>${esc(center(footer, w))}</small>`);
+  }
+
+  document.getElementById('preview').innerHTML = parts.join('\n');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function pad2(n) { return String(n).padStart(2,'0'); }
+function center(s, w) {
+  const pad = Math.max(0, Math.floor((w - s.length) / 2));
+  return ' '.repeat(pad) + s;
+}
+
+// ── Editor-Hilfe ───────────────────────────────────────────────
+function insert(prefix) {
+  const ta  = document.getElementById('editor');
+  const s   = ta.selectionStart;
+  const e   = ta.selectionEnd;
+  const val = ta.value;
+  const lineStart = val.lastIndexOf('\n', s - 1) + 1;
+  // Prefix an Zeilenanfang setzen
+  ta.value = val.slice(0, lineStart) + prefix + val.slice(lineStart);
+  ta.selectionStart = ta.selectionEnd = s + prefix.length;
+  ta.focus();
+  renderPreview();
+}
+
+function insertLine(text) {
+  const ta  = document.getElementById('editor');
+  const s   = ta.selectionStart;
+  const val = ta.value;
+  const ins = (s > 0 && val[s-1] !== '\n' ? '\n' : '') + text + '\n';
+  ta.value  = val.slice(0, s) + ins + val.slice(s);
+  ta.selectionStart = ta.selectionEnd = s + ins.length;
+  ta.focus();
+  renderPreview();
+}
+
+function clearEditor() {
+  if (document.getElementById('editor').value && !confirm('Text leeren?')) return;
+  document.getElementById('editor').value = '';
+  renderPreview();
+}
+
+// ── Drucken ────────────────────────────────────────────────────
+async function doPrint() {
+  const btn = document.getElementById('btn-print');
+  const res = document.getElementById('print-result');
+  btn.disabled = true;
+  res.className = ''; res.style.display = 'none';
+
+  try {
+    const resp   = await fetch(`${SERVER}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildPayload())
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      showResult('ok', `✓ Gedruckt via ${data.method}`);
+    } else {
+      showResult('err', `✗ ${data.error}`);
+    }
+  } catch (ex) {
+    showResult('err', `✗ Server nicht erreichbar (${ex.message})`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showResult(type, msg) {
+  const el = document.getElementById('print-result');
+  el.className = type;
+  el.textContent = msg;
+  if (type === 'ok') setTimeout(() => { el.className = ''; el.style.display = 'none'; }, 4000);
+}
+
+// ── Server-Ping ────────────────────────────────────────────────
+async function pingServer() {
+  const dot  = document.getElementById('srv-dot');
+  const txt  = document.getElementById('srv-text');
+  try {
+    const r = await fetch(`${SERVER}/`, { method: 'GET', signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      dot.className = 'status-dot ok';
+      txt.textContent = 'Server OK';
+      return;
+    }
+  } catch (_) {}
+  dot.className = 'status-dot err';
+  txt.textContent = 'Server nicht erreichbar';
+}
+
+// ── Events ─────────────────────────────────────────────────────
+document.getElementById('editor').addEventListener('input', renderPreview);
+document.getElementById('opt-width').addEventListener('change', renderPreview);
+document.getElementById('opt-header').addEventListener('input', renderPreview);
+document.getElementById('opt-footer').addEventListener('input', renderPreview);
+document.getElementById('opt-datetime').addEventListener('change', renderPreview);
+
+// Tab in Textarea als echten Tab einfügen
+document.getElementById('editor').addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    insert('  ');
+  }
+});
+
+// Enter zum Drucken (Ctrl+Enter)
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') doPrint();
+});
+
+// Init
+pingServer();
+setInterval(pingServer, 10000);
+renderPreview();
+</script>
+</body>
+</html>
