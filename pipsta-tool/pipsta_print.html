@@ -48,6 +48,40 @@
   .fmt-btn:hover { background: var(--bg3); color: var(--t1); }
   .fmt-btn title { display: none; }
 
+  /* ── Bild-Panel ── */
+  .img-panel {
+    display: none; flex-direction: column; gap: 8px;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 10px 12px;
+  }
+  .img-panel.open { display: flex; }
+  .img-panel-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .img-drop {
+    border: 2px dashed var(--line); border-radius: var(--r); padding: 16px;
+    text-align: center; color: var(--t4); font-size: 13px; cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .img-drop:hover, .img-drop.drag { border-color: var(--blue); color: var(--t2); }
+  .img-drop input { display: none; }
+  .img-modes { display: flex; gap: 4px; }
+  .img-mode-btn {
+    padding: 3px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--line);
+    background: var(--bg3); color: var(--t3); cursor: pointer;
+  }
+  .img-mode-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .img-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--t3); }
+  .img-controls input[type=range] { accent-color: var(--blue); width: 100px; cursor: pointer; }
+  .img-preview-wrap { display: flex; gap: 12px; overflow-x: auto; }
+  #img-canvas-orig  { border-radius: 4px; max-height: 140px; width: auto; object-fit: contain; }
+  #img-canvas-bw    { border-radius: 4px; image-rendering: pixelated; max-height: 140px; width: auto; border: 1px solid var(--line); }
+  #img-ascii-pre {
+    font-family: var(--mono); font-size: 6px; line-height: 1.1; color: var(--t1);
+    background: var(--bg0); border-radius: 4px; padding: 6px; overflow: auto;
+    max-height: 140px; white-space: pre; letter-spacing: 0;
+  }
+  .img-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  #img-info { font-size: 11px; color: var(--t4); }
+
   .editor-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
   #editor {
     flex: 1; resize: none; background: var(--bg2); border: 1px solid var(--line);
@@ -189,9 +223,63 @@
         <button class="fmt-btn" onclick="insert('~')" title="Kleine Schrift">~klein</button>
         <button class="fmt-btn" onclick="insertLine('---')" title="Trennlinie">───</button>
         <button class="fmt-btn" onclick="insertLine('===')" title="Doppellinie">=══</button>
-        <button class="fmt-btn" onclick="clearEditor()" style="color:var(--t4);margin-left:auto">✕ Leeren</button>
+        <button class="fmt-btn" id="img-toggle-btn" onclick="toggleImgPanel()" style="margin-left:auto">📷 Bild</button>
+        <button class="fmt-btn" onclick="clearEditor()" style="color:var(--t4)">✕ Leeren</button>
       </div>
     </div>
+    <!-- Bild-Panel -->
+    <div class="img-panel" id="img-panel">
+      <div class="img-panel-head">
+        <div class="img-modes">
+          <button class="img-mode-btn active" id="mode-ascii" onclick="setImgMode('ascii')">ASCII-Art</button>
+          <button class="img-mode-btn" id="mode-bitmap" onclick="setImgMode('bitmap')">Bitmap</button>
+        </div>
+        <div class="img-controls" id="img-ctrl-ascii">
+          <label>Breite: <select id="img-ascii-width" onchange="reprocessImage()" style="background:var(--bg3);border:1px solid var(--line);border-radius:4px;color:var(--t1);font-size:12px;padding:2px 6px">
+            <option value="32" selected>32 Zeichen</option>
+            <option value="42">42 Zeichen</option>
+            <option value="48">48 Zeichen</option>
+          </select></label>
+          <label>Helligkeit: <input type="range" id="img-brightness" min="-100" max="100" value="0" oninput="reprocessImage()"> <span id="img-brightness-val">0</span></label>
+          <label><input type="checkbox" id="img-invert" onchange="reprocessImage()"> Invertieren</label>
+        </div>
+        <div class="img-controls" id="img-ctrl-bitmap" style="display:none">
+          <span>Druckbreite: 384 Dots</span>
+          <label>Schwelle: <input type="range" id="img-threshold" min="20" max="235" value="128" oninput="reprocessImage()"> <span id="img-threshold-val">128</span></label>
+          <label><input type="checkbox" id="img-bmp-invert" onchange="reprocessImage()"> Invertieren</label>
+        </div>
+      </div>
+
+      <div class="img-drop" id="img-drop" onclick="document.getElementById('img-file').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="event.preventDefault();this.classList.remove('drag');loadImgFile(event.dataTransfer.files[0])">
+        <input type="file" id="img-file" accept="image/*" onchange="loadImgFile(this.files[0])">
+        <span id="img-drop-label">Bild hier ablegen oder klicken zum Auswählen</span>
+      </div>
+
+      <div class="img-preview-wrap" id="img-preview-wrap" style="display:none">
+        <div>
+          <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Original</div>
+          <canvas id="img-canvas-orig"></canvas>
+        </div>
+        <div id="img-preview-ascii">
+          <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Vorschau</div>
+          <pre id="img-ascii-pre"></pre>
+        </div>
+        <div id="img-preview-bitmap" style="display:none">
+          <div style="font-size:11px;color:var(--t4);margin-bottom:3px">Vorschau (1-Bit)</div>
+          <canvas id="img-canvas-bw"></canvas>
+        </div>
+      </div>
+
+      <div class="img-actions" id="img-actions" style="display:none">
+        <button class="fmt-btn" id="img-insert-btn" onclick="insertAsciiIntoEditor()" style="display:none">↓ In Editor einfügen</button>
+        <button class="fmt-btn" id="img-print-btn" onclick="printImage()" style="background:var(--blue);color:#fff;border-color:var(--blue)">🖶 Bild drucken</button>
+        <span id="img-info"></span>
+      </div>
+    </div>
+
     <div class="editor-wrap">
       <textarea id="editor" placeholder="Text eingeben…&#10;&#10;!Fettzeile&#10;Normale Zeile&#10;>Zentrierte Zeile&#10;~Kleine Schrift&#10;---" spellcheck="false"></textarea>
       <div id="editor-ruler"></div>
@@ -519,6 +607,209 @@ document.getElementById('editor').addEventListener('keydown', e => {
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') doPrint();
 });
+
+// ── Bild-Panel ────────────────────────────────────────────────
+let _imgMode = 'ascii';
+let _imgEl   = null;   // loaded Image element
+
+function toggleImgPanel() {
+  const panel = document.getElementById('img-panel');
+  const btn   = document.getElementById('img-toggle-btn');
+  const open  = panel.classList.toggle('open');
+  btn.style.background = open ? 'var(--blue)' : '';
+  btn.style.color      = open ? '#fff' : '';
+  btn.style.borderColor = open ? 'var(--blue)' : '';
+}
+
+function setImgMode(mode) {
+  _imgMode = mode;
+  document.getElementById('mode-ascii').classList.toggle('active', mode === 'ascii');
+  document.getElementById('mode-bitmap').classList.toggle('active', mode === 'bitmap');
+  document.getElementById('img-ctrl-ascii').style.display  = mode === 'ascii'  ? '' : 'none';
+  document.getElementById('img-ctrl-bitmap').style.display = mode === 'bitmap' ? '' : 'none';
+  document.getElementById('img-preview-ascii').style.display  = mode === 'ascii'  ? '' : 'none';
+  document.getElementById('img-preview-bitmap').style.display = mode === 'bitmap' ? '' : 'none';
+  document.getElementById('img-insert-btn').style.display = mode === 'ascii' ? '' : 'none';
+  if (_imgEl) reprocessImage();
+}
+
+function loadImgFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    _imgEl = img;
+    // Draw original preview
+    const c  = document.getElementById('img-canvas-orig');
+    const maxH = 140;
+    const scale = Math.min(1, maxH / img.height);
+    c.width  = Math.round(img.width  * scale);
+    c.height = Math.round(img.height * scale);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    document.getElementById('img-drop-label').textContent = file.name;
+    document.getElementById('img-preview-wrap').style.display = '';
+    document.getElementById('img-actions').style.display = '';
+    reprocessImage();
+  };
+  img.src = url;
+}
+
+function reprocessImage() {
+  if (!_imgEl) return;
+  // sync slider labels
+  const bv = document.getElementById('img-brightness').value;
+  document.getElementById('img-brightness-val').textContent = bv > 0 ? '+' + bv : bv;
+  const tv = document.getElementById('img-threshold').value;
+  document.getElementById('img-threshold-val').textContent = tv;
+
+  if (_imgMode === 'ascii') renderAscii();
+  else                      renderBitmapPreview();
+}
+
+// ── ASCII-Art ─────────────────────────────────────────────────
+const ASCII_CHARS = ' ░▒▓█';   // hell→dunkel; cp437-kompatibel
+
+function renderAscii() {
+  const width      = parseInt(document.getElementById('img-ascii-width').value, 10);
+  const brightness = parseInt(document.getElementById('img-brightness').value, 10);
+  const invert     = document.getElementById('img-invert').checked;
+  const img        = _imgEl;
+
+  const aspect = 0.52;  // Zeichen sind ~2× höher als breit
+  const height = Math.max(1, Math.round(img.height / img.width * width * aspect));
+
+  const c   = document.createElement('canvas');
+  c.width   = width;
+  c.height  = height;
+  const ctx = c.getContext('2d');
+  ctx.filter = brightness !== 0
+    ? `brightness(${100 + brightness * 1.5}%)`
+    : 'none';
+  ctx.drawImage(img, 0, 0, width, height);
+  const px = ctx.getImageData(0, 0, width, height).data;
+
+  let text = '';
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i   = (y * width + x) * 4;
+      const lum = (0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2]) / 255;
+      let t = invert ? lum : 1 - lum;
+      text += ASCII_CHARS[Math.min(ASCII_CHARS.length - 1, Math.round(t * (ASCII_CHARS.length - 1)))];
+    }
+    text += '\n';
+  }
+  document.getElementById('img-ascii-pre').textContent = text;
+  document.getElementById('img-info').textContent = `${width} × ${height} Zeichen`;
+}
+
+function insertAsciiIntoEditor() {
+  const ascii = document.getElementById('img-ascii-pre').textContent;
+  if (!ascii.trim()) return;
+  const ta  = document.getElementById('editor');
+  const sep = ta.value && !ta.value.endsWith('\n') ? '\n' : '';
+  ta.value += sep + ascii;
+  // Kein weiteres Hard-Wrap — ASCII-Zeilen haben bereits exakt die konfigurierte Breite
+  renderPreview();
+  ta.scrollTop = ta.scrollHeight;
+}
+
+// ── Bitmap ────────────────────────────────────────────────────
+const PRINTER_DOTS = 384;   // Pipsta Classic: 48 mm × 8 dots/mm
+
+function renderBitmapPreview() {
+  const threshold = parseInt(document.getElementById('img-threshold').value, 10);
+  const invert    = document.getElementById('img-bmp-invert').checked;
+  const img       = _imgEl;
+
+  const scale  = PRINTER_DOTS / img.width;
+  const height = Math.round(img.height * scale);
+
+  const c   = document.createElement('canvas');
+  c.width   = PRINTER_DOTS;
+  c.height  = height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, PRINTER_DOTS, height);
+  const px = ctx.getImageData(0, 0, PRINTER_DOTS, height).data;
+
+  // 1-Bit canvas für Vorschau
+  const bwC   = document.getElementById('img-canvas-bw');
+  const maxH  = 140;
+  const previewScale = maxH / height;
+  bwC.width   = Math.round(PRINTER_DOTS * previewScale);
+  bwC.height  = maxH;
+  const bwCtx = bwC.getContext('2d');
+  const bwPx  = bwCtx.createImageData(bwC.width, bwC.height);
+
+  const widthBytes = Math.ceil(PRINTER_DOTS / 8);
+  const bits = new Uint8Array(widthBytes * height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < PRINTER_DOTS; x++) {
+      const i   = (y * PRINTER_DOTS + x) * 4;
+      const lum = 0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2];
+      let dark  = lum < threshold;
+      if (invert) dark = !dark;
+      if (dark) bits[y * widthBytes + Math.floor(x / 8)] |= (1 << (7 - x % 8));
+
+      // Vorschau-Pixel
+      const px2 = Math.floor(x * previewScale);
+      const py2 = Math.floor(y * previewScale);
+      if (px2 < bwC.width && py2 < bwC.height) {
+        const bi = (py2 * bwC.width + px2) * 4;
+        const v  = dark ? 0 : 255;
+        bwPx.data[bi]   = v; bwPx.data[bi+1] = v;
+        bwPx.data[bi+2] = v; bwPx.data[bi+3] = 255;
+      }
+    }
+  }
+  bwCtx.putImageData(bwPx, 0, 0);
+
+  // Daten für späteren Druckauftrag cachen
+  window._bitmapPayload = {
+    data: btoa(String.fromCharCode(...bits)),
+    width_bytes: widthBytes,
+    height
+  };
+  document.getElementById('img-info').textContent =
+    `${PRINTER_DOTS} × ${height} Dots · ${widthBytes} Bytes/Zeile`;
+}
+
+async function printImage() {
+  const btn = document.getElementById('img-print-btn');
+  btn.disabled = true;
+
+  try {
+    let resp, data;
+    if (_imgMode === 'ascii') {
+      // ASCII: als normaler Text-Druckauftrag
+      const width  = parseInt(document.getElementById('img-ascii-width').value, 10);
+      const ascii  = document.getElementById('img-ascii-pre').textContent;
+      const lines  = ascii.split('\n').filter(l => l !== '').map(t => ({ text: t }));
+      resp = await fetch(`${SERVER}/print`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line_width: width, header: '', footer: '', show_datetime: false, lines })
+      });
+    } else {
+      if (!window._bitmapPayload) { showResult('err', '✗ Kein Bild verarbeitet'); btn.disabled = false; return; }
+      resp = await fetch(`${SERVER}/print-image`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(window._bitmapPayload)
+      });
+    }
+    data = await resp.json();
+    if (data.ok) {
+      showResult('ok', `✓ Bild gedruckt via ${data.method}`);
+    } else if (data.not_found) {
+      showErrModal(data.error);
+    } else {
+      showResult('err', `✗ ${data.error.split('\n')[0]}`);
+    }
+  } catch (ex) {
+    showResult('err', `✗ ${ex.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 // Init
 pingServer();
