@@ -4,7 +4,7 @@ Pipsta Freitext-Drucker  –  Standalone HTTP-Server
 Start:   python pipsta_server.py
 Browser: http://localhost:8765
 """
-import sys, json, os, threading, webbrowser
+import sys, json, os, threading, webbrowser, struct, base64
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 
@@ -201,6 +201,20 @@ def _try_spooler(data):
         win32print.ClosePrinter(h)
     return f"Spooler ({name})"
 
+def build_bitmap_escpos(payload):
+    data_b64   = payload.get('data', '')
+    width_bytes = int(payload.get('width_bytes', 48))
+    height      = int(payload.get('height', 100))
+    bitmap      = base64.b64decode(data_b64)
+    # GS v 0  –  raster bit image, normal density
+    out  = NL + ALIGN_C
+    out += b'\x1d\x76\x30\x00'
+    out += struct.pack('<H', width_bytes)
+    out += struct.pack('<H', height)
+    out += bitmap
+    out += NL * 4
+    return out
+
 def send_to_printer(data):
     errors = []
     for fn, label in [(_try_winusb, 'WinUSB'), (_try_pyusb, 'PyUSB'), (_try_spooler, 'Spooler')]:
@@ -254,12 +268,15 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(resp)
             threading.Thread(target=_server.shutdown, daemon=True).start()
             return
-        if self.path != '/print':
+        if self.path not in ('/print', '/print-image'):
             self.send_error(404); return
         length  = int(self.headers.get('Content-Length', 0))
         payload = json.loads(self.rfile.read(length))
         try:
-            escpos = build_escpos(payload)
+            if self.path == '/print-image':
+                escpos = build_bitmap_escpos(payload)
+            else:
+                escpos = build_escpos(payload)
             method = send_to_printer(escpos)
             resp   = json.dumps({'ok': True, 'method': method}).encode()
         except RuntimeError as ex:
