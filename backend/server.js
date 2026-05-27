@@ -567,6 +567,51 @@ async function initDb() {
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
+  recalcOnStart();
+}
+
+function recalcOnStart() {
+  // Rohmaterial: stock_qty aus Movements neu berechnen
+  const rmIds = all('SELECT id FROM raw_materials').map(r => r.id);
+  let rmFixed = 0;
+  for (const id of rmIds) {
+    const calc = get(`SELECT COALESCE(SUM(CASE WHEN type='in' THEN qty ELSE -qty END),0) as s FROM raw_material_movements WHERE raw_material_id=?`, [id])?.s || 0;
+    const cur  = get('SELECT stock_qty FROM raw_materials WHERE id=?', [id])?.stock_qty ?? 0;
+    if (Math.abs(calc - cur) > 0.0001) {
+      run('UPDATE raw_materials SET stock_qty=MAX(0,?) WHERE id=?', [calc, id]);
+      rmFixed++;
+    }
+  }
+
+  // Lagerartikel: stock_qty aus inventory_transactions neu berechnen (falls Tabelle existiert)
+  try {
+    const invIds = all('SELECT id FROM inventory_items').map(r => r.id);
+    let invFixed = 0;
+    for (const id of invIds) {
+      const calc = get(`SELECT COALESCE(SUM(CASE WHEN type='in' THEN qty ELSE -qty END),0) as s FROM inventory_transactions WHERE inventory_item_id=?`, [id])?.s;
+      if (calc == null) break; // Tabelle ohne Einträge — kein Handlungsbedarf
+      const cur = get('SELECT stock_qty FROM inventory_items WHERE id=?', [id])?.stock_qty ?? 0;
+      if (Math.abs(calc - cur) > 0.0001) {
+        run('UPDATE inventory_items SET stock_qty=MAX(0,?) WHERE id=?', [calc, id]);
+        invFixed++;
+      }
+    }
+    if (invFixed) console.log(`recalc: ${invFixed} Lagerartikel-Bestände korrigiert`);
+  } catch (_) {}
+
+  if (rmFixed) console.log(`recalc: ${rmFixed} Rohmaterial-Bestände korrigiert`);
+
+  // PLM Status-Übersicht loggen
+  const byStatus = all(`
+    SELECT r.status, COUNT(*) as count
+    FROM revisions r JOIN items i ON r.item_id = i.id
+    WHERE r.id = (SELECT MAX(r2.id) FROM revisions r2 WHERE r2.item_id = r.item_id)
+    GROUP BY r.status ORDER BY r.status`);
+  if (byStatus.length) {
+    console.log('PLM Status: ' + byStatus.map(s => `${s.status}=${s.count}`).join(' · '));
+  }
+
+  if (rmFixed) saveDb();
 }
 
 function migrateOnce(key, fn) {
@@ -2170,7 +2215,7 @@ app.get('/api/stats', (req, res) => {
     raw_materials: count('SELECT COUNT(*) as c FROM raw_materials'),
     standard_parts:count('SELECT COUNT(*) as c FROM standard_parts'),
     open_pos:      count("SELECT COUNT(*) as c FROM purchase_orders WHERE status IN ('DRAFT','ORDERED')"),
-    by_status:     all("SELECT status, COUNT(*) as count FROM revisions GROUP BY status"),
+    by_status:     all(`SELECT r.status, COUNT(*) as count FROM revisions r JOIN items i ON r.item_id=i.id WHERE r.id=(SELECT MAX(r2.id) FROM revisions r2 WHERE r2.item_id=r.item_id) GROUP BY r.status ORDER BY r.status`),
     recent_items:  recentItems,
     recent_projects: all('SELECT * FROM projects ORDER BY updated_at DESC LIMIT 5'),
   });
