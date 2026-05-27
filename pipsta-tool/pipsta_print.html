@@ -48,6 +48,7 @@
   .fmt-btn:hover { background: var(--bg3); color: var(--t1); }
   .fmt-btn title { display: none; }
 
+  .editor-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
   #editor {
     flex: 1; resize: none; background: var(--bg2); border: 1px solid var(--line);
     border-radius: var(--r); color: var(--t1); font-family: var(--mono); font-size: 13px;
@@ -55,6 +56,11 @@
   }
   #editor:focus { border-color: var(--blue); }
   #editor::placeholder { color: var(--t4); }
+  #editor-ruler {
+    position: absolute; top: 1px; bottom: 1px; width: 0;
+    border-right: 1px dashed rgba(79,158,248,.35);
+    pointer-events: none; border-radius: 0 var(--r) var(--r) 0;
+  }
 
   .hint-box {
     background: var(--bg2); border: 1px solid var(--line); border-radius: var(--r);
@@ -186,7 +192,10 @@
         <button class="fmt-btn" onclick="clearEditor()" style="color:var(--t4);margin-left:auto">✕ Leeren</button>
       </div>
     </div>
-    <textarea id="editor" placeholder="Text eingeben…&#10;&#10;!Fettzeile&#10;Normale Zeile&#10;>Zentrierte Zeile&#10;~Kleine Schrift&#10;---" spellcheck="false"></textarea>
+    <div class="editor-wrap">
+      <textarea id="editor" placeholder="Text eingeben…&#10;&#10;!Fettzeile&#10;Normale Zeile&#10;>Zentrierte Zeile&#10;~Kleine Schrift&#10;---" spellcheck="false"></textarea>
+      <div id="editor-ruler"></div>
+    </div>
     <div class="hint-box">
       <code>!text</code> Fett &nbsp;·&nbsp;
       <code>&gt;text</code> Zentriert &nbsp;·&nbsp;
@@ -328,6 +337,64 @@ function center(s, w) {
   return ' '.repeat(pad) + s;
 }
 
+// ── Hard-Wrap ──────────────────────────────────────────────────
+function hardWrap(value, cursor, width) {
+  const lines = value.split('\n');
+  let out = '', newCursor = cursor, origPos = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let offset = 0;
+
+    while (offset < line.length) {
+      const chunkLen    = Math.min(width, line.length - offset);
+      const origChunkEnd = origPos + offset + chunkLen;
+      out += line.slice(offset, offset + chunkLen);
+      offset += chunkLen;
+      if (offset < line.length) {
+        if (cursor >= origChunkEnd) newCursor++;
+        out += '\n';
+      }
+    }
+
+    origPos += line.length;
+    if (i < lines.length - 1) { out += '\n'; origPos++; }
+  }
+
+  return { text: out, cursor: Math.min(newCursor, out.length) };
+}
+
+function applyWrap() {
+  const ta    = document.getElementById('editor');
+  const width = parseInt(document.getElementById('opt-width').value, 10);
+  const cur   = ta.selectionStart;
+  const { text, cursor } = hardWrap(ta.value, cur, width);
+  if (text !== ta.value) {
+    ta.value = text;
+    ta.selectionStart = ta.selectionEnd = cursor;
+  }
+}
+
+// ── Ruler ──────────────────────────────────────────────────────
+function updateRuler() {
+  const ta    = document.getElementById('editor');
+  const ruler = document.getElementById('editor-ruler');
+  const width = parseInt(document.getElementById('opt-width').value, 10);
+
+  // Zeichenbreite per temporärem Span messen
+  const span = document.createElement('span');
+  const cs   = getComputedStyle(ta);
+  span.style.cssText = `font-family:${cs.fontFamily};font-size:${cs.fontSize};` +
+                       `visibility:hidden;position:absolute;white-space:pre;top:-9999px`;
+  span.textContent = '0'.repeat(width);
+  document.body.appendChild(span);
+  const charsPx = span.offsetWidth;
+  document.body.removeChild(span);
+
+  const paddingLeft = parseInt(cs.paddingLeft) || 10;
+  ruler.style.left = (paddingLeft + charsPx) + 'px';
+}
+
 // ── Editor-Hilfe ───────────────────────────────────────────────
 function insert(prefix) {
   const ta  = document.getElementById('editor');
@@ -434,8 +501,8 @@ async function pingServer() {
 }
 
 // ── Events ─────────────────────────────────────────────────────
-document.getElementById('editor').addEventListener('input', renderPreview);
-document.getElementById('opt-width').addEventListener('change', renderPreview);
+document.getElementById('editor').addEventListener('input', () => { applyWrap(); renderPreview(); });
+document.getElementById('opt-width').addEventListener('change', () => { applyWrap(); renderPreview(); updateRuler(); });
 document.getElementById('opt-header').addEventListener('input', renderPreview);
 document.getElementById('opt-footer').addEventListener('input', renderPreview);
 document.getElementById('opt-datetime').addEventListener('change', renderPreview);
@@ -457,6 +524,8 @@ document.addEventListener('keydown', e => {
 pingServer();
 setInterval(pingServer, 10000);
 renderPreview();
+// Ruler nach erstem Paint (braucht gerenderte Schrift)
+requestAnimationFrame(updateRuler);
 </script>
 </body>
 </html>
