@@ -2993,7 +2993,8 @@ app.post('/api/print-receipt', (req, res) => {
 app.post('/api/print-label', (req, res) => {
   const data = req.body;
   const scriptPath = path.join(__dirname, 'print_receipt.py');
-  runPrintScript([scriptPath, '--mode', 'label', '--stdin'], data, 20000,
+  execFile(PYTHON_CMD, [scriptPath, '--mode', 'label', '--data', JSON.stringify(data)],
+    { timeout: 20000, encoding: 'utf8', windowsHide: true },
     (error, stdout, stderr) => {
       if (error) {
         const detail = [stderr, stdout, error.message].filter(Boolean).join('\n').trim();
