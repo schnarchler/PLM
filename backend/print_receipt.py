@@ -79,52 +79,40 @@ def build_receipt(data):
     return o
 
 def build_label(data):
-    """Rohmaterial-Etikett: Text (build_receipt) + QR als GS v 0 Bitmap"""
-    import struct
-
+    """Rohmaterial-Etikett: Text (build_receipt) + QR mit minimalem Zeilenabstand"""
     # Schritt 1: Text — identisch mit Produktion
     text_part = build_receipt(data)
 
-    # Schritt 2: QR als Pixel-Bitmap anhängen
     qr_content = (data.get('qr_content') or '').strip()
     if not qr_content:
         return text_part
     try:
         import qrcode as _qr
     except ImportError:
-        return text_part  # kein qrcode → nur Text, kein Absturz
+        return text_part
 
     qrc = _qr.QRCode(version=None,
                      error_correction=_qr.constants.ERROR_CORRECT_L,
-                     box_size=1, border=2)
+                     box_size=1, border=1)
     qrc.add_data(qr_content)
     qrc.make(fit=True)
-    matrix   = qrc.get_matrix()
-    modules  = len(matrix)           # z.B. 25 für Version 1 mit border=2
-    scale    = 6                      # 6 Dots pro Modul → ~18 mm Seitenlänge
-    dots     = modules * scale        # Pixel-Gesamtgrösse
-    w_bytes  = (dots + 7) // 8       # Bytes pro Zeile (aufgerundet auf 8)
+    matrix  = qrc.get_matrix()
+    modules = len(matrix)
 
-    # Bitmap-Daten: jede Modul-Zeile 'scale'-mal wiederholen
-    bdata = bytearray()
+    # ESC 3 n  — Zeilenabstand auf n Dots setzen (Standard = 30, min ~8)
+    # Mit n=8 und FONT_B (~6 Dots breit, ~8 Dots hoch) werden Module ca. quadratisch
+    # ESC 2 setzt Standardabstand zurück
+    SET_SPACING  = b'\x1b\x33\x08'   # ESC 3  8 Dots
+    RESET_SPACING = b'\x1b\x32'       # ESC 2
+
+    qr_out = SET_SPACING + FONT_B + ALIGN_L
     for row_data in matrix:
-        row = bytearray(w_bytes)
-        for col, dark in enumerate(row_data):
-            if dark:
-                for dot in range(scale):
-                    px = col * scale + dot
-                    row[px >> 3] |= 0x80 >> (px & 7)
-        for _ in range(scale):
-            bdata += row
+        # 2 Zeichen pro Modul → Breite ~12 Dots, Höhe ~8 Dots → annähernd quadratisch
+        line = bytes([0x23 if dark else 0x20 for dark in row_data for _ in range(2)])
+        qr_out += line + NL
+    qr_out += RESET_SPACING + FONT_A + NL * 3
 
-    # GS v 0  — Raster-Bitmap (mode 0 = normale Dichte)
-    qr_bitmap  = ALIGN_C
-    qr_bitmap += b'\x1d\x76\x30\x00'
-    qr_bitmap += struct.pack('<HH', w_bytes, dots)
-    qr_bitmap += bytes(bdata)
-    qr_bitmap += NL * 4
-
-    return text_part.rstrip(b'\x0a') + NL + qr_bitmap
+    return text_part.rstrip(b'\x0a') + NL + qr_out
 
 
 def build_multi_receipt(data):
