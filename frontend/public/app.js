@@ -1623,6 +1623,12 @@ async function renderSettings() {
             ${fck('receipt_show_notes','Notizen anzeigen',s.receipt_show_notes)}
           </div>
         </div>
+        <div class="sep-label">Rohmaterial-Etikett</div>
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
+            ${fck('label_show_qr','QR-Code auf Etikett drucken',s.label_show_qr ?? '1')}
+          </div>
+        </div>
         <div style="margin-top:16px">
           <button class="btn btn-primary" onclick="saveSettings()">💾 Speichern</button>
         </div>
@@ -1906,7 +1912,7 @@ async function saveSettings() {
     'default_tax_rate','quote_validity_days','default_payment_terms',
     'hourly_rate',
     'invoice_footer','quote_footer','receipt_footer','receipt_line_width','checkout_dir'];
-  const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes'];
+  const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes','label_show_qr'];
   const body = {};
   keys.forEach(k => {
     const el = document.getElementById('st-' + k);

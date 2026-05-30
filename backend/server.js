@@ -383,7 +383,8 @@ async function initDb() {
     receipt_show_datetime: '1',
     receipt_show_customer: '1',
     receipt_show_item_number: '1',
-    receipt_show_notes: '1'
+    receipt_show_notes: '1',
+    label_show_qr: '1'
   };
   Object.entries(defaults).forEach(([k, v]) => {
     db.run('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)', [k, v]);
@@ -3002,7 +3003,7 @@ app.post('/api/print-label', (req, res) => {
   const w      = parseInt(d.line_width) || 32;
 
   const rcptSettings = Object.fromEntries(
-    all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_line_width')")
+    all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_line_width','label_show_qr')")
     .map(r => [r.key, r.value])
   );
 
@@ -3024,6 +3025,7 @@ app.post('/api/print-label', (req, res) => {
     show_customer:    false,
     show_item_number: !!artNr,
     show_notes:       false,
+    show_qr:          rcptSettings.label_show_qr !== '0',
   };
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
