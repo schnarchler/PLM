@@ -312,6 +312,144 @@ def print_spooler(data, preferred=''):
         win32print.ClosePrinter(h)
     return name
 
+# ── Label (Produkt-Etikett) ────────────────────────────────────
+def _qr_escpos(text, module_size=4):
+    d  = text.encode('utf-8')
+    n  = len(d) + 3
+    pL = n & 0xFF; pH = (n >> 8) & 0xFF
+    out  = b'\x1d\x28\x6b\x04\x00\x31\x41\x32\x00'
+    out += bytes([0x1d,0x28,0x6b,0x03,0x00,0x31,0x43,module_size])
+    out += b'\x1d\x28\x6b\x03\x00\x31\x45\x31'
+    out += bytes([0x1d,0x28,0x6b,pL,pH,0x31,0x50,0x30]) + d
+    out += b'\x1d\x28\x6b\x03\x00\x31\x51\x30'
+    return out
+
+def build_label(data):
+    try:
+        return _build_label_bitmap(data)
+    except Exception as ex:
+        print(f"INFO: Bitmap-Label nicht verfügbar ({ex}), nutze Text-Fallback", file=sys.stderr)
+        return _build_label_text(data)
+
+def _build_label_bitmap(data):
+    import struct as _st
+    import qrcode as _qr
+    from PIL import Image, ImageDraw, ImageFont as _IF
+
+    art_nr   = (data.get('article_number') or '').strip()
+    name     = (data.get('name') or '').strip()
+    lot      = (data.get('lot_number') or '').strip()
+    brand    = (data.get('brand') or '').strip()
+    color    = (data.get('color') or '').strip()
+    material = (data.get('material_type') or '').strip()
+    p_temp   = data.get('print_temp')
+    b_temp   = data.get('bed_temp')
+    qr_data  = (data.get('qr_content') or art_nr or lot or name).strip()
+    DOTS     = 384
+
+    qrc = _qr.QRCode(version=None, error_correction=_qr.constants.ERROR_CORRECT_M, box_size=1, border=2)
+    qrc.add_data(qr_data); qrc.make(fit=True)
+    matrix = qrc.get_matrix(); qr_mod = len(matrix)
+
+    raw_lines = []
+    if art_nr:  raw_lines.append((art_nr, True, 16))
+    if name:    raw_lines.append((name, False, 11))
+    if lot:     raw_lines.append((f'LOT: {lot}', False, 10))
+    spec = ' · '.join(x for x in [material, color, brand] if x)
+    if spec:    raw_lines.append((spec, False, 9))
+    if p_temp:
+        raw_lines.append((f'{p_temp}C / {b_temp}C' if b_temp else f'{p_temp}C', False, 9))
+
+    def load_font(size, bold=False):
+        candidates = ([
+            '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf',
+            '/usr/share/fonts/TTF/DejaVuSansMono-Bold.ttf',
+            'C:/Windows/Fonts/courbd.ttf', 'C:/Windows/Fonts/arialbd.ttf',
+        ] if bold else [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+            '/usr/share/fonts/TTF/DejaVuSansMono.ttf',
+            'C:/Windows/Fonts/cour.ttf', 'C:/Windows/Fonts/arial.ttf',
+        ])
+        for p in candidates:
+            try: return _IF.truetype(p, size)
+            except: pass
+        try:    return _IF.load_default(size=size)
+        except: return _IF.load_default()
+
+    lines = [(t, load_font(s, b)) for t, b, s in raw_lines]
+    qr_scale = max(2, min(4, 96 // qr_mod))
+    qr_size  = qr_mod * qr_scale
+    text_h   = sum(f.size + 3 for _, f in lines) + 4
+    label_h  = max(qr_size + 4, text_h + 4)
+
+    img  = Image.new('1', (DOTS, label_h), 1)
+    draw = ImageDraw.Draw(img)
+
+    qr_y0 = (label_h - qr_size) // 2
+    for ry, row in enumerate(matrix):
+        for rx, dark in enumerate(row):
+            if dark:
+                x0, y0 = rx*qr_scale, qr_y0+ry*qr_scale
+                draw.rectangle([x0,y0,x0+qr_scale-1,y0+qr_scale-1], fill=0)
+
+    sep_x = qr_size + 5
+    draw.line([(sep_x,2),(sep_x,label_h-3)], fill=0)
+
+    tx = sep_x + 7; avail = DOTS - tx - 4
+    ty = (label_h - text_h) // 2 + 2
+    for text, font in lines:
+        t = text
+        while len(t) > 1:
+            try:    w = font.getlength(t)
+            except: w = len(t) * font.size * 0.6
+            if w <= avail: break
+            t = t[:-1]
+        draw.text((tx, ty), t, font=font, fill=0)
+        ty += font.size + 3
+
+    width_bytes = (DOTS + 7) // 8
+    bdata = []
+    for y in range(label_h):
+        for bx in range(width_bytes):
+            byte = 0
+            for b in range(8):
+                x = bx*8+b
+                if x < DOTS and img.getpixel((x,y)) == 0:
+                    byte |= (1 << (7-b))
+            bdata.append(byte)
+
+    out  = NL + ALIGN_C
+    out += b'\x1d\x76\x30\x00'
+    out += _st.pack('<H', width_bytes)
+    out += _st.pack('<H', label_h)
+    out += bytes(bdata)
+    out += NL * 3
+    return out
+
+def _build_label_text(data):
+    w       = int(data.get('line_width', 32))
+    art_nr  = (data.get('article_number') or '').strip()
+    name    = (data.get('name') or '').strip()
+    lot     = (data.get('lot_number') or '').strip()
+    brand   = (data.get('brand') or '').strip()
+    color   = (data.get('color') or '').strip()
+    material= (data.get('material_type') or '').strip()
+    p_temp  = data.get('print_temp')
+    b_temp  = data.get('bed_temp')
+    qr_data = (data.get('qr_content') or art_nr or lot or name).strip()
+    qs      = int(data.get('qr_size', 4))
+    out = NL + ALIGN_C
+    if art_nr: out += BOLD_ON + e(art_nr) + NL + BOLD_OFF
+    out += ALIGN_L + e('-'*w) + NL
+    if name:   out += BOLD_ON + e(name[:w]) + NL + BOLD_OFF
+    if lot:    out += e(f'LOT: {lot}'[:w]) + NL
+    spec = ' · '.join(x for x in [material, color, brand] if x)
+    if spec:   out += FONT_B + e(spec[:w]) + NL + FONT_A
+    if p_temp: out += FONT_B + e((f'{p_temp}C / {b_temp}C' if b_temp else f'{p_temp}C')[:w]) + NL + FONT_A
+    out += ALIGN_L + e('-'*w) + NL
+    out += ALIGN_C + _qr_escpos(qr_data, qs) + NL*3
+    return out
+
 # ── Main ──────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
@@ -326,7 +464,12 @@ def main():
         print(f"FEHLER: Ungültiges JSON - {ex}", file=sys.stderr); sys.exit(1)
 
     try:
-        receipt = build_multi_receipt(data) if args.mode == 'multi' else build_receipt(data)
+        if args.mode == 'label':
+            receipt = build_label(data)
+        elif args.mode == 'multi':
+            receipt = build_multi_receipt(data)
+        else:
+            receipt = build_receipt(data)
         err1 = err2 = None
         try:
             used = print_winusb(receipt)

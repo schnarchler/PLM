@@ -2824,6 +2824,14 @@ async function onSearch(q) {
           <td>${esc(c.name)}</td><td style="color:var(--t3)">${esc(c.email||'—')}</td>
           <td style="color:var(--t3)">${esc(c.city||'—')}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
+      ${r.rawMaterials?.length ? section('Rohmaterial', r.rawMaterials.length) + `<div class="tbl-wrap"><table>
+        <thead><tr><th>Artikel-Nr.</th><th>Name</th><th>LOT</th><th style="text-align:right">Bestand</th></tr></thead>
+        <tbody>${r.rawMaterials.map(m=>`<tr style="cursor:pointer" onclick="gotoView('rawmaterials');openRawMatDetail(${m.id})">
+          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(m.article_number||'—')}</td>
+          <td>${esc(m.name)}</td>
+          <td style="font-family:var(--mono);font-size:12px;color:var(--t3)">${esc(m.lot_number||'—')}</td>
+          <td style="font-family:var(--mono);font-size:13px;text-align:right">${fmtN(m.stock_qty,0)} ${esc(m.unit)}</td>
+        </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.projects?.length ? section('Projekte', r.projects.length) + `<div class="card-grid">${r.projects.map(p=>`
         <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>
         <div class="card-num">${p.number}</div><div class="card-name">${esc(p.name)}</div></div>`).join('')}</div>` : ''}
@@ -7586,7 +7594,11 @@ function _renderRawMaterialsTable() {
 
   const q = _rmQ.toLowerCase();
   const filtered = q
-    ? items.filter(i => [i.material_type, i.color, i.brand, i.name, i.dimensions].some(f => (f||'').toLowerCase().includes(q)))
+    ? items.filter(i => {
+        const basic = [i.material_type, i.color, i.brand, i.name, i.dimensions].some(f => (f||'').toLowerCase().includes(q));
+        if (basic) return true;
+        return (i.lots||[]).some(l => (l.article_number||'').toLowerCase().includes(q) || (l.lot_number||'').toLowerCase().includes(q));
+      })
     : items;
 
   const displayed = _rmShowAll ? filtered : filtered.filter(i => i.stock_qty > 0);
@@ -7901,10 +7913,6 @@ async function openRmLabelModal(rmId, lotNumber, _unused) {
   // Label-Daten laden
   const label = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lotNumber)}`);
 
-  // Pipsta-Verbindung prüfen
-  let pipstaOk = false;
-  try { const p = await fetch(`${PIPSTA}/`, { signal: AbortSignal.timeout(1500) }); pipstaOk = p.ok; } catch (_) {}
-
   const qrContent = artNr || lotNumber || label.name;
   const specLine = [label.material_type, label.color, label.brand].filter(Boolean).join(' · ');
   const previewLines = [
@@ -7936,9 +7944,7 @@ async function openRmLabelModal(rmId, lotNumber, _unused) {
     `<div style="font-size:11px;color:var(--t4);margin-top:4px">QR: <span style="font-family:var(--mono);color:var(--blue)">${esc(qrContent)}</span></div>`,
   ].filter(Boolean).join('');
 
-  const statusHtml = pipstaOk
-    ? `<span style="color:var(--green);font-size:12px">● Pipsta Tool verbunden</span>`
-    : `<span style="color:var(--amber);font-size:12px">⚠ Pipsta Tool nicht erreichbar (localhost:8765)</span>`;
+  const statusHtml = '';
 
   const modalHtml = `
     <div class="overlay" id="rmLabelModal" onclick="if(event.target===this)closeModal('rmLabelModal')">
@@ -7976,7 +7982,6 @@ async function openRmLabelModal(rmId, lotNumber, _unused) {
 }
 
 async function printRmLabel(label) {
-  const PIPSTA = 'http://localhost:8765';
   const btn = document.getElementById('rm-label-print-btn');
   if (btn) btn.disabled = true;
   try {
@@ -7993,19 +7998,10 @@ async function printRmLabel(label) {
       line_width:     parseInt(document.getElementById('rm-label-width')?.value || '32'),
       qr_size:        parseInt(document.getElementById('rm-label-qr-size')?.value || '4'),
     };
-    const r = await fetch(`${PIPSTA}/print-label`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const d = await r.json();
-    if (d.ok) {
-      toast('Etikett gedruckt', 'ok');
-      closeModal('rmLabelModal');
-    } else {
-      toast('Druckfehler: ' + (d.error?.split('\n')[0] || '?'), 'err');
-    }
+    const d = await api('/api/print-label', 'POST', payload);
+    if (d.ok) { toast('Etikett gedruckt', 'ok'); closeModal('rmLabelModal'); }
   } catch (e) {
-    toast('Pipsta Tool nicht erreichbar (localhost:8765)', 'err');
+    toast('Druckfehler: ' + (e.message || '?'), 'err');
   } finally {
     if (btn) btn.disabled = false;
   }
