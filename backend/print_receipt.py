@@ -126,8 +126,12 @@ def build_label(data):
 
     pad = max(0, (w - size) // 2)
 
-    # FONT_B für QR → jedes Zeichen ~halb so breit/hoch wie FONT_A → QR deutlich kleiner
-    qr_out = FONT_B
+    # ESC 3 n: Zeilenabstand auf n Dots (Standard 30, hier 8 → ~4× kleiner in der Höhe)
+    # FONT_B:  Zeichenbreite halbieren
+    ESC3 = b'\x1b\x33\x08'   # ESC 3  8
+    ESC2 = b'\x1b\x32'        # ESC 2 (Standard zurück)
+
+    qr_out = ESC3 + FONT_B
     for y in range(0, size, 2):
         line = SPC * pad
         for x in range(size):
@@ -138,7 +142,7 @@ def build_label(data):
             elif bot:          line += LOWER
             else:              line += SPC
         qr_out += ALIGN_L + e(line) + NL
-    qr_out += FONT_A + NL * 3
+    qr_out += ESC2 + FONT_A + NL * 3
 
     return text_part.rstrip(b'\x0a') + NL + qr_out
 
