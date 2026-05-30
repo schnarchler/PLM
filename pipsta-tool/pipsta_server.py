@@ -201,6 +201,176 @@ def _try_spooler(data):
         win32print.ClosePrinter(h)
     return f"Spooler ({name})"
 
+def build_product_label_bitmap(payload):
+    """Kompaktes Produkt-Etikett als Bitmap: QR links, Text rechts.
+    Benötigt: pip install qrcode pillow
+    """
+    try:
+        import qrcode as _qr
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError as ex:
+        raise RuntimeError(f'pip install qrcode pillow\n({ex})')
+
+    art_nr   = (payload.get('article_number') or '').strip()
+    name     = (payload.get('name') or '').strip()
+    lot      = (payload.get('lot_number') or '').strip()
+    brand    = (payload.get('brand') or '').strip()
+    color    = (payload.get('color') or '').strip()
+    material = (payload.get('material_type') or '').strip()
+    p_temp   = payload.get('print_temp')
+    b_temp   = payload.get('bed_temp')
+    qr_data  = (payload.get('qr_content') or art_nr or lot or name).strip()
+    DOTS     = 384
+
+    # QR-Matrix erzeugen
+    qrc = _qr.QRCode(version=None,
+                     error_correction=_qr.constants.ERROR_CORRECT_M,
+                     box_size=1, border=2)
+    qrc.add_data(qr_data); qrc.make(fit=True)
+    matrix  = qrc.get_matrix()
+    qr_mod  = len(matrix)
+
+    # Textzeilen (ohne Bestand)
+    raw_lines = []
+    if art_nr:  raw_lines.append((art_nr,  True,  16))
+    if name:    raw_lines.append((name,    False, 11))
+    if lot:     raw_lines.append((f'LOT: {lot}', False, 10))
+    spec = ' · '.join(x for x in [material, color, brand] if x)
+    if spec:    raw_lines.append((spec, False, 9))
+    if p_temp:
+        tmp = f'{p_temp}°C / {b_temp}°C' if b_temp else f'{p_temp}°C'
+        raw_lines.append((tmp, False, 9))
+
+    # Schriften laden (Cross-Platform)
+    def load_font(size, bold=False):
+        paths = ([
+            '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf',
+            '/usr/share/fonts/TTF/DejaVuSansMono-Bold.ttf',
+            'C:/Windows/Fonts/courbd.ttf', 'C:/Windows/Fonts/arialbd.ttf',
+        ] if bold else [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+            '/usr/share/fonts/TTF/DejaVuSansMono.ttf',
+            'C:/Windows/Fonts/cour.ttf',   'C:/Windows/Fonts/arial.ttf',
+        ])
+        for p in paths:
+            try: return ImageFont.truetype(p, size)
+            except: pass
+        try:    return ImageFont.load_default(size=size)
+        except: return ImageFont.load_default()
+
+    lines = [(t, load_font(s, b)) for t, b, s in raw_lines]
+
+    # QR-Skalierung (Ziel: ~96px)
+    qr_scale = max(2, min(4, 96 // qr_mod))
+    qr_size  = qr_mod * qr_scale
+
+    # Gesamthöhe
+    text_h  = sum(f.size + 3 for _, f in lines) + 4
+    label_h = max(qr_size + 4, text_h + 4)
+
+    # Bild erstellen (1-Bit, weiss)
+    img  = Image.new('1', (DOTS, label_h), 1)
+    draw = ImageDraw.Draw(img)
+
+    # QR links, vertikal zentriert
+    qr_y0 = (label_h - qr_size) // 2
+    for ry, row in enumerate(matrix):
+        for rx, dark in enumerate(row):
+            if dark:
+                x0, y0 = rx * qr_scale, qr_y0 + ry * qr_scale
+                draw.rectangle([x0, y0, x0+qr_scale-1, y0+qr_scale-1], fill=0)
+
+    # Trennlinie
+    sep_x = qr_size + 5
+    draw.line([(sep_x, 2), (sep_x, label_h-3)], fill=0)
+
+    # Text rechts
+    tx    = sep_x + 7
+    avail = DOTS - tx - 4
+    ty    = (label_h - text_h) // 2 + 2
+    for text, font in lines:
+        # Kürzen bis es passt
+        t = text
+        while len(t) > 1:
+            try:    w = font.getlength(t)
+            except: w = len(t) * font.size * 0.6
+            if w <= avail: break
+            t = t[:-1]
+        draw.text((tx, ty), t, font=font, fill=0)
+        ty += font.size + 3
+
+    # Bitmap → ESC/POS GS v 0
+    width_bytes = (DOTS + 7) // 8
+    bdata = []
+    for y in range(label_h):
+        for bx in range(width_bytes):
+            byte = 0
+            for b in range(8):
+                x = bx * 8 + b
+                if x < DOTS and img.getpixel((x, y)) == 0:
+                    byte |= (1 << (7 - b))
+            bdata.append(byte)
+
+    out  = NL + ALIGN_C
+    out += b'\x1d\x76\x30\x00'
+    out += struct.pack('<H', width_bytes)
+    out += struct.pack('<H', label_h)
+    out += bytes(bdata)
+    out += NL * 3
+    return out
+
+def qr_escpos(data, module_size=4):
+    """Nativer ESC/POS QR-Code (GS ( k)"""
+    d  = data.encode('utf-8')
+    n  = len(d) + 3
+    pL = n & 0xFF
+    pH = (n >> 8) & 0xFF
+    out  = b'\x1d\x28\x6b\x04\x00\x31\x41\x32\x00'           # model 2
+    out += bytes([0x1d,0x28,0x6b,0x03,0x00,0x31,0x43,module_size])  # Modulgrösse
+    out += b'\x1d\x28\x6b\x03\x00\x31\x45\x31'                # Fehlerkorrektur M
+    out += bytes([0x1d,0x28,0x6b,pL,pH,0x31,0x50,0x30]) + d   # Daten speichern
+    out += b'\x1d\x28\x6b\x03\x00\x31\x51\x30'                # Drucken
+    return out
+
+def build_label_escpos(payload):
+    w           = int(payload.get('line_width', 32))
+    art_nr      = payload.get('article_number', '')
+    name        = payload.get('name', '')
+    lot         = payload.get('lot_number', '')
+    brand       = payload.get('brand', '')
+    color       = payload.get('color', '')
+    material    = payload.get('material_type', '')
+    qty         = payload.get('remaining_qty', '')
+    unit        = payload.get('unit', '')
+    print_temp  = payload.get('print_temp')
+    bed_temp    = payload.get('bed_temp')
+    qr_content  = payload.get('qr_content') or art_nr or lot or name
+    module_size = int(payload.get('qr_size', 4))
+
+    out = NL + ALIGN_C
+
+    # Artikel-Nummer gross + fett
+    if art_nr:
+        out += BOLD_ON + enc(art_nr) + NL + BOLD_OFF
+        out += ALIGN_L + enc('-' * w) + NL
+
+    # Materialinfos
+    out += ALIGN_L
+    if name:  out += BOLD_ON + enc(name[:w]) + NL + BOLD_OFF
+    if lot:   out += enc(f'LOT: {lot}'[:w]) + NL
+    if brand: out += FONT_B + enc(brand[:w]) + NL + FONT_A
+    spec_parts = [p for p in [material, color] if p]
+    if spec_parts: out += FONT_B + enc(' · '.join(spec_parts)[:w]) + NL + FONT_A
+    if qty != '': out += enc(f'Bestand: {qty} {unit}'[:w]) + NL
+    if print_temp: out += FONT_B + enc(f'{print_temp}°C / Bett {bed_temp}°C'[:w] if bed_temp else f'{print_temp}°C'[:w]) + NL + FONT_A
+    out += ALIGN_L + enc('-' * w) + NL
+
+    # QR-Code zentriert
+    out += ALIGN_C
+    out += qr_escpos(qr_content, module_size)
+    out += NL * 3
+    return out
+
 def build_bitmap_escpos(payload):
     data_b64   = payload.get('data', '')
     width_bytes = int(payload.get('width_bytes', 48))
@@ -268,13 +438,23 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(resp)
             threading.Thread(target=_server.shutdown, daemon=True).start()
             return
-        if self.path not in ('/print', '/print-image'):
+        if self.path not in ('/print', '/print-image', '/print-label'):
             self.send_error(404); return
         length  = int(self.headers.get('Content-Length', 0))
         payload = json.loads(self.rfile.read(length))
         try:
             if self.path == '/print-image':
                 escpos = build_bitmap_escpos(payload)
+            elif self.path == '/print-label':
+                try:
+                    escpos = build_product_label_bitmap(payload)
+                except RuntimeError as bex:
+                    if 'pip install' in str(bex):
+                        # Fallback: ESC/POS Text + nativer QR
+                        print(f'INFO: Bitmap-Label nicht verfügbar ({bex.args[0].splitlines()[0]}), nutze Text-Fallback')
+                        escpos = build_label_escpos(payload)
+                    else:
+                        raise
             else:
                 escpos = build_escpos(payload)
             method = send_to_printer(escpos)

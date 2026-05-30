@@ -7695,12 +7695,17 @@ async function openRawMatDetail(id) {
             const depleted = rem <= 0;
             const label    = l.lot_number || (l.last_date ? l.last_date.slice(0,10) : '—');
             const bg = depleted ? 'background:rgba(74,79,91,.18)' : 'background:var(--bg2)';
-            return `<div style="display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:8px;padding:7px 10px;${bg};border:1px solid var(--line);border-radius:var(--r-sm)">
-              <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':!l.lot_number?'color:var(--t4)':''}">
-                ${depleted?'<span style="color:var(--red);font-size:11px;margin-right:4px">●</span>':'<span style="color:var(--green);font-size:11px;margin-right:4px">●</span>'}${esc(label)}
+            const artNr = l.article_number || '';
+            return `<div style="display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:8px;padding:7px 10px;${bg};border:1px solid var(--line);border-radius:var(--r-sm)">
+              <span>
+                <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':!l.lot_number?'color:var(--t4)':''}">
+                  ${depleted?'<span style="color:var(--red);font-size:11px;margin-right:4px">●</span>':'<span style="color:var(--green);font-size:11px;margin-right:4px">●</span>'}${esc(label)}
+                </span>
+                ${artNr ? `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px">${esc(artNr)}</span>` : ''}
               </span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--t3)'};text-align:right">${fmtN(rem,0)} ${item.unit}</span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--teal)'};text-align:right">${l.unit_price!=null?fmtChf(l.unit_price)+'/'+item.unit:'—'}</span>
+              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px;white-space:nowrap" onclick="openRmLabelModal(${item.id},'${esc(l.lot_number||'')}',${item.id})" title="Etikett drucken">🏷</button>
               ${l.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="editLotRow(${l.id},'${esc(l.lot_number||'')}',${l.qty},${l.unit_price??'null'},'${esc(item.unit)}',${item.id})" title="Bearbeiten">✎</button>` : '<span></span>'}
             </div>`;
           }).join('')}
@@ -7881,6 +7886,129 @@ function _rmAutoFillTemps() {
   if (!match) return;
   if (match.print_temp && tempEl) tempEl.value = match.print_temp;
   if (match.bed_temp   && bedEl)  bedEl.value  = match.bed_temp;
+}
+
+async function openRmLabelModal(rmId, lotNumber, _unused) {
+  const PIPSTA = 'http://localhost:8765';
+
+  // Artikel-Nummer zuweisen falls noch nicht vorhanden
+  let artNr = '';
+  try {
+    const r = await api(`/api/raw-materials/${rmId}/lots/assign-number`, 'POST', { lot_number: lotNumber });
+    artNr = r.article_number || '';
+  } catch (e) { toast('Artikel-Nummer konnte nicht vergeben werden', 'warn'); }
+
+  // Label-Daten laden
+  const label = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lotNumber)}`);
+
+  // Pipsta-Verbindung prüfen
+  let pipstaOk = false;
+  try { const p = await fetch(`${PIPSTA}/`, { signal: AbortSignal.timeout(1500) }); pipstaOk = p.ok; } catch (_) {}
+
+  const qrContent = artNr || lotNumber || label.name;
+  const specLine = [label.material_type, label.color, label.brand].filter(Boolean).join(' · ');
+  const previewLines = [
+    // Kompaktes Produktetikett-Layout: QR links, Text rechts
+    `<div style="display:flex;gap:10px;align-items:center">
+      <div style="background:#fff;border:1px solid var(--line);border-radius:4px;padding:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;width:72px;height:72px">
+        <div id="rm-label-qr-preview" style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--t4);text-align:center">
+          <svg viewBox="0 0 40 40" width="60" height="60" fill="currentColor" opacity=".3">
+            <rect x="1" y="1" width="16" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>
+            <rect x="5" y="5" width="8" height="8"/>
+            <rect x="23" y="1" width="16" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>
+            <rect x="27" y="5" width="8" height="8"/>
+            <rect x="1" y="23" width="16" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>
+            <rect x="5" y="27" width="8" height="8"/>
+            <rect x="23" y="23" width="4" height="4"/><rect x="29" y="23" width="4" height="4"/>
+            <rect x="23" y="29" width="4" height="4"/><rect x="33" y="29" width="4" height="4"/>
+            <rect x="29" y="33" width="4" height="4"/>
+          </svg>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+        ${artNr ? `<span style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--t1)">${esc(artNr)}</span>` : '<span style="color:var(--t4);font-size:12px">Artikel-Nr. wird vergeben…</span>'}
+        <span style="font-size:13px;color:var(--t2)">${esc(label.name)}</span>
+        ${lotNumber ? `<span style="font-size:12px;color:var(--t3);font-family:var(--mono)">LOT: ${esc(lotNumber)}</span>` : ''}
+        ${specLine ? `<span style="font-size:11px;color:var(--t4)">${esc(specLine)}</span>` : ''}
+        ${label.print_temp ? `<span style="font-size:11px;color:var(--t4)">${label.print_temp}°C / ${label.bed_temp||'—'}°C</span>` : ''}
+      </div>
+    </div>`,
+    `<div style="font-size:11px;color:var(--t4);margin-top:4px">QR: <span style="font-family:var(--mono);color:var(--blue)">${esc(qrContent)}</span></div>`,
+  ].filter(Boolean).join('');
+
+  const statusHtml = pipstaOk
+    ? `<span style="color:var(--green);font-size:12px">● Pipsta Tool verbunden</span>`
+    : `<span style="color:var(--amber);font-size:12px">⚠ Pipsta Tool nicht erreichbar (localhost:8765)</span>`;
+
+  const modalHtml = `
+    <div class="overlay" id="rmLabelModal" onclick="if(event.target===this)closeModal('rmLabelModal')">
+      <div class="modal" style="max-width:380px">
+        <div class="modal-head"><span>Etikett drucken</span><button class="btn-close" onclick="closeModal('rmLabelModal')">✕</button></div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+          <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px;line-height:1.8;font-size:13px">
+            ${previewLines}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="font-size:12px;color:var(--t3)">QR-Grösse:</label>
+            <select id="rm-label-qr-size" class="fi" style="width:80px;padding:3px 6px">
+              <option value="3">Klein</option>
+              <option value="4" selected>Mittel</option>
+              <option value="6">Gross</option>
+            </select>
+            <label style="font-size:12px;color:var(--t3);margin-left:8px">Breite:</label>
+            <select id="rm-label-width" class="fi" style="width:100px;padding:3px 6px">
+              <option value="32" selected>32 Zeichen</option>
+              <option value="42">42 Zeichen</option>
+              <option value="48">48 Zeichen</option>
+            </select>
+          </div>
+          ${statusHtml}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal('rmLabelModal')">Abbrechen</button>
+          <button class="btn btn-primary" id="rm-label-print-btn" onclick="printRmLabel(${JSON.stringify(label).replace(/"/g,'&quot;')})">🖶 Drucken</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('rmLabelModal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function printRmLabel(label) {
+  const PIPSTA = 'http://localhost:8765';
+  const btn = document.getElementById('rm-label-print-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const payload = {
+      article_number: label.article_number || '',
+      name:           label.name,
+      lot_number:     label.lot_number,
+      brand:          label.brand,
+      color:          label.color,
+      material_type:  label.material_type,
+      print_temp:     label.print_temp,
+      bed_temp:       label.bed_temp,
+      qr_content:     label.article_number || label.lot_number || label.name,
+      line_width:     parseInt(document.getElementById('rm-label-width')?.value || '32'),
+      qr_size:        parseInt(document.getElementById('rm-label-qr-size')?.value || '4'),
+    };
+    const r = await fetch(`${PIPSTA}/print-label`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Etikett gedruckt', 'ok');
+      closeModal('rmLabelModal');
+    } else {
+      toast('Druckfehler: ' + (d.error?.split('\n')[0] || '?'), 'err');
+    }
+  } catch (e) {
+    toast('Pipsta Tool nicht erreichbar (localhost:8765)', 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function editLotRow(movId, lotNr, qty, price, unit, matId) {

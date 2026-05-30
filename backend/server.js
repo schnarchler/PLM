@@ -564,6 +564,8 @@ async function initDb() {
   try { db.run('ALTER TABLE orders ADD COLUMN include_hours INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
+  try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
+  db.run(`INSERT OR IGNORE INTO counters VALUES ('rm_lot',0)`);
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -3617,6 +3619,63 @@ app.delete('/api/bom-std/:id', (req, res) => {
 // ==============================================================
 // RAW MATERIALS
 // ==============================================================
+// Artikel-Nummer einem Lot zuweisen (idempotent)
+app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
+  const rmId = parseInt(req.params.id);
+  const { lot_number } = req.body;
+  const rm = get('SELECT * FROM raw_materials WHERE id=?', [rmId]);
+  if (!rm) return res.status(404).json({ error: 'not found' });
+
+  // Existiert schon?
+  const existing = get(
+    `SELECT article_number FROM raw_material_movements WHERE raw_material_id=? AND lot_number=? AND article_number IS NOT NULL LIMIT 1`,
+    [rmId, lot_number || '']
+  );
+  if (existing?.article_number) return res.json({ article_number: existing.article_number });
+
+  // Neue Nummer generieren
+  const pre = getSetting('prefix_rm_lot', 'RM');
+  const yr  = getSetting('num_yearly', '1') !== '0' ? new Date().getFullYear() + '-' : '';
+  const num = padN(nextCounter('rm_lot'), 'pad_rm_lot', 4);
+  const articleNumber = `${pre}-${yr}${num}`;
+
+  run(
+    `UPDATE raw_material_movements SET article_number=? WHERE raw_material_id=? AND (lot_number=? OR (lot_number IS NULL AND ?='')) AND type='in' ORDER BY id LIMIT 1`,
+    [articleNumber, rmId, lot_number || '', lot_number || '']
+  );
+  saveDb();
+  logChange('raw_material', rmId, rm.name, `Artikel-Nr. ${articleNumber} für LOT ${lot_number || '(kein)'} zugewiesen`);
+  res.json({ article_number: articleNumber });
+});
+
+// Label-Daten für Etikettendruck
+app.get('/api/raw-materials/:id/label', (req, res) => {
+  const rm  = get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]);
+  if (!rm) return res.status(404).json({ error: 'not found' });
+  const { lot_number } = req.query;
+  const mov = get(
+    `SELECT article_number FROM raw_material_movements WHERE raw_material_id=? AND (lot_number=? OR (lot_number IS NULL AND ?='')) AND article_number IS NOT NULL LIMIT 1`,
+    [rm.id, lot_number || '', lot_number || '']
+  );
+  const remaining = get(
+    `SELECT COALESCE(SUM(CASE WHEN type='in' THEN qty ELSE -qty END),0) as qty FROM raw_material_movements WHERE raw_material_id=? AND (lot_number=? OR (lot_number IS NULL AND ?=''))`,
+    [rm.id, lot_number || '', lot_number || '']
+  );
+  res.json({
+    article_number: mov?.article_number || null,
+    name:        rm.name,
+    material_type: rm.material_type,
+    color:       rm.color,
+    brand:       rm.brand,
+    lot_number:  lot_number || '',
+    remaining_qty: Math.max(0, remaining?.qty || 0),
+    unit:        rm.unit,
+    print_temp:  rm.print_temp,
+    bed_temp:    rm.bed_temp,
+    dimensions:  rm.dimensions,
+  });
+});
+
 app.get('/api/raw-materials', (req, res) => {
   const mats = all('SELECT * FROM raw_materials ORDER BY material_type, color, name');
   mats.forEach(m => {
@@ -3624,7 +3683,8 @@ app.get('/api/raw-materials', (req, res) => {
       SUM(CASE WHEN type='in' THEN qty ELSE 0 END) as qty,
       SUM(CASE WHEN type='in' THEN qty ELSE -qty END) as remaining_qty,
       MAX(CASE WHEN type='in' THEN unit_price ELSE NULL END) as unit_price,
-      MAX(created_at) as last_date
+      MAX(created_at) as last_date,
+      MAX(article_number) as article_number
       FROM raw_material_movements
       WHERE raw_material_id=? AND lot_number IS NOT NULL AND lot_number!=''
       GROUP BY lot_number
