@@ -348,17 +348,28 @@ def build_label(data):
     return _build_label_text(data)
 
 
+def _ensure_qrcode():
+    """qrcode bei Bedarf automatisch installieren"""
+    try:
+        import qrcode
+        return qrcode
+    except ImportError:
+        import subprocess
+        print("INFO: Installiere qrcode...", file=sys.stderr)
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'qrcode', '--quiet'],
+                       check=True, capture_output=True)
+        import qrcode
+        return qrcode
+
+
 def _build_label_qr_text(data):
     """QR-Code als Unicode-Halbblock-Zeichen (cp437-kompatibel, kein Pillow nötig)"""
-    import qrcode as _qr
+    _qr = _ensure_qrcode()
 
     w       = int(data.get('line_width', 32))
     art_nr  = (data.get('article_number') or '').strip()
     name    = (data.get('name') or '').strip()
     lot     = (data.get('lot_number') or '').strip()
-    brand   = (data.get('brand') or '').strip()
-    p_temp  = data.get('print_temp')
-    b_temp  = data.get('bed_temp')
     qr_data = (data.get('qr_content') or art_nr or lot or name).strip()
 
     # ── Kopf ──────────────────────────────────────────────────
@@ -368,10 +379,6 @@ def _build_label_qr_text(data):
     out += sep(w)
     out += row(name, bold=True, w=w)
     out += row(f'LOT: {lot}' if lot else 'LOT: -', w=w)
-    details = []
-    if brand:  details.append(brand)
-    if p_temp: details.append(f'{p_temp}C/Bett {b_temp}C' if b_temp else f'{p_temp}C')
-    if details: out += row('  '.join(details), small=True, w=w)
     out += sep(w)
 
     # ── QR als Halbblock ────────────────────────────────────────
@@ -429,10 +436,6 @@ def _build_label_bitmap(data):
     if art_nr:  raw_lines.append((art_nr, True, 16))
     if name:    raw_lines.append((name, False, 11))
     raw_lines.append((f'LOT: {lot}' if lot else 'LOT: -', True, 11))
-    # kein Material-Typ, nur Marke + Temperatur
-    if brand:   raw_lines.append((brand, False, 9))
-    if p_temp:
-        raw_lines.append((f'{p_temp}C / {b_temp}C' if b_temp else f'{p_temp}C', False, 9))
 
     def load_font(size, bold=False):
         candidates = ([
@@ -514,10 +517,6 @@ def _build_label_text(data):
     out += sep(w)
     out += row(name, bold=True, w=w)
     out += row(f'LOT: {lot}' if lot else 'LOT: -', w=w)
-    details = []
-    if brand:  details.append(brand)
-    if p_temp: details.append(f'{p_temp}C/Bett {b_temp}C' if b_temp else f'{p_temp}C')
-    if details: out += row('  '.join(details), small=True, w=w)
     out += sep(w) + NL * 3
     return out
 
