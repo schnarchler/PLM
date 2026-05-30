@@ -2994,31 +2994,45 @@ app.post('/api/print-receipt', (req, res) => {
   );
 });
 
+// Rohmaterial-Etikett — identischer Mechanismus wie /api/print-receipt
 app.post('/api/print-label', (req, res) => {
-  const d          = req.body;
-  const artNr      = (d.article_number || '').trim();
-  const spec       = [d.material_type, d.color, d.brand].filter(Boolean).join(' / ');
-  const tempStr    = d.print_temp ? `${d.print_temp}C / Bett ${d.bed_temp||'?'}C` : '';
-  const descParts  = [d.lot_number ? `LOT: ${d.lot_number}` : '', spec, tempStr].filter(Boolean);
+  const d      = req.body;
+  const artNr  = (d.article_number || '').trim();
+  const lot    = (d.lot_number || '').trim();
+  const w      = parseInt(d.line_width) || 32;
 
-  // QR-Inhalt: nur Artikel-Nr. (kurz = kleine QR-Version, kein Zeilenpuffer-Überlauf)
-  const qrContent = artNr || d.lot_number || '';
+  const rcptSettings = Object.fromEntries(
+    all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_line_width')")
+    .map(r => [r.key, r.value])
+  );
 
+  // Gleiche Struktur wie build_receipt — nur Text, keine Sonderzeichen
   const printData = {
-    article_number:  artNr,
-    name:            d.name || '',
-    lot_number:      d.lot_number || '',
-    qr_content:      qrContent,
-    line_width:      parseInt(d.line_width) || 32,
+    header:           artNr || 'Rohmaterial',
+    name:             d.name || '',
+    number:           artNr,
+    desc:             lot ? `LOT: ${lot}` : '',
+    qty:              null,
+    unit:             '',
+    price:            null,
+    customer:         '',
+    notes:            '',
+    footer:           '',
+    params:           {},
+    line_width:       parseInt(rcptSettings.receipt_line_width) || w,
+    show_datetime:    false,
+    show_customer:    false,
+    show_item_number: !!artNr,
+    show_notes:       false,
   };
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
-  execFile(PYTHON_CMD, [scriptPath, '--mode', 'label', '--data', JSON.stringify(printData)],
+  execFile(PYTHON_CMD, [scriptPath, '--data', JSON.stringify(printData)],
     { timeout: 20000, encoding: 'utf8', windowsHide: true },
     (error, stdout, stderr) => {
       if (error) {
-        const detail = [stderr, stdout, error.message].filter(Boolean).join('\n').trim();
-        console.error('Pipsta label error:\n' + detail);
+        const detail = [stderr, stdout, error.message].filter(Boolean).join(' | ').trim();
+        console.error('Pipsta label error:', detail);
         return res.status(500).json({ error: detail || 'Unbekannter Fehler' });
       }
       console.log('Pipsta label:', stdout.trim());
