@@ -7707,24 +7707,28 @@ async function openRawMatDetail(id) {
           <span style="font-size:11px;color:var(--t4);font-weight:400;margin-left:6px">${activeCount} aktiv${depletedCount?' · '+depletedCount+' leer':''} · ${fmtN(item.stock_qty,0)} ${item.unit} gesamt</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:2px">
-          ${sorted.map(l => {
+          ${sorted.map((l, lotIdx) => {
             const rem      = l.remaining_qty ?? l.qty ?? 0;
             const depleted = rem <= 0;
             const label    = l.lot_number || (l.last_date ? l.last_date.slice(0,10) : '—');
             const bg = depleted ? 'background:rgba(74,79,91,.18)' : 'background:var(--bg2)';
             const artNr = l.article_number || '';
+            // Daten sicher in globalem Objekt speichern — kein Encoding in onclick-Attributen
+            const lotKey = `${item.id}_${lotIdx}`;
+            window._rmLotMap = window._rmLotMap || {};
+            window._rmLotMap[lotKey] = { rmId: item.id, lotNumber: l.lot_number || '', artNr };
             return `<div style="display:grid;grid-template-columns:1fr auto auto auto auto auto;align-items:center;gap:6px;padding:7px 10px;${bg};border:1px solid var(--line);border-radius:var(--r-sm)">
               <span>
                 <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':!l.lot_number?'color:var(--t4)':''}">
                   ${depleted?'<span style="color:var(--red);font-size:11px;margin-right:4px">●</span>':'<span style="color:var(--green);font-size:11px;margin-right:4px">●</span>'}${esc(label)}
                 </span>
                 ${artNr
-                  ? `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px">${esc(artNr)}</span>`
-                  : `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 5px;margin-left:6px;color:var(--t4)" data-rmid="${item.id}" data-lot="${esc(l.lot_number||'')}" onclick="assignRmArticleNr(this)">+ Nr.</button>`}
+                  ? `<span id="artnr-${lotKey}" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px">${esc(artNr)}</span>`
+                  : `<button id="artnr-${lotKey}" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 5px;margin-left:6px;color:var(--t4)" onclick="assignRmArticleNr('${lotKey}')">+ Nr.</button>`}
               </span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--t3)'};text-align:right">${fmtN(rem,0)} ${item.unit}</span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--teal)'};text-align:right">${l.unit_price!=null?fmtChf(l.unit_price)+'/'+item.unit:'—'}</span>
-              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px" data-rmid="${item.id}" data-lot="${esc(l.lot_number||'')}" onclick="openRmPrintModal(this)" title="Etikett drucken">🖶</button>
+              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px" onclick="openRmPrintModal('${lotKey}')" title="Etikett drucken">🖶</button>
               ${l.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="editLotRow(${l.id},'${esc(l.lot_number||'')}',${l.qty},${l.unit_price??'null'},'${esc(item.unit)}',${item.id})" title="Bearbeiten">✎</button>` : '<span></span>'}
             </div>`;
           }).join('')}
@@ -7908,20 +7912,24 @@ function _rmAutoFillTemps() {
 }
 
 // ── Artikel-Nr. vergeben (inline, kein Modal) ──────────────────
-async function assignRmArticleNr(btn) {
-  const rmId = btn.dataset.rmid;
-  const lot  = btn.dataset.lot;
-  btn.disabled = true;
-  btn.textContent = '…';
+async function assignRmArticleNr(lotKey) {
+  const entry = (window._rmLotMap || {})[lotKey];
+  if (!entry) { toast('Lot-Daten nicht gefunden', 'err'); return; }
+  const { rmId, lotNumber } = entry;
+  const btn = document.getElementById('artnr-' + lotKey);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const r = await api(`/api/raw-materials/${rmId}/lots/assign-number`, 'POST', { lot_number: lot });
+    const r = await api(`/api/raw-materials/${rmId}/lots/assign-number`, 'POST', { lot_number: lotNumber });
     if (r.article_number) {
-      // Nummer im Button-Span anzeigen
-      const span = document.createElement('span');
-      span.style.cssText = 'font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:6px';
-      span.textContent = r.article_number;
-      btn.replaceWith(span);
-      // Liste links aktualisieren
+      entry.artNr = r.article_number;
+      const el = document.getElementById('artnr-' + lotKey);
+      if (el) {
+        const span = document.createElement('span');
+        span.id = 'artnr-' + lotKey;
+        span.style.cssText = 'font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px';
+        span.textContent = r.article_number;
+        el.replaceWith(span);
+      }
       if (window._rmAllItems) {
         const updated = await api('/api/raw-materials');
         window._rmAllItems = updated;
@@ -7929,27 +7937,26 @@ async function assignRmArticleNr(btn) {
       }
     }
   } catch(e) {
-    btn.disabled = false;
-    btn.textContent = '+ Nr.';
+    if (btn) { btn.disabled = false; btn.textContent = '+ Nr.'; }
     toast('Fehler: ' + (e.message||'?'), 'err');
   }
 }
 
-// ── Etikett drucken (direkter Button, kein Nummervergabe-Flow) ─
-async function openRmPrintModal(btn) {
-  const rmId = btn.dataset.rmid;
-  const lot  = btn.dataset.lot;
+async function openRmPrintModal(lotKey) {
+  const entry = (window._rmLotMap || {})[lotKey];
+  if (!entry) { toast('Lot-Daten nicht gefunden', 'err'); return; }
+  const { rmId, lotNumber } = entry;
 
   // Label-Daten laden
   let label;
   try {
-    label = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lot)}`);
+    label = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lotNumber)}`);
   } catch(e) { toast('Fehler beim Laden: ' + (e.message||'?'), 'err'); return; }
 
   window._rmLabelData = label;
 
-  const artNr   = label.article_number || '';
-  const qrText  = artNr || lot || label.name || '';
+  const artNr   = entry.artNr || label.article_number || '';
+  const qrText  = artNr || lotNumber || label.name || '';
   const specLine = [label.material_type, label.color, label.brand].filter(Boolean).join(' · ');
 
   const modalHtml = `
@@ -7961,7 +7968,7 @@ async function openRmPrintModal(btn) {
           <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;font-size:13px;line-height:1.7">
             ${artNr ? `<div style="font-family:var(--mono);font-weight:700;font-size:14px;color:var(--t1)">${esc(artNr)}</div>` : '<div style="color:var(--amber);font-size:12px">⚠ Noch keine Artikel-Nr. — erst "+ Nr." klicken</div>'}
             <div>${esc(label.name)}</div>
-            ${lot ? `<div style="color:var(--t3);font-family:var(--mono);font-size:12px">LOT: ${esc(lot)}</div>` : ''}
+            ${lotNumber ? `<div style="color:var(--t3);font-family:var(--mono);font-size:12px">LOT: ${esc(lotNumber)}</div>` : ''}
             ${specLine ? `<div style="color:var(--t4);font-size:12px">${esc(specLine)}</div>` : ''}
             ${label.print_temp ? `<div style="color:var(--t4);font-size:12px">${label.print_temp}°C / Bett ${label.bed_temp||'—'}°C</div>` : ''}
             <div style="margin-top:8px;border:1px dashed var(--line);border-radius:4px;padding:6px;font-size:11px;color:var(--t4);text-align:center">
