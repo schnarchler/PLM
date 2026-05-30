@@ -211,7 +211,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   const cadBtn = document.getElementById('tb-cad-btn');
   if (cadBtn) cadBtn.style.display = state.settings?.cad_path ? '' : 'none';
   history.replaceState({ view: 'dashboard' }, '');
-  gotoView('dashboard');
+
+  // QR-Code-URL: ?search=RM-2026-0001 → direkt zur Suche navigieren
+  const urlSearch = new URLSearchParams(window.location.search).get('search');
+  if (urlSearch) {
+    gotoView('search');
+    const inp = document.getElementById('search-input');
+    if (inp) { inp.value = urlSearch; inp.dispatchEvent(new Event('input')); }
+  } else {
+    gotoView('dashboard');
+  }
   loadStats();
   loadCheckouts();
   _renderRecent();
@@ -7958,13 +7967,8 @@ async function openRmPrintModal(lotKey) {
       article_number: artNr || rm.article_number || '',
       name:           rm.name,
       lot_number:     lotNumber,
-      brand:          rm.brand,
-      color:          rm.color,
-      material_type:  rm.material_type,
-      print_temp:     rm.print_temp,
-      bed_temp:       rm.bed_temp,
-      unit:           rm.unit,
       line_width:     32,
+      base_url:       window.location.origin,
     });
     toast('Etikett gedruckt ✓', 'ok');
   } catch(e) {
