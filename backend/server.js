@@ -3662,6 +3662,9 @@ app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
   );
   if (existing?.article_number) return res.json({ article_number: existing.article_number });
 
+  // Counter sicherstellen (falls Migration noch nicht gelaufen)
+  db.run(`INSERT OR IGNORE INTO counters VALUES ('rm_lot',0)`);
+
   // Neue Nummer generieren
   const pre = getSetting('prefix_rm_lot', 'RM');
   const yr  = getSetting('num_yearly', '1') !== '0' ? new Date().getFullYear() + '-' : '';
@@ -3674,7 +3677,7 @@ app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
     [articleNumber, rmId, lot]
   );
   saveDb();
-  logChange('raw_material', rmId, rm.name, `Artikel-Nr. ${articleNumber} für LOT ${lot || '(kein)'} zugewiesen`);
+  log('raw_material', rmId, 'artikel_nr', `${articleNumber} für LOT ${lot || '(kein)'}`);
   res.json({ article_number: articleNumber });
 });
 
