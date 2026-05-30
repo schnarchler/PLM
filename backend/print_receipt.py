@@ -126,7 +126,8 @@ def build_label(data):
 
     pad = max(0, (w - size) // 2)
 
-    qr_out = b''
+    # FONT_B für QR → jedes Zeichen ~halb so breit/hoch wie FONT_A → QR deutlich kleiner
+    qr_out = FONT_B
     for y in range(0, size, 2):
         line = SPC * pad
         for x in range(size):
@@ -137,8 +138,8 @@ def build_label(data):
             elif bot:          line += LOWER
             else:              line += SPC
         qr_out += ALIGN_L + e(line) + NL
+    qr_out += FONT_A + NL * 3
 
-    qr_out += NL * 3
     return text_part.rstrip(b'\x0a') + NL + qr_out
 
 
