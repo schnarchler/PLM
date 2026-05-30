@@ -7987,16 +7987,21 @@ async function openRmLabelModal(rmId, lotNumber, _unused) {
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="closeModal('rmLabelModal')">Abbrechen</button>
-          <button class="btn btn-primary" id="rm-label-print-btn" onclick="printRmLabel(${JSON.stringify(label).replace(/"/g,'&quot;')})">🖶 Drucken</button>
+          <button class="btn btn-primary" id="rm-label-print-btn" onclick="printRmLabel()">🖶 Drucken</button>
         </div>
       </div>
     </div>`;
+
+  // Label-Daten sicher in globaler Variable speichern (kein JSON in onclick)
+  window._rmLabelData = label;
 
   document.getElementById('rmLabelModal')?.remove();
   document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
-async function printRmLabel(label) {
+async function printRmLabel() {
+  const label = window._rmLabelData;
+  if (!label) { toast('Keine Label-Daten', 'err'); return; }
   const btn = document.getElementById('rm-label-print-btn');
   if (btn) btn.disabled = true;
   try {
@@ -8013,12 +8018,14 @@ async function printRmLabel(label) {
       line_width:     parseInt(document.getElementById('rm-label-width')?.value || '32'),
       qr_size:        parseInt(document.getElementById('rm-label-qr-size')?.value || '4'),
     };
+    console.log('[Label] Sende an /api/print-label:', payload);
     const d = await api('/api/print-label', 'POST', payload);
     if (d.ok) {
       toast('Etikett gedruckt', 'ok');
       closeModal('rmLabelModal');
-      // Detail neu laden damit Artikel-Nr. im Tab sichtbar ist
-      if (state.item) openRawMatDetail(state.item.id || rmId);
+    } else {
+      const firstLine = (d.error || '?').split('\n').filter(l => l.startsWith('FEHLER:') || !l.startsWith('INFO:'))[0] || d.error || '?';
+      toast('Druckfehler: ' + firstLine, 'err');
     }
   } catch (e) {
     toast('Druckfehler: ' + (e.message || '?'), 'err');
