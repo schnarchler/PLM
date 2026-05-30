@@ -334,11 +334,76 @@ def _qr_escpos(text, module_size=4):
     return out
 
 def build_label(data):
+    # Versuch 1: Bitmap mit QR (qrcode + Pillow)
     try:
         return _build_label_bitmap(data)
     except Exception as ex:
-        print(f"INFO: Bitmap-Label nicht verfügbar ({ex}), nutze Text-Fallback", file=sys.stderr)
-        return _build_label_text(data)
+        print(f"INFO: Bitmap-Label nicht verfügbar ({ex})", file=sys.stderr)
+    # Versuch 2: Text mit QR als Unicode-Blockzeichen (nur qrcode, kein Pillow)
+    try:
+        return _build_label_qr_text(data)
+    except Exception as ex:
+        print(f"INFO: QR-Text nicht verfügbar ({ex}), nutze Text-Fallback", file=sys.stderr)
+    # Versuch 3: Reiner Text
+    return _build_label_text(data)
+
+
+def _build_label_qr_text(data):
+    """QR-Code als Unicode-Halbblock-Zeichen (cp437-kompatibel, kein Pillow nötig)"""
+    import qrcode as _qr
+
+    w       = int(data.get('line_width', 32))
+    art_nr  = (data.get('article_number') or '').strip()
+    name    = (data.get('name') or '').strip()
+    lot     = (data.get('lot_number') or '').strip()
+    brand   = (data.get('brand') or '').strip()
+    p_temp  = data.get('print_temp')
+    b_temp  = data.get('bed_temp')
+    qr_data = (data.get('qr_content') or art_nr or lot or name).strip()
+
+    # ── Kopf ──────────────────────────────────────────────────
+    out = NL + sep(w)
+    if art_nr:
+        out += row(art_nr, bold=True, centered=True, w=w)
+    out += sep(w)
+    out += row(name, bold=True, w=w)
+    out += row(f'LOT: {lot}' if lot else 'LOT: -', w=w)
+    details = []
+    if brand:  details.append(brand)
+    if p_temp: details.append(f'{p_temp}C/Bett {b_temp}C' if b_temp else f'{p_temp}C')
+    if details: out += row('  '.join(details), small=True, w=w)
+    out += sep(w)
+
+    # ── QR als Halbblock ────────────────────────────────────────
+    # Jede Zeile enthält 2 QR-Reihen: █ ▀ ▄ (Leerzeichen)
+    # cp437: █=0xDB ▀=0xDF ▄=0xDC
+    FULL = '█'; UPPER = '▀'; LOWER = '▄'; SPC = ' '
+
+    qrc = _qr.QRCode(
+        version=None,
+        error_correction=_qr.constants.ERROR_CORRECT_M,
+        box_size=1, border=2)
+    qrc.add_data(qr_data)
+    qrc.make(fit=True)
+    matrix = qrc.get_matrix()
+    size   = len(matrix)
+    pad    = max(0, (w - size) // 2)
+
+    out += ALIGN_C
+    for y in range(0, size, 2):
+        line = SPC * pad
+        for x in range(size):
+            top = matrix[y][x]
+            bot = matrix[y+1][x] if (y+1) < size else False
+            if   top and bot:  line += FULL
+            elif top:          line += UPPER
+            elif bot:          line += LOWER
+            else:              line += SPC
+        out += ALIGN_L + e(line) + NL
+
+    out += sep(w)
+    out += NL * 3
+    return out
 
 def _build_label_bitmap(data):
     import struct as _st
@@ -363,9 +428,9 @@ def _build_label_bitmap(data):
     raw_lines = []
     if art_nr:  raw_lines.append((art_nr, True, 16))
     if name:    raw_lines.append((name, False, 11))
-    if lot:     raw_lines.append((f'LOT: {lot}', False, 10))
-    spec = ' · '.join(x for x in [material, color, brand] if x)
-    if spec:    raw_lines.append((spec, False, 9))
+    raw_lines.append((f'LOT: {lot}' if lot else 'LOT: -', True, 11))
+    # kein Material-Typ, nur Marke + Temperatur
+    if brand:   raw_lines.append((brand, False, 9))
     if p_temp:
         raw_lines.append((f'{p_temp}C / {b_temp}C' if b_temp else f'{p_temp}C', False, 9))
 
@@ -436,31 +501,24 @@ def _build_label_bitmap(data):
     return out
 
 def _build_label_text(data):
-    # Nur einfache ESC/POS-Befehle – kompatibel mit Pipsta Classic
-    # (kein GS ( k QR-Befehl – nicht vom Pipsta unterstützt)
     w       = int(data.get('line_width', 32))
     art_nr  = (data.get('article_number') or '').strip()
     name    = (data.get('name') or '').strip()
     lot     = (data.get('lot_number') or '').strip()
     brand   = (data.get('brand') or '').strip()
-    color   = (data.get('color') or '').strip()
-    material= (data.get('material_type') or '').strip()
     p_temp  = data.get('print_temp')
     b_temp  = data.get('bed_temp')
-    out  = NL
-    out += sep(w)
+    out  = NL + sep(w)
     if art_nr:
         out += row(art_nr, bold=True, centered=True, w=w)
-        out += sep(w)
-    out += row(name, bold=True, w=w)
-    if lot:     out += row(f'LOT: {lot}', w=w)
-    spec = ' / '.join(x for x in [material, color, brand] if x)
-    if spec:    out += row(spec, small=True, w=w)
-    if p_temp:
-        tmp = f'{p_temp}C / Bett {b_temp}C' if b_temp else f'{p_temp}C'
-        out += row(tmp, small=True, w=w)
     out += sep(w)
-    out += NL * 3
+    out += row(name, bold=True, w=w)
+    out += row(f'LOT: {lot}' if lot else 'LOT: -', w=w)
+    details = []
+    if brand:  details.append(brand)
+    if p_temp: details.append(f'{p_temp}C/Bett {b_temp}C' if b_temp else f'{p_temp}C')
+    if details: out += row('  '.join(details), small=True, w=w)
+    out += sep(w) + NL * 3
     return out
 
 # ── Main ──────────────────────────────────────────────────────
