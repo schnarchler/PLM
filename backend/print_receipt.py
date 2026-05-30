@@ -96,7 +96,10 @@ def build_label(data):
     # Schritt 1: Text — identisch mit Produktion
     text_part = build_receipt(data)
 
-    # QR-Inhalt: Artikel-Nr. — aus 'article_number' oder Fallback auf 'number'
+    # QR nur wenn in Einstellungen aktiviert
+    if not data.get('show_qr', True):
+        return text_part
+
     art_nr  = (data.get('article_number') or data.get('number') or '').strip()
     lot     = (data.get('lot_number') or '').strip()
     qr_data = art_nr or lot
@@ -126,11 +129,7 @@ def build_label(data):
 
     pad = max(0, (w - size) // 2)
 
-    # ESC 3 16: Zeilenabstand 16 Dots (Standard 30) → ~2× kleiner, kein Abschneiden
-    ESC3 = b'\x1b\x33\x10'   # ESC 3  16
-    ESC2 = b'\x1b\x32'        # ESC 2 (Standard zurück)
-
-    qr_out = ESC3 + FONT_A
+    qr_out = b''
     for y in range(0, size, 2):
         line = SPC * pad
         for x in range(size):
@@ -141,7 +140,7 @@ def build_label(data):
             elif bot:          line += LOWER
             else:              line += SPC
         qr_out += ALIGN_L + e(line) + NL
-    qr_out += ESC2 + FONT_A + NL * 3
+    qr_out += NL * 3
 
     return text_part.rstrip(b'\x0a') + NL + qr_out
 
