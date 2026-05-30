@@ -7945,61 +7945,33 @@ async function assignRmArticleNr(lotKey) {
 async function openRmPrintModal(lotKey) {
   const entry = (window._rmLotMap || {})[lotKey];
   if (!entry) { toast('Lot-Daten nicht gefunden', 'err'); return; }
-  const { rmId, lotNumber } = entry;
+  const { rmId, lotNumber, artNr } = entry;
 
-  // Label-Daten laden
-  let label;
+  // Direkt drucken — kein Modal, genau wie Produktion
+  const btnEl = document.querySelector(`[onclick="openRmPrintModal('${lotKey}')"]`);
+  const orig = btnEl ? btnEl.textContent : '';
+  if (btnEl) { btnEl.textContent = '⏳'; btnEl.disabled = true; }
+
   try {
-    label = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lotNumber)}`);
-  } catch(e) { toast('Fehler beim Laden: ' + (e.message||'?'), 'err'); return; }
-
-  window._rmLabelData = label;
-
-  const artNr   = entry.artNr || label.article_number || '';
-  const qrText  = artNr || lotNumber || label.name || '';
-  const specLine = [label.material_type, label.color, label.brand].filter(Boolean).join(' · ');
-
-  const modalHtml = `
-    <div class="overlay" id="rmLabelModal" onclick="if(event.target===this)closeModal('rmLabelModal')">
-      <div class="modal" style="max-width:360px">
-        <div class="modal-head"><span>Etikett drucken</span><button class="btn-close" onclick="closeModal('rmLabelModal')">✕</button></div>
-        <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-
-          <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;font-size:13px;line-height:1.7">
-            ${artNr ? `<div style="font-family:var(--mono);font-weight:700;font-size:14px;color:var(--t1)">${esc(artNr)}</div>` : '<div style="color:var(--amber);font-size:12px">⚠ Noch keine Artikel-Nr. — erst "+ Nr." klicken</div>'}
-            <div>${esc(label.name)}</div>
-            ${lotNumber ? `<div style="color:var(--t3);font-family:var(--mono);font-size:12px">LOT: ${esc(lotNumber)}</div>` : ''}
-            ${specLine ? `<div style="color:var(--t4);font-size:12px">${esc(specLine)}</div>` : ''}
-            ${label.print_temp ? `<div style="color:var(--t4);font-size:12px">${label.print_temp}°C / Bett ${label.bed_temp||'—'}°C</div>` : ''}
-            <div style="margin-top:8px;border:1px dashed var(--line);border-radius:4px;padding:6px;font-size:11px;color:var(--t4);text-align:center">
-              QR: <span style="font-family:var(--mono);color:var(--blue)">${esc(qrText)}</span>
-            </div>
-          </div>
-
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <label style="font-size:12px;color:var(--t3)">Breite:</label>
-            <select id="rm-label-width" style="background:var(--bg2);border:1px solid var(--line);border-radius:4px;color:var(--t1);font-size:12px;padding:3px 6px">
-              <option value="32" selected>32 Zeichen</option>
-              <option value="42">42 Zeichen</option>
-              <option value="48">48 Zeichen</option>
-            </select>
-            <label style="font-size:12px;color:var(--t3)">QR-Grösse:</label>
-            <select id="rm-label-qr-size" style="background:var(--bg2);border:1px solid var(--line);border-radius:4px;color:var(--t1);font-size:12px;padding:3px 6px">
-              <option value="3">Klein</option>
-              <option value="4" selected>Mittel</option>
-              <option value="6">Gross</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-ghost" onclick="closeModal('rmLabelModal')">Abbrechen</button>
-          <button class="btn btn-primary" id="rm-label-print-btn" onclick="printRmLabel()">🖶 Drucken</button>
-        </div>
-      </div>
-    </div>`;
-
-  document.getElementById('rmLabelModal')?.remove();
-  document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const rm = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lotNumber)}`);
+    await api('/api/print-label', 'POST', {
+      article_number: artNr || rm.article_number || '',
+      name:           rm.name,
+      lot_number:     lotNumber,
+      brand:          rm.brand,
+      color:          rm.color,
+      material_type:  rm.material_type,
+      print_temp:     rm.print_temp,
+      bed_temp:       rm.bed_temp,
+      unit:           rm.unit,
+      line_width:     32,
+    });
+    toast('Etikett gedruckt ✓', 'ok');
+  } catch(e) {
+    showPrinterError(e);
+  } finally {
+    if (btnEl) { btnEl.textContent = orig; btnEl.disabled = false; }
+  }
 }
 
 async function openRmLabelModal(rmId, lotNumber, _unused) {
