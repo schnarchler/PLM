@@ -78,40 +78,67 @@ def build_receipt(data):
     o+=NL*3
     return o
 
+def _ensure_qrcode():
+    try:
+        import qrcode
+        return qrcode
+    except ImportError:
+        import subprocess
+        print("INFO: Installiere qrcode...", file=sys.stderr)
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'qrcode', '--quiet'],
+                       check=True, capture_output=True)
+        import qrcode
+        return qrcode
+
+
 def build_label(data):
-    """Rohmaterial-Etikett: Text (build_receipt) + QR mit minimalem Zeilenabstand"""
+    """Rohmaterial-Etikett: Text + QR als Halbblock-Zeichen (identisch mit c22ce470)"""
     # Schritt 1: Text — identisch mit Produktion
     text_part = build_receipt(data)
 
-    qr_content = (data.get('qr_content') or '').strip()
-    if not qr_content:
+    # QR-Inhalt: NUR Artikel-Nr. oder Lot — nie URL (URL zu lang → Überlauf)
+    art_nr  = (data.get('article_number') or '').strip()
+    lot     = (data.get('lot_number') or '').strip()
+    qr_data = art_nr or lot
+    if not qr_data:
         return text_part
+
     try:
-        import qrcode as _qr
-    except ImportError:
+        _qr = _ensure_qrcode()
+    except Exception:
         return text_part
 
-    qrc = _qr.QRCode(version=None,
-                     error_correction=_qr.constants.ERROR_CORRECT_L,
-                     box_size=1, border=1)
-    qrc.add_data(qr_content)
+    FULL = '█'; UPPER = '▀'; LOWER = '▄'; SPC = ' '
+    w = int(data.get('line_width') or LINE_W)
+
+    qrc = _qr.QRCode(
+        version=None,
+        error_correction=_qr.constants.ERROR_CORRECT_M,
+        box_size=1, border=2)
+    qrc.add_data(qr_data)
     qrc.make(fit=True)
-    matrix  = qrc.get_matrix()
-    modules = len(matrix)
+    matrix = qrc.get_matrix()
+    size   = len(matrix)
 
-    # ESC 3 n  — Zeilenabstand auf n Dots setzen (Standard = 30, min ~8)
-    # Mit n=8 und FONT_B (~6 Dots breit, ~8 Dots hoch) werden Module ca. quadratisch
-    # ESC 2 setzt Standardabstand zurück
-    SET_SPACING  = b'\x1b\x33\x08'   # ESC 3  8 Dots
-    RESET_SPACING = b'\x1b\x32'       # ESC 2
+    # Sicherheit: nie breiter als Druckerzeile
+    if size > w:
+        return text_part
 
-    qr_out = SET_SPACING + FONT_B + ALIGN_L
-    for row_data in matrix:
-        # 2 Zeichen pro Modul → Breite ~12 Dots, Höhe ~8 Dots → annähernd quadratisch
-        line = bytes([0x23 if dark else 0x20 for dark in row_data for _ in range(2)])
-        qr_out += line + NL
-    qr_out += RESET_SPACING + FONT_A + NL * 3
+    pad = max(0, (w - size) // 2)
 
+    qr_out = b''
+    for y in range(0, size, 2):
+        line = SPC * pad
+        for x in range(size):
+            top = matrix[y][x]
+            bot = matrix[y+1][x] if (y+1) < size else False
+            if   top and bot:  line += FULL
+            elif top:          line += UPPER
+            elif bot:          line += LOWER
+            else:              line += SPC
+        qr_out += ALIGN_L + e(line) + NL
+
+    qr_out += NL * 3
     return text_part.rstrip(b'\x0a') + NL + qr_out
 
 
