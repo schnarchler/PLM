@@ -34,6 +34,26 @@ if %errorlevel% neq 0 (
 )
 echo Node.js gefunden: OK
 
+:: Python-Pakete fuer Etikettendruck installieren (qrcode + Pillow)
+where py >nul 2>&1
+if %errorlevel% equ 0 (
+    echo Pruefe Python-Pakete fuer Etikettendruck...
+    py -c "import qrcode, PIL" >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo  Installiere qrcode und Pillow...
+        py -m pip install qrcode pillow --quiet
+        if %errorlevel% equ 0 (
+            echo  qrcode + Pillow installiert: OK
+        ) else (
+            echo  HINWEIS: qrcode/Pillow konnten nicht installiert werden - Etiketten werden ohne QR-Code gedruckt.
+        )
+    ) else (
+        echo qrcode + Pillow: OK
+    )
+) else (
+    echo HINWEIS: Python ^(py^) nicht gefunden - Etiketten ohne QR-Code.
+)
+
 :: npm install nur wenn node_modules fehlt
 if not exist "%PLM_DIR%\node_modules" (
     echo Erstmaliger Start - Pakete werden installiert, bitte warten...

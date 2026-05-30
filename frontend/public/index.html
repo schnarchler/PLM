@@ -8,7 +8,8 @@
 <link rel="apple-touch-icon" href="/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" id="main-css" href="styles.css">
+<script>document.getElementById('main-css').href='styles.css?v='+Date.now();</script>
 </head>
 <body>
 
@@ -879,6 +880,13 @@
 
 <div id="toasts"></div>
 
-<script src="app.js"></script>
+<script>
+// Cache-Busting: app.js mit aktuellem Timestamp laden
+(function(){
+  var s = document.createElement('script');
+  s.src = 'app.js?v=' + Date.now();
+  document.currentScript.parentNode.appendChild(s);
+})();
+</script>
 </body>
 </html>
