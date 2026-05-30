@@ -60,10 +60,11 @@ def build_receipt(data):
     o+=row(name,bold=True,w=w)
     if desc and desc!=name: o+=row(desc,small=True,w=w)
     if s_no and notes: o+=row(notes,small=True,w=w)
+    qty_line = f'{qty} {unit}'.strip() if qty is not None else ''
     if price is not None:
-        o+=lr(f'{qty} {unit}', f'CHF {rnd5(price * qty):.2f}', w=w)
-    else:
-        o+=row(f'{qty} {unit}',w=w)
+        o+=lr(qty_line, f'CHF {rnd5(price * qty):.2f}', w=w)
+    elif qty_line:
+        o+=row(qty_line, w=w)
     o+=sep(w)
     if params:
         o+=row('DRUCKPARAMETER',bold=True,w=w)
@@ -76,6 +77,41 @@ def build_receipt(data):
     if footer: o+=row(footer,small=True,centered=True,w=w)
     o+=NL*3
     return o
+
+def build_label(data):
+    """Rohmaterial-Etikett: Text (via build_receipt) + QR in FONT_B (reines ASCII)"""
+    # Schritt 1: Text-Teil — exakt wie Produktion
+    text_part = build_receipt(data)
+
+    # Schritt 2: QR anhängen (nur wenn qrcode installiert)
+    qr_content = (data.get('qr_content') or '').strip()
+    if not qr_content:
+        return text_part
+    try:
+        import qrcode as _qr
+        w   = int(data.get('line_width') or LINE_W)
+        qrc = _qr.QRCode(version=None,
+                          error_correction=_qr.constants.ERROR_CORRECT_L,
+                          box_size=1, border=1)
+        qrc.add_data(qr_content)
+        qrc.make(fit=True)
+        matrix = qrc.get_matrix()
+        size   = len(matrix)
+        # 2 ASCII-Zeichen pro Modul in FONT_B → annähernd quadratische Module
+        cpm    = 2  # chars per module
+        if size * cpm > 64:  # 64 Zeichen max in FONT_B (384 dots / 6 dots)
+            cpm = 1
+        # QR-Block bauen — nur Bytes 0x23 (#) und 0x20 (Leerzeichen)
+        qr_bytes = FONT_B + ALIGN_L
+        for row_data in matrix:
+            line = bytes([0x23 if dark else 0x20 for dark in row_data for _ in range(cpm)])
+            qr_bytes += line + NL
+        qr_bytes += FONT_A + NL * 3
+        # text_part endet mit NL*3 — diese ersetzen durch QR + NL*3
+        return text_part.rstrip(b'\x0a') + NL + qr_bytes
+    except ImportError:
+        return text_part  # qrcode nicht installiert → nur Text
+
 
 def build_multi_receipt(data):
     w   = int(data.get('line_width') or LINE_W)
@@ -338,7 +374,9 @@ def main():
         print(f"FEHLER: Ungültiges JSON - {ex}", file=sys.stderr); sys.exit(1)
 
     try:
-        if args.mode == 'multi':
+        if args.mode == 'label':
+            receipt = build_label(data)
+        elif args.mode == 'multi':
             receipt = build_multi_receipt(data)
         else:
             receipt = build_receipt(data)
