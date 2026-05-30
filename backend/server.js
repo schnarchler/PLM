@@ -2995,9 +2995,34 @@ app.post('/api/print-receipt', (req, res) => {
 });
 
 app.post('/api/print-label', (req, res) => {
-  const data = req.body;
+  const d          = req.body;
+  const artNr      = (d.article_number || '').trim();
+  const spec       = [d.material_type, d.color, d.brand].filter(Boolean).join(' / ');
+  const tempStr    = d.print_temp ? `${d.print_temp}C / Bett ${d.bed_temp||'?'}C` : '';
+  const descParts  = [d.lot_number ? `LOT: ${d.lot_number}` : '', spec, tempStr].filter(Boolean);
+
+  // Exakt dasselbe Format wie Produktionsdruck (build_receipt)
+  const printData = {
+    header:           artNr || 'Rohmaterial',
+    name:             d.name || '',
+    number:           artNr,
+    desc:             descParts.join('  '),
+    qty:              1,
+    unit:             d.unit || 'Stk',
+    price:            null,
+    customer:         '',
+    notes:            '',
+    footer:           '',
+    params:           {},
+    line_width:       parseInt(d.line_width) || 32,
+    show_datetime:    false,
+    show_customer:    false,
+    show_item_number: !!artNr,
+    show_notes:       false,
+  };
+
   const scriptPath = path.join(__dirname, 'print_receipt.py');
-  execFile(PYTHON_CMD, [scriptPath, '--mode', 'label', '--data', JSON.stringify(data)],
+  execFile(PYTHON_CMD, [scriptPath, '--data', JSON.stringify(printData)],
     { timeout: 20000, encoding: 'utf8', windowsHide: true },
     (error, stdout, stderr) => {
       if (error) {
