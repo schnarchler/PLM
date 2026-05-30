@@ -436,6 +436,8 @@ def _build_label_bitmap(data):
     return out
 
 def _build_label_text(data):
+    # Nur einfache ESC/POS-Befehle – kompatibel mit Pipsta Classic
+    # (kein GS ( k QR-Befehl – nicht vom Pipsta unterstützt)
     w       = int(data.get('line_width', 32))
     art_nr  = (data.get('article_number') or '').strip()
     name    = (data.get('name') or '').strip()
@@ -445,18 +447,20 @@ def _build_label_text(data):
     material= (data.get('material_type') or '').strip()
     p_temp  = data.get('print_temp')
     b_temp  = data.get('bed_temp')
-    qr_data = (data.get('qr_content') or art_nr or lot or name).strip()
-    qs      = int(data.get('qr_size', 4))
-    out = NL + ALIGN_C
-    if art_nr: out += BOLD_ON + e(art_nr) + NL + BOLD_OFF
-    out += ALIGN_L + e('-'*w) + NL
-    if name:   out += BOLD_ON + e(name[:w]) + NL + BOLD_OFF
-    if lot:    out += e(f'LOT: {lot}'[:w]) + NL
-    spec = ' · '.join(x for x in [material, color, brand] if x)
-    if spec:   out += FONT_B + e(spec[:w]) + NL + FONT_A
-    if p_temp: out += FONT_B + e((f'{p_temp}C / {b_temp}C' if b_temp else f'{p_temp}C')[:w]) + NL + FONT_A
-    out += ALIGN_L + e('-'*w) + NL
-    out += ALIGN_C + _qr_escpos(qr_data, qs) + NL*3
+    out  = NL
+    out += sep(w)
+    if art_nr:
+        out += row(art_nr, bold=True, centered=True, w=w)
+        out += sep(w)
+    out += row(name, bold=True, w=w)
+    if lot:     out += row(f'LOT: {lot}', w=w)
+    spec = ' / '.join(x for x in [material, color, brand] if x)
+    if spec:    out += row(spec, small=True, w=w)
+    if p_temp:
+        tmp = f'{p_temp}C / Bett {b_temp}C' if b_temp else f'{p_temp}C'
+        out += row(tmp, small=True, w=w)
+    out += sep(w)
+    out += NL * 3
     return out
 
 # ── Main ──────────────────────────────────────────────────────
