@@ -3,12 +3,13 @@
 # Methode 1: WinUSB direkt via ctypes (kein libusb noetig, erfordert Zadig)
 # Methode 2: Windows-Spooler via pywin32 (Fallback)
 # pip install pywin32
-import sys, json, argparse, ctypes, ctypes.wintypes as wt, winreg
+import sys, json, argparse, ctypes
 from datetime import datetime
 
 # ── ESC/POS ───────────────────────────────────────────────────
 ESC=b'\x1b'
 ALIGN_L=ESC+b'\x61\x00'
+ALIGN_C=ESC+b'\x61\x01'
 BOLD_ON=ESC+b'\x45\x01'; BOLD_OFF=ESC+b'\x45\x00'
 FONT_A=ESC+b'\x4d\x00'; FONT_B=ESC+b'\x4d\x01'
 NL=b'\x0a'
@@ -114,6 +115,10 @@ def build_multi_receipt(data):
 
 # ── Geraetepfade aus Registry ─────────────────────────────────
 def _reg_paths_for_guid(guid):
+    try:
+        import winreg
+    except ImportError:
+        return []
     base = f'SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{guid}'
     paths = []
     try: root = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base)
@@ -170,6 +175,10 @@ class WINUSB_PIPE_INFORMATION(ctypes.Structure):
     ]
 
 def print_winusb(data):
+    try:
+        import ctypes.wintypes as wt
+    except (ImportError, ValueError):
+        raise RuntimeError("WinUSB nicht verfügbar (kein Windows)")
     paths = find_device_paths()
     if not paths:
         raise RuntimeError(
