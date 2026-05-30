@@ -949,7 +949,11 @@ const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(FRONTEND_DIR));
+app.use(express.static(FRONTEND_DIR, { etag: false, lastModified: false, setHeaders: (res, filePath) => {
+  if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+}}));
 
 // ==============================================================
 // PROJECTS
