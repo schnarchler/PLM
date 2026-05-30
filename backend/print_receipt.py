@@ -79,38 +79,52 @@ def build_receipt(data):
     return o
 
 def build_label(data):
-    """Rohmaterial-Etikett: Text (via build_receipt) + QR in FONT_B (reines ASCII)"""
-    # Schritt 1: Text-Teil — exakt wie Produktion
+    """Rohmaterial-Etikett: Text (build_receipt) + QR als GS v 0 Bitmap"""
+    import struct
+
+    # Schritt 1: Text — identisch mit Produktion
     text_part = build_receipt(data)
 
-    # Schritt 2: QR anhängen (nur wenn qrcode installiert)
+    # Schritt 2: QR als Pixel-Bitmap anhängen
     qr_content = (data.get('qr_content') or '').strip()
     if not qr_content:
         return text_part
     try:
         import qrcode as _qr
-        w   = int(data.get('line_width') or LINE_W)
-        qrc = _qr.QRCode(version=None,
-                          error_correction=_qr.constants.ERROR_CORRECT_L,
-                          box_size=1, border=1)
-        qrc.add_data(qr_content)
-        qrc.make(fit=True)
-        matrix = qrc.get_matrix()
-        size   = len(matrix)
-        # 2 ASCII-Zeichen pro Modul in FONT_B → annähernd quadratische Module
-        cpm    = 2  # chars per module
-        if size * cpm > 64:  # 64 Zeichen max in FONT_B (384 dots / 6 dots)
-            cpm = 1
-        # QR-Block bauen — nur Bytes 0x23 (#) und 0x20 (Leerzeichen)
-        qr_bytes = FONT_B + ALIGN_L
-        for row_data in matrix:
-            line = bytes([0x23 if dark else 0x20 for dark in row_data for _ in range(cpm)])
-            qr_bytes += line + NL
-        qr_bytes += FONT_A + NL * 3
-        # text_part endet mit NL*3 — diese ersetzen durch QR + NL*3
-        return text_part.rstrip(b'\x0a') + NL + qr_bytes
     except ImportError:
-        return text_part  # qrcode nicht installiert → nur Text
+        return text_part  # kein qrcode → nur Text, kein Absturz
+
+    qrc = _qr.QRCode(version=None,
+                     error_correction=_qr.constants.ERROR_CORRECT_L,
+                     box_size=1, border=2)
+    qrc.add_data(qr_content)
+    qrc.make(fit=True)
+    matrix   = qrc.get_matrix()
+    modules  = len(matrix)           # z.B. 25 für Version 1 mit border=2
+    scale    = 6                      # 6 Dots pro Modul → ~18 mm Seitenlänge
+    dots     = modules * scale        # Pixel-Gesamtgrösse
+    w_bytes  = (dots + 7) // 8       # Bytes pro Zeile (aufgerundet auf 8)
+
+    # Bitmap-Daten: jede Modul-Zeile 'scale'-mal wiederholen
+    bdata = bytearray()
+    for row_data in matrix:
+        row = bytearray(w_bytes)
+        for col, dark in enumerate(row_data):
+            if dark:
+                for dot in range(scale):
+                    px = col * scale + dot
+                    row[px >> 3] |= 0x80 >> (px & 7)
+        for _ in range(scale):
+            bdata += row
+
+    # GS v 0  — Raster-Bitmap (mode 0 = normale Dichte)
+    qr_bitmap  = ALIGN_C
+    qr_bitmap += b'\x1d\x76\x30\x00'
+    qr_bitmap += struct.pack('<HH', w_bytes, dots)
+    qr_bitmap += bytes(bdata)
+    qr_bitmap += NL * 4
+
+    return text_part.rstrip(b'\x0a') + NL + qr_bitmap
 
 
 def build_multi_receipt(data):
