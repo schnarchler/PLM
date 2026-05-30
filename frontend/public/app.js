@@ -7610,7 +7610,12 @@ function _renderRawMaterialsTable() {
     const dotCol   = empty ? 'var(--red)' : low ? 'var(--amber)' : 'var(--green)';
     const stockCol = empty ? 'var(--red)' : low ? 'var(--amber)' : 'var(--green)';
     const opacity  = empty ? 'opacity:.5' : '';
-    const activeLotCount = (i.lots||[]).filter(l => (l.remaining_qty ?? l.qty ?? 0) > 0).length;
+    const activeLots   = (i.lots||[]).filter(l => (l.remaining_qty ?? l.qty ?? 0) > 0);
+    const activeLotCount = activeLots.length;
+    const artNrs = activeLots.map(l => l.article_number).filter(Boolean);
+    const artNrHtml = artNrs.length
+      ? artNrs.map(a => `<span style="font-family:var(--mono);font-size:10px;color:var(--blue);background:rgba(79,158,248,.1);border-radius:3px;padding:1px 4px">${esc(a)}</span>`).join(' ')
+      : '';
     return `<tr onclick="openRawMatDetail(${i.id})" style="cursor:pointer;${opacity}">
       <td><span style="color:${dotCol};font-size:11px">●</span></td>
       <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.material_type||'—')}</td>
@@ -7619,7 +7624,7 @@ function _renderRawMaterialsTable() {
       <td style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${esc(i.name)}</td>
       <td style="font-family:var(--mono);font-size:13px;text-align:right;color:${stockCol};font-weight:600">${fmtN(i.stock_qty,0)}</td>
       <td style="font-size:11px;color:var(--t4)">${esc(i.unit)}</td>
-      <td style="font-size:11px;color:var(--t4)">${activeLotCount > 0 ? activeLotCount+' Lot'+(activeLotCount!==1?'s':'') : ''}</td>
+      <td style="font-size:11px;color:var(--t4)">${artNrHtml || (activeLotCount > 0 ? activeLotCount+' Lot'+(activeLotCount!==1?'s':'') : '')}</td>
     </tr>`;
   }).join('');
 
