@@ -7713,16 +7713,18 @@ async function openRawMatDetail(id) {
             const label    = l.lot_number || (l.last_date ? l.last_date.slice(0,10) : '—');
             const bg = depleted ? 'background:rgba(74,79,91,.18)' : 'background:var(--bg2)';
             const artNr = l.article_number || '';
-            return `<div style="display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:8px;padding:7px 10px;${bg};border:1px solid var(--line);border-radius:var(--r-sm)">
+            return `<div style="display:grid;grid-template-columns:1fr auto auto auto auto auto;align-items:center;gap:6px;padding:7px 10px;${bg};border:1px solid var(--line);border-radius:var(--r-sm)">
               <span>
                 <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':!l.lot_number?'color:var(--t4)':''}">
                   ${depleted?'<span style="color:var(--red);font-size:11px;margin-right:4px">●</span>':'<span style="color:var(--green);font-size:11px;margin-right:4px">●</span>'}${esc(label)}
                 </span>
-                ${artNr ? `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px">${esc(artNr)}</span>` : ''}
+                ${artNr
+                  ? `<span style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px">${esc(artNr)}</span>`
+                  : `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 5px;margin-left:6px;color:var(--t4)" data-rmid="${item.id}" data-lot="${esc(l.lot_number||'')}" onclick="assignRmArticleNr(this)">+ Nr.</button>`}
               </span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--t3)'};text-align:right">${fmtN(rem,0)} ${item.unit}</span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--teal)'};text-align:right">${l.unit_price!=null?fmtChf(l.unit_price)+'/'+item.unit:'—'}</span>
-              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px;white-space:nowrap" onclick="openRmLabelModal(${item.id},'${esc(l.lot_number||'')}',${item.id})" title="Etikett drucken">🏷</button>
+              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px" data-rmid="${item.id}" data-lot="${esc(l.lot_number||'')}" onclick="openRmPrintModal(this)" title="Etikett drucken">🖶</button>
               ${l.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="editLotRow(${l.id},'${esc(l.lot_number||'')}',${l.qty},${l.unit_price??'null'},'${esc(item.unit)}',${item.id})" title="Bearbeiten">✎</button>` : '<span></span>'}
             </div>`;
           }).join('')}
@@ -7903,6 +7905,94 @@ function _rmAutoFillTemps() {
   if (!match) return;
   if (match.print_temp && tempEl) tempEl.value = match.print_temp;
   if (match.bed_temp   && bedEl)  bedEl.value  = match.bed_temp;
+}
+
+// ── Artikel-Nr. vergeben (inline, kein Modal) ──────────────────
+async function assignRmArticleNr(btn) {
+  const rmId = btn.dataset.rmid;
+  const lot  = btn.dataset.lot;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await api(`/api/raw-materials/${rmId}/lots/assign-number`, 'POST', { lot_number: lot });
+    if (r.article_number) {
+      // Nummer im Button-Span anzeigen
+      const span = document.createElement('span');
+      span.style.cssText = 'font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:6px';
+      span.textContent = r.article_number;
+      btn.replaceWith(span);
+      // Liste links aktualisieren
+      if (window._rmAllItems) {
+        const updated = await api('/api/raw-materials');
+        window._rmAllItems = updated;
+        _renderRawMaterialsTable();
+      }
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '+ Nr.';
+    toast('Fehler: ' + (e.message||'?'), 'err');
+  }
+}
+
+// ── Etikett drucken (direkter Button, kein Nummervergabe-Flow) ─
+async function openRmPrintModal(btn) {
+  const rmId = btn.dataset.rmid;
+  const lot  = btn.dataset.lot;
+
+  // Label-Daten laden
+  let label;
+  try {
+    label = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lot)}`);
+  } catch(e) { toast('Fehler beim Laden: ' + (e.message||'?'), 'err'); return; }
+
+  window._rmLabelData = label;
+
+  const artNr   = label.article_number || '';
+  const qrText  = artNr || lot || label.name || '';
+  const specLine = [label.material_type, label.color, label.brand].filter(Boolean).join(' · ');
+
+  const modalHtml = `
+    <div class="overlay" id="rmLabelModal" onclick="if(event.target===this)closeModal('rmLabelModal')">
+      <div class="modal" style="max-width:360px">
+        <div class="modal-head"><span>Etikett drucken</span><button class="btn-close" onclick="closeModal('rmLabelModal')">✕</button></div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+
+          <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;font-size:13px;line-height:1.7">
+            ${artNr ? `<div style="font-family:var(--mono);font-weight:700;font-size:14px;color:var(--t1)">${esc(artNr)}</div>` : '<div style="color:var(--amber);font-size:12px">⚠ Noch keine Artikel-Nr. — erst "+ Nr." klicken</div>'}
+            <div>${esc(label.name)}</div>
+            ${lot ? `<div style="color:var(--t3);font-family:var(--mono);font-size:12px">LOT: ${esc(lot)}</div>` : ''}
+            ${specLine ? `<div style="color:var(--t4);font-size:12px">${esc(specLine)}</div>` : ''}
+            ${label.print_temp ? `<div style="color:var(--t4);font-size:12px">${label.print_temp}°C / Bett ${label.bed_temp||'—'}°C</div>` : ''}
+            <div style="margin-top:8px;border:1px dashed var(--line);border-radius:4px;padding:6px;font-size:11px;color:var(--t4);text-align:center">
+              QR: <span style="font-family:var(--mono);color:var(--blue)">${esc(qrText)}</span>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label style="font-size:12px;color:var(--t3)">Breite:</label>
+            <select id="rm-label-width" style="background:var(--bg2);border:1px solid var(--line);border-radius:4px;color:var(--t1);font-size:12px;padding:3px 6px">
+              <option value="32" selected>32 Zeichen</option>
+              <option value="42">42 Zeichen</option>
+              <option value="48">48 Zeichen</option>
+            </select>
+            <label style="font-size:12px;color:var(--t3)">QR-Grösse:</label>
+            <select id="rm-label-qr-size" style="background:var(--bg2);border:1px solid var(--line);border-radius:4px;color:var(--t1);font-size:12px;padding:3px 6px">
+              <option value="3">Klein</option>
+              <option value="4" selected>Mittel</option>
+              <option value="6">Gross</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal('rmLabelModal')">Abbrechen</button>
+          <button class="btn btn-primary" id="rm-label-print-btn" onclick="printRmLabel()">🖶 Drucken</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('rmLabelModal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 async function openRmLabelModal(rmId, lotNumber, _unused) {
