@@ -381,32 +381,24 @@ def _build_label_qr_text(data):
     out += row(f'LOT: {lot}' if lot else 'LOT: -', w=w)
     out += sep(w)
 
-    # ── QR als Halbblock ────────────────────────────────────────
-    # Jede Zeile enthält 2 QR-Reihen: █ ▀ ▄ (Leerzeichen)
-    # cp437: █=0xDB ▀=0xDF ▄=0xDC
-    FULL = '█'; UPPER = '▀'; LOWER = '▄'; SPC = ' '
-
+    # ── QR als ASCII (## = dunkel, Leerzeichen = hell) in FONT_B ──
+    # FONT_B: ~6 dots breit, ~12 dots hoch → mit 2 Zeichen pro Modul
+    # ergibt 12x12 dots pro Modul ≈ quadratisch → scannbar
     qrc = _qr.QRCode(
         version=None,
-        error_correction=_qr.constants.ERROR_CORRECT_L,  # kleinstes Format
+        error_correction=_qr.constants.ERROR_CORRECT_L,
         box_size=1, border=1)
     qrc.add_data(qr_data)
     qrc.make(fit=True)
     matrix = qrc.get_matrix()
-    size   = len(matrix)
-    pad    = max(0, (w - size) // 2)
 
-    out += ALIGN_C
-    for y in range(0, size, 2):
-        line = SPC * pad
-        for x in range(size):
-            top = matrix[y][x]
-            bot = matrix[y+1][x] if (y+1) < size else False
-            if   top and bot:  line += FULL
-            elif top:          line += UPPER
-            elif bot:          line += LOWER
-            else:              line += SPC
-        out += ALIGN_L + e(line) + NL
+    out += FONT_B + ALIGN_L
+    for row_data in matrix:
+        line = b''
+        for dark in row_data:
+            line += b'##' if dark else b'  '
+        out += line + NL
+    out += FONT_A
 
     out += sep(w)
     out += NL * 3
