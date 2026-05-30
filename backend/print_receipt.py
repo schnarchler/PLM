@@ -126,12 +126,11 @@ def build_label(data):
 
     pad = max(0, (w - size) // 2)
 
-    # ESC 3 n: Zeilenabstand auf n Dots (Standard 30, hier 8 → ~4× kleiner in der Höhe)
-    # FONT_B:  Zeichenbreite halbieren
-    ESC3 = b'\x1b\x33\x08'   # ESC 3  8
+    # ESC 3 16: Zeilenabstand 16 Dots (Standard 30) → ~2× kleiner, kein Abschneiden
+    ESC3 = b'\x1b\x33\x10'   # ESC 3  16
     ESC2 = b'\x1b\x32'        # ESC 2 (Standard zurück)
 
-    qr_out = ESC3 + FONT_B
+    qr_out = ESC3 + FONT_A
     for y in range(0, size, 2):
         line = SPC * pad
         for x in range(size):
