@@ -3700,7 +3700,7 @@ app.get('/api/raw-materials/:id/label', (req, res) => {
     material_type: rm.material_type,
     color:       rm.color,
     brand:       rm.brand,
-    lot_number:  lot_number || '',
+    lot_number:  lot,
     remaining_qty: Math.max(0, remaining?.qty || 0),
     unit:        rm.unit,
     print_temp:  rm.print_temp,
