@@ -96,8 +96,8 @@ def build_label(data):
     # Schritt 1: Text — identisch mit Produktion
     text_part = build_receipt(data)
 
-    # QR-Inhalt: NUR Artikel-Nr. oder Lot — nie URL (URL zu lang → Überlauf)
-    art_nr  = (data.get('article_number') or '').strip()
+    # QR-Inhalt: Artikel-Nr. — aus 'article_number' oder Fallback auf 'number'
+    art_nr  = (data.get('article_number') or data.get('number') or '').strip()
     lot     = (data.get('lot_number') or '').strip()
     qr_data = art_nr or lot
     if not qr_data:
