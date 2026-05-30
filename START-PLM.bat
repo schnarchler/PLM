@@ -1,5 +1,5 @@
 @echo off
-title PLM & ERP
+title PLM ^& ERP
 
 :: Sicherheitssperre entfernen (Zone.Identifier / SmartScreen)
 :: Diese Zeile entfernt die "Herausgeber nicht verifiziert"-Markierung ein fuer allemal.
