@@ -3024,10 +3024,11 @@ app.post('/api/print-label', (req, res) => {
     show_customer:    false,
     show_item_number: !!artNr,
     show_notes:       false,
+    qr_content:       artNr || lot,
   };
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
-  execFile(PYTHON_CMD, [scriptPath, '--data', JSON.stringify(printData)],
+  execFile(PYTHON_CMD, [scriptPath, '--mode', 'label', '--data', JSON.stringify(printData)],
     { timeout: 20000, encoding: 'utf8', windowsHide: true },
     (error, stdout, stderr) => {
       if (error) {
