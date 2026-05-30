@@ -3024,7 +3024,6 @@ app.post('/api/print-label', (req, res) => {
     show_customer:    false,
     show_item_number: !!artNr,
     show_notes:       false,
-    qr_content:       artNr || lot,
   };
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
