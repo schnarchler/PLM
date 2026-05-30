@@ -3001,18 +3001,17 @@ app.post('/api/print-label', (req, res) => {
   const tempStr    = d.print_temp ? `${d.print_temp}C / Bett ${d.bed_temp||'?'}C` : '';
   const descParts  = [d.lot_number ? `LOT: ${d.lot_number}` : '', spec, tempStr].filter(Boolean);
 
-  // QR-Inhalt: URL zum PLM (öffnet Material direkt beim Scannen)
-  // base_url kommt vom Frontend (window.location.origin), z.B. http://192.168.1.5:3000
-  const baseUrl = (d.base_url || '').replace(/\/$/, '');
-  const qrContent = baseUrl && artNr
-    ? `${baseUrl}/?search=${encodeURIComponent(artNr)}`
-    : (artNr || d.lot_number || d.name || '');
-
+  // Daten für build_label (--mode label)
   const printData = {
     article_number:  artNr,
     name:            d.name || '',
     lot_number:      d.lot_number || '',
-    qr_content:      qrContent,
+    brand:           d.brand || '',
+    color:           d.color || '',
+    material_type:   d.material_type || '',
+    print_temp:      d.print_temp || null,
+    bed_temp:        d.bed_temp || null,
+    qr_content:      artNr || d.lot_number || d.name || '',
     line_width:      parseInt(d.line_width) || 32,
   };
 
