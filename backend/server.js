@@ -2259,7 +2259,17 @@ app.get('/api/search', (req, res) => {
     WHERE d.number LIKE ? OR d.title LIKE ? OR COALESCE(c.name,d.customer_name_free,'') LIKE ?
     ORDER BY d.id DESC LIMIT 10`, [q,q,q]);
 
-  res.json({ items, projects, datasets, orders, quotes, customers, deliveries });
+  // Rohmaterial: suche auch in Lot-Artikel-Nummern
+  const rawMaterials = all(`
+    SELECT DISTINCT rm.id, rm.name, rm.material_type, rm.color, rm.brand, rm.stock_qty, rm.unit,
+      rmm.article_number, rmm.lot_number
+    FROM raw_materials rm
+    LEFT JOIN raw_material_movements rmm ON rmm.raw_material_id=rm.id AND rmm.article_number IS NOT NULL
+    WHERE rm.name LIKE ? OR rm.material_type LIKE ? OR rm.color LIKE ? OR rm.brand LIKE ?
+       OR rmm.article_number LIKE ? OR rmm.lot_number LIKE ?
+    ORDER BY rm.name LIMIT 15`, [q,q,q,q,q,q]);
+
+  res.json({ items, projects, datasets, orders, quotes, customers, deliveries, rawMaterials });
 });
 
 app.get('/api/changelog', (req, res) => {
@@ -2960,6 +2970,23 @@ app.post('/api/print-receipt', (req, res) => {
   );
 });
 
+app.post('/api/print-label', (req, res) => {
+  const data = req.body;
+  const scriptPath = path.join(__dirname, 'print_receipt.py');
+  execFile(PYTHON_CMD, [scriptPath, '--mode', 'label', '--data', JSON.stringify(data)],
+    { timeout: 20000, encoding: 'utf8', windowsHide: true },
+    (error, stdout, stderr) => {
+      if (error) {
+        const detail = [stderr, stdout, error.message].filter(Boolean).join(' | ').trim();
+        console.error('Pipsta label error:', detail);
+        return res.status(500).json({ error: detail || 'Unbekannter Fehler' });
+      }
+      console.log('Pipsta label:', stdout.trim());
+      res.json({ ok: true });
+    }
+  );
+});
+
 app.post('/api/print-receipt-delivery', (req, res) => {
   const { delivery_id, mode } = req.body;
   if (!delivery_id) return res.status(400).json({ error: 'delivery_id required' });
@@ -3626,10 +3653,12 @@ app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
   const rm = get('SELECT * FROM raw_materials WHERE id=?', [rmId]);
   if (!rm) return res.status(404).json({ error: 'not found' });
 
+  const lot = lot_number || '';
+
   // Existiert schon?
   const existing = get(
     `SELECT article_number FROM raw_material_movements WHERE raw_material_id=? AND lot_number=? AND article_number IS NOT NULL LIMIT 1`,
-    [rmId, lot_number || '']
+    [rmId, lot]
   );
   if (existing?.article_number) return res.json({ article_number: existing.article_number });
 
@@ -3639,12 +3668,13 @@ app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
   const num = padN(nextCounter('rm_lot'), 'pad_rm_lot', 4);
   const articleNumber = `${pre}-${yr}${num}`;
 
+  // Subquery statt UPDATE...LIMIT (sql.js unterstützt kein UPDATE...LIMIT)
   run(
-    `UPDATE raw_material_movements SET article_number=? WHERE raw_material_id=? AND (lot_number=? OR (lot_number IS NULL AND ?='')) AND type='in' ORDER BY id LIMIT 1`,
-    [articleNumber, rmId, lot_number || '', lot_number || '']
+    `UPDATE raw_material_movements SET article_number=? WHERE id=(SELECT id FROM raw_material_movements WHERE raw_material_id=? AND lot_number=? AND type='in' ORDER BY id LIMIT 1)`,
+    [articleNumber, rmId, lot]
   );
   saveDb();
-  logChange('raw_material', rmId, rm.name, `Artikel-Nr. ${articleNumber} für LOT ${lot_number || '(kein)'} zugewiesen`);
+  logChange('raw_material', rmId, rm.name, `Artikel-Nr. ${articleNumber} für LOT ${lot || '(kein)'} zugewiesen`);
   res.json({ article_number: articleNumber });
 });
 
@@ -3652,14 +3682,14 @@ app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
 app.get('/api/raw-materials/:id/label', (req, res) => {
   const rm  = get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]);
   if (!rm) return res.status(404).json({ error: 'not found' });
-  const { lot_number } = req.query;
+  const lot = req.query.lot_number || '';
   const mov = get(
-    `SELECT article_number FROM raw_material_movements WHERE raw_material_id=? AND (lot_number=? OR (lot_number IS NULL AND ?='')) AND article_number IS NOT NULL LIMIT 1`,
-    [rm.id, lot_number || '', lot_number || '']
+    `SELECT article_number FROM raw_material_movements WHERE raw_material_id=? AND lot_number=? AND article_number IS NOT NULL LIMIT 1`,
+    [rm.id, lot]
   );
   const remaining = get(
-    `SELECT COALESCE(SUM(CASE WHEN type='in' THEN qty ELSE -qty END),0) as qty FROM raw_material_movements WHERE raw_material_id=? AND (lot_number=? OR (lot_number IS NULL AND ?=''))`,
-    [rm.id, lot_number || '', lot_number || '']
+    `SELECT COALESCE(SUM(CASE WHEN type='in' THEN qty ELSE -qty END),0) as qty FROM raw_material_movements WHERE raw_material_id=? AND lot_number=?`,
+    [rm.id, lot]
   );
   res.json({
     article_number: mov?.article_number || null,
