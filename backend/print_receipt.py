@@ -462,13 +462,17 @@ def _build_label_text(data):
 # ── Main ──────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', required=True)
+    parser.add_argument('--data', default=None)
+    parser.add_argument('--stdin', action='store_true', help='JSON via stdin lesen')
     parser.add_argument('--printer', default='')
     parser.add_argument('--mode', default='single')
     args = parser.parse_args()
 
     try:
-        data = json.loads(args.data)
+        raw = sys.stdin.read() if args.stdin else args.data
+        if not raw:
+            print("FEHLER: Keine Daten (--data oder --stdin erwartet)", file=sys.stderr); sys.exit(1)
+        data = json.loads(raw)
     except json.JSONDecodeError as ex:
         print(f"FEHLER: Ungültiges JSON - {ex}", file=sys.stderr); sys.exit(1)
 

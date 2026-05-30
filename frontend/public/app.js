@@ -7910,13 +7910,23 @@ async function openRmLabelModal(rmId, lotNumber, _unused) {
 
   // Artikel-Nummer zuweisen falls noch nicht vorhanden
   let artNr = '';
+  let isNewNumber = false;
   try {
     const r = await api(`/api/raw-materials/${rmId}/lots/assign-number`, 'POST', { lot_number: lotNumber });
     artNr = r.article_number || '';
-  } catch (e) { toast('Artikel-Nummer konnte nicht vergeben werden', 'warn'); }
+    isNewNumber = r.is_new || false;
+  } catch (e) { toast('Artikel-Nummer konnte nicht vergeben werden: ' + (e.message||'?'), 'warn'); }
 
-  // Label-Daten laden
+  // Label-Daten laden (enthält jetzt auch article_number nach Zuweisung)
   const label = await api(`/api/raw-materials/${rmId}/label?lot_number=${encodeURIComponent(lotNumber)}`);
+  if (!artNr && label.article_number) artNr = label.article_number;
+
+  // Linke Liste aktualisieren wenn neue Nummer vergeben wurde
+  if (window._rmAllItems) {
+    const updated = await api('/api/raw-materials');
+    window._rmAllItems = updated;
+    _renderRawMaterialsTable();
+  }
 
   const qrContent = artNr || lotNumber || label.name;
   const specLine = [label.material_type, label.color, label.brand].filter(Boolean).join(' · ');
@@ -8004,7 +8014,12 @@ async function printRmLabel(label) {
       qr_size:        parseInt(document.getElementById('rm-label-qr-size')?.value || '4'),
     };
     const d = await api('/api/print-label', 'POST', payload);
-    if (d.ok) { toast('Etikett gedruckt', 'ok'); closeModal('rmLabelModal'); }
+    if (d.ok) {
+      toast('Etikett gedruckt', 'ok');
+      closeModal('rmLabelModal');
+      // Detail neu laden damit Artikel-Nr. im Tab sichtbar ist
+      if (state.item) openRawMatDetail(state.item.id || rmId);
+    }
   } catch (e) {
     toast('Druckfehler: ' + (e.message || '?'), 'err');
   } finally {

@@ -2881,8 +2881,28 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
 // ==============================================================
 // THERMAL PRINT (Pipsta Classic)
 // ==============================================================
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
+const os = require('os');
+// Versuche py (Windows Launcher), dann python, dann python3
 const PYTHON_CMD = process.platform === 'win32' ? 'py' : 'python3';
+
+// Daten via stdin statt --data Argument übergeben (vermeidet Windows Quoting-Probleme)
+function runPrintScript(args, data, timeout, cb) {
+  const child = spawn(PYTHON_CMD, args, { windowsHide: true });
+  let stdout = '', stderr = '';
+  child.stdout.on('data', d => stdout += d);
+  child.stderr.on('data', d => stderr += d);
+  const timer = setTimeout(() => { child.kill(); cb(new Error('Timeout'), stdout, stderr); }, timeout);
+  child.on('close', code => {
+    clearTimeout(timer);
+    if (code !== 0) cb(new Error(`Exit ${code}`), stdout, stderr);
+    else cb(null, stdout, stderr);
+  });
+  child.on('error', err => { clearTimeout(timer); cb(err, stdout, stderr); });
+  // Daten als JSON via stdin
+  child.stdin.write(JSON.stringify(data));
+  child.stdin.end();
+}
 
 app.post('/api/print-receipt', (req, res) => {
   const { delivery_item_id, mode } = req.body;
@@ -2973,12 +2993,11 @@ app.post('/api/print-receipt', (req, res) => {
 app.post('/api/print-label', (req, res) => {
   const data = req.body;
   const scriptPath = path.join(__dirname, 'print_receipt.py');
-  execFile(PYTHON_CMD, [scriptPath, '--mode', 'label', '--data', JSON.stringify(data)],
-    { timeout: 20000, encoding: 'utf8', windowsHide: true },
+  runPrintScript([scriptPath, '--mode', 'label', '--stdin'], data, 20000,
     (error, stdout, stderr) => {
       if (error) {
-        const detail = [stderr, stdout, error.message].filter(Boolean).join(' | ').trim();
-        console.error('Pipsta label error:', detail);
+        const detail = [stderr, stdout, error.message].filter(Boolean).join('\n').trim();
+        console.error('Pipsta label error:\n' + detail);
         return res.status(500).json({ error: detail || 'Unbekannter Fehler' });
       }
       console.log('Pipsta label:', stdout.trim());
@@ -3722,7 +3741,7 @@ app.get('/api/raw-materials', (req, res) => {
       WHERE raw_material_id=? AND lot_number IS NOT NULL AND lot_number!=''
       GROUP BY lot_number
       ORDER BY MAX(created_at) DESC`, [m.id]);
-    const withoutLot = all(`SELECT id, '' as lot_number, qty, qty as remaining_qty, unit_price, created_at as last_date, notes
+    const withoutLot = all(`SELECT id, '' as lot_number, qty, qty as remaining_qty, unit_price, created_at as last_date, notes, article_number
       FROM raw_material_movements
       WHERE raw_material_id=? AND type='in' AND (lot_number IS NULL OR lot_number='')
       ORDER BY created_at DESC`, [m.id]);
