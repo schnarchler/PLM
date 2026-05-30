@@ -394,9 +394,13 @@ def _build_label_qr_text(data):
     qrc.make(fit=True)
     matrix = qrc.get_matrix()
     size   = len(matrix)
-    pad    = max(0, (w - size) // 2)
 
-    out += ALIGN_C
+    # Sicherheit: QR nie breiter als Druckerzeile
+    if size > w:
+        raise ValueError(f'QR zu gross ({size} > {w} Zeichen)')
+
+    pad = max(0, (w - size) // 2)
+
     for y in range(0, size, 2):
         line = SPC * pad
         for x in range(size):

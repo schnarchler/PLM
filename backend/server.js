@@ -3001,17 +3001,14 @@ app.post('/api/print-label', (req, res) => {
   const tempStr    = d.print_temp ? `${d.print_temp}C / Bett ${d.bed_temp||'?'}C` : '';
   const descParts  = [d.lot_number ? `LOT: ${d.lot_number}` : '', spec, tempStr].filter(Boolean);
 
-  // Daten für build_label (--mode label)
+  // QR-Inhalt: nur Artikel-Nr. (kurz = kleine QR-Version, kein Zeilenpuffer-Überlauf)
+  const qrContent = artNr || d.lot_number || '';
+
   const printData = {
     article_number:  artNr,
     name:            d.name || '',
     lot_number:      d.lot_number || '',
-    brand:           d.brand || '',
-    color:           d.color || '',
-    material_type:   d.material_type || '',
-    print_temp:      d.print_temp || null,
-    bed_temp:        d.bed_temp || null,
-    qr_content:      artNr || d.lot_number || d.name || '',
+    qr_content:      qrContent,
     line_width:      parseInt(d.line_width) || 32,
   };
 
