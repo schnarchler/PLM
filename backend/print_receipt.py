@@ -113,8 +113,8 @@ def build_label(data):
 
     qrc = _qr.QRCode(
         version=None,
-        error_correction=_qr.constants.ERROR_CORRECT_M,
-        box_size=1, border=2)
+        error_correction=_qr.constants.ERROR_CORRECT_L,
+        box_size=1, border=1)
     qrc.add_data(qr_data)
     qrc.make(fit=True)
     matrix = qrc.get_matrix()
