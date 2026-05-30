@@ -3001,28 +3001,22 @@ app.post('/api/print-label', (req, res) => {
   const tempStr    = d.print_temp ? `${d.print_temp}C / Bett ${d.bed_temp||'?'}C` : '';
   const descParts  = [d.lot_number ? `LOT: ${d.lot_number}` : '', spec, tempStr].filter(Boolean);
 
-  // Exakt dasselbe Format wie Produktionsdruck (build_receipt)
+  // Daten für build_label (--mode label)
   const printData = {
-    header:           artNr || 'Rohmaterial',
-    name:             d.name || '',
-    number:           artNr,
-    desc:             descParts.join('  '),
-    qty:              1,
-    unit:             d.unit || 'Stk',
-    price:            null,
-    customer:         '',
-    notes:            '',
-    footer:           '',
-    params:           {},
-    line_width:       parseInt(d.line_width) || 32,
-    show_datetime:    false,
-    show_customer:    false,
-    show_item_number: !!artNr,
-    show_notes:       false,
+    article_number:  artNr,
+    name:            d.name || '',
+    lot_number:      d.lot_number || '',
+    brand:           d.brand || '',
+    color:           d.color || '',
+    material_type:   d.material_type || '',
+    print_temp:      d.print_temp || null,
+    bed_temp:        d.bed_temp || null,
+    qr_content:      artNr || d.lot_number || d.name || '',
+    line_width:      parseInt(d.line_width) || 32,
   };
 
   const scriptPath = path.join(__dirname, 'print_receipt.py');
-  execFile(PYTHON_CMD, [scriptPath, '--data', JSON.stringify(printData)],
+  execFile(PYTHON_CMD, [scriptPath, '--mode', 'label', '--data', JSON.stringify(printData)],
     { timeout: 20000, encoding: 'utf8', windowsHide: true },
     (error, stdout, stderr) => {
       if (error) {
