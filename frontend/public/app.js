@@ -1539,8 +1539,25 @@ async function renderSettings() {
   const fck = (id, label, val) =>
     `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)"><input type="checkbox" id="st-${id}" ${val !== '0' ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">${label}</label>`;
 
+  const stor = await api('/api/storage').catch(() => null);
+  function fmtBytes(b) {
+    if (b == null) return '—';
+    if (b < 1024) return b + ' B';
+    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+    if (b < 1024*1024*1024) return (b/1024/1024).toFixed(1) + ' MB';
+    return (b/1024/1024/1024).toFixed(2) + ' GB';
+  }
+  const storHtml = stor ? `
+    <div style="display:flex;gap:16px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;margin-bottom:18px;font-size:12px;color:var(--t3)">
+      <span style="color:var(--t2);font-weight:600;font-size:13px">Speicher</span>
+      <span>Datenbank: <strong style="color:var(--t1)">${fmtBytes(stor.db_bytes)}</strong></span>
+      <span>Dateien: <strong style="color:var(--t1)">${fmtBytes(stor.files_bytes)}</strong></span>
+      <span style="margin-left:auto">Gesamt: <strong style="color:var(--blue)">${fmtBytes(stor.total_bytes)}</strong></span>
+    </div>` : '';
+
   setLeftBody(`
     <div style="max-width:720px">
+      ${storHtml}
       <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px">
         <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Firma</button>
         <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Kalkulation</button>
