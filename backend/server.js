@@ -2228,6 +2228,24 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+app.get('/api/storage', (req, res) => {
+  let dbSize = 0, filesSize = 0;
+  try { dbSize = fs.statSync(DB_PATH).size; } catch {}
+  function dirSize(dir) {
+    let total = 0;
+    try {
+      for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, f.name);
+        if (f.isDirectory()) total += dirSize(p);
+        else try { total += fs.statSync(p).size; } catch {}
+      }
+    } catch {}
+    return total;
+  }
+  filesSize = dirSize(FILES_DIR);
+  res.json({ db_bytes: dbSize, files_bytes: filesSize, total_bytes: dbSize + filesSize });
+});
+
 app.get('/api/search', (req, res) => {
   const q = '%' + (req.query.q || '') + '%';
 
