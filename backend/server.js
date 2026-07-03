@@ -66,14 +66,36 @@ fs.mkdirSync(FILES_DIR, { recursive: true });
 // -- sql.js wrapper (synchronous-style API) ---------------------
 let db;
 let saveTimer;
+let dbDirty = false;
+
+// Atomar schreiben (tmp + rename), damit ein Absturz mitten im
+// Schreiben die plm.db nicht korrumpiert.
+function flushDb() {
+  if (!dbDirty || !db) return;
+  clearTimeout(saveTimer);
+  const tmpPath = DB_PATH + '.tmp';
+  fs.writeFileSync(tmpPath, Buffer.from(db.export()));
+  fs.renameSync(tmpPath, DB_PATH);
+  dbDirty = false;
+}
 
 function saveDb() {
+  dbDirty = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const data = db.export();
-    fs.writeFileSync(DB_PATH, Buffer.from(data));
+    try { flushDb(); }
+    catch (err) { console.error('DB-Speichern fehlgeschlagen:', err.message); }
   }, 500);
 }
+
+// Ausstehende Änderungen beim Beenden sichern (Debounce-Fenster = 500ms)
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => {
+    try { flushDb(); } catch (err) { console.error('DB-Speichern beim Beenden fehlgeschlagen:', err.message); }
+    process.exit(0);
+  });
+}
+process.on('exit', () => { try { flushDb(); } catch {} });
 
 function run(sql, params = []) {
   db.run(sql, params);
@@ -563,10 +585,37 @@ async function initDb() {
   try { db.run('ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN estimated_hours REAL DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN include_hours INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE items ADD COLUMN classification TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE items ADD COLUMN weight_g REAL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
   try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
   db.run(`INSERT OR IGNORE INTO counters VALUES ('rm_lot',0)`);
+
+  // Indizes auf Fremdschlüssel- und Filterspalten (idempotent)
+  [
+    'CREATE INDEX IF NOT EXISTS idx_items_project        ON items(project_id)',
+    'CREATE INDEX IF NOT EXISTS idx_items_parent         ON items(parent_id)',
+    'CREATE INDEX IF NOT EXISTS idx_items_variant        ON items(variant_group_id)',
+    'CREATE INDEX IF NOT EXISTS idx_revisions_item       ON revisions(item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_datasets_revision    ON datasets(revision_id)',
+    'CREATE INDEX IF NOT EXISTS idx_bom_parent           ON bom(parent_rev_id)',
+    'CREATE INDEX IF NOT EXISTS idx_bom_child            ON bom(child_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_bom_std_part         ON bom_std_parts(std_part_id)',
+    'CREATE INDEX IF NOT EXISTS idx_changelog_entity     ON changelog(entity_type, entity_id)',
+    'CREATE INDEX IF NOT EXISTS idx_order_items_order    ON order_items(order_id)',
+    'CREATE INDEX IF NOT EXISTS idx_order_items_item     ON order_items(item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_quote_items_quote    ON quote_items(quote_id)',
+    'CREATE INDEX IF NOT EXISTS idx_delivery_items_del   ON delivery_items(delivery_id)',
+    'CREATE INDEX IF NOT EXISTS idx_deliveries_order     ON deliveries(order_id)',
+    'CREATE INDEX IF NOT EXISTS idx_po_items_po          ON purchase_order_items(po_id)',
+    'CREATE INDEX IF NOT EXISTS idx_documents_project    ON documents(project_id)',
+    'CREATE INDEX IF NOT EXISTS idx_inv_movements_item   ON inventory_movements(item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_rm_movements_mat     ON raw_material_movements(raw_material_id)',
+    'CREATE INDEX IF NOT EXISTS idx_std_part_files_part  ON standard_part_files(std_part_id)',
+    'CREATE INDEX IF NOT EXISTS idx_time_entries_order   ON time_entries(order_id)',
+    'CREATE INDEX IF NOT EXISTS idx_time_entries_item    ON time_entries(item_id)',
+  ].forEach(sql => db.run(sql));
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -961,12 +1010,23 @@ app.use(express.static(FRONTEND_DIR, { etag: false, lastModified: false, setHead
 // ==============================================================
 app.get('/api/projects', (req, res) => {
   const projects = all('SELECT * FROM projects ORDER BY pinned DESC, number DESC');
+  const itemCounts = {};
+  all('SELECT project_id, item_type, COUNT(*) as c FROM items GROUP BY project_id, item_type').forEach(r => {
+    const t = itemCounts[r.project_id] || (itemCounts[r.project_id] = { total: 0 });
+    t.total += r.c;
+    t[r.item_type] = (t[r.item_type] || 0) + r.c;
+  });
+  const fileCounts = {};
+  all('SELECT i.project_id as pid, COUNT(*) as c FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id GROUP BY i.project_id').forEach(r => {
+    fileCounts[r.pid] = r.c;
+  });
   projects.forEach(p => {
-    p.item_count = count('SELECT COUNT(*) as c FROM items WHERE project_id=?', [p.id]);
-    p.asm_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='asm'", [p.id]);
-    p.prt_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='prt'", [p.id]);
-    p.doc_count  = count("SELECT COUNT(*) as c FROM items WHERE project_id=? AND item_type='doc'", [p.id]);
-    p.file_count = count('SELECT COUNT(*) as c FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id WHERE i.project_id=?', [p.id]);
+    const t = itemCounts[p.id] || {};
+    p.item_count = t.total || 0;
+    p.asm_count  = t.asm   || 0;
+    p.prt_count  = t.prt   || 0;
+    p.doc_count  = t.doc   || 0;
+    p.file_count = fileCounts[p.id] || 0;
   });
   res.json(projects);
 });
