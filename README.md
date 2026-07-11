@@ -231,7 +231,9 @@ PLM/
 ├── frontend/
 │   └── public/
 │       ├── index.html     ← HTML-Grundstruktur
-│       ├── app.js         ← Single-Page-App
+│       ├── js/            ← Single-Page-App, aufgeteilt nach Domänen
+│       │   ├── 01-core.js …  13-normteile-einkauf.js
+│       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
 │       └── styles.css     ← Design-System (Dark Theme)
 ├── plm.config             ← Datenpfad-Konfiguration (wird auto-erstellt)
 ├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
@@ -246,3 +248,20 @@ PLM/
 **Einstellungen → Daten → Gesamtexport herunterladen** – ZIP mit `plm.db` + `files/`.
 
 Wiederherstellen: ZIP entpacken → Inhalt in `data/`-Ordner → Server neu starten.
+
+**Automatisch:** Bei jedem Serverstart wird eine Tageskopie der Datenbank in
+`data/backups/plm-JJJJ-MM-TT.db` abgelegt (die letzten 14 werden behalten).
+Wiederherstellen: gewünschte Backup-Datei als `plm.db` in den `data/`-Ordner
+kopieren → Server neu starten.
+
+---
+
+## Tests
+
+```bash
+cd backend
+npm test
+```
+
+Startet den Server mit einer leeren Wegwerf-Datenbank und prüft die wichtigsten
+Abläufe (Aufträge, Preis-Sync Auftrag ↔ Produktion, Lagerbuchungen, Backups).

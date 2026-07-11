@@ -79,13 +79,18 @@ function flushDb() {
   dbDirty = false;
 }
 
+// Debounce 500ms — aber spätestens nach 5s flushen, damit ununterbrochene
+// Schreibvorgänge das Speichern nicht endlos hinauszögern.
+const MAX_FLUSH_DELAY = 5000;
+let dirtySince = 0;
 function saveDb() {
-  dbDirty = true;
+  if (!dbDirty) { dbDirty = true; dirtySince = Date.now(); }
   clearTimeout(saveTimer);
+  const overdue = Date.now() - dirtySince >= MAX_FLUSH_DELAY;
   saveTimer = setTimeout(() => {
     try { flushDb(); }
     catch (err) { console.error('DB-Speichern fehlgeschlagen:', err.message); }
-  }, 500);
+  }, overdue ? 0 : 500);
 }
 
 // Ausstehende Änderungen beim Beenden sichern (Debounce-Fenster = 500ms)
@@ -100,6 +105,20 @@ process.on('exit', () => { try { flushDb(); } catch {} });
 function run(sql, params = []) {
   db.run(sql, params);
   saveDb();
+}
+
+// Mehrere Statements atomar ausführen: schlägt eines fehl, wird alles zurückgerollt.
+function tx(fn) {
+  db.run('BEGIN');
+  try {
+    const result = fn();
+    db.run('COMMIT');
+    saveDb();
+    return result;
+  } catch (err) {
+    try { db.run('ROLLBACK'); } catch {}
+    throw err;
+  }
 }
 
 function get(sql, params = []) {
@@ -135,8 +154,29 @@ function runGetId(sql, params = []) {
 }
 
 // -- INIT DB ----------------------------------------------------
+// Automatisches Backup beim Start: eine Kopie pro Tag, die letzten 14 behalten.
+const BACKUP_KEEP = 14;
+function autoBackupDb() {
+  if (!fs.existsSync(DB_PATH)) return;
+  const backupDir = path.join(DATA_DIR, 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const today = new Date().toISOString().slice(0, 10);
+  const dest = path.join(backupDir, `plm-${today}.db`);
+  if (!fs.existsSync(dest)) {
+    fs.copyFileSync(DB_PATH, dest);
+    console.log('  DB-Backup erstellt: ' + dest);
+  }
+  const old = fs.readdirSync(backupDir)
+    .filter(f => /^plm-\d{4}-\d{2}-\d{2}\.db$/.test(f))
+    .sort()
+    .slice(0, -BACKUP_KEEP);
+  old.forEach(f => { try { fs.unlinkSync(path.join(backupDir, f)); } catch {} });
+}
+
 async function initDb() {
   const SQL = await initSqlJs();
+  try { autoBackupDb(); }
+  catch (err) { console.error('DB-Backup fehlgeschlagen:', err.message); }
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(fileBuffer);
@@ -1078,22 +1118,25 @@ app.delete('/api/projects/:id', (req, res) => {
   const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
   if (!p) return res.status(404).json({ error: 'Not found' });
   const revIds = all('SELECT r.id FROM revisions r JOIN items i ON r.item_id=i.id WHERE i.project_id=?', [p.id]);
-  revIds.forEach(r => {
-    all('SELECT filename FROM datasets WHERE revision_id=?', [r.id]).forEach(f => {
-      try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {}
+  // Dateien erst nach erfolgreichem Commit löschen (nicht zurückrollbar)
+  const filesToDelete = [];
+  tx(() => {
+    revIds.forEach(r => {
+      all('SELECT filename FROM datasets WHERE revision_id=?', [r.id]).forEach(f => filesToDelete.push(f.filename));
+      run('DELETE FROM datasets WHERE revision_id=?', [r.id]);
+      run('DELETE FROM bom WHERE parent_rev_id=?', [r.id]);
+      run('DELETE FROM print_settings WHERE revision_id=?', [r.id]);
     });
-    run('DELETE FROM datasets WHERE revision_id=?', [r.id]);
-    run('DELETE FROM bom WHERE parent_rev_id=?', [r.id]);
-    run('DELETE FROM print_settings WHERE revision_id=?', [r.id]);
+    const itemIds = all('SELECT id FROM items WHERE project_id=?', [p.id]);
+    itemIds.forEach(i => {
+      run('DELETE FROM revisions WHERE item_id=?', [i.id]);
+      run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['item', i.id]);
+    });
+    run('DELETE FROM items WHERE project_id=?', [p.id]);
+    run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['project', p.id]);
+    run('DELETE FROM projects WHERE id=?', [p.id]);
   });
-  const itemIds = all('SELECT id FROM items WHERE project_id=?', [p.id]);
-  itemIds.forEach(i => {
-    run('DELETE FROM revisions WHERE item_id=?', [i.id]);
-    run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['item', i.id]);
-  });
-  run('DELETE FROM items WHERE project_id=?', [p.id]);
-  run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['project', p.id]);
-  run('DELETE FROM projects WHERE id=?', [p.id]);
+  filesToDelete.forEach(fn => { try { fs.unlinkSync(path.join(FILES_DIR, fn)); } catch {} });
   res.json({ success: true });
 });
 
@@ -1278,18 +1321,21 @@ app.delete('/api/items/:id', (req, res) => {
   if (!item) return res.status(404).json({ error: 'Not found' });
   log('project', item.project_id, 'Item gelöscht', item.item_type + ' ' + item.item_number + ' – ' + item.name);
   const revs = all('SELECT id FROM revisions WHERE item_id=?', [item.id]);
-  revs.forEach(rev => {
-    all('SELECT filename FROM datasets WHERE revision_id=?', [rev.id]).forEach(f => {
-      try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {}
+  // Dateien erst nach erfolgreichem Commit löschen (nicht zurückrollbar)
+  const filesToDelete = [];
+  tx(() => {
+    revs.forEach(rev => {
+      all('SELECT filename FROM datasets WHERE revision_id=?', [rev.id]).forEach(f => filesToDelete.push(f.filename));
+      run('DELETE FROM datasets WHERE revision_id=?', [rev.id]);
+      run('DELETE FROM bom WHERE parent_rev_id=?', [rev.id]);
+      run('DELETE FROM print_settings WHERE revision_id=?', [rev.id]);
     });
-    run('DELETE FROM datasets WHERE revision_id=?', [rev.id]);
-    run('DELETE FROM bom WHERE parent_rev_id=?', [rev.id]);
-    run('DELETE FROM print_settings WHERE revision_id=?', [rev.id]);
+    run('DELETE FROM revisions WHERE item_id=?', [item.id]);
+    run('DELETE FROM bom WHERE child_item_id=?', [item.id]);
+    run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['item', item.id]);
+    run('DELETE FROM items WHERE id=?', [item.id]);
   });
-  run('DELETE FROM revisions WHERE item_id=?', [item.id]);
-  run('DELETE FROM bom WHERE child_item_id=?', [item.id]);
-  run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['item', item.id]);
-  run('DELETE FROM items WHERE id=?', [item.id]);
+  filesToDelete.forEach(fn => { try { fs.unlinkSync(path.join(FILES_DIR, fn)); } catch {} });
   res.json({ success: true });
 });
 
@@ -1938,8 +1984,10 @@ app.delete('/api/customers/:id', (req, res) => {
 // ==============================================================
 app.get('/api/orders', (req, res) => {
   const orders = all('SELECT o.*,COALESCE(c.name,o.customer_name_free) as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id=c.id ORDER BY o.number DESC');
+  const itemsByOrder = {};
+  all('SELECT * FROM order_items ORDER BY COALESCE(position,id),id').forEach(i => (itemsByOrder[i.order_id] ??= []).push(i));
   orders.forEach(o => {
-    o.items = all('SELECT * FROM order_items WHERE order_id=?', [o.id]);
+    o.items = itemsByOrder[o.id] || [];
     const sub = o.items.reduce((s,i) => s + i.quantity*i.unit_price*(1-(i.discount_pct||0)/100), 0);
     const disc = sub * (o.discount_pct||0) / 100;
     const net = sub - disc;
@@ -1991,8 +2039,10 @@ app.put('/api/orders/:id/status', (req, res) => {
 });
 
 app.delete('/api/orders/:id', (req, res) => {
-  run('DELETE FROM order_items WHERE order_id=?', [req.params.id]);
-  run('DELETE FROM orders WHERE id=?', [req.params.id]);
+  tx(() => {
+    run('DELETE FROM order_items WHERE order_id=?', [req.params.id]);
+    run('DELETE FROM orders WHERE id=?', [req.params.id]);
+  });
   res.json({ success: true });
 });
 
@@ -2027,9 +2077,9 @@ function syncPriceFromOrderItem(orderItemId) {
 }
 
 app.put('/api/order-items/:id', (req, res) => {
-  const { description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
-  run('UPDATE order_items SET description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
-    [description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
+  const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
+  run('UPDATE order_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
+    [item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
   const priceSynced = syncPriceFromOrderItem(req.params.id);
   const row = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
   if (row) row.price_synced = priceSynced;
@@ -2080,7 +2130,9 @@ app.put('/api/delivery-items/:id/move', (req, res) => {
 // ==============================================================
 app.get('/api/quotes', (req, res) => {
   const quotes = all('SELECT q.*,COALESCE(c.name,q.customer_name_free) as customer_name FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id ORDER BY q.number DESC');
-  quotes.forEach(q => { q.items = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]); });
+  const itemsByQuote = {};
+  all('SELECT * FROM quote_items ORDER BY COALESCE(position,id),id').forEach(i => (itemsByQuote[i.quote_id] ??= []).push(i));
+  quotes.forEach(q => { q.items = itemsByQuote[q.id] || []; });
   res.json(quotes);
 });
 
@@ -2120,8 +2172,10 @@ app.put('/api/quotes/:id/status', (req, res) => {
 });
 
 app.delete('/api/quotes/:id', (req, res) => {
-  run('DELETE FROM quote_items WHERE quote_id=?', [req.params.id]);
-  run('DELETE FROM quotes WHERE id=?', [req.params.id]);
+  tx(() => {
+    run('DELETE FROM quote_items WHERE quote_id=?', [req.params.id]);
+    run('DELETE FROM quotes WHERE id=?', [req.params.id]);
+  });
   res.json({ success: true });
 });
 
@@ -2133,9 +2187,9 @@ app.post('/api/quotes/:id/items', (req, res) => {
 });
 
 app.put('/api/quote-items/:id', (req, res) => {
-  const { description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
-  run('UPDATE quote_items SET description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
-    [description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
+  const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
+  run('UPDATE quote_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
+    [item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
   res.json(get('SELECT * FROM quote_items WHERE id=?', [req.params.id]));
 });
 
@@ -2147,16 +2201,19 @@ app.delete('/api/quote-items/:id', (req, res) => {
 app.post('/api/quotes/:id/convert', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id=?', [req.params.id]);
   if (!q) return res.status(404).json({ error: 'Not found' });
-  const number = nextOrderNumber();
-  const orderId = runGetId(`INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax)
-    VALUES (?,?,?,?,?,date('now'),?,?,?,?)`,
-    [number, q.customer_id, q.customer_name_free||null, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'', q.include_tax||0]);
-  const qItems = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]);
-  qItems.forEach(qi => {
-    run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-      [orderId, qi.item_id, qi.description, qi.quantity, qi.unit, qi.unit_price, qi.discount_pct, qi.notes||'', qi.raw_material_id||null, qi.estimated_hours||null, qi.printer_name||'', qi.estimated_print_hours||null]);
+  const orderId = tx(() => {
+    const number = nextOrderNumber();
+    const id = runGetId(`INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax)
+      VALUES (?,?,?,?,?,date('now'),?,?,?,?)`,
+      [number, q.customer_id, q.customer_name_free||null, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'', q.include_tax||0]);
+    const qItems = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]);
+    qItems.forEach(qi => {
+      run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [id, qi.item_id, qi.description, qi.quantity, qi.unit, qi.unit_price, qi.discount_pct, qi.notes||'', qi.raw_material_id||null, qi.estimated_hours||null, qi.printer_name||'', qi.estimated_print_hours||null]);
+    });
+    run("UPDATE quotes SET status='ACCEPTED',updated_at=datetime('now') WHERE id=?", [q.id]);
+    return id;
   });
-  run("UPDATE quotes SET status='ACCEPTED',updated_at=datetime('now') WHERE id=?", [q.id]);
   res.json(get('SELECT * FROM orders WHERE id=?', [orderId]));
 });
 
@@ -2935,8 +2992,10 @@ app.put('/api/deliveries/:id/status', (req, res) => {
 });
 
 app.delete('/api/deliveries/:id', (req, res) => {
-  run('DELETE FROM delivery_items WHERE delivery_id=?', [req.params.id]);
-  run('DELETE FROM deliveries WHERE id=?', [req.params.id]);
+  tx(() => {
+    run('DELETE FROM delivery_items WHERE delivery_id=?', [req.params.id]);
+    run('DELETE FROM deliveries WHERE id=?', [req.params.id]);
+  });
   res.json({ success: true });
 });
 
@@ -2952,9 +3011,9 @@ app.post('/api/deliveries/:id/items', (req, res) => {
 });
 
 app.put('/api/delivery-items/:id', (req, res) => {
-  const { description, quantity, unit, unit_price, print_settings_json, notes, position, raw_material_id } = req.body;
-  run(`UPDATE delivery_items SET description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=?,raw_material_id=? WHERE id=?`,
-    [description, quantity||1, unit||'Stk',
+  const { item_id, description, quantity, unit, unit_price, print_settings_json, notes, position, raw_material_id } = req.body;
+  run(`UPDATE delivery_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=?,raw_material_id=? WHERE id=?`,
+    [item_id||null, description, quantity||1, unit||'Stk',
      unit_price!=null ? parseFloat(unit_price) : null,
      print_settings_json??null, notes||'', position||999, raw_material_id||null, req.params.id]);
   // Preis zurück in den verknüpften Auftrag (und weitere Produktionsaufträge) übernehmen
@@ -3247,33 +3306,35 @@ function computeTotals(doc) {
 app.post('/api/orders/:id/to-delivery', (req, res) => {
   const o = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
   if (!o) return res.status(404).json({ error: 'Not found' });
-  const number = nextDeliveryNumber();
-  const delivId = runGetId(
-    `INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,notes)
-     VALUES (?,?,?,?,?,?,?,?)`,
-    [number, o.title, o.id, o.customer_id||null, o.customer_name_free||null,
-     'DRAFT', o.delivery_date||null, o.notes||'']
-  );
-  const oItems = all('SELECT * FROM order_items WHERE order_id=?', [o.id]);
-  oItems.forEach((oi, idx) => {
-    run(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,notes,position,order_item_id)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
-      [delivId, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk',
-       oi.unit_price||null, oi.notes||'', idx + 1, oi.id]);
-  });
-  if (req.body.include_time) {
-    const hourlyRateRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
-    const hourlyRate = parseFloat(hourlyRateRow?.value) || 0;
-    const billable = all("SELECT * FROM time_entries WHERE order_id=? AND billable=1 ORDER BY date,id", [o.id]);
-    const basePos = oItems.length + 1;
-    billable.forEach((te, idx) => {
-      const desc = ['Arbeitszeit', te.date, te.description].filter(Boolean).join(' – ');
-      run(`INSERT INTO delivery_items (delivery_id,description,quantity,unit,unit_price,notes,position)
-           VALUES (?,?,?,?,?,?,?)`,
-        [delivId, desc, te.hours, 'h', hourlyRate || null, '', basePos + idx]);
+  const delivId = tx(() => {
+    const number = nextDeliveryNumber();
+    const id = runGetId(
+      `INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,notes)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [number, o.title, o.id, o.customer_id||null, o.customer_name_free||null,
+       'DRAFT', o.delivery_date||null, o.notes||'']
+    );
+    const oItems = all('SELECT * FROM order_items WHERE order_id=?', [o.id]);
+    oItems.forEach((oi, idx) => {
+      run(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,notes,position,order_item_id)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
+        [id, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk',
+         oi.unit_price||null, oi.notes||'', idx + 1, oi.id]);
     });
-  }
-  saveDb();
+    if (req.body.include_time) {
+      const hourlyRateRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
+      const hourlyRate = parseFloat(hourlyRateRow?.value) || 0;
+      const billable = all("SELECT * FROM time_entries WHERE order_id=? AND billable=1 ORDER BY date,id", [o.id]);
+      const basePos = oItems.length + 1;
+      billable.forEach((te, idx) => {
+        const desc = ['Arbeitszeit', te.date, te.description].filter(Boolean).join(' – ');
+        run(`INSERT INTO delivery_items (delivery_id,description,quantity,unit,unit_price,notes,position)
+             VALUES (?,?,?,?,?,?,?)`,
+          [id, desc, te.hours, 'h', hourlyRate || null, '', basePos + idx]);
+      });
+    }
+    return id;
+  });
   res.json(get('SELECT * FROM deliveries WHERE id=?', [delivId]));
 });
 
@@ -3676,8 +3737,10 @@ app.put('/api/inventory/:id', (req, res) => {
 });
 
 app.delete('/api/inventory/:id', (req, res) => {
-  run('DELETE FROM inventory_movements WHERE item_id=?', [req.params.id]);
-  run('DELETE FROM inventory_items WHERE id=?', [req.params.id]);
+  tx(() => {
+    run('DELETE FROM inventory_movements WHERE item_id=?', [req.params.id]);
+    run('DELETE FROM inventory_items WHERE id=?', [req.params.id]);
+  });
   res.json({ success: true });
 });
 
@@ -3687,9 +3750,11 @@ app.post('/api/inventory/:id/movement', (req, res) => {
   const item = get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found' });
   const delta = type === 'out' ? -Math.abs(parseFloat(qty)) : Math.abs(parseFloat(qty));
-  run('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
-    [req.params.id, type, delta, reference||'', notes||'']);
-  run(`UPDATE inventory_items SET stock_qty=stock_qty+?,updated_at=datetime('now') WHERE id=?`, [delta, req.params.id]);
+  tx(() => {
+    run('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
+      [req.params.id, type, delta, reference||'', notes||'']);
+    run(`UPDATE inventory_items SET stock_qty=stock_qty+?,updated_at=datetime('now') WHERE id=?`, [delta, req.params.id]);
+  });
   res.json(get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]));
 });
 
