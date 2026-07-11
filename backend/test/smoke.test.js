@@ -130,6 +130,20 @@ test('Auftrag löschen entfernt auch die Positionen', async () => {
   assert.equal(r.status, 404);
 });
 
+test('Datei-Upload hinterlegt den Original-Dateinamen als Notiz', async () => {
+  const p = await api('/api/projects', 'POST', { name: 'Uploadprojekt' });
+  const item = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Uploadteil', item_type: 'part' });
+  const detail = await api(`/api/items/${item.id}`);
+  const revId = detail.revisions[0].id;
+  const fd = new FormData();
+  fd.append('file', new Blob(['solid test'], { type: 'application/octet-stream' }), 'Gehäuse-Deckel_v3.stl');
+  const r = await fetch(`${BASE}/api/revisions/${revId}/datasets`, { method: 'POST', body: fd });
+  assert.ok(r.ok, 'Upload erfolgreich');
+  const ds = await r.json();
+  assert.equal(ds.notes, 'Gehäuse-Deckel_v3.stl', 'Originalname (inkl. Umlaut) als Notiz');
+  assert.notEqual(ds.original_name, 'Gehäuse-Deckel_v3.stl', 'Datei wurde auf Artikelnr_revX umbenannt');
+});
+
 test('Automatisches Backup wurde beim Start angelegt', async () => {
   // Der Testserver startet mit leerer DB — Backup entsteht erst, wenn eine
   // plm.db existiert. Neustart-Szenario: zweiter Serverstart im selben DATA_DIR.

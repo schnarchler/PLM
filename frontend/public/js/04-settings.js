@@ -604,7 +604,7 @@ async function renderFileIndex() {
       <td style="font-size:13px;font-weight:500">${esc(f.original_name)}</td>
       <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${esc(f.filename)}</td>
       <td style="font-family:var(--mono);font-size:13px;color:var(--t3);text-align:right">${fmtSize(f.file_size)}</td>
-      <td style="font-size:13px;color:var(--t3)">${(f.uploaded_at||'').slice(0,10)}</td>
+      <td style="font-size:13px;color:var(--t3)">${fmtD(f.uploaded_at,'')}</td>
     </tr>`).join('');
 
   const docRows = documents.map(f => `
@@ -614,7 +614,7 @@ async function renderFileIndex() {
       <td style="font-size:13px;font-weight:500">${esc(f.original_name)}</td>
       <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${esc(f.filename)}</td>
       <td style="font-family:var(--mono);font-size:13px;color:var(--t3);text-align:right">${fmtSize(f.file_size)}</td>
-      <td style="font-size:13px;color:var(--t3)">${(f.uploaded_at||'').slice(0,10)}</td>
+      <td style="font-size:13px;color:var(--t3)">${fmtD(f.uploaded_at,'')}</td>
     </tr>`).join('');
 
   const total = datasets.length + documents.length;
@@ -654,8 +654,8 @@ function exportFileIndex() {
   const { datasets, documents } = window._fileIndexData || { datasets:[], documents:[] };
   const rows = [
     ['Projekt','Artikel-Nr.','Revision','Angezeigter Name','Dateiname auf Festplatte','Typ','Grösse (Bytes)','Datum'],
-    ...datasets.map(f => [f.project_number, f.item_number||'', f.revision||'', f.original_name, f.filename, f.ds_type||'', f.file_size||'', (f.uploaded_at||'').slice(0,10)]),
-    ...documents.map(f => [f.project_number, '', '', f.original_name, f.filename, f.ds_type||'', f.file_size||'', (f.uploaded_at||'').slice(0,10)])
+    ...datasets.map(f => [f.project_number, f.item_number||'', f.revision||'', f.original_name, f.filename, f.ds_type||'', f.file_size||'', fmtD(f.uploaded_at,'')]),
+    ...documents.map(f => [f.project_number, '', '', f.original_name, f.filename, f.ds_type||'', f.file_size||'', fmtD(f.uploaded_at,'')])
   ];
   const csv = rows.map(r => r.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const a = document.createElement('a');

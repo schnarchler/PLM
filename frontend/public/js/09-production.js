@@ -37,7 +37,7 @@ function _render_deliveryRows() {
     <td style="color:var(--t2)">${d.customer_name||'—'}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.item_count||0}</td>
     <td>${_stSel('delivery',d.id,d.status)}</td>
-    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.delivery_date||'—'}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Druckansicht">&#128196;</button>
       ${d.status === 'DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>` : ''}
@@ -63,8 +63,8 @@ async function openDeliveryDetail(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('delivery',id,d.status)}</div>
         <div><div class="ps-label">Kunde</div>${d.customer_name||'—'}</div>
-        <div><div class="ps-label">Lieferdatum</div>${d.delivery_date||'—'}</div>
-        ${d.manufacture_date?`<div><div class="ps-label">Herstellungsdatum</div>${d.manufacture_date}</div>`:''}
+        <div><div class="ps-label">Lieferdatum</div>${fmtD(d.delivery_date)}</div>
+        ${d.manufacture_date?`<div><div class="ps-label">Herstellungsdatum</div>${fmtD(d.manufacture_date)}</div>`:''}
         ${d.order_number?`<div><div class="ps-label">Auftrag</div>${d.order_number} ${d.order_title?'– '+esc(d.order_title):''}</div>`:''}
         ${d.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(d.notes)}</span></div>`:''}
       </div>

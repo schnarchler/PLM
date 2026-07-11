@@ -984,7 +984,7 @@ async function applyDimRawMat(val) {
           <button class="btn btn-ghost" style="text-align:left;justify-content:space-between"
             onclick="set('dim-price','${p.unit_price}');_hideDynModal()">
             <span style="font-family:var(--mono)">${fmtChf(p.unit_price)} / ${esc(unit)}</span>
-            <span style="font-size:11px;color:var(--t4)">${p.created_at?.slice(0,10)||''}${p.notes?' · '+esc(p.notes):''}</span>
+            <span style="font-size:11px;color:var(--t4)">${fmtD(p.created_at,'')}${p.notes?' · '+esc(p.notes):''}</span>
           </button>`).join('')}
         <button class="btn btn-ghost" style="text-align:left;color:var(--t4)"
           onclick="_hideDynModal()">— Kein Preis übernehmen</button>

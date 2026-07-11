@@ -216,7 +216,7 @@ function _render_quoteRows() {
     <td style="color:var(--t2)">${q.customer_name||'—'}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${(q.items||[]).length}</td>
     <td>${_stSel('quote',q.id,q.status)}</td>
-    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${q.valid_until||'—'}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(q.valid_until)}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${q.id},'quote')" title="Angebot PDF">&#128196;</button>
       ${q.status==='DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delQuote(${q.id})">&#x2715;</button>` : ''}
@@ -280,8 +280,8 @@ async function openQuoteDetail(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('quote',id,q.status)}</div>
         <div><div class="ps-label">Kunde</div>${q.customer_name||'—'}</div>
-        <div><div class="ps-label">Datum</div>${q.quote_date||'—'}</div>
-        <div><div class="ps-label">Gültig bis</div>${q.valid_until||'—'}</div>
+        <div><div class="ps-label">Datum</div>${fmtD(q.quote_date)}</div>
+        <div><div class="ps-label">Gültig bis</div>${fmtD(q.valid_until)}</div>
         <div><div class="ps-label">MwSt.</div>${q.tax_rate??0} % ${q.include_tax?'<span style="color:var(--green);font-size:13px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:13px">(ohne)</span>'}</div>
         ${estHours>0?`<div><div class="ps-label">Arbeitszeit</div>${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h = <span style="font-family:var(--mono);color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>${q.include_hours?' <span style="color:var(--green);font-size:13px">(eingerechnet)</span>':' <span style="color:var(--t3);font-size:13px">(nicht eingerechnet)</span>'}</div>`:''}
         ${(q.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${q.discount_pct} %</div>`:''}

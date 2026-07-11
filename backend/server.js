@@ -1036,7 +1036,8 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext);
   }
 });
-const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 } });
+// defParamCharset utf8: sonst kommen Umlaute in hochgeladenen Dateinamen als Zeichensalat an
+const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 }, defParamCharset: 'utf8' });
 
 app.use(cors());
 app.use(express.json());
@@ -1511,8 +1512,14 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
     while (existing.some(d => d.original_name === `${base}_${n}${ext}`)) n++;
     displayName = `${base}_${n}${ext}`;
   }
+  // Die Datei wird auf {Artikelnr}_rev{X} umbenannt — den ursprünglichen Dateinamen
+  // als Notiz festhalten, sonst geht er verloren.
+  const origName = req.file.originalname;
+  const finalNotes = displayName !== origName
+    ? (notes ? `${notes} · ${origName}` : origName)
+    : (notes || '');
   const id = runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-    [rev.id, dsType, req.file.filename, displayName, req.file.size, version || '1', notes || '']);
+    [rev.id, dsType, req.file.filename, displayName, req.file.size, version || '1', finalNotes]);
   log('revision', rev.id, 'Dataset Added', displayName + ' (' + dsType + ')');
   res.json(get('SELECT * FROM datasets WHERE id=?', [id]));
 });
@@ -2602,7 +2609,7 @@ app.post('/api/projects/:id/documents', upload.single('file'), (req, res) => {
   const docType = guessType(req.file.originalname);
   const displayName = name || req.file.originalname;
   const id = runGetId('INSERT INTO documents (project_id,name,filename,original_name,file_size,doc_type,notes) VALUES (?,?,?,?,?,?,?)',
-    [p.id, displayName, req.file.filename, req.file.originalname, req.file.size, docType, notes||'']);
+    [p.id, displayName, req.file.filename, req.file.originalname, req.file.size, docType, notes || req.file.originalname]);
   log('project', p.id, 'Dokument hochgeladen', displayName + ' (' + docType + ')');
   res.json(get('SELECT * FROM documents WHERE id=?', [id]));
 });
@@ -2787,7 +2794,7 @@ app.get('/launcher', (req, res) => {
 // ==============================================================
 // 3MF PARSE
 // ==============================================================
-const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 }, defParamCharset: 'utf8' });
 
 app.post('/api/parse-3mf', uploadMem.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
@@ -3833,7 +3840,7 @@ app.post('/api/standard-parts/:id/files', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
   const dsType = guessType(req.file.originalname);
   const id = runGetId('INSERT INTO standard_part_files (std_part_id,filename,original_name,file_size,ds_type,notes) VALUES (?,?,?,?,?,?)',
-    [req.params.id, req.file.filename, req.file.originalname, req.file.size, dsType, req.body.notes||'']);
+    [req.params.id, req.file.filename, req.file.originalname, req.file.size, dsType, req.body.notes || req.file.originalname]);
   res.json(get('SELECT * FROM standard_part_files WHERE id=?', [id]));
 });
 
