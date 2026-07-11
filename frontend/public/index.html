@@ -879,6 +879,20 @@
 
 <div id="toasts"></div>
 
-<script src="app.js"></script>
+<!-- Aufgeteilte app.js: klassische Scripts mit gemeinsamem globalem Scope.
+     Die Reihenfolge entspricht der ursprünglichen app.js und muss erhalten bleiben. -->
+<script src="js/01-core.js"></script>
+<script src="js/02-plm-browse.js"></script>
+<script src="js/03-dashboard.js"></script>
+<script src="js/04-settings.js"></script>
+<script src="js/05-erp-views.js"></script>
+<script src="js/06-plm-crud.js"></script>
+<script src="js/07-erp-crud.js"></script>
+<script src="js/08-ui-api.js"></script>
+<script src="js/09-production.js"></script>
+<script src="js/10-documents.js"></script>
+<script src="js/11-time-checkout.js"></script>
+<script src="js/12-lager.js"></script>
+<script src="js/13-normteile-einkauf.js"></script>
 </body>
 </html>
