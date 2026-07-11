@@ -389,7 +389,7 @@ async function renderPurchasing() {
         <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.supplier_name||'—')}</span>
         <span style="font-size:12px;color:var(--t4)">${po.item_count} Pos.</span>
         ${total}
-        <span style="font-size:12px;color:var(--t4)">${po.order_date||''}</span>
+        <span style="font-size:12px;color:var(--t4)">${fmtD(po.order_date,'')}</span>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generatePoDoc(${po.id})" title="PDF" style="flex-shrink:0;padding:2px 6px">&#128196;</button>
     </div>`;
@@ -453,7 +453,7 @@ async function openPoDetail(id) {
       <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto" onclick="deletePo(${po.id})">Löschen</button>
     </div>
     <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--t3);margin-bottom:14px">
-      ${po.order_date ? `<span>Bestellt: <strong style="color:var(--t1)">${po.order_date}</strong></span>` : ''}
+      ${po.order_date ? `<span>Bestellt: <strong style="color:var(--t1)">${fmtD(po.order_date)}</strong></span>` : ''}
       ${po.expected_date ? `<span>Erwartet: <strong style="color:var(--t1)">${po.expected_date}</strong></span>` : ''}
       ${po.supplier_email ? `<span>${esc(po.supplier_email)}</span>` : ''}
       ${po.supplier_phone ? `<span>${esc(po.supplier_phone)}</span>` : ''}

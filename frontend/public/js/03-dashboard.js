@@ -69,7 +69,7 @@ async function renderDashboard() {
       <span class="status ${ostCls[o.status]||'st-DFT'}" style="flex-shrink:0">${ostLabel[o.status]||o.status}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px">${o.number} · ${esc(o.customer_name||'—')}${o.delivery_date?' · '+o.delivery_date.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px">${o.number} · ${esc(o.customer_name||'—')}${o.delivery_date?' · '+fmtD(o.delivery_date):''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:var(--mono);font-size:13px;color:var(--t1)">${fmtCHF(o.total||0)}</div>
@@ -83,7 +83,7 @@ async function renderDashboard() {
       <span class="status ${qstCls[q.status]||'st-DFT'}" style="flex-shrink:0">${qstLabel[q.status]||q.status}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}${q.valid_until?' · bis '+q.valid_until.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}${q.valid_until?' · bis '+fmtD(q.valid_until):''}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:var(--mono);font-size:13px;color:var(--t1)">${fmtCHF(q.total||0)}</div>
@@ -119,7 +119,7 @@ async function renderDashboard() {
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${label}</div>
-        <div style="font-size:13px;color:var(--t4)">${ls.delivery_date}</div>
+        <div style="font-size:13px;color:var(--t4)">${fmtD(ls.delivery_date)}</div>
       </div>
     </div>`;
   }).join('') : emptyRow('Keine Produktionsaufträge fällig in 14 Tagen');
@@ -259,7 +259,7 @@ function exportChangelog() {
   const header = ['Datum','Zeit','Typ','Referenz','Bezeichnung','Aktion','Details'];
   const csvRows = _changelogRows.map(r => {
     const dt = r.created_at ? r.created_at.replace('T',' ').slice(0,19) : '';
-    const date = dt.slice(0,10); const time = dt.slice(11,16);
+    const date = fmtD(dt.slice(0,10), ''); const time = dt.slice(11,16);
     return [date, time, r.entity_type||'', r.ref||'', r.label||'', r.action||'', r.details||''];
   });
   const csv = [header, ...csvRows].map(row => row.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');

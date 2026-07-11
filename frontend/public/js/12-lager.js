@@ -149,7 +149,7 @@ async function openInventoryDetail(id) {
       ${item.movements?.length ? `<div class="tbl-wrap"><table>
         <thead><tr><th>Datum</th><th>Typ</th><th>Menge</th><th>Referenz</th><th>Notiz</th></tr></thead>
         <tbody>${item.movements.map(m => `<tr>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${(m.created_at||'').slice(0,16).replace('T',' ')}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtDT(m.created_at,'')}</td>
           <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(91,211,138,.15)':'rgba(241,120,120,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
           <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.reference||'—')}</td>
@@ -594,7 +594,7 @@ async function openRawMatDetail(id) {
           ${sorted.map((l, lotIdx) => {
             const rem      = l.remaining_qty ?? l.qty ?? 0;
             const depleted = rem <= 0;
-            const label    = l.lot_number || (l.last_date ? l.last_date.slice(0,10) : '—');
+            const label    = l.lot_number || (l.last_date ? fmtD(l.last_date) : '—');
             const bg = depleted ? 'background:rgba(74,79,91,.18)' : 'background:var(--bg2)';
             const artNr = l.article_number || '';
             // Daten sicher in globalem Objekt speichern — kein Encoding in onclick-Attributen
@@ -623,7 +623,7 @@ async function openRawMatDetail(id) {
       ${movements.length ? `<div class="tbl-wrap"><table>
         <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th style="text-align:right">Saldo</th><th style="text-align:right">Preis/Stk</th><th>Lot</th><th>Notiz</th></tr></thead>
         <tbody>${movements.map(m => `<tr>
-          <td style="font-family:var(--mono);font-size:11px;color:var(--t4);white-space:nowrap">${m.created_at?.slice(0,16)||'—'}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--t4);white-space:nowrap">${fmtDT(m.created_at)}</td>
           <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px;white-space:nowrap">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right;color:${m.type==='in'?'var(--green)':'var(--amber)'};white-space:nowrap">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${item.unit}</td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3);white-space:nowrap">${fmtN(m.balance??0,0)} ${item.unit}</td>

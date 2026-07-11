@@ -286,7 +286,7 @@ async function openCustomerDetail(id) {
       <span class="status ${ostCls[o.status]||'st-DFT'}">${ostLabel[o.status]||o.status}</span>
       <div>
         <div style="font-weight:500">${esc(o.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:2px">${o.number}${o.order_date?' · '+o.order_date.slice(0,10):''}${o.delivery_date?' · 📅 '+o.delivery_date.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:2px">${o.number}${o.order_date?' · '+fmtD(o.order_date):''}${o.delivery_date?' · 📅 '+fmtD(o.delivery_date):''}</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:13px">${fmtChfD(o.total)}</div>
@@ -299,7 +299,7 @@ async function openCustomerDetail(id) {
       <span class="status ${qstCls[q.status]||'st-DFT'}">${qstLabel[q.status]||q.status}</span>
       <div>
         <div style="font-weight:500">${esc(q.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:2px">${q.number}${q.quote_date?' · '+q.quote_date.slice(0,10):''}${q.valid_until?' · gültig bis '+q.valid_until.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:2px">${q.number}${q.quote_date?' · '+fmtD(q.quote_date):''}${q.valid_until?' · gültig bis '+fmtD(q.valid_until):''}</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:13px">${fmtChfD(q.total)}</div>
@@ -312,7 +312,7 @@ async function openCustomerDetail(id) {
       <span class="status ${dstCls[d.status]||'st-DFT'}">${dstLabel[d.status]||d.status}</span>
       <div>
         <div style="font-weight:500">${esc(d.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:2px">${d.number}${d.order_number?' · Auftrag '+d.order_number:''}${d.delivery_date?' · '+d.delivery_date.slice(0,10):''}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:2px">${d.number}${d.order_number?' · Auftrag '+d.order_number:''}${d.delivery_date?' · '+fmtD(d.delivery_date):''}</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:13px">${fmtChfD(d.total)}</div>
@@ -403,7 +403,7 @@ function _render_orderRows() {
     <td style="color:var(--t2)">${o.customer_name||'—'}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${(o.items||[]).length}</td>
     <td>${_stSel('order',o.id,o.status)}</td>
-    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${o.order_date||'—'}</td>
+    <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(o.order_date)}</td>
     <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--green)">${o.computed_total != null ? fmtChf(o.computed_total) : '—'}</td>
     <td style="display:flex;gap:4px">
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDoc(${o.id},'invoice')" title="Rechnung PDF">&#128196;</button>
@@ -431,7 +431,7 @@ function _renderBillableTimeSection(timeEntries, taxRate, discountPct, includeTa
         return `<tr style="border-bottom:1px solid var(--line)">
           <td style="padding:6px 8px;width:28px"></td>
           <td style="padding:6px 8px;font-size:13px">${esc(e.description||'Arbeitszeit')}
-            <div style="font-size:13px;color:var(--t3)">${e.date||''}</div></td>
+            <div style="font-size:13px;color:var(--t3)">${fmtD(e.date,'')}</div></td>
           <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtN(e.hours,2)} h</td>
           <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtCHF(hourlyRate)}/h</td>
           <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px">${fmtCHF(cost)}</td>
@@ -520,8 +520,8 @@ async function openOrderDetail(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('order',id,o.status)}</div>
         <div><div class="ps-label">Kunde</div>${o.customer_name||'—'}</div>
-        <div><div class="ps-label">Datum</div>${o.order_date||'—'}</div>
-        <div><div class="ps-label">Lieferdatum</div><span id="od-delivery-date">${o.delivery_date||'—'}</span></div>
+        <div><div class="ps-label">Datum</div>${fmtD(o.order_date)}</div>
+        <div><div class="ps-label">Lieferdatum</div><span id="od-delivery-date">${fmtD(o.delivery_date)}</span></div>
         <div><div class="ps-label">MwSt.</div>${o.tax_rate??0} % ${o.include_tax?'<span style="color:var(--green);font-size:13px">(ausgewiesen)</span>':'<span style="color:var(--t3);font-size:13px">(ohne)</span>'}</div>
         ${estHours>0?`<div><div class="ps-label">Arbeitszeit</div>${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h = <span style="font-family:var(--mono);color:${o.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>${o.include_hours?' <span style="color:var(--green);font-size:13px">(eingerechnet)</span>':' <span style="color:var(--t3);font-size:13px">(nicht eingerechnet)</span>'}</div>`:''}
         ${(o.discount_pct||0)>0?`<div><div class="ps-label">Gesamtrabatt</div>${o.discount_pct} %</div>`:''}
@@ -638,7 +638,7 @@ async function onSearch(q) {
           <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(o.number)}</td>
           <td>${esc(o.title)}</td><td style="color:var(--t3)">${esc(o.customer_name||'—')}</td>
           <td><span class="status ${ostC[o.status]||''}">${ostL[o.status]||o.status}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${o.delivery_date||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(o.delivery_date)}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.quotes?.length ? section('Angebote', r.quotes.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Gültig bis</th></tr></thead>
@@ -646,7 +646,7 @@ async function onSearch(q) {
           <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(q.number)}</td>
           <td>${esc(q.title)}</td><td style="color:var(--t3)">${esc(q.customer_name||'—')}</td>
           <td><span class="status ${qstC[q.status]||''}">${qstL[q.status]||q.status}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${q.valid_until||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(q.valid_until)}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.deliveries?.length ? section('Produktion', r.deliveries.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Datum</th></tr></thead>
@@ -654,7 +654,7 @@ async function onSearch(q) {
           <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</td>
           <td>${esc(d.title)}</td><td style="color:var(--t3)">${esc(d.customer_name||'—')}</td>
           <td><span class="status ${dstC[d.status]||''}">${dstL[d.status]||d.status}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.delivery_date||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${r.customers?.length ? section('Kunden', r.customers.length) + `<div class="tbl-wrap"><table>
         <thead><tr><th>Nr.</th><th>Name</th><th>E-Mail</th><th>Ort</th></tr></thead>

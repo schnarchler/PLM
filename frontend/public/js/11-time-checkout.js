@@ -22,7 +22,7 @@ async function loadTimeEntries(orderId) {
     ${entries.length ? `<div class="tbl-wrap"><table>
       <thead><tr><th>Datum</th><th>Stunden</th><th>Beschreibung</th><th>Verrechnen</th><th></th></tr></thead>
       <tbody>${entries.map(e => `<tr>
-        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${e.date||'—'}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(e.date)}</td>
         <td style="font-family:var(--mono);font-size:13px;font-weight:600">${fmtN(e.hours,2)} h</td>
         <td style="color:var(--t2)">${esc(e.description||'')}</td>
         <td style="text-align:center"><span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(91,211,138,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
@@ -165,7 +165,7 @@ async function loadErpUsage(itemId) {
       <span style="font-family:var(--mono);font-size:12px;color:var(--t3);flex-shrink:0">${fmtN(qty,0)} ${esc(unit||'Stk')}</span>
       ${price != null ? `<span style="font-family:var(--mono);font-size:12px;color:var(--t2);flex-shrink:0">${fmtCHF(price)}</span>` : ''}
       <span class="status ${stMap[status]||'st-DFT'}" style="font-size:11px;flex-shrink:0">${lblMap[status]||status}</span>
-      ${date ? `<span style="font-size:11px;color:var(--t4);flex-shrink:0">${date}</span>` : ''}
+      ${date ? `<span style="font-size:11px;color:var(--t4);flex-shrink:0">${fmtD(date)}</span>` : ''}
     </div>`;
 
   const none = '<div style="color:var(--t4);font-size:13px;padding:4px 0">—</div>';
@@ -212,7 +212,7 @@ async function loadItemTimeEntries(itemId) {
       </tr></thead>
       <tbody>
         ${entries.map(e => `<tr>
-          <td style="font-family:var(--mono);font-size:13px">${e.date||'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px">${fmtD(e.date)}</td>
           <td style="font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtN(parseFloat(e.hours)||0,2)} h</td>
           <td style="font-size:13px;color:var(--t2)">${esc(e.description||'—')}</td>
           <td style="white-space:nowrap">
@@ -477,7 +477,7 @@ async function showCheckoutList() {
         <div style="font-size:13px;font-weight:600;color:var(--t3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Aktive Checkouts</div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${list.map((c, i) => {
-            const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+            const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
             return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
                 ${_itemChip(c.item_type,18)}

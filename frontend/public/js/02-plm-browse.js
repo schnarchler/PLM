@@ -30,7 +30,7 @@ async function renderProjectsList() {
         ${statChip(p.prt_count, 'prt', 'var(--teal)')}
         ${statChip(p.doc_count, 'doc', 'var(--purple)')}
         ${p.file_count ? `<span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}
-        <span style="font-size:13px;color:var(--t4);white-space:nowrap">${new Date(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span>
+        <span style="font-size:13px;color:var(--t4);white-space:nowrap">${new Date(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'})}</span>
         <button onclick="event.stopPropagation();pinProject(${p.id})" title="${p.pinned?'Angeheftet – klicken zum Lösen':'Anpinnen'}"
           style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:${p.pinned?'1':'0.3'};transition:opacity .15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='${p.pinned?'1':'0.3'}'">
           📌

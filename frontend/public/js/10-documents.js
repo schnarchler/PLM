@@ -218,7 +218,7 @@ function generateItemTemplate(type) {
           <td style="font-family:monospace;font-weight:700">rev${r.rev}</td>
           <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">${r.status}</span></td>
           <td>${escHtml(r.description||'')}</td>
-          <td style="color:#6b7280;font-size:12px">${r.created_at?r.created_at.slice(0,10):''}</td>
+          <td style="color:#6b7280;font-size:12px">${fmtD(r.created_at,'')}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
@@ -231,7 +231,7 @@ function generateItemTemplate(type) {
           <td style="color:#6b7280">${escHtml(d.ds_type||'')}</td>
           <td style="font-family:monospace;font-size:12px">${escHtml(d.original_filename||d.filename)}</td>
           <td style="color:#6b7280">${d.file_size ? Math.round(d.file_size/1024)+' KB' : '—'}</td>
-          <td style="color:#6b7280;font-size:12px">${d.uploaded_at?d.uploaded_at.slice(0,10):''}</td>
+          <td style="color:#6b7280;font-size:12px">${fmtD(d.uploaded_at,'')}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
@@ -481,9 +481,9 @@ async function generateDoc(id, type) {
     <div style="font-family:monospace;font-size:13px;color:${color}">${d.number}</div>
     <div class="meta">
       Datum: ${today}<br>
-      ${isQuote && d.valid_until ? 'Gültig bis: '+d.valid_until+'<br>' : ''}
-      ${!isQuote && d.order_date ? 'Auftragsdatum: '+d.order_date+'<br>' : ''}
-      ${!isQuote && d.delivery_date ? 'Lieferdatum: '+d.delivery_date+'<br>' : ''}
+      ${isQuote && d.valid_until ? 'Gültig bis: '+fmtD(d.valid_until)+'<br>' : ''}
+      ${!isQuote && d.order_date ? 'Auftragsdatum: '+fmtD(d.order_date)+'<br>' : ''}
+      ${!isQuote && d.delivery_date ? 'Lieferdatum: '+fmtD(d.delivery_date)+'<br>' : ''}
       ${d.payment_terms ? 'Zahlung: '+escHtml(d.payment_terms) : ''}
     </div>
   </div>
@@ -719,8 +719,8 @@ async function generateDeliveryDoc(id) {
     <div style="font-family:monospace;font-size:13px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
     <div class="meta">
       Erstellt: ${today}<br>
-      ${d.delivery_date?'Lieferdatum: '+d.delivery_date+'<br>':''}
-      ${d.manufacture_date?'Herstellungsdatum: '+d.manufacture_date+'<br>':''}
+      ${d.delivery_date?'Lieferdatum: '+fmtD(d.delivery_date)+'<br>':''}
+      ${d.manufacture_date?'Herstellungsdatum: '+fmtD(d.manufacture_date)+'<br>':''}
       ${d.order_number?'Auftrag: '+escHtml(d.order_number):''}
     </div>
     <span class="badge" style="background:#dbeafe;color:#1d4ed8;margin-top:4px">${DELIVERY_ST_LABEL[d.status]||d.status}</span>

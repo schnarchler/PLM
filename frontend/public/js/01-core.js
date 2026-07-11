@@ -32,7 +32,7 @@ async function setDocStatus(type, id, status, el) {
     if (type === 'order' && r.delivery_date) {
       if (rec) rec.delivery_date = r.delivery_date;
       const ddEl = document.getElementById('od-delivery-date');
-      if (ddEl) ddEl.textContent = r.delivery_date;
+      if (ddEl) ddEl.textContent = fmtD(r.delivery_date);
     }
     if (type === 'delivery') {
       if (r.delivery_date && rec) rec.delivery_date = r.delivery_date;

@@ -71,6 +71,17 @@ const V = id => document.getElementById(id)?.value||'';
 const set = (id,v) => { const el=document.getElementById(id); if(el) el.value=v??''; };
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const fmtDate = d => d ? new Date(d).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+// Nur Datum, TT.MM.JJJJ — string-basiert, damit ISO-Datumswerte nicht durch Zeitzonen verschoben werden
+const fmtD = (d, empty='—') => {
+  const m = String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : (d ? String(d) : empty);
+};
+// Datum + Uhrzeit, TT.MM.JJJJ HH:MM (für ISO-Timestamps aus der DB)
+const fmtDT = (d, empty='—') => {
+  if (!d) return empty;
+  const time = String(d).replace('T',' ').slice(11,16);
+  return fmtD(d) + (time ? ' ' + time : '');
+};
 const fmtSize = b => { if(!b) return '—'; if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; };
 const fmtChf = v => fmtCHF(parseFloat(v)||0);
 
