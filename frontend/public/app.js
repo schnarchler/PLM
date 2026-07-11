@@ -4886,8 +4886,8 @@ async function saveLineItem() {
     printer_name: document.getElementById('li-printer')?.value || null,
     estimated_print_hours: parseFloat(V('li-print-hours'))||null };
   if (itemId) {
-    await api(`/api/${parentType === 'order' ? 'order' : 'quote'}-items/${itemId}`,'PUT',body);
-    toast('Gespeichert','ok');
+    const r = await api(`/api/${parentType === 'order' ? 'order' : 'quote'}-items/${itemId}`,'PUT',body);
+    toast(r?.price_synced ? `Gespeichert · Preis in ${r.price_synced} Produktionsposition${r.price_synced>1?'en':''} übernommen` : 'Gespeichert','ok');
   } else {
     await api(`/api/${parentType === 'order' ? 'orders' : 'quotes'}/${parentId}/items`,'POST',body);
     toast('Position hinzugefügt','ok');
@@ -5557,8 +5557,8 @@ async function saveDeliveryItem() {
   };
   try {
     if (itemId) {
-      await api(`/api/delivery-items/${itemId}`,'PUT',body);
-      toast('Gespeichert','ok');
+      const r = await api(`/api/delivery-items/${itemId}`,'PUT',body);
+      toast(r?.price_synced ? 'Gespeichert · Preis im Auftrag übernommen' : 'Gespeichert','ok');
     } else {
       await api(`/api/deliveries/${deliveryId}/items`,'POST',body);
       toast('Position hinzugefügt','ok');
@@ -7424,7 +7424,14 @@ async function saveInventoryItem(id) {
   openInventoryDetail(id);
 }
 
-function openMovementModal(itemId, defaultType) {
+async function _orderRefDatalist(listId) {
+  const orders = await api('/api/orders').catch(() => []);
+  return `<datalist id="${listId}">${orders.map(o =>
+    `<option value="${esc(o.number)}">${esc(o.title)}${o.customer_name ? ' · ' + esc(o.customer_name) : ''}</option>`).join('')}</datalist>`;
+}
+
+async function openMovementModal(itemId, defaultType) {
+  const refList = await _orderRefDatalist('mov-ref-orders');
   _showDynModal(`<div class="modal" style="max-width:360px">
     <div class="modal-head"><div class="modal-title">Lagerbewegung</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
@@ -7436,7 +7443,8 @@ function openMovementModal(itemId, defaultType) {
           <option value="adjust">Korrektur (=)</option>
         </select></div>
       <div class="fg"><label class="fl">Menge</label><input id="mov-qty" type="number" min="0.01" step="0.01" class="fi" placeholder="1"></div>
-      <div class="fg"><label class="fl">Referenz (z.B. Auftragsnr.)</label><input id="mov-ref" class="fi" placeholder="optional"></div>
+      <div class="fg"><label class="fl">Referenz</label>
+        <input id="mov-ref" class="fi" list="mov-ref-orders" placeholder="Freitext oder Auftrag wählen">${refList}</div>
       <div class="fg"><label class="fl">Notiz</label><input id="mov-notes" class="fi" placeholder="optional"></div>
     </div>
     <div class="modal-foot">
@@ -7469,6 +7477,9 @@ async function delInventoryItem(id) {
 async function openInventoryDeductModal(orderItemId, plmItemId, qty, orderId) {
   const invItems = await api(`/api/inventory?item_id=${plmItemId}`);
   if (!invItems.length) { toast('Kein Lagerartikel für dieses Teil verknüpft', 'err'); return; }
+  const order = await api('/api/orders/' + orderId).catch(() => null);
+  const refDefault = order?.number || ('AUF-' + orderId);
+  const refList = await _orderRefDatalist('ded-ref-orders');
 
   const first = invItems[0];
   const options = invItems.map(i => {
@@ -7487,7 +7498,7 @@ async function openInventoryDeductModal(orderItemId, plmItemId, qty, orderId) {
       <div class="fg"><label class="fl">Menge abbuchen</label>
         <input id="ded-qty" type="number" min="0.01" step="0.01" class="fi" value="${qty}" oninput="_dedCheckQty(this)"></div>
       <div class="fg"><label class="fl">Referenz</label>
-        <input id="ded-ref" class="fi" value="AUF-${orderId}" placeholder="Auftragsnr."></div>
+        <input id="ded-ref" class="fi" list="ded-ref-orders" value="${esc(refDefault)}" placeholder="Freitext oder Auftrag wählen">${refList}</div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>

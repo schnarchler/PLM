@@ -590,6 +590,7 @@ async function initDb() {
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
   try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE delivery_items ADD COLUMN order_item_id INTEGER REFERENCES order_items(id)'); } catch {}
   db.run(`INSERT OR IGNORE INTO counters VALUES ('rm_lot',0)`);
 
   // Indizes auf Fremdschlüssel- und Filterspalten (idempotent)
@@ -2002,11 +2003,37 @@ app.post('/api/orders/:id/items', (req, res) => {
   res.json(get('SELECT * FROM order_items WHERE id=?', [id]));
 });
 
+// ── Preis-Sync Auftrag ↔ Produktion ───────────────────────────
+// Positionen sind über delivery_items.order_item_id verknüpft. Produktions-
+// positionen aus der Zeit vor dieser Spalte werden über Auftrag + Artikel +
+// Beschreibung gematcht und dabei dauerhaft nachverknüpft.
+function linkedDeliveryItemIds(oi) {
+  const direct = all('SELECT id FROM delivery_items WHERE order_item_id=?', [oi.id]).map(r => r.id);
+  const legacy = all(`SELECT di.id FROM delivery_items di
+    JOIN deliveries d ON di.delivery_id=d.id
+    WHERE d.order_id=? AND di.order_item_id IS NULL
+      AND COALESCE(di.item_id,-1)=COALESCE(?,-1) AND di.description=?`,
+    [oi.order_id, oi.item_id ?? null, oi.description]).map(r => r.id);
+  legacy.forEach(id => run('UPDATE delivery_items SET order_item_id=? WHERE id=?', [oi.id, id]));
+  return direct.concat(legacy);
+}
+
+function syncPriceFromOrderItem(orderItemId) {
+  const oi = get('SELECT * FROM order_items WHERE id=?', [orderItemId]);
+  if (!oi) return 0;
+  const ids = linkedDeliveryItemIds(oi);
+  ids.forEach(id => run('UPDATE delivery_items SET unit_price=? WHERE id=?', [oi.unit_price ?? 0, id]));
+  return ids.length;
+}
+
 app.put('/api/order-items/:id', (req, res) => {
   const { description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
   run('UPDATE order_items SET description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
     [description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
-  res.json(get('SELECT * FROM order_items WHERE id=?', [req.params.id]));
+  const priceSynced = syncPriceFromOrderItem(req.params.id);
+  const row = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
+  if (row) row.price_synced = priceSynced;
+  res.json(row);
 });
 
 app.delete('/api/order-items/:id', (req, res) => {
@@ -2930,7 +2957,25 @@ app.put('/api/delivery-items/:id', (req, res) => {
     [description, quantity||1, unit||'Stk',
      unit_price!=null ? parseFloat(unit_price) : null,
      print_settings_json??null, notes||'', position||999, raw_material_id||null, req.params.id]);
-  res.json(get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [req.params.id]));
+  // Preis zurück in den verknüpften Auftrag (und weitere Produktionsaufträge) übernehmen
+  let priceSynced = 0;
+  const di = get('SELECT di.*, d.order_id as _order_id FROM delivery_items di JOIN deliveries d ON di.delivery_id=d.id WHERE di.id=?', [req.params.id]);
+  if (di && di.unit_price != null && di._order_id) {
+    let oiId = di.order_item_id;
+    if (!oiId) {
+      const oi = get(`SELECT id FROM order_items WHERE order_id=? AND COALESCE(item_id,-1)=COALESCE(?,-1) AND description=?`,
+        [di._order_id, di.item_id ?? null, di.description]);
+      if (oi) { oiId = oi.id; run('UPDATE delivery_items SET order_item_id=? WHERE id=?', [oiId, di.id]); }
+    }
+    if (oiId) {
+      run('UPDATE order_items SET unit_price=? WHERE id=?', [di.unit_price, oiId]);
+      priceSynced = 1;
+      syncPriceFromOrderItem(oiId);
+    }
+  }
+  const row = get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [req.params.id]);
+  if (row) row.price_synced = priceSynced;
+  res.json(row);
 });
 
 app.delete('/api/delivery-items/:id', (req, res) => {
@@ -3211,10 +3256,10 @@ app.post('/api/orders/:id/to-delivery', (req, res) => {
   );
   const oItems = all('SELECT * FROM order_items WHERE order_id=?', [o.id]);
   oItems.forEach((oi, idx) => {
-    run(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,notes,position)
-         VALUES (?,?,?,?,?,?,?,?)`,
+    run(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,notes,position,order_item_id)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
       [delivId, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk',
-       oi.unit_price||null, oi.notes||'', idx + 1]);
+       oi.unit_price||null, oi.notes||'', idx + 1, oi.id]);
   });
   if (req.body.include_time) {
     const hourlyRateRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
