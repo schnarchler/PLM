@@ -7,6 +7,14 @@ function _stTab(name) {
   document.querySelectorAll('.st-tab-pane').forEach(p => p.hidden = p.dataset.tab !== name);
 }
 
+function _fmtBytes(b) {
+  if (b == null) return '—';
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  if (b < 1024*1024*1024) return (b/1024/1024).toFixed(1) + ' MB';
+  return (b/1024/1024/1024).toFixed(2) + ' GB';
+}
+
 async function renderSettings() {
   setLeftHeader('Einstellungen', `<button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Speichern</button>`);
   closeDetail();
@@ -19,13 +27,7 @@ async function renderSettings() {
     `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)"><input type="checkbox" id="st-${id}" ${val !== '0' ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">${label}</label>`;
 
   const stor = await api('/api/storage').catch(() => null);
-  function fmtBytes(b) {
-    if (b == null) return '—';
-    if (b < 1024) return b + ' B';
-    if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
-    if (b < 1024*1024*1024) return (b/1024/1024).toFixed(1) + ' MB';
-    return (b/1024/1024/1024).toFixed(2) + ' GB';
-  }
+  const fmtBytes = _fmtBytes;
   const storHtml = stor ? `
     <div style="display:flex;gap:16px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;margin-bottom:18px;font-size:12px;color:var(--t3)">
       <span style="color:var(--t2);font-weight:600;font-size:13px">Speicher</span>
@@ -205,6 +207,37 @@ async function renderSettings() {
           <button class="btn btn-ghost btn-sm" onclick="saveDataPath()">Pfad speichern</button>
           <span id="st-datapath-msg" style="font-size:13px;color:var(--t3)"></span>
         </div>
+        <div style="font-size:11px;color:var(--t4);margin-top:6px">
+          Achtung: „Pfad speichern“ ändert nur, wo PLM beim nächsten Start sucht — vorhandene Daten bleiben am alten Ort.
+          Zum Umziehen der bestehenden Daten den Bereich „Daten verschieben“ verwenden.
+        </div>
+
+        <div class="sep-label" style="margin-top:24px">Daten verschieben</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">
+          Kopiert das komplette Datenverzeichnis (Datenbank, alle Dateien, Backups) an einen neuen Ort,
+          prüft die Kopie und schaltet PLM sofort darauf um — ein Neustart ist nicht nötig.
+          Erst nach erfolgreicher Prüfung wird der alte Ordner gelöscht.
+        </div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Neues Datenverzeichnis (leerer oder neuer Ordner)</label>
+            <input class="fi" id="st-move-dir" placeholder="/absoluter/pfad/zum/neuen/ordner">
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2);margin-top:4px">
+          <input type="checkbox" id="st-move-keep" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
+          Daten am alten Ort behalten (kopieren statt verschieben)
+        </label>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <button class="btn btn-ghost btn-sm" id="st-move-btn" onclick="moveDataDir()">&#x1F4E6; Daten verschieben</button>
+          <span id="st-move-msg" style="font-size:13px;color:var(--t3)"></span>
+        </div>
+        <div id="st-move-progress" style="display:none;margin-top:10px;max-width:420px">
+          <div style="height:6px;background:var(--bg2);border:1px solid var(--line);border-radius:4px;overflow:hidden">
+            <div id="st-move-bar" style="height:100%;width:0;background:var(--blue);transition:width .3s"></div>
+          </div>
+          <div id="st-move-detail" style="font-size:12px;color:var(--t4);margin-top:5px"></div>
+        </div>
 
         <div class="sep-label" style="margin-top:20px">CAD-Programm</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Pfad zur ausführbaren Datei des CAD-Programms. Wird über den CAD-Button in der Topbar gestartet.</div>
@@ -364,7 +397,7 @@ async function renderSettings() {
       `DB: <code style="user-select:all">${d.db_path}</code><br>Dateien: <code style="user-select:all">${d.files_dir}</code>`
       + (d.config_file ? `<br><span style="color:var(--t4);font-size:12px">Konfigdatei: <code style="user-select:all">${d.config_file}</code></span>` : '');
     document.getElementById('st-data-dir').value = d.data_dir;
-    if (!d.configured) _showFirstRunModal(d.data_dir);
+    if (!d.configured) _showFirstRunModal(d.data_dir, d.config_file);
   });
   api('/api/settings').then(s => {
     const el = document.getElementById('st-checkout-dir');
@@ -422,7 +455,7 @@ async function saveSettings() {
   toast('Einstellungen gespeichert','ok');
 }
 
-function _showFirstRunModal(suggestedPath) {
+function _showFirstRunModal(suggestedPath, configFile) {
   const id = 'first-run-modal';
   if (document.getElementById(id)) return;
   const overlay = document.createElement('div');
@@ -433,7 +466,8 @@ function _showFirstRunModal(suggestedPath) {
       <div style="font-size:18px;font-weight:600;margin-bottom:8px">Willkommen bei PLM</div>
       <div style="font-size:14px;color:var(--t2);margin-bottom:20px">
         Bitte wähle, wo die Daten (Datenbank und Dateien) gespeichert werden sollen.
-        Der Pfad wird dauerhaft in <code style="font-family:var(--mono);font-size:12px">~/.config/plm/config.json</code> gespeichert und kann später unter Einstellungen geändert werden.
+        Der Pfad wird dauerhaft in <code style="font-family:var(--mono);font-size:12px">${esc(configFile || 'plm.config')}</code>
+        gespeichert und kann später unter Einstellungen → Daten geändert werden.
       </div>
       <div style="margin-bottom:16px">
         <label style="font-size:13px;color:var(--t3);display:block;margin-bottom:4px">Datenverzeichnis</label>
@@ -475,6 +509,98 @@ async function saveDataPath() {
     msg.textContent = 'Fehler beim Speichern';
     msg.style.color = 'var(--red)';
   }
+}
+
+// ── DATEN VERSCHIEBEN ─────────────────────────────────────────
+const _MOVE_PHASES = {
+  prepare: 'Vorbereiten…',
+  copy:    'Kopieren…',
+  verify:  'Kopie wird geprüft…',
+  switch:  'Umschalten auf neuen Pfad…',
+  cleanup: 'Alten Ordner löschen…',
+  done:    'Fertig',
+};
+
+async function moveDataDir() {
+  const input  = document.getElementById('st-move-dir');
+  const target = input?.value.trim();
+  const keep   = !!document.getElementById('st-move-keep')?.checked;
+  const msg    = document.getElementById('st-move-msg');
+  const btn    = document.getElementById('st-move-btn');
+  if (!target) { toast('Bitte Zielpfad angeben', 'err'); return; }
+
+  const warn = keep
+    ? 'Alle PLM-Daten werden dorthin kopiert. Der neue Ordner wird danach verwendet, die alten Daten bleiben erhalten.'
+    : 'Alle PLM-Daten werden dorthin verschoben. Der alte Ordner wird erst gelöscht, nachdem die Kopie geprüft wurde.';
+  if (!confirm(`Datenverzeichnis umziehen nach:\n${target}\n\n${warn}\n\nWährend des Vorgangs nicht weiterarbeiten. Fortfahren?`)) return;
+
+  btn.disabled = true;
+  msg.textContent = '';
+  const prog = document.getElementById('st-move-progress');
+  const bar  = document.getElementById('st-move-bar');
+  const det  = document.getElementById('st-move-detail');
+  bar.style.width = '0';
+  det.textContent = 'Wird gestartet…';
+  prog.style.display = '';
+
+  try {
+    await api('/api/data-path/move', 'POST', { target_dir: target, keep_source: keep });
+  } catch (e) {
+    btn.disabled = false;
+    prog.style.display = 'none';
+    msg.textContent = e.message || 'Fehler';
+    msg.style.color = 'var(--red)';
+    return;
+  }
+  _pollDataMove();
+}
+
+function _pollDataMove() {
+  const btn = document.getElementById('st-move-btn');
+  const msg = document.getElementById('st-move-msg');
+  const bar = document.getElementById('st-move-bar');
+  const det = document.getElementById('st-move-detail');
+  const timer = setInterval(async () => {
+    let s;
+    try { s = await api('/api/data-path/move-status'); } catch { return; }
+    if (!det) { clearInterval(timer); return; }
+
+    const pct = s.total_bytes ? Math.min(100, Math.round(s.copied_bytes / s.total_bytes * 100)) : (s.running ? 0 : 100);
+    bar.style.width = pct + '%';
+    det.textContent = `${_MOVE_PHASES[s.phase] || s.phase} ${_fmtBytes(s.copied_bytes)} / ${_fmtBytes(s.total_bytes)} (${s.total_files} Dateien)`;
+
+    if (s.running) return;
+    clearInterval(timer);
+    if (btn) btn.disabled = false;
+
+    if (s.error) {
+      bar.style.background = 'var(--red)';
+      det.textContent = 'Abgebrochen — die Daten am alten Ort sind unverändert.';
+      msg.textContent = s.error;
+      msg.style.color = 'var(--red)';
+      toast('Verschieben fehlgeschlagen', 'err');
+      return;
+    }
+
+    bar.style.width = '100%';
+    det.textContent = s.message || 'Fertig';
+    msg.textContent = 'Neuer Pfad aktiv';
+    msg.style.color = 'var(--green)';
+    toast('Daten erfolgreich verschoben', 'ok');
+    document.getElementById('st-move-dir').value = '';
+    _refreshDataPathInfo();
+  }, 700);
+}
+
+async function _refreshDataPathInfo() {
+  const d = await api('/api/data-path').catch(() => null);
+  if (!d) return;
+  const info = document.getElementById('st-datapath-info');
+  if (info) info.innerHTML =
+    `DB: <code style="user-select:all">${esc(d.db_path)}</code><br>Dateien: <code style="user-select:all">${esc(d.files_dir)}</code>`
+    + (d.config_file ? `<br><span style="color:var(--t4);font-size:12px">Konfigdatei: <code style="user-select:all">${esc(d.config_file)}</code></span>` : '');
+  const inp = document.getElementById('st-data-dir');
+  if (inp) inp.value = d.data_dir;
 }
 
 // ── PRINTER / NOZZLE / MATERIAL SETTINGS ──────────────────────
