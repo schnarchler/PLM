@@ -219,7 +219,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadCheckouts();
   _renderRecent();
   setupUploadDrag();
-  api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal(''); }).catch(() => {});
+  api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal('', d.config_file); }).catch(() => {});
   document.addEventListener('click', e => {
     const res = document.getElementById('li-plm-results');
     if (res && !e.target.closest('#li-plm-results') && e.target.id !== 'li-plm-search') res.style.display = 'none';

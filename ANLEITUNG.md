@@ -564,7 +564,8 @@ Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren.
 
 ### Daten
 - **Darstellung** — Schriftgrösse (wird serverseitig gespeichert)
-- **Datenpfad** — Datenbank und Dateispeicher
+- **Datenpfad** — Datenbank und Dateispeicher. Ändert nur, wo PLM sucht — vorhandene Daten bleiben am alten Ort
+- **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Backups) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
 - **CAD-Programm** — Pfad für den 🖥 CAD-Button in der Topbar
 - **Checkout-Verzeichnis** — Zielordner für Checkouts
 - **Datensicherung** — ZIP-Export aller Daten

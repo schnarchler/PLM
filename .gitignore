@@ -18,7 +18,4 @@ PLM.code-workspace
 *.code-workspace
 
 # Lokale Konfiguration (persönliche Pfade)
-backend/config.json
-
-# PLM Config ausschliessen (persönliche Pfade)
 plm.config

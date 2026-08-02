@@ -51,17 +51,18 @@ if (!fs.existsSync(PLM_CONFIG_PATH)) {
   console.log('plm.config erstellt: ' + PLM_CONFIG_PATH);
 }
 const _config = loadConfig();
-const DATA_DIR    = process.env.PLM_DATA_DIR
-  ? path.resolve(process.env.PLM_DATA_DIR)
-  : _config.data_dir
-  ? path.resolve(_config.data_dir)
-  : path.join(__dirname, 'data');
-const DB_PATH     = path.join(DATA_DIR, 'plm.db');
-const FILES_DIR   = path.join(DATA_DIR, 'files');
+// Die Datenpfade sind veränderbar: /api/data-path/move schaltet den laufenden
+// Server nach dem Verschieben ohne Neustart auf das neue Verzeichnis um.
+let DATA_DIR, DB_PATH, FILES_DIR;
+function setDataDir(dir) {
+  DATA_DIR  = path.resolve(dir);
+  DB_PATH   = path.join(DATA_DIR, 'plm.db');
+  FILES_DIR = path.join(DATA_DIR, 'files');
+  fs.mkdirSync(DATA_DIR,  { recursive: true });
+  fs.mkdirSync(FILES_DIR, { recursive: true });
+}
+setDataDir(process.env.PLM_DATA_DIR || _config.data_dir || path.join(__dirname, 'data'));
 const FRONTEND_DIR = path.join(__dirname, '..', 'frontend', 'public');
-
-fs.mkdirSync(DATA_DIR,  { recursive: true });
-fs.mkdirSync(FILES_DIR, { recursive: true });
 
 // -- sql.js wrapper (synchronous-style API) ---------------------
 let db;
@@ -1041,6 +1042,15 @@ const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 }, defPa
 
 app.use(cors());
 app.use(express.json());
+
+// Während einer laufenden Datenverschiebung keine Schreibzugriffe zulassen,
+// sonst landen Änderungen im alten Verzeichnis und gehen verloren.
+app.use((req, res, next) => {
+  if (dataMove.running && req.method !== 'GET' && !req.path.startsWith('/api/data-path')) {
+    return res.status(503).json({ error: 'Daten werden gerade verschoben — bitte warten.' });
+  }
+  next();
+});
 app.use(express.static(FRONTEND_DIR, { etag: false, lastModified: false, setHeaders: (res, filePath) => {
   if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
     res.setHeader('Cache-Control', 'no-store');
@@ -2706,6 +2716,153 @@ app.put('/api/data-path', (req, res) => {
   cfg.data_dir = data_dir.trim();
   saveConfig(cfg);
   res.json({ ok: true, message: 'Pfad gespeichert. Bitte Server neu starten damit die Änderung wirksam wird.' });
+});
+
+// -- DATA MOVE -------------------------------------------------
+// Verschiebt das komplette Datenverzeichnis (Datenbank, Dateien, Backups,
+// Checkout …) an einen neuen Ort: kopieren → prüfen → umschalten → aufräumen.
+const dataMove = {
+  running: false, done: false, error: null, phase: '', message: '',
+  from: '', to: '', total_bytes: 0, copied_bytes: 0, total_files: 0, keep_source: false,
+};
+
+function dirStats(dir) {
+  let bytes = 0, files = 0;
+  const stack = [dir];
+  while (stack.length) {
+    let entries = [];
+    const d = stack.pop();
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) stack.push(p);
+      else if (e.isFile()) { files++; try { bytes += fs.statSync(p).size; } catch {} }
+    }
+  }
+  return { bytes, files };
+}
+
+// Asynchron kopieren, damit der Server während des Umzugs erreichbar bleibt
+// (Fortschrittsabfrage im Frontend) und nicht blockiert.
+async function copyTree(src, dest, onBytes) {
+  await fs.promises.mkdir(dest, { recursive: true });
+  for (const e of await fs.promises.readdir(src, { withFileTypes: true })) {
+    const s = path.join(src, e.name);
+    const d = path.join(dest, e.name);
+    if (e.isDirectory()) await copyTree(s, d, onBytes);
+    else if (e.isFile()) {
+      await fs.promises.copyFile(s, d);
+      onBytes((await fs.promises.stat(d)).size);
+    }
+    // Symlinks/Sonderdateien werden übersprungen
+  }
+}
+
+// true wenn child gleich parent ist oder darin liegt
+function isInside(parent, child) {
+  const rel = path.relative(parent, child);
+  return rel === '' || (!rel.startsWith('..' + path.sep) && rel !== '..' && !path.isAbsolute(rel));
+}
+
+function fmtMB(b) { return (b / 1024 / 1024).toFixed(1) + ' MB'; }
+
+async function runDataMove(target, keepSource, targetExisted) {
+  const source = DATA_DIR;
+  try {
+    dataMove.phase = 'prepare';
+    flushDb();                                  // ausstehende DB-Änderungen sichern
+    dataMove.phase = 'copy';
+    await copyTree(source, target, b => { dataMove.copied_bytes += b; });
+
+    dataMove.phase = 'verify';
+    const a = dirStats(source), b = dirStats(target);
+    if (a.files !== b.files || a.bytes !== b.bytes) {
+      throw new Error(`Prüfung fehlgeschlagen: alt ${a.files} Dateien / ${fmtMB(a.bytes)}, neu ${b.files} Dateien / ${fmtMB(b.bytes)}. Es wurde nichts gelöscht.`);
+    }
+
+    dataMove.phase = 'switch';
+    const cfg = loadConfig();
+    cfg.data_dir = target;
+    saveConfig(cfg);
+    setDataDir(target);
+    dbDirty = true;
+    flushDb();                                  // DB aus dem Speicher an den neuen Ort schreiben
+
+    if (!keepSource) {
+      dataMove.phase = 'cleanup';
+      fs.rmSync(source, { recursive: true, force: true });
+    }
+
+    dataMove.phase = 'done';
+    dataMove.message = keepSource
+      ? 'Daten kopiert. Der neue Pfad ist aktiv, die Daten am alten Ort bleiben erhalten.'
+      : 'Daten verschoben. Der neue Pfad ist aktiv, der alte Ordner wurde gelöscht.';
+    console.log('Datenverzeichnis umgestellt: ' + source + ' -> ' + target);
+  } catch (err) {
+    dataMove.error = err.message;
+    console.error('Verschieben fehlgeschlagen:', err.message);
+    // Nur aufräumen solange noch nicht umgeschaltet wurde — die Quelle bleibt unangetastet
+    if (DATA_DIR === source) {
+      try {
+        if (targetExisted) for (const e of fs.readdirSync(target)) fs.rmSync(path.join(target, e), { recursive: true, force: true });
+        else fs.rmSync(target, { recursive: true, force: true });
+      } catch {}
+    }
+  } finally {
+    dataMove.running = false;
+    dataMove.done = !dataMove.error;
+  }
+}
+
+app.post('/api/data-path/move', (req, res) => {
+  if (dataMove.running) return res.status(409).json({ error: 'Es läuft bereits eine Verschiebung.' });
+  const raw = String(req.body?.target_dir || '').trim();
+  const keepSource = !!req.body?.keep_source;
+  if (!raw) return res.status(400).json({ error: 'Zielpfad fehlt' });
+  if (!path.isAbsolute(raw)) return res.status(400).json({ error: 'Bitte einen absoluten Pfad angeben.' });
+
+  const target = path.resolve(raw);
+  if (target === DATA_DIR) return res.status(400).json({ error: 'Das ist bereits das aktuelle Datenverzeichnis.' });
+  if (isInside(DATA_DIR, target)) return res.status(400).json({ error: 'Das Ziel darf nicht innerhalb des aktuellen Datenverzeichnisses liegen.' });
+  if (isInside(target, DATA_DIR)) return res.status(400).json({ error: 'Das Ziel darf kein übergeordneter Ordner des aktuellen Datenverzeichnisses sein.' });
+
+  let targetExisted = false;
+  try {
+    const st = fs.statSync(target);
+    if (!st.isDirectory()) return res.status(400).json({ error: 'Das Ziel ist eine Datei, kein Ordner.' });
+    targetExisted = true;
+    if (fs.readdirSync(target).length) return res.status(400).json({ error: 'Der Zielordner ist nicht leer. Bitte einen leeren oder noch nicht vorhandenen Ordner wählen.' });
+    try { fs.accessSync(target, fs.constants.W_OK); }
+    catch { return res.status(400).json({ error: 'Kein Schreibrecht im Zielordner: ' + target }); }
+  } catch (err) {
+    if (err.code !== 'ENOENT') return res.status(400).json({ error: 'Ziel nicht lesbar: ' + err.message });
+    // Nicht probeweise anlegen: nächstgelegenen vorhandenen Ordner auf Schreibrecht prüfen.
+    let parent = path.dirname(target);
+    while (parent !== path.dirname(parent) && !fs.existsSync(parent)) parent = path.dirname(parent);
+    try { fs.accessSync(parent, fs.constants.W_OK); }
+    catch { return res.status(400).json({ error: 'Zielordner kann nicht angelegt werden — kein Schreibrecht in: ' + parent }); }
+  }
+
+  const src = dirStats(DATA_DIR);
+  try {                                          // Platz am Ziel prüfen (10% Reserve)
+    const st = fs.statfsSync(targetExisted ? target : path.dirname(target));
+    const free = st.bsize * st.bavail;
+    if (free < src.bytes * 1.1) {
+      return res.status(400).json({ error: `Zu wenig Speicherplatz am Ziel: ${fmtMB(free)} frei, ${fmtMB(src.bytes)} benötigt.` });
+    }
+  } catch {}
+
+  Object.assign(dataMove, {
+    running: true, done: false, error: null, phase: 'prepare', message: '',
+    from: DATA_DIR, to: target, total_bytes: src.bytes, copied_bytes: 0,
+    total_files: src.files, keep_source: keepSource,
+  });
+  res.json({ ok: true, started: true, total_bytes: src.bytes, total_files: src.files });
+  setImmediate(() => runDataMove(target, keepSource, targetExisted));
+});
+
+app.get('/api/data-path/move-status', (req, res) => {
+  res.json({ ...dataMove, data_dir: DATA_DIR, db_path: DB_PATH, files_dir: FILES_DIR });
 });
 
 // -- PRINTERS --------------------------------------------------
