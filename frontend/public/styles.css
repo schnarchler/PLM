@@ -106,18 +106,6 @@ body {
   border-right: 1px solid var(--line);
   flex-shrink: 0;
 }
-.tb-logo .mark {
-  width: 22px; height: 22px;
-  border-radius: 6px;
-  background: var(--blue);
-  display: grid;
-  place-items: center;
-  font-family: var(--mono);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--bg0);
-  flex-shrink: 0;
-}
 .tb-logo span { color: var(--t3); font-weight: 400; }
 .tb-search {
   flex: 1;
@@ -246,7 +234,6 @@ body {
   letter-spacing: -0.01em;
 }
 .panel-title strong { color: var(--t1); font-weight: 600; }
-.panel-title .muted { font-weight: 400; color: var(--t3); }
 .ph-spacer { flex: 1; }
 .panel-body { flex: 1; overflow-y: auto; padding: 16px 18px 28px; }
 
@@ -288,17 +275,6 @@ body {
   text-overflow: ellipsis;
   letter-spacing: -0.01em;
 }
-.card-meta { font-size: 13px; color: var(--t3); display: flex; flex-wrap: wrap; gap: 6px 12px; }
-.card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-  font-size: 15px;
-  color: var(--t3);
-}
 
 /* ── TABLE ── */
 .tbl-wrap { overflow-x: clip; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg1); }
@@ -339,7 +315,6 @@ tbody tr:last-child { border-bottom: none; }
 .tree-row:hover { background: var(--bg2); }
 .tree-row.selected { background: var(--bg3); box-shadow: inset 2px 0 0 var(--blue); }
 .tree-children { padding-left: 18px; margin-left: 8px; border-left: 1px solid var(--line); }
-.tree-icon { font-size: 15px; flex-shrink: 0; opacity: .9; }
 .tree-num { font-family: var(--mono); font-size: 13px; color: var(--blue); flex-shrink: 0; font-weight: 500; }
 .tree-name { font-size: 13px; color: var(--t1); font-weight: 450; }
 .tree-rev { font-family: var(--mono); font-size: 11px; margin-left: auto; flex-shrink: 0; }
@@ -386,7 +361,6 @@ tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; 
 .tab-body { flex: 1; overflow-y: auto; padding: 16px; }
 
 /* ── REVISION STRIP ── */
-.rev-strip { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
 .rev-pill {
   font-family: var(--mono);
   font-size: 15px;
@@ -711,24 +685,6 @@ tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; 
   margin: 16px 0 10px;
 }
 .sep-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-
-.cost-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-.cost-result {
-  background: var(--bg2);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 14px;
-  margin-top: 10px;
-}
-.cost-total {
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--green);
-}
-.cost-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--line); }
-.cost-row:last-child { border-bottom: none; }
-.cost-row span:last-child { font-family: var(--mono); color: var(--t1); font-weight: 500; }
 
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

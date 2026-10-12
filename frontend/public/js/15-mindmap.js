@@ -7,7 +7,7 @@ const _MM = {
   NODE_W: 174, NODE_H: 44,
   GAP_X: 96, GAP_Y: 14,
   data: null, scale: 1, tx: 0, ty: 0,
-  up: 3, down: 3, rootId: null, hover: null,
+  up: 3, down: 3, rootId: null,
 };
 
 let _mmDragMove = null, _mmDragUp = null;

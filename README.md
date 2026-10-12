@@ -78,7 +78,15 @@ Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
 - Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar
 - **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
-- **Where-Used** – zeigt alle Revisionen der Baugruppen in denen ein Teil verbaut ist
+- **Datenblatt-Tab** – Beschreibung, Quelle, Kennzahlen, Druckparameter, Stücklisten-Kurzfassung,
+  Lagerbestand, freie Notizen, QR-Code der Teilenummer und letzte Änderung auf einen Blick
+- **Mindmap** – Abhängigkeiten als Graph: links die Baugruppen die das Teil verwenden,
+  rechts die Teile aus denen es besteht (siehe unten)
+- **Revisionsstand in der Stückliste** – folgt standardmäßig automatisch der aktuellen
+  Revision, pro Position optional fest fixierbar (siehe unten)
+- **Freie Notizen** pro Item – für alles was nicht in die Beschreibung gehört
+- **Where-Used** – zeigt alle Revisionen der Baugruppen in denen ein Teil verbaut ist,
+  inklusive des Standes auf den die jeweilige Verwendung fixiert ist
 - **Variantenverwaltung** – Items als Varianten verknüpfen; Navigation zwischen Varianten direkt im Detail
 - **Dokumentvorlagen** – PDF-Vorlagen aus dem Item-Detail: Datenblatt, Stückliste, Prüfprotokoll
 - **Itemvergleich** – zwei Items nebeneinander vergleichen (Metadaten, BOM-Diff, Dateien)
@@ -149,8 +157,58 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - **Kalkulation** – Stundenansatz, Maschinenkosten, Standardwerte
 - **3D-Druck** – Drucker, Düsen, Materialprofile
 - **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop)
-- **Daten** – Schriftgrösse, Checkout-Ordner, CAD-Programm, Backup
+- **Daten** – Schriftgrösse, **Design zurücksetzen**, Checkout-Ordner, CAD-Programm, Backup
 - **Admin** – Nummerierungsstruktur, Datensätze löschen
+
+---
+
+## Revisionsstand in der Stückliste
+
+Eine Stücklistenposition verweist auf das **Teil**, nicht auf eine feste Revision.
+Standardmäßig zeigt sie deshalb immer den aktuellen Stand: wird das Teil auf rev2
+gehoben, ziehen alle Baugruppen automatisch mit. Das ist für die meisten
+Baugruppen richtig und bleibt unverändert.
+
+Für Fälle, in denen ein realer, abweichender Zustand dokumentiert werden muss,
+lässt sich eine Position **fest auf eine Revision setzen**. Klick auf das
+Revisions-Kennzeichen in der Stücklistenzeile öffnet die Auswahl:
+
+| Auswahl | Verhalten |
+|---|---|
+| **Automatisch** (Standard) | folgt immer der aktiven Revision |
+| **Fest auf revN** | bleibt auf diesem Stand, auch wenn neuere Revisionen entstehen |
+
+Fixierte Positionen sind mit einem Schloss markiert. Existiert inzwischen eine
+neuere Revision, erscheint zusätzlich ein Hinweis (`↑rev2`) in Amber — der Stand
+ist dann bewusst alt, nicht vergessen.
+
+**Typischer Anwendungsfall:** Fahrzeuge oder ausgelieferte Geräte, die als
+Baugruppe (ASM) angelegt sind. Wird ein Bauteil überarbeitet, bleiben die
+Einheiten, die noch nicht umgerüstet sind, auf ihrem Stand. Der Where-Used-Tab
+des Bauteils zeigt dann direkt, welche Einheit auf welchem Stand ist.
+
+Wird eine fixierte Revision gelöscht, fällt die Position automatisch auf
+„Automatisch" zurück — es entstehen keine toten Verweise.
+
+---
+
+## Mindmap – Abhängigkeiten
+
+Der ⌗-Knopf in der Titelzeile eines Items (oder im Datenblatt-Tab) öffnet den
+Abhängigkeitsgraphen:
+
+```
+Baugruppen die es verwenden  ──►  [ Teil ]  ──►  Teile aus denen es besteht
+          (Where-Used)                              (Stückliste)
+```
+
+- **Ziehen** verschiebt, **Mausrad** zoomt, **Klick** öffnet das Teil
+- Tiefe für beide Richtungen getrennt einstellbar (0–6 Ebenen)
+- Normteile erscheinen als Blätter, Mengen stehen an den Kanten
+- Fest fixierte Positionen zeigen die Revision in Amber; der Graph klappt dann
+  die Unterstückliste **dieser** Revision auf, nicht die der aktuellsten
+- Verwendungen, die nur in älteren Revisionen stehen, werden gezählt und
+  in der Fußzeile gemeldet
 
 ---
 
@@ -233,13 +291,38 @@ PLM/
 │       ├── index.html     ← HTML-Grundstruktur
 │       ├── js/            ← Single-Page-App, aufgeteilt nach Domänen
 │       │   ├── 01-core.js …  13-normteile-einkauf.js
+│       │   ├── 14-qr.js      ← QR-Encoder (eigenständig, keine externe Bibliothek)
+│       │   ├── 15-mindmap.js ← Abhängigkeitsgraph (SVG, Pan/Zoom)
 │       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
-│       └── styles.css     ← Design-System (Dark Theme)
+│       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
 ├── plm.config             ← Datenpfad-Konfiguration (wird auto-erstellt)
 ├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md
 ```
+
+---
+
+## Update einspielen
+
+```bash
+git pull
+cd backend && npm install     # nur nötig wenn Pakete dazugekommen sind
+node server.js
+```
+
+Datenbank und `plm.config` liegen außerhalb des Repositories und stehen in der
+`.gitignore` — ein Pull fasst sie nicht an.
+
+Schemaänderungen laufen beim Serverstart automatisch: `initDb()` legt **zuerst**
+eine Tageskopie unter `data/backups/` an, ergänzt dann fehlende Tabellen und
+Spalten und schreibt die Datei zurück. Der Vorgang ist idempotent, ein zweiter
+Start ändert nichts mehr.
+
+Nach einem Update, das die Farbpalette betrifft, einmal
+**Einstellungen → Daten → Design zurücksetzen** drücken: die Farben der
+Klassifizierungen liegen in der Datenbank und ziehen sonst nicht mit. Namen und
+Reihenfolge bleiben dabei erhalten.
 
 ---
 

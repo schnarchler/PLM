@@ -3130,7 +3130,7 @@ app.post('/api/shutdown', (req, res) => {
 // Launcher-Seite: öffnet PLM per window.open() damit window.close() funktioniert
 app.get('/launcher', (req, res) => {
   res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PLM starten…</title>
-  <style>body{background:#0a0b0d;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#4a5470}</style>
+  <style>body{background:#15171c;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#99a1b0}</style>
   </head><body><div>PLM & ERP wird gestartet…</div>
   <script>
     var w = window.open('/', '_blank', 'width='+screen.availWidth+',height='+screen.availHeight+',left=0,top=0');
@@ -3865,13 +3865,6 @@ app.get('/api/export', (req, res) => {
   res.send(zip);
 });
 
-app.get('/launcher', (req, res) => {
-  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PLM startet…</title>
-  <style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#0a0c10;color:#4a9eff;font-family:monospace;font-size:14px}</style>
-  </head><body>PLM &amp; ERP wird geöffnet…
-  <script>var w=window.open('http://localhost:${PORT}/','_blank');if(!w){location.href='http://localhost:${PORT}/';}else{window.close();}</script>
-  </body></html>`);
-});
 
 // ==============================================================
 // SUPPLIERS
