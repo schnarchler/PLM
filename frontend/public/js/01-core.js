@@ -99,13 +99,13 @@ const _SVG_PRT = '🔩';
 const _SVG_DOC = '📄';
 function _itemSvg(t)   { return t==="asm" ? _SVG_ASM : t==="doc" ? _SVG_DOC : _SVG_PRT; }
 function _itemColor(t) { return t==="asm" ? "var(--blue)" : t==="doc" ? "var(--purple)" : "var(--teal)"; }
-function _itemBg(t)    { return t==="asm" ? "rgba(142,163,255,.12)" : t==="doc" ? "rgba(180,140,255,.12)" : "rgba(106,208,214,.12)"; }
+function _itemBg(t)    { return t==="asm" ? "rgba(157,180,255,.12)" : t==="doc" ? "rgba(196,162,255,.12)" : "rgba(121,221,227,.12)"; }
 function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.75)}px;line-height:1;flex-shrink:0">${_itemSvg(t)}</span>`; }
 
 function _classColor(cls) {
   const list = getClassifications();
   const entry = list.find(c => c.name === cls);
-  const hex = entry?.color || '#7a7f8e';
+  const hex = entry?.color || '#9aa3b2';
   return [hex, hex + '20'];
 }
 function _classChip(cls, size) {

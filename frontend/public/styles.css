@@ -1,45 +1,52 @@
 :root {
-  /* Surfaces — four-step elevation */
-  --bg0: #0a0b0d;   /* canvas */
-  --bg1: #101114;   /* surface */
-  --bg2: #161820;   /* raised */
-  --bg3: #1d2029;   /* hover / active */
-  --bg4: #252934;   /* popovers */
+  /* Surfaces — four-step elevation.
+     Kein Schwarz: der Canvas startet bei #15171c, damit die Stufen
+     unterscheidbar bleiben und Kanten nicht hart abreissen. */
+  --bg0: #15171c;   /* canvas */
+  --bg1: #1b1e24;   /* surface */
+  --bg2: #22262e;   /* raised */
+  --bg3: #2c313b;   /* hover / active */
+  --bg4: #343a46;   /* popovers */
 
   /* Lines */
-  --line:  #1d1f26;
-  --line2: #292c36;
-  --line3: #353945;
+  --line:  #323743;
+  --line2: #3f4552;
+  --line3: #515869;
 
-  /* Text — 4 stops */
-  --t1: #ecedef;
-  --t2: #a4a9b4;
-  --t3: #6e7480;
-  --t4: #4a4f5b;
+  /* Text — 4 stops. Kontrast auf --bg1: 15.4 / 10.0 / 6.4 / 3.9
+     --t4 ist bewusst unter AA: nur Labels, Deko und Zeitstempel. */
+  --t1: #f4f6f8;
+  --t2: #c3c9d4;
+  --t3: #99a1b0;
+  --t4: #737b8a;
+
+  /* Neutral tint — ersetzt die alten rgba(74,79,91,…)-Flaechen.
+     Muss heller als die Flaeche sein, sonst reisst sie ein Loch. */
+  --grey-soft: rgba(115,123,138,.26);
 
   /* Accent — muted slate-blue */
-  --blue:      #8ea3ff;
-  --blue2:     #6f86e6;
-  --blue-glow: rgba(142,163,255,.10);
+  --blue:      #9db4ff;
+  --blue2:     #7e97ee;
+  --blue-glow: rgba(157,180,255,.14);
 
   /* Semantic */
-  --green:  #5bd38a;
-  --amber:  #efb14a;
-  --red:    #f17878;
-  --purple: #b48cff;
-  --teal:   #6ad0d6;
+  --green:  #6ede9c;
+  --amber:  #f5c061;
+  --red:    #ff8e8e;
+  --purple: #c4a2ff;
+  --teal:   #79dde3;
 
   /* Semantic soft/line variants */
-  --green-soft:  rgba(91,211,138,.12);
-  --green-line:  rgba(91,211,138,.30);
-  --amber-soft:  rgba(239,177,74,.12);
-  --amber-line:  rgba(239,177,74,.30);
-  --red-soft:    rgba(241,120,120,.12);
-  --red-line:    rgba(241,120,120,.30);
-  --purple-soft: rgba(180,140,255,.12);
-  --purple-line: rgba(180,140,255,.30);
-  --teal-soft:   rgba(106,208,214,.12);
-  --teal-line:   rgba(106,208,214,.30);
+  --green-soft:  rgba(110,222,156,.16);
+  --green-line:  rgba(110,222,156,.40);
+  --amber-soft:  rgba(245,192,97,.16);
+  --amber-line:  rgba(245,192,97,.40);
+  --red-soft:    rgba(255,142,142,.16);
+  --red-line:    rgba(255,142,142,.40);
+  --purple-soft: rgba(196,162,255,.16);
+  --purple-line: rgba(196,162,255,.40);
+  --teal-soft:   rgba(121,221,227,.16);
+  --teal-line:   rgba(121,221,227,.40);
 
   /* Fonts */
   --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
@@ -353,8 +360,8 @@ tbody tr:last-child { border-bottom: none; }
 #detail-panel.hidden { width: 0; border: none; }
 
 /* ── ACTIVE ROW ── */
-tr.row-active td { background: rgba(99,179,237,.08); }
-tr.row-active { outline: 1px solid rgba(99,179,237,.25); outline-offset: -1px; }
+tr.row-active td { background: rgba(157,180,255,.10); }
+tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; }
 
 /* ── TABS ── */
 .tabs { display: flex; border-bottom: 1px solid var(--line); flex-shrink: 0; padding: 0 14px; gap: 0; background: var(--bg1); }
@@ -417,11 +424,11 @@ tr.row-active { outline: 1px solid rgba(99,179,237,.25); outline-offset: -1px; }
   border-radius: 50%;
   background: currentColor;
 }
-.st-DFT  { background: rgba(142,163,255,.10); color: var(--blue); }
+.st-DFT  { background: var(--blue-glow);      color: var(--blue); }
 .st-REV  { background: var(--amber-soft);     color: var(--amber); }
 .st-REL  { background: var(--green-soft);     color: var(--green); }
 .st-ECO  { background: var(--purple-soft);    color: var(--purple); }
-.st-OBS  { background: rgba(74,79,91,.25);    color: var(--t3); }
+.st-OBS  { background: var(--grey-soft);      color: var(--t3); }
 
 .status-sel {
   font-family: var(--mono);
@@ -460,14 +467,14 @@ tr.row-active { outline: 1px solid rgba(99,179,237,.25); outline-offset: -1px; }
   flex-shrink: 0;
   letter-spacing: .4px;
 }
-.dt-CAD        { background: rgba(142,163,255,.12); color: var(--blue); }
-.dt-STL        { background: rgba(239,177,74,.12);  color: var(--amber); }
+.dt-CAD        { background: var(--blue-glow);      color: var(--blue); }
+.dt-STL        { background: var(--amber-soft);     color: var(--amber); }
 .dt-GCODE      { background: var(--teal-soft);      color: var(--teal); }
 .dt-PDF        { background: var(--red-soft);       color: var(--red); }
 .dt-IMAGE      { background: var(--amber-soft);     color: var(--amber); }
 .dt-DOC        { background: var(--purple-soft);    color: var(--purple); }
 .dt-SPREADSHEET{ background: var(--green-soft);     color: var(--green); }
-.dt-OTHER      { background: rgba(74,79,91,.25);    color: var(--t2); }
+.dt-OTHER      { background: var(--grey-soft);      color: var(--t2); }
 .ds-info { flex: 1; min-width: 0; }
 .ds-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 450; }
 .ds-meta { font-family: var(--mono); font-size: 13px; color: var(--t3); margin-top: 3px; }
@@ -544,15 +551,15 @@ tr.row-active { outline: 1px solid rgba(99,179,237,.25); outline-offset: -1px; }
 .btn-ghost { background: var(--bg2); color: var(--t2); border-color: var(--line2); }
 .btn-ghost:hover { background: var(--bg3); color: var(--t1); border-color: var(--line3); }
 .btn-teal   { background: var(--teal-soft);   color: var(--teal);   border-color: var(--teal-line); }
-.btn-teal:hover   { background: rgba(106,208,214,.20); }
+.btn-teal:hover   { background: rgba(121,221,227,.26); }
 .btn-amber  { background: var(--amber-soft);  color: var(--amber);  border-color: var(--amber-line); }
-.btn-amber:hover  { background: rgba(239,177,74,.22); }
+.btn-amber:hover  { background: rgba(245,192,97,.28); }
 .btn-green  { background: var(--green-soft);  color: var(--green);  border-color: var(--green-line); }
-.btn-green:hover  { background: rgba(91,211,138,.22); }
+.btn-green:hover  { background: rgba(110,222,156,.28); }
 .btn-red    { background: var(--red-soft);    color: var(--red);    border-color: var(--red-line); }
-.btn-red:hover    { background: rgba(241,120,120,.20); }
+.btn-red:hover    { background: rgba(255,142,142,.26); }
 .btn-purple { background: var(--purple-soft); color: var(--purple); border-color: var(--purple-line); }
-.btn-purple:hover { background: rgba(180,140,255,.22); }
+.btn-purple:hover { background: rgba(196,162,255,.28); }
 .btn-sm   { padding: 4px 9px; font-size: 13px; }
 .btn-icon { padding: 5px; border-radius: var(--r-sm); }
 .btn[disabled] { opacity: .35; cursor: not-allowed; }
@@ -600,7 +607,7 @@ tr.row-active { outline: 1px solid rgba(99,179,237,.25); outline-offset: -1px; }
 }
 .upload-zone:hover, .upload-zone.drag {
   border-color: var(--blue);
-  background: rgba(142,163,255,.04);
+  background: rgba(157,180,255,.06);
 }
 .upload-zone input { display: none; }
 

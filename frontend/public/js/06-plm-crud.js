@@ -133,11 +133,11 @@ async function _doSaveAdminSettings() {
 }
 
 const DEFAULT_CLASSIFICATIONS = [
-  {name:'Eigenteil',  color:'#8ea3ff'},
-  {name:'Kaufteil',   color:'#6ad0d6'},
-  {name:'Normteil',   color:'#efb14a'},
-  {name:'Halbzeug',   color:'#b48cff'},
-  {name:'Rohmaterial',color:'#7a7f8e'},
+  {name:'Eigenteil',  color:'#9db4ff'},
+  {name:'Kaufteil',   color:'#79dde3'},
+  {name:'Normteil',   color:'#f5c061'},
+  {name:'Halbzeug',   color:'#c4a2ff'},
+  {name:'Rohmaterial',color:'#9aa3b2'},
 ];
 
 function getClassifications() {
@@ -147,7 +147,7 @@ function getClassifications() {
       const parsed = JSON.parse(raw);
       // Backwards compat: old format was array of strings
       if (parsed.length && typeof parsed[0] === 'string')
-        return parsed.map((name, i) => ({ name, color: DEFAULT_CLASSIFICATIONS[i]?.color || '#7a7f8e' }));
+        return parsed.map((name, i) => ({ name, color: DEFAULT_CLASSIFICATIONS[i]?.color || '#9aa3b2' }));
       return parsed;
     }
   } catch {}
@@ -164,7 +164,7 @@ function _renderClassList(list) {
   const el = document.getElementById('st-class-list');
   if (!el) return;
   el.innerHTML = list.map((c, i) => {
-    const col = c.color || '#7a7f8e';
+    const col = c.color || '#9aa3b2';
     const bg = col + '20'; // hex with 12% alpha approximation
     return `<div class="cls-row" data-idx="${i}" draggable="true"
       style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);transition:opacity .15s">
@@ -210,7 +210,7 @@ function _onClassColorChange() {
   const el = document.getElementById('st-class-list');
   if (!el) return;
   el.querySelectorAll('.cls-row').forEach(row => {
-    const col = row.querySelector('.cls-color')?.value || '#7a7f8e';
+    const col = row.querySelector('.cls-color')?.value || '#9aa3b2';
     const bg = col + '20';
     const preview = row.querySelector('.cls-preview');
     if (preview) { preview.style.color = col; preview.style.background = bg; }
@@ -222,7 +222,7 @@ function _getCurrentClassList() {
   if (!el) return [];
   return [...el.querySelectorAll('.cls-row')].map(row => ({
     name:  row.querySelector('.cls-name')?.value.trim() || '',
-    color: row.querySelector('.cls-color')?.value || '#7a7f8e',
+    color: row.querySelector('.cls-color')?.value || '#9aa3b2',
   })).filter(c => c.name);
 }
 
@@ -232,7 +232,7 @@ function _addClass() {
   if (!val) return;
   const list = _getCurrentClassList();
   if (list.some(c => c.name === val)) { toast('Bereits vorhanden', 'err'); return; }
-  list.push({ name: val, color: '#8ea3ff' });
+  list.push({ name: val, color: '#9db4ff' });
   _renderClassList(list);
   inp.value = '';
   inp.focus();
@@ -790,7 +790,7 @@ function _renderBomBasket() {
         <button class="btn btn-icon btn-ghost btn-sm" onclick="_bomRemove(${i})" style="color:var(--red);flex-shrink:0">✕</button>
         ${b.type === 'item'
           ? `${_itemChip(b.item_type, 14)}<span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(b.item_number)}</span>`
-          : `<span style="font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);padding:1px 5px;border-radius:3px;flex-shrink:0">N</span>`}
+          : `<span style="font-size:10px;font-weight:700;background:rgba(157,180,255,.15);color:var(--blue);padding:1px 5px;border-radius:3px;flex-shrink:0">N</span>`}
         <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(b.name)}</span>
         <input type="number" value="${b.quantity}" min="1" step="1"
           style="width:52px;font-size:13px;font-family:var(--mono);text-align:right;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 5px;color:var(--t1);flex-shrink:0"

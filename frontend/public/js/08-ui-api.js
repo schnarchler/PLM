@@ -172,11 +172,12 @@ async function _doShutdown(checkinFirst) {
   _hideDynModal();
   try { fetch('/api/shutdown', { method: 'POST', keepalive: true }); } catch {}
   // Seite sofort ersetzen — Server braucht ~500ms bis process.exit
-  document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0a0b0d;color:#ecedef;font-family:Manrope,sans-serif;gap:16px">
-    <div style="font-size:36px;color:#4a5470">■</div>
+  // Farben aus den Tokens — das Stylesheet bleibt geladen, nur body wird ersetzt
+  document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:var(--bg0);color:var(--t1);font-family:var(--sans);gap:16px">
+    <div style="font-size:36px;color:var(--t4)">■</div>
     <div style="font-size:17px;font-weight:600">PLM & ERP wurde beendet</div>
-    <div style="font-size:13px;color:#4a5470;margin-bottom:8px">Der Server wurde gestoppt.</div>
-    <button onclick="window.close()" style="background:#1d2029;border:1px solid #2a2d3a;color:#ecedef;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;font-family:Manrope,sans-serif">✕ Tab schliessen</button>
+    <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Der Server wurde gestoppt.</div>
+    <button onclick="window.close()" style="background:var(--bg2);border:1px solid var(--line2);color:var(--t1);padding:8px 20px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;font-family:var(--sans)">✕ Tab schliessen</button>
   </div>`;
   // Tab schliessen versuchen (funktioniert wenn Tab per Skript geöffnet wurde)
   setTimeout(() => window.close(), 600);

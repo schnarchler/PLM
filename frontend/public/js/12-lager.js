@@ -45,7 +45,7 @@ function _invRenderTable(items) {
 
   const critical = items.filter(i => _invStockState(i) === 'critical').length;
   const warn = items.filter(i => _invStockState(i) === 'warn').length;
-  const banner = (critical || warn) ? `<div style="background:rgba(241,120,120,.10);border:1px solid rgba(241,120,120,.30);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:13px;display:flex;gap:12px">
+  const banner = (critical || warn) ? `<div style="background:rgba(255,142,142,.10);border:1px solid rgba(255,142,142,.30);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:13px;display:flex;gap:12px">
     ${critical?`<span style="color:var(--red)">● ${critical} unter Mindestbestand</span>`:''}
     ${warn?`<span style="color:var(--amber)">● ${warn} auf Mindestbestand</span>`:''}
   </div>` : '';
@@ -150,7 +150,7 @@ async function openInventoryDetail(id) {
         <thead><tr><th>Datum</th><th>Typ</th><th>Menge</th><th>Referenz</th><th>Notiz</th></tr></thead>
         <tbody>${item.movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtDT(m.created_at,'')}</td>
-          <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(91,211,138,.15)':'rgba(241,120,120,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
+          <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(110,222,156,.15)':'rgba(255,142,142,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
           <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.reference||'—')}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.notes||'')}</td>
@@ -498,7 +498,7 @@ function _renderRawMaterialsTable() {
     const activeLotCount = activeLots.length;
     const artNrs = activeLots.map(l => l.article_number).filter(Boolean);
     const artNrHtml = artNrs.length
-      ? artNrs.map(a => `<span style="font-family:var(--mono);font-size:10px;color:var(--blue);background:rgba(79,158,248,.1);border-radius:3px;padding:1px 4px">${esc(a)}</span>`).join(' ')
+      ? artNrs.map(a => `<span style="font-family:var(--mono);font-size:10px;color:var(--blue);background:rgba(157,180,255,.1);border-radius:3px;padding:1px 4px">${esc(a)}</span>`).join(' ')
       : '';
     return `<tr onclick="openRawMatDetail(${i.id})" style="cursor:pointer;${opacity}">
       <td><span style="color:${dotCol};font-size:11px">●</span></td>
@@ -595,7 +595,7 @@ async function openRawMatDetail(id) {
             const rem      = l.remaining_qty ?? l.qty ?? 0;
             const depleted = rem <= 0;
             const label    = l.lot_number || (l.last_date ? fmtD(l.last_date) : '—');
-            const bg = depleted ? 'background:rgba(74,79,91,.18)' : 'background:var(--bg2)';
+            const bg = depleted ? 'background:rgba(115,123,138,.18)' : 'background:var(--bg2)';
             const artNr = l.article_number || '';
             // Daten sicher in globalem Objekt speichern — kein Encoding in onclick-Attributen
             const lotKey = `${item.id}_${lotIdx}`;
