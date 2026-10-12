@@ -195,6 +195,16 @@ async function renderSettings() {
           }).join('')}
         </div>
 
+        <div style="font-size:13px;color:var(--t3);margin:18px 0 8px">
+          Setzt die Farben der Klassifizierungen auf die Standardwerte der aktuellen Palette zurück.
+          Nötig für Datenbanken, die noch die Farben der alten Palette gespeichert haben.
+          Namen, Reihenfolge und Schriftgrösse bleiben erhalten.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="resetDesignColors()">Design zurücksetzen</button>
+          <span id="st-design-msg" style="font-size:13px;color:var(--t3)"></span>
+        </div>
+
         <div class="sep-label" style="margin-top:24px">Datenpfad</div>
         <div id="st-datapath-info" style="font-size:13px;color:var(--t3);margin-bottom:10px">Lädt aktuelle Pfade…</div>
         <div class="form-row">

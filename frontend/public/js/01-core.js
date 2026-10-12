@@ -85,6 +85,18 @@ function _updateCheckoutBadge() {
   btn.style.borderColor = newCount > 0 ? 'var(--amber-line)' : total > 0 ? 'var(--teal-line)' : '';
 }
 
+// Nur http/https sind als Link sicher. Gespeicherte Werte wie
+// "javascript:…" oder "data:…" wuerden sonst beim Klick ausgefuehrt.
+// Gibt bei sicheren URLs den Hostnamen zurueck, sonst null.
+function safeLinkHost(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.hostname.replace(/^www\./, '');
+  } catch { return null; }
+}
+
 function fmtN(v, dec = 2) {
   const n = parseFloat(v) || 0;
   const [intPart, decPart] = n.toFixed(dec).split('.');

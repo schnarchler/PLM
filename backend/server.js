@@ -629,6 +629,7 @@ async function initDb() {
   try { db.run('ALTER TABLE items ADD COLUMN classification TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN weight_g REAL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE items ADD COLUMN notes TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
   try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE delivery_items ADD COLUMN order_item_id INTEGER REFERENCES order_items(id)'); } catch {}
@@ -890,12 +891,15 @@ function getActiveRevision(itemId) {
   return get("SELECT * FROM revisions WHERE item_id=? AND status='REL' ORDER BY rowid DESC LIMIT 1", [itemId])
     || getLatestRevision(itemId);
 }
-// Recursively sum dev hours (time_entries) for an item and all its BOM children via CTE
+// Recursively sum dev hours (time_entries) for an item and all its BOM children via CTE.
+// UNION (nicht UNION ALL): dedupliziert die Baumzeilen und beendet die Rekursion
+// auch bei einem Stuecklisten-Zyklus. Am Ergebnis aendert das nichts, weil das
+// abschliessende IN ohnehin nur die Menge der item_id auswertet.
 function calcDevHours(itemId) {
   const row = get(`
     WITH RECURSIVE tree(item_id) AS (
       SELECT ?
-      UNION ALL
+      UNION
       SELECT b.child_item_id
       FROM bom b
       JOIN tree t ON b.parent_rev_id = (
@@ -1174,6 +1178,10 @@ app.get('/api/items/:id', (req, res) => {
   item.variants = item.variant_group_id
     ? all('SELECT id,item_number,name,item_type FROM items WHERE variant_group_id=? AND id!=? ORDER BY item_number', [item.variant_group_id, item.id])
     : [];
+  // Fuer das Datenblatt: Entwicklungszeit (BOM-Rollup) und verknuepfter Lagerbestand
+  item.dev_hours = calcDevHours(item.id);
+  item.inventory = all(`SELECT id, name, sku, unit, stock_qty, min_qty, price_per_unit, notes
+    FROM inventory_items WHERE item_id=? ORDER BY name`, [item.id]);
   res.json(item);
 });
 
@@ -1209,9 +1217,14 @@ app.post('/api/projects/:projectId/items', (req, res) => {
 });
 
 app.put('/api/items/:id', (req, res) => {
-  const { name, description, source_url, default_price, classification, weight_g } = req.body;
-  run('UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=?,weight_g=? WHERE id=?',
-    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, classification||null, weight_g != null ? parseFloat(weight_g) : null, req.params.id]);
+  const { name, description, source_url, default_price, classification, weight_g, notes } = req.body;
+  // notes nur schreiben, wenn das Feld im Request vorkommt — sonst wuerden
+  // Aufrufe ohne notes (z.B. Preis-Inline-Edit) die Notizen leeren.
+  const keepNotes = !Object.prototype.hasOwnProperty.call(req.body, 'notes');
+  run(`UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=?,weight_g=?,
+       notes=CASE WHEN ? THEN notes ELSE ? END WHERE id=?`,
+    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, classification||null, weight_g != null ? parseFloat(weight_g) : null,
+     keepNotes ? 1 : 0, notes || null, req.params.id]);
   log('item', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
 });
@@ -1263,6 +1276,126 @@ app.get('/api/items/:id/where-used', (req, res) => {
     WHERE b.child_item_id = ?
     ORDER BY p.number, i.item_number, CAST(r.rev AS INTEGER)`, [req.params.id]);
   res.json(rows);
+});
+
+// Abhaengigkeitsgraph fuer die Mindmap-Ansicht.
+// Nach oben: wer verwendet dieses Item (Where-Used, rekursiv).
+// Nach unten: was verwendet dieses Item (BOM, rekursiv), inklusive Normteile.
+// Beruecksichtigt nur die jeweils neueste Revision — Verwendungen, die nur in
+// aelteren Revisionen stehen, werden gezaehlt und als historic_up gemeldet.
+app.get('/api/items/:id/graph', (req, res) => {
+  const rootId = parseInt(req.params.id);
+  const root = get('SELECT * FROM items WHERE id=?', [rootId]);
+  if (!root) return res.status(404).json({ error: 'Not found' });
+
+  const MAX_DEPTH = 6;
+  const MAX_NODES = 400;
+  const up   = Math.min(parseInt(req.query.up)   || 3, MAX_DEPTH);
+  const down = Math.min(parseInt(req.query.down) || 3, MAX_DEPTH);
+
+  const latestRevId = id => get('SELECT id FROM revisions WHERE item_id=? ORDER BY rowid DESC LIMIT 1', [id])?.id || null;
+
+  const nodes = new Map();   // key -> node
+  const edges = [];          // { from, to, quantity, unit }
+  const edgeSeen = new Set();
+  let truncatedUp = false, truncatedDown = false;
+
+  function addItemNode(row, level) {
+    const key = 'i' + row.id;
+    const existing = nodes.get(key);
+    if (existing) {
+      // Naeher am Zentrum gewinnt, damit die Ebene stabil bleibt
+      if (Math.abs(level) < Math.abs(existing.level)) existing.level = level;
+      return existing;
+    }
+    const rev = get('SELECT rev, status FROM revisions WHERE item_id=? ORDER BY rowid DESC LIMIT 1', [row.id]);
+    const proj = row.project_id ? get('SELECT number FROM projects WHERE id=?', [row.project_id]) : null;
+    const node = {
+      key, kind: 'item', id: row.id, level,
+      item_number: row.item_number, name: row.name, item_type: row.item_type,
+      classification: row.classification || null,
+      rev: rev?.rev || null, status: rev?.status || null,
+      project_number: proj?.number || null,
+      is_root: row.id === rootId,
+    };
+    nodes.set(key, node);
+    return node;
+  }
+
+  function addEdge(fromKey, toKey, quantity, unit) {
+    const sig = fromKey + '>' + toKey;
+    if (edgeSeen.has(sig)) return;
+    edgeSeen.add(sig);
+    edges.push({ from: fromKey, to: toKey, quantity: quantity ?? null, unit: unit || null });
+  }
+
+  addItemNode(root, 0);
+
+  // ── nach unten: BOM ──
+  (function walkDown(itemId, fromKey, depth, path) {
+    if (depth > down) { truncatedDown = true; return; }
+    if (nodes.size >= MAX_NODES) { truncatedDown = true; return; }
+    const revId = latestRevId(itemId);
+    if (!revId) return;
+
+    const kids = all(`SELECT b.quantity, b.unit, i.*
+      FROM bom b JOIN items i ON i.id=b.child_item_id
+      WHERE b.parent_rev_id=? ORDER BY b.position`, [revId]);
+    for (const k of kids) {
+      if (path.includes(k.id)) continue;            // Zyklus
+      const node = addItemNode(k, depth);
+      addEdge(fromKey, node.key, k.quantity, k.unit);
+      walkDown(k.id, node.key, depth + 1, path.concat(k.id));
+    }
+
+    // Normteile sind Blaetter, keine Items
+    const std = all(`SELECT bs.quantity, bs.unit, sp.id, sp.designation, sp.name as sp_name, sp.std_number
+      FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id
+      WHERE bs.parent_rev_id=? ORDER BY bs.position`, [revId]);
+    for (const sp of std) {
+      const key = 's' + sp.id + '@' + itemId;
+      if (!nodes.has(key)) {
+        nodes.set(key, {
+          key, kind: 'std', id: sp.id, level: depth,
+          item_number: sp.std_number || sp.designation || '—',
+          name: sp.sp_name || sp.designation || 'Normteil',
+          item_type: 'std', classification: 'Normteil',
+          rev: null, status: null, project_number: null, is_root: false,
+        });
+      }
+      addEdge(fromKey, key, sp.quantity, sp.unit);
+    }
+  })(rootId, 'i' + rootId, 1, [rootId]);
+
+  // ── nach oben: Where-Used ──
+  let historicUp = 0;
+  (function walkUp(itemId, toKey, depth, path) {
+    if (depth > up) { truncatedUp = true; return; }
+    if (nodes.size >= MAX_NODES) { truncatedUp = true; return; }
+
+    const parents = all(`SELECT r.id as rev_id, r.item_id, b.quantity, b.unit
+      FROM bom b JOIN revisions r ON b.parent_rev_id=r.id
+      WHERE b.child_item_id=?`, [itemId]);
+
+    for (const pr of parents) {
+      if (pr.rev_id !== latestRevId(pr.item_id)) { historicUp++; continue; }
+      if (path.includes(pr.item_id)) continue;      // Zyklus
+      const prow = get('SELECT * FROM items WHERE id=?', [pr.item_id]);
+      if (!prow) continue;
+      const node = addItemNode(prow, -depth);
+      addEdge(node.key, toKey, pr.quantity, pr.unit);
+      walkUp(pr.item_id, node.key, depth + 1, path.concat(pr.item_id));
+    }
+  })(rootId, 'i' + rootId, 1, [rootId]);
+
+  res.json({
+    root: 'i' + rootId,
+    nodes: [...nodes.values()],
+    edges,
+    historic_up: historicUp,
+    truncated: { up: truncatedUp, down: truncatedDown },
+    limits: { up, down, max_nodes: MAX_NODES },
+  });
 });
 
 app.get('/api/items/:id/erp-usage', (req, res) => {
