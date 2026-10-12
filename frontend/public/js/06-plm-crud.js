@@ -253,6 +253,74 @@ async function _saveClassifications() {
   toast('Klassifizierungen gespeichert', 'ok');
 }
 
+// ── DESIGN ZURUECKSETZEN ──────────────────────────────────────
+// Bestehende Datenbanken haben die Klassifizierungsfarben gespeichert und
+// ignorieren damit DEFAULT_CLASSIFICATIONS. Dieser Reset zieht die Farben auf
+// die aktuelle Palette nach, behaelt aber Namen und Reihenfolge des Nutzers.
+const _NEUTRAL_CLASS_COLOR = '#9aa3b2';
+
+function _defaultColorFor(name, idx) {
+  const byName = DEFAULT_CLASSIFICATIONS.find(d => d.name.toLowerCase() === String(name).toLowerCase());
+  if (byName) return byName.color;
+  return DEFAULT_CLASSIFICATIONS[idx]?.color || _NEUTRAL_CLASS_COLOR;
+}
+
+// Liste, auf die sich der Reset bezieht: ungespeicherte Aenderungen im
+// PLM-Tab haben Vorrang, sonst die gespeicherte Einstellung.
+function _classListForReset() {
+  const current = _getCurrentClassList();
+  return current.length ? current : getClassifications();
+}
+
+function resetDesignColors() {
+  const list = _classListForReset();
+  if (!list.length) { toast('Keine Klassifizierungen vorhanden', 'err'); return; }
+
+  const preview = list.map((c, i) => {
+    const to = _defaultColorFor(c.name, i);
+    const from = c.color || _NEUTRAL_CLASS_COLOR;
+    return { name: c.name, from, to, changed: from.toLowerCase() !== to.toLowerCase() };
+  });
+  const changedCount = preview.filter(p => p.changed).length;
+  if (!changedCount) { toast('Farben sind bereits aktuell', 'ok'); return; }
+
+  _showDynModal(`<div class="modal" style="max-width:470px">
+    <div class="modal-head"><div class="modal-title">Design zurücksetzen</div></div>
+    <div class="modal-body" style="font-size:13px;color:var(--t2)">
+      <div style="margin-bottom:12px">
+        ${changedCount} von ${list.length} Klassifizierungen bekommen die Standardfarbe der
+        aktuellen Palette. Namen und Reihenfolge bleiben unverändert.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${preview.map(p => `
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 9px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)${p.changed ? '' : ';opacity:.45'}">
+            <span style="font-family:var(--mono);font-size:13px;padding:1px 7px;border-radius:3px;background:${p.from}20;color:${p.from}">${esc(p.name)}</span>
+            <span style="color:var(--t4)">→</span>
+            <span style="font-family:var(--mono);font-size:13px;padding:1px 7px;border-radius:3px;background:${p.to}20;color:${p.to}">${esc(p.name)}</span>
+            ${p.changed ? '' : '<span style="font-size:11px;color:var(--t4);margin-left:auto">unverändert</span>'}
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="_doResetDesignColors()">Farben übernehmen</button>
+    </div>
+  </div>`);
+}
+
+async function _doResetDesignColors() {
+  _hideDynModal();
+  const list = _classListForReset().map((c, i) => ({ name: c.name, color: _defaultColorFor(c.name, i) }));
+
+  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list) });
+  state.settings = await api('/api/settings');
+  _renderClassList(list);
+
+  const msg = document.getElementById('st-design-msg');
+  if (msg) { msg.textContent = 'Zurückgesetzt'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2500); }
+  toast('Design-Farben zurückgesetzt', 'ok');
+}
+
 async function _loadDelTab() {
   const [projects, orders, quotes, deliveries, settings, counters] = await Promise.all([
     api('/api/projects').catch(()=>[]),

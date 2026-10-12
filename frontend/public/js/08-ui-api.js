@@ -14,7 +14,11 @@ function _markActiveRow(id) {
 function switchTab(btn, targetId) {
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
-  document.querySelectorAll(`#dp-body > div`).forEach(d=>{d.style.display='none'});
+  // data-keep="1" markiert Bloecke, die zu jedem Tab gehoeren (z.B. Varianten)
+  // und beim Wechsel nicht mitversteckt werden duerfen.
+  document.querySelectorAll('#dp-body > div').forEach(d => {
+    if (d.dataset.keep !== '1') d.style.display = 'none';
+  });
   const el=document.getElementById(targetId);
   if(el) el.style.display='';
 }

@@ -406,10 +406,12 @@ function renderItemDetail(item, activeRevId) {
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument generieren">&#128196;</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Vergleichen">⇄</button>`;
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Vergleichen">⇄</button>`
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemMindmap(${item.id})" title="Abhängigkeiten als Mindmap">⌗</button>`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
+    <button class="tab" onclick="switchTab(this,'it-sheet')">Datenblatt</button>
     <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>
     ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}
     <button class="tab" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Where-Used</button>
@@ -459,7 +461,9 @@ function renderItemDetail(item, activeRevId) {
               class="no-spin" onblur="saveItemWeight(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
             <span style="color:var(--t4)">g</span>
           </span>
-          ${item.source_url ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>` : ''}
+          ${item.source_url ? (safeLinkHost(item.source_url)
+            ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>`
+            : `<span style="font-size:13px;color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px" title="Kein http/https-Link — nicht anklickbar: ${esc(item.source_url)}">Quelle ⚠</span>`) : ''}
         </div>`;
       })()}
       <div class="sep-label" style="margin-top:4px">Revisionen</div>
@@ -475,6 +479,7 @@ function renderItemDetail(item, activeRevId) {
       </div>
       ${rev ? renderRevDetail(rev, item) : '<div style="color:var(--t3)">Keine Revision</div>'}
     </div>
+    ${renderItemSheet(item, activeRevId)}
     <div id="it-log" style="display:none">
       ${(item.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
@@ -498,6 +503,298 @@ function renderItemDetail(item, activeRevId) {
   }, 0);
 }
 
+// ── DATENBLATT-TAB ────────────────────────────────────────────
+// Liest ausschliesslich Felder, die /api/items/:id schon mitliefert —
+// kein zusaetzlicher Request. Die angezeigte Revision folgt der Auswahl
+// im Revisionen-Tab.
+function _sheetCell(label, value, opts = {}) {
+  const v = (value === null || value === undefined || value === '') ? '—' : value;
+  const dim = (v === '—') ? ';color:var(--t3)' : '';
+  return `<div class="ps-cell">
+    <div class="ps-label">${esc(label)}</div>
+    <div class="ps-val" style="word-break:break-word${dim}${opts.mono ? ';font-family:var(--mono)' : ''}">${opts.raw ? v : esc(v)}</div>
+  </div>`;
+}
+
+function _sheetRows(rows) {
+  const keep = rows.filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (!keep.length) return '';
+  return keep.map(([k, v, raw]) => `<div class="cl-row" style="padding:7px 0">
+    <div style="min-width:104px;flex-shrink:0" class="ps-label">${esc(k)}</div>
+    <div style="font-size:13px;color:var(--t2);line-height:1.6;white-space:pre-wrap;min-width:0">${raw ? v : esc(v)}</div>
+  </div>`).join('');
+}
+
+function _fmtHours(h) {
+  const n = parseFloat(h) || 0;
+  if (!n) return null;
+  const hh = Math.floor(n), mm = Math.round((n - hh) * 60);
+  return hh ? `${hh} h${mm ? ' ' + mm + ' min' : ''}` : `${mm} min`;
+}
+
+function renderItemSheet(item, activeRevId) {
+  const rev = (item.revisions || []).find(r => r.id === activeRevId) || (item.revisions || [])[0];
+  // Kurzcode wie im Panel-Titel — die Langform kollidiert mit frei
+  // benannten Klassifizierungen ("Bauteil" als Klassifizierung und als Typ).
+  const typeCode = item.item_type === 'asm' ? 'ASM' : item.item_type === 'doc' ? 'DOC' : 'PRT';
+  const editable = itemIsEditable(item);
+  const ergaenzen = feld => editable
+    ? ` <span style="color:var(--blue);cursor:pointer;text-decoration:underline" onclick="openEditItemModal(${item.id})">Jetzt ergänzen</span>`
+    : '';
+
+  // -- Kopfzeile: Checkout-Status und QR-Code
+  const checkout = (state.checkouts || []).find(c => c.item_id === item.id);
+  const coBadge = checkout
+    ? `<span class="status st-REV" style="background:var(--teal-soft);color:var(--teal)">ausgecheckt</span>`
+    : `<span class="chip">eingecheckt</span>`;
+
+  // -- Beschreibung
+  const descBlock = item.description
+    ? `<div style="font-size:13px;line-height:1.65;color:var(--t2);white-space:pre-wrap">${esc(item.description)}</div>`
+    : `<div style="font-size:13px;color:var(--t3)">Keine Beschreibung hinterlegt.${ergaenzen()}</div>`;
+
+  // -- Quelle. Pruefung zentral in safeLinkHost (01-core.js).
+  let srcBlock;
+  if (item.source_url) {
+    const host = safeLinkHost(item.source_url);
+    srcBlock = host
+      ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <a href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer"
+             style="font-size:13px;color:var(--blue);text-decoration:underline;word-break:break-all">${esc(item.source_url)}</a>
+          <span class="chip">${esc(host)}</span>
+        </div>`
+      : `<div style="font-size:13px;color:var(--t2);word-break:break-all;font-family:var(--mono)">${esc(item.source_url)}
+          <span class="chip" style="color:var(--amber);border-color:var(--amber-line)">kein Web-Link</span>
+        </div>`;
+  } else {
+    srcBlock = `<div style="font-size:13px;color:var(--t3)">Keine Quelle hinterlegt.${ergaenzen()}</div>`;
+  }
+
+  // -- Allgemein
+  const revCount = (item.revisions || []).length;
+  const allDs = (item.revisions || []).flatMap(r => (r.datasets || []).map(d => ({ ...d, rev: r.rev })));
+  const dsBytes = allDs.reduce((s, d) => s + (d.file_size || 0), 0);
+  const weightTxt = item.effective_weight_g != null
+    ? fmtN(item.effective_weight_g, 1) + ' g' + (item.weight_g == null && item.item_type === 'asm' ? ' (aus BOM)' : '')
+    : null;
+
+  const facts = `<div class="ps-grid">
+    ${_sheetCell('Typ', typeCode, { mono: true })}
+    ${_sheetCell('Klassifizierung', item.classification ? _classChip(item.classification, 13) : null, { raw: !!item.classification })}
+    ${_sheetCell('Projekt', item.project ? item.project.number + ' · ' + item.project.name : null)}
+    ${_sheetCell('Gewicht', weightTxt, { mono: true })}
+    ${_sheetCell('Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null, { mono: true })}
+    ${_sheetCell('Entwicklungszeit', _fmtHours(item.dev_hours), { mono: true })}
+    ${_sheetCell('Erstellt', item.created_at ? fmtDate(item.created_at) : null, { mono: true })}
+    ${_sheetCell('Revisionen', revCount ? String(revCount) : null, { mono: true })}
+    ${_sheetCell('Dateien', allDs.length ? allDs.length + ' · ' + fmtSize(dsBytes) : null, { mono: true })}
+  </div>`;
+
+  // -- Aktive Revision
+  let revBlock = '<div style="font-size:13px;color:var(--t3)">Keine Revision vorhanden.</div>';
+  if (rev) {
+    const rows = _sheetRows([
+      ['Beschreibung', rev.description],
+      ['ECO-Grund', rev.eco_reason],
+      ['Freigegeben', rev.released_at ? fmtDate(rev.released_at) + (rev.released_by ? ' · ' + rev.released_by : '') : null],
+      ['Angelegt', rev.created_at ? fmtDate(rev.created_at) : null],
+    ]);
+    revBlock = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span class="status st-${rev.status}">rev${rev.rev}</span>
+        <span style="font-size:13px;color:var(--t3)">${rev.status}</span>
+      </div>
+      ${rows || '<div style="font-size:13px;color:var(--t3)">Keine weiteren Angaben zu dieser Revision.</div>'}`;
+  }
+
+  // -- Druckparameter der aktiven Revision
+  let psBlock = '';
+  const ps = rev?.print_settings;
+  if (ps) {
+    const cells = [
+      ['Düse', ps.nozzle ? ps.nozzle + ' mm' : null],
+      ['Schicht', ps.layer_height ? fmtN(ps.layer_height, 2) + ' mm' : null],
+      ['Material', ps.material],
+      ['Farbe', ps.color],
+      ['Füllung', ps.infill != null && ps.infill !== '' ? ps.infill + ' %' : null],
+      ['Stützen', ps.supports == null || ps.supports === '' ? null : (Number(ps.supports) ? 'ja' : 'nein')],
+      ['Düsentemp.', ps.print_temp ? ps.print_temp + ' °C' : null],
+      ['Bett', ps.bed_temp ? ps.bed_temp + ' °C' : null],
+      ['Drucker', ps.printer],
+      ['Teilgewicht', ps.part_weight ? fmtN(ps.part_weight, 1) + ' g' : null],
+      ['Filament', ps.filament_weight_total ? fmtN(ps.filament_weight_total, 1) + ' g' : null],
+      ['Druckdauer', _fmtHours(ps.print_duration)],
+    ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+    if (cells.length) {
+      psBlock = `<div class="sep-label">Druckparameter <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
+        <div class="ps-grid">${cells.map(([k, v]) => _sheetCell(k, v, { mono: true })).join('')}</div>
+        ${ps.notes ? `<div style="font-size:13px;color:var(--t3);margin-top:7px;white-space:pre-wrap">${esc(ps.notes)}</div>` : ''}`;
+    }
+  }
+
+  // -- Stuecklisten-Kurzfassung (nur Baugruppen)
+  let bomBlock = '';
+  if (item.item_type === 'asm') {
+    const bom = rev?.bom || [];
+    const std = rev?.bom_std || [];
+    const priced = bom.filter(b => b.default_price != null);
+    const bomTotal = priced.reduce((s, b) => s + b.default_price * b.quantity, 0);
+    const stdTotal = std.reduce((s, b) => s + ((b.unit_price || 0) * b.quantity), 0);
+    const positions = bom.length + std.length;
+    if (positions) {
+      bomBlock = `<div class="sep-label">Stückliste <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
+        <div class="ps-grid">
+          ${_sheetCell('Positionen', String(positions), { mono: true })}
+          ${_sheetCell('Eigene Teile', String(bom.length), { mono: true })}
+          ${_sheetCell('Normteile', String(std.length), { mono: true })}
+          ${_sheetCell('Teilesumme', bomTotal ? fmtChf(bomTotal) : null, { mono: true })}
+          ${_sheetCell('Normteilsumme', stdTotal ? fmtChf(stdTotal) : null, { mono: true })}
+          ${_sheetCell('Gesamt', (bomTotal + stdTotal) ? fmtChf(bomTotal + stdTotal) : null, { mono: true })}
+        </div>
+        ${priced.length < bom.length
+          ? `<div style="font-size:13px;color:var(--amber);margin-top:7px">⚠ ${bom.length - priced.length} von ${bom.length} eigenen Teilen ohne Preis — Summe unvollständig.</div>`
+          : ''}`;
+    } else {
+      bomBlock = `<div class="sep-label">Stückliste</div>
+        <div style="font-size:13px;color:var(--t3)">Noch keine Positionen in rev${rev?.rev ?? '—'}.</div>`;
+    }
+  }
+
+  // -- Lagerbestand
+  let invBlock = '';
+  const inv = item.inventory || [];
+  if (inv.length) {
+    invBlock = `<div class="sep-label">Lagerbestand</div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${inv.map(l => {
+          const low = l.min_qty != null && l.stock_qty != null && l.stock_qty <= l.min_qty;
+          return `<div class="ds-row" style="padding:6px 10px;margin:0">
+            <span class="ds-type ${low ? 'dt-PDF' : 'dt-GCODE'}">${low ? 'KNAPP' : 'LAGER'}</span>
+            <div class="ds-info">
+              <div class="ds-name">${esc(l.name)}${l.sku ? ` <span style="color:var(--t3);font-family:var(--mono);font-size:11px">${esc(l.sku)}</span>` : ''}</div>
+              <div class="ds-meta">${fmtN(l.stock_qty || 0, 1)} ${esc(l.unit || 'Stk')}${
+                l.min_qty != null ? ` · Min ${fmtN(l.min_qty, 1)}` : ''}${
+                l.price_per_unit != null ? ` · ${fmtChf(l.price_per_unit)}/${esc(l.unit || 'Stk')}` : ''}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  // -- Dateien pro Typ
+  let dsBlock = '<div style="font-size:13px;color:var(--t3)">Noch keine Dateien angehängt.</div>';
+  if (allDs.length) {
+    const groups = {};
+    allDs.forEach(d => {
+      const k = fileLabel(d.original_name, d.ds_type);
+      (groups[k] = groups[k] || { cls: dtClass(d.original_name, d.ds_type), n: 0, bytes: 0 });
+      groups[k].n++;
+      groups[k].bytes += d.file_size || 0;
+    });
+    dsBlock = `<div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${Object.entries(groups).map(([label, g]) => `
+        <div class="ds-row" style="padding:5px 9px;margin:0;gap:7px">
+          <span class="ds-type ${g.cls}">${esc(label)}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${g.n}×</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtSize(g.bytes)}</span>
+        </div>`).join('')}
+    </div>
+    <div style="font-size:13px;color:var(--t4);margin-top:7px">
+      ${allDs.length} Dateien über ${revCount} Revision${revCount === 1 ? '' : 'en'} · ${fmtSize(dsBytes)} gesamt
+    </div>`;
+  }
+
+  // -- Letzte Aenderung
+  const lastLog = (item.changelog || [])[0];
+  const logBlock = lastLog
+    ? `<div class="cl-row" style="padding:0;border:none">
+        <div class="cl-dot"></div>
+        <div class="cl-body">
+          <div class="cl-action">${esc(lastLog.action)}</div>
+          ${lastLog.details ? `<div class="cl-detail">${esc(lastLog.details)}</div>` : ''}
+        </div>
+        <div class="cl-time">${fmtDate(lastLog.created_at)}</div>
+      </div>`
+    : '<div style="font-size:13px;color:var(--t3)">Noch keine Einträge.</div>';
+
+  // -- Notizen (freies Feld am Item)
+  const notesBlock = `<textarea class="ft" id="sheet-notes-${item.id}" rows="3"
+      placeholder="Freie Notizen zu diesem Teil — Bezugsquellen, Erfahrungen, offene Punkte…"
+      style="min-height:62px"
+      onblur="saveItemNotes(${item.id}, this)">${esc(item.notes || '')}</textarea>
+    <div style="font-size:11px;color:var(--t4);margin-top:4px">Wird beim Verlassen des Feldes gespeichert.</div>`;
+
+  // -- QR-Code der Teilenummer
+  const qr = typeof qrSvg === 'function'
+    ? qrSvg(item.item_number, 104, { dark: '#0d0f14', light: '#f4f6f8' })
+    : '';
+
+  return `<div id="it-sheet" style="display:none">
+    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          ${coBadge}
+          ${checkout ? `<span style="font-size:13px;color:var(--t3)">${esc(checkout.folder || '')}</span>` : ''}
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost btn-sm" onclick="openItemMindmap(${item.id})">⌗ Mindmap</button>
+          <button class="btn btn-ghost btn-sm" onclick="window._docTemplateItem=state.item;generateItemTemplate('datenblatt')">&#128196; Als PDF</button>
+          ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
+        </div>
+      </div>
+      ${qr ? `<div style="flex-shrink:0;text-align:center">
+        <div style="background:#f4f6f8;padding:5px;border-radius:var(--r-sm);line-height:0">${qr}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--t4);margin-top:4px;letter-spacing:.3px">${esc(item.item_number)}</div>
+      </div>` : ''}
+    </div>
+
+    <div class="sep-label" style="margin-top:0">Beschreibung</div>
+    ${descBlock}
+
+    <div class="sep-label">Quelle</div>
+    ${srcBlock}
+
+    <div class="sep-label">Allgemein</div>
+    ${facts}
+
+    <div class="sep-label">Notizen</div>
+    ${notesBlock}
+
+    <div class="sep-label">Aktive Revision</div>
+    ${revBlock}
+
+    ${psBlock}
+    ${bomBlock}
+    ${invBlock}
+
+    <div class="sep-label">Dateien</div>
+    ${dsBlock}
+
+    <div class="sep-label">Letzte Änderung</div>
+    ${logBlock}
+  </div>`;
+}
+
+// Notizen speichern — eigener Aufruf, damit andere Felder nicht ueberschrieben werden
+async function saveItemNotes(itemId, el) {
+  const value = el.value;
+  if (el.dataset.saved === value) return;
+  const it = state.item;
+  if (!it || it.id !== itemId) return;
+  try {
+    await api(`/api/items/${itemId}`, 'PUT', {
+      name: it.name, description: it.description, source_url: it.source_url,
+      default_price: it.default_price, classification: it.classification,
+      weight_g: it.weight_g, notes: value,
+    });
+    it.notes = value;
+    el.dataset.saved = value;
+    el.style.borderColor = 'var(--green-line)';
+    setTimeout(() => { el.style.borderColor = ''; }, 1200);
+  } catch (e) {
+    toast('Notiz konnte nicht gespeichert werden', 'err');
+  }
+}
+
 function renderVariantsSection(item) {
   const variants = item.variants || [];
   const chips = variants.map(v =>
@@ -510,7 +807,7 @@ function renderVariantsSection(item) {
         style="background:none;border:none;cursor:pointer;color:var(--t4);font-size:13px;padding:0 0 0 4px;line-height:1" hidden>✕</button>
     </div>`).join('');
 
-  return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+  return `<div data-keep="1" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4)">Varianten</span>
       <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:1px 7px" onclick="openLinkVariantModal(${item.id})">+ Verknüpfen</button>
