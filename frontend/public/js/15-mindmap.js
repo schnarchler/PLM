@@ -134,9 +134,15 @@ function _mmEdgeSvg(e, L) {
     c1x = ax + dx; c2x = bxL - dx; endX = bxL;
   }
 
-  const label = e.quantity != null
+  // Fixierte Positionen bekommen die Revision ins Label — sonst sieht man
+  // nicht, dass dieser Zweig bewusst auf einem alten Stand steht.
+  // Kein Emoji: in SVG haengt dessen Darstellung von der Systemschrift ab,
+  // die Farbe traegt die Bedeutung zuverlaessiger.
+  const qty = e.quantity != null
     ? `${fmtN(e.quantity, e.quantity % 1 ? 1 : 0)}${e.unit ? ' ' + e.unit : '×'}`
     : '';
+  const pin = e.pinned_rev ? `rev${e.pinned_rev}` : '';
+  const label = [qty, pin].filter(Boolean).join(' · ');
   // Label kurz vor dem Zielknoten: dort hat sich der Faecher aufgeteilt und
   // jede Kante liegt auf der Hoehe ihres eigenen Ziels. Am Startknoten wuerden
   // sich alle Beschriftungen uebereinanderstapeln.
@@ -156,7 +162,8 @@ function _mmEdgeSvg(e, L) {
     ${label ? `<g><rect x="${lx - lw / 2}" y="${ly - 7}" width="${lw}" height="14" rx="3"
         style="fill:var(--bg0);opacity:.9"/>
       <text x="${lx}" y="${ly + 3.5}" text-anchor="middle"
-        style="font-family:var(--mono);font-size:10px;fill:var(--t3)">${esc(label)}</text></g>` : ''}
+        style="font-family:var(--mono);font-size:10px;fill:var(--t3)">${esc(qty)}${
+          pin ? `${qty ? ' · ' : ''}<tspan style="fill:var(--amber)">${esc(pin)}</tspan>` : ''}</text></g>` : ''}
   </g>`;
 }
 
@@ -360,6 +367,8 @@ function openItemMindmap(itemId) {
       <div style="margin-left:auto;display:flex;align-items:center;gap:12px;font-size:11px;color:var(--t4);flex-wrap:wrap">
         ${[['Baugruppe','var(--blue)'],['Bauteil','var(--teal)'],['Dokument','var(--purple)'],['Normteil','var(--amber)']]
           .map(([l,c]) => `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${c}"></span>${l}</span>`).join('')}
+        <span style="color:var(--line2)">│</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="font-family:var(--mono);color:var(--amber)">rev1</span> feste Revision</span>
         <span style="color:var(--line2)">│</span>
         <span>Ziehen zum Verschieben · Rad zum Zoomen · Klick öffnet das Teil</span>
       </div>

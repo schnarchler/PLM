@@ -630,6 +630,7 @@ async function initDb() {
   try { db.run('ALTER TABLE items ADD COLUMN weight_g REAL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN notes TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE bom ADD COLUMN child_rev_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
   try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE delivery_items ADD COLUMN order_item_id INTEGER REFERENCES order_items(id)'); } catch {}
@@ -1168,7 +1169,17 @@ app.get('/api/items/:id', (req, res) => {
     rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
     if (item.item_type === 'asm') {
       rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
-      rev.bom.forEach(b => { b.child_active_rev = getActiveRevision(b.child_item_id); b.dev_hours = calcDevHours(b.child_item_id); });
+      rev.bom.forEach(b => {
+        b.child_active_rev = getActiveRevision(b.child_item_id);
+        // child_rev_id ist normalerweise NULL: dann folgt die Position automatisch
+        // der aktiven Revision. Ist sie gesetzt, bleibt die Position auf diesem Stand.
+        b.child_pinned_rev = b.child_rev_id
+          ? get('SELECT * FROM revisions WHERE id=?', [b.child_rev_id]) : null;
+        b.child_effective_rev = b.child_pinned_rev || b.child_active_rev;
+        b.rev_outdated = !!(b.child_pinned_rev && b.child_active_rev
+          && b.child_pinned_rev.id !== b.child_active_rev.id);
+        b.dev_hours = calcDevHours(b.child_item_id);
+      });
       rev.bom_std = all('SELECT bs.*, sp.designation, sp.name as sp_name, sp.material, sp.size, sp.unit_price, sp.standard, sp.std_number FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.parent_rev_id=? ORDER BY bs.position', [rev.id]);
     }
   });
@@ -1268,13 +1279,19 @@ app.get('/api/items/:id/where-used', (req, res) => {
     SELECT i.id, i.item_number, i.name, i.item_type, i.classification,
       r.id as rev_id, r.rev, r.status,
       p.id as project_id, p.number as project_number, p.name as project_name,
-      b.quantity, b.unit
+      b.quantity, b.unit, b.child_rev_id
     FROM bom b
     JOIN revisions r ON b.parent_rev_id = r.id
     JOIN items i ON r.item_id = i.id
     JOIN projects p ON i.project_id = p.id
     WHERE b.child_item_id = ?
     ORDER BY p.number, i.item_number, CAST(r.rev AS INTEGER)`, [req.params.id]);
+  // Auf welchen Stand ist diese Verwendung fixiert? NULL = folgt automatisch.
+  const active = getActiveRevision(req.params.id);
+  rows.forEach(r => {
+    r.pinned_rev = r.child_rev_id ? get('SELECT id, rev, status FROM revisions WHERE id=?', [r.child_rev_id]) : null;
+    r.rev_outdated = !!(r.pinned_rev && active && r.pinned_rev.id !== active.id);
+  });
   res.json(rows);
 });
 
@@ -1322,30 +1339,35 @@ app.get('/api/items/:id/graph', (req, res) => {
     return node;
   }
 
-  function addEdge(fromKey, toKey, quantity, unit) {
+  function addEdge(fromKey, toKey, quantity, unit, pinnedRev) {
     const sig = fromKey + '>' + toKey;
     if (edgeSeen.has(sig)) return;
     edgeSeen.add(sig);
-    edges.push({ from: fromKey, to: toKey, quantity: quantity ?? null, unit: unit || null });
+    edges.push({ from: fromKey, to: toKey, quantity: quantity ?? null,
+      unit: unit || null, pinned_rev: pinnedRev || null });
   }
 
   addItemNode(root, 0);
 
   // ── nach unten: BOM ──
-  (function walkDown(itemId, fromKey, depth, path) {
+  // useRevId: ist die Position auf eine Revision fixiert, wird deren
+  // Unterstueckliste aufgeklappt statt der aktuellsten.
+  (function walkDown(itemId, fromKey, depth, path, useRevId) {
     if (depth > down) { truncatedDown = true; return; }
     if (nodes.size >= MAX_NODES) { truncatedDown = true; return; }
-    const revId = latestRevId(itemId);
+    const revId = useRevId || latestRevId(itemId);
     if (!revId) return;
 
-    const kids = all(`SELECT b.quantity, b.unit, i.*
+    const kids = all(`SELECT b.quantity, b.unit, b.child_rev_id, i.*
       FROM bom b JOIN items i ON i.id=b.child_item_id
       WHERE b.parent_rev_id=? ORDER BY b.position`, [revId]);
     for (const k of kids) {
       if (path.includes(k.id)) continue;            // Zyklus
       const node = addItemNode(k, depth);
-      addEdge(fromKey, node.key, k.quantity, k.unit);
-      walkDown(k.id, node.key, depth + 1, path.concat(k.id));
+      const pin = k.child_rev_id
+        ? get('SELECT rev FROM revisions WHERE id=?', [k.child_rev_id]) : null;
+      addEdge(fromKey, node.key, k.quantity, k.unit, pin?.rev || null);
+      walkDown(k.id, node.key, depth + 1, path.concat(k.id), k.child_rev_id || null);
     }
 
     // Normteile sind Blaetter, keine Items
@@ -1363,9 +1385,9 @@ app.get('/api/items/:id/graph', (req, res) => {
           rev: null, status: null, project_number: null, is_root: false,
         });
       }
-      addEdge(fromKey, key, sp.quantity, sp.unit);
+      addEdge(fromKey, key, sp.quantity, sp.unit, null);
     }
-  })(rootId, 'i' + rootId, 1, [rootId]);
+  })(rootId, 'i' + rootId, 1, [rootId], null);
 
   // ── nach oben: Where-Used ──
   let historicUp = 0;
@@ -1373,7 +1395,7 @@ app.get('/api/items/:id/graph', (req, res) => {
     if (depth > up) { truncatedUp = true; return; }
     if (nodes.size >= MAX_NODES) { truncatedUp = true; return; }
 
-    const parents = all(`SELECT r.id as rev_id, r.item_id, b.quantity, b.unit
+    const parents = all(`SELECT r.id as rev_id, r.item_id, b.quantity, b.unit, b.child_rev_id
       FROM bom b JOIN revisions r ON b.parent_rev_id=r.id
       WHERE b.child_item_id=?`, [itemId]);
 
@@ -1383,7 +1405,9 @@ app.get('/api/items/:id/graph', (req, res) => {
       const prow = get('SELECT * FROM items WHERE id=?', [pr.item_id]);
       if (!prow) continue;
       const node = addItemNode(prow, -depth);
-      addEdge(node.key, toKey, pr.quantity, pr.unit);
+      const pin = pr.child_rev_id
+        ? get('SELECT rev FROM revisions WHERE id=?', [pr.child_rev_id]) : null;
+      addEdge(node.key, toKey, pr.quantity, pr.unit, pin?.rev || null);
       walkUp(pr.item_id, node.key, depth + 1, path.concat(pr.item_id));
     }
   })(rootId, 'i' + rootId, 1, [rootId]);
@@ -1569,6 +1593,13 @@ app.delete('/api/revisions/:id', (req, res) => {
   run('DELETE FROM datasets WHERE revision_id=?', [rev.id]);
   run('DELETE FROM print_settings WHERE revision_id=?', [rev.id]);
   run('DELETE FROM bom WHERE parent_rev_id=?', [rev.id]);
+  // Positionen, die auf genau diese Revision fixiert waren, fallen auf
+  // automatisch zurueck — sonst zeigte die Fixierung ins Leere.
+  const pinned = all('SELECT id FROM bom WHERE child_rev_id=?', [rev.id]);
+  if (pinned.length) {
+    run('UPDATE bom SET child_rev_id=NULL WHERE child_rev_id=?', [rev.id]);
+    log('revision', rev.id, 'BOM Revision', `${pinned.length} fixierte Position(en) auf automatisch zurückgesetzt`);
+  }
   run('DELETE FROM revisions WHERE id=?', [rev.id]);
   log('revision', rev.id, 'Gelöscht', `DFT Rev ${rev.rev} von Item ${rev.item_id}`);
   // If the previous revision is ECO, revert it back to REL
@@ -1605,10 +1636,14 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
 // BOM
 // ==============================================================
 app.post('/api/revisions/:revId/bom', (req, res) => {
-  const { child_item_id, quantity, unit, position, notes } = req.body;
+  const { child_item_id, quantity, unit, position, notes, child_rev_id } = req.body;
+  // Revision nur uebernehmen, wenn sie wirklich zu diesem Kind gehoert
+  const pin = child_rev_id
+    ? get('SELECT id FROM revisions WHERE id=? AND item_id=?', [child_rev_id, child_item_id])?.id || null
+    : null;
   try {
-    run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position,notes) VALUES (?,?,?,?,?,?)',
-      [req.params.revId, child_item_id, quantity || 1, unit || 'pcs', position || 999, notes || '']);
+    run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position,notes,child_rev_id) VALUES (?,?,?,?,?,?,?)',
+      [req.params.revId, child_item_id, quantity || 1, unit || 'pcs', position || 999, notes || '', pin]);
     log('revision', req.params.revId, 'BOM Add', 'Item ' + child_item_id + ' x' + (quantity || 1));
     res.json({ success: true });
   } catch (e) { res.status(400).json({ error: 'Already in BOM or invalid' }); }
@@ -1619,6 +1654,28 @@ app.put('/api/bom/:id/quantity', (req, res) => {
   run('UPDATE bom SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
   saveDb();
   res.json({ success: true });
+});
+
+// Revision einer Stuecklistenposition fixieren oder wieder automatisch folgen lassen.
+// rev_id = null/leer -> automatisch (Standard).
+app.put('/api/bom/:id/revision', (req, res) => {
+  const { rev_id } = req.body;
+  const bom = get('SELECT b.*, i.item_number FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.id=?', [req.params.id]);
+  if (!bom) return res.status(404).json({ error: 'Position nicht gefunden' });
+
+  if (rev_id == null || rev_id === '') {
+    run('UPDATE bom SET child_rev_id=NULL WHERE id=?', [bom.id]);
+    log('revision', bom.parent_rev_id, 'BOM Revision', `${bom.item_number}: folgt wieder automatisch`);
+    saveDb();
+    return res.json({ success: true, child_rev_id: null });
+  }
+
+  const target = get('SELECT * FROM revisions WHERE id=? AND item_id=?', [rev_id, bom.child_item_id]);
+  if (!target) return res.status(400).json({ error: 'Revision gehört nicht zu diesem Teil' });
+  run('UPDATE bom SET child_rev_id=? WHERE id=?', [target.id, bom.id]);
+  log('revision', bom.parent_rev_id, 'BOM Revision', `${bom.item_number}: fixiert auf rev${target.rev}`);
+  saveDb();
+  res.json({ success: true, child_rev_id: target.id, rev: target.rev, status: target.status });
 });
 
 app.put('/api/revisions/:revId/bom-reorder', (req, res) => {

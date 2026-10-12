@@ -650,6 +650,15 @@ function renderItemSheet(item, activeRevId) {
           ${_sheetCell('Normteilsumme', stdTotal ? fmtChf(stdTotal) : null, { mono: true })}
           ${_sheetCell('Gesamt', (bomTotal + stdTotal) ? fmtChf(bomTotal + stdTotal) : null, { mono: true })}
         </div>
+        ${(() => {
+          const pinned = bom.filter(x => x.child_pinned_rev);
+          const stale = pinned.filter(x => x.rev_outdated);
+          if (!pinned.length) return '';
+          return `<div style="font-size:13px;color:var(--t3);margin-top:7px">
+            🔒 ${pinned.length} Position${pinned.length === 1 ? '' : 'en'} auf eine feste Revision gesetzt${
+              stale.length ? ` · <span style="color:var(--amber)">${stale.length} davon nicht mehr aktuell</span>` : ''}
+          </div>`;
+        })()}
         ${priced.length < bom.length
           ? `<div style="font-size:13px;color:var(--amber);margin-top:7px">⚠ ${bom.length - priced.length} von ${bom.length} eigenen Teilen ohne Preis — Summe unvollständig.</div>`
           : ''}`;
@@ -792,6 +801,82 @@ async function saveItemNotes(itemId, el) {
     setTimeout(() => { el.style.borderColor = ''; }, 1200);
   } catch (e) {
     toast('Notiz konnte nicht gespeichert werden', 'err');
+  }
+}
+
+
+// ── REVISION EINER STUECKLISTENPOSITION WAEHLEN ───────────────
+// Standard ist "automatisch": die Position folgt immer der aktiven Revision.
+// Fixieren braucht man vor allem dort, wo ein realer Stand dokumentiert wird
+// (z.B. ein Fahrzeug, in dem noch die alte Revision verbaut ist).
+async function openBomRevPicker(bomId, childItemId, parentItemId, parentRevId) {
+  let child;
+  try { child = await api(`/api/items/${childItemId}`); }
+  catch { return toast('Teil konnte nicht geladen werden', 'err'); }
+
+  const revs = child.revisions || [];
+  if (!revs.length) return toast('Keine Revisionen vorhanden', 'err');
+
+  // aktuell fixierte Revision aus der Elternstückliste lesen
+  const parent = state.item && state.item.id === parentItemId ? state.item : null;
+  const prow = parent?.revisions?.find(r => r.id === parentRevId)?.bom?.find(x => x.id === bomId);
+  const pinnedId = prow?.child_rev_id || null;
+  const activeId = (prow?.child_active_rev || revs[0])?.id;
+
+  const row = (sel, label, sub, onclick, extra = '') => `
+    <div onclick="${onclick}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;
+      border:1px solid ${sel ? 'var(--blue)' : 'var(--line)'};border-radius:var(--r-sm);
+      background:${sel ? 'var(--blue-glow)' : 'var(--bg2)'};margin-bottom:6px"
+      onmouseover="if(!${sel})this.style.background='var(--bg3)'"
+      onmouseout="if(!${sel})this.style.background='var(--bg2)'">
+      <span style="width:14px;flex-shrink:0;color:var(--blue)">${sel ? '●' : '○'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--t1)">${label}</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:1px">${sub}</div>
+      </div>
+      ${extra}
+    </div>`;
+
+  const autoSub = activeId
+    ? `Aktuell: rev${revs.find(r => r.id === activeId)?.rev ?? '—'} — neue Revisionen werden automatisch übernommen`
+    : 'Neue Revisionen werden automatisch übernommen';
+
+  _showDynModal(`<div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <div class="modal-title" style="display:flex;align-items:center;gap:8px;min-width:0">
+        <span>Revision in der Stückliste</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(child.item_number)}</span>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+        ${esc(child.name)}
+      </div>
+      ${row(!pinnedId, 'Automatisch', autoSub, `_setBomRev(${bomId},null,${parentItemId})`,
+        '<span class="chip" style="flex-shrink:0">Standard</span>')}
+      <div class="sep-label">Fest auf Revision</div>
+      ${revs.map(r => row(pinnedId === r.id, `rev${esc(r.rev)}`,
+          esc(r.description || '—') + (r.released_at ? ' · freigegeben ' + fmtDate(r.released_at) : ''),
+          `_setBomRev(${bomId},${r.id},${parentItemId})`,
+          `<span class="status st-${r.status}" style="flex-shrink:0;font-size:11px">${r.status}</span>`
+          + (r.id === activeId ? '<span class="chip" style="flex-shrink:0;margin-left:5px">aktuell</span>' : ''))).join('')}
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+    </div>
+  </div>`);
+}
+
+async function _setBomRev(bomId, revId, parentItemId) {
+  _hideDynModal();
+  try {
+    await api(`/api/bom/${bomId}/revision`, 'PUT', { rev_id: revId });
+    toast(revId ? 'Revision fixiert' : 'Folgt wieder automatisch', 'ok');
+    const fresh = await api(`/api/items/${parentItemId}`);
+    state.item = fresh;
+    renderItemDetail(fresh, state.activeRevId);
+  } catch (e) {
+    toast('Konnte nicht gespeichert werden', 'err');
   }
 }
 
@@ -978,6 +1063,32 @@ function switchSTLViewer(revId, url) {
   initSTLViewer(canvasId, url);
 }
 
+// Revisionsanzeige einer Stuecklistenposition.
+// Ohne Fixierung folgt die Position automatisch der aktiven Revision —
+// das ist der Normalfall und wird schlicht dargestellt. Fixierte Positionen
+// bekommen ein Schloss, veraltete zusaetzlich eine Warnfarbe.
+function _bomRevBadge(b, locked, itemId, parentRevId) {
+  const eff = b.child_effective_rev || b.child_active_rev;
+  if (!eff) return '';
+  const pinned = !!b.child_pinned_rev;
+  const outdated = !!b.rev_outdated;
+  const newest = b.child_active_rev ? 'rev' + b.child_active_rev.rev : '—';
+
+  const title = pinned
+    ? (outdated
+        ? `Fest auf rev${eff.rev} — aktuell wäre ${newest}. Klicken zum Ändern.`
+        : `Fest auf rev${eff.rev}. Klicken zum Ändern.`)
+    : `Folgt automatisch der aktuellen Revision (${newest}). Klicken zum Fixieren.`;
+
+  const inner = `<span class="status st-${eff.status}" style="flex-shrink:0;font-size:11px">`
+    + `${pinned ? '🔒 ' : ''}rev${eff.rev}</span>`
+    + (outdated ? `<span style="font-size:10px;font-family:var(--mono);color:var(--amber);flex-shrink:0">↑${newest}</span>` : '');
+
+  if (locked) return `<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0" title="${esc(title)}">${inner}</span>`;
+  return `<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;cursor:pointer"
+    title="${esc(title)}" onclick="event.stopPropagation();openBomRevPicker(${b.id},${b.child_item_id},${itemId},${parentRevId})">${inner}</span>`;
+}
+
 function renderBomList(rev, item, locked) {
   const plmRows = (rev.bom||[]).map(b => ({ ...b, _std: false })).sort((a,b) => (a.position||999)-(b.position||999));
   const stdRows = (rev.bom_std||[]).map(b => ({ ...b, _std: true }));
@@ -995,7 +1106,7 @@ function renderBomList(rev, item, locked) {
       <span>${_itemChip(b.item_type,16)}</span>
       <span class="bom-num">${esc(b.item_number)}</span>
       <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</span>
-      ${b.child_active_rev ? `<span class="status st-${b.child_active_rev.status}" style="flex-shrink:0;font-size:11px">rev${b.child_active_rev.rev}</span>` : ''}
+      ${_bomRevBadge(b, locked, item.id, rev.id)}
       ${(b.dev_hours||0) > 0 ? `<span style="font-size:11px;font-family:var(--mono);color:var(--amber);flex-shrink:0" title="Entwicklungszeit">⏱ ${fmtN(b.dev_hours,2)} h</span>` : ''}
       ${locked
         ? `<span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>`

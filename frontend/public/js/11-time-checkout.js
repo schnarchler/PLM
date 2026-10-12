@@ -120,7 +120,8 @@ async function loadWhereUsed(itemId) {
       seen.set(r.id, entry);
       grouped.push(entry);
     }
-    seen.get(r.id).revs.push({ rev_id: r.rev_id, rev: r.rev, status: r.status, quantity: r.quantity, unit: r.unit });
+    seen.get(r.id).revs.push({ rev_id: r.rev_id, rev: r.rev, status: r.status,
+      quantity: r.quantity, unit: r.unit, pinned_rev: r.pinned_rev, rev_outdated: r.rev_outdated });
   }
 
   el.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">
@@ -134,11 +135,20 @@ async function loadWhereUsed(itemId) {
           <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${esc(g.project_number)}</span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;padding:5px 10px 8px;border-top:1px solid var(--line)">
-          ${g.revs.map(rv => `
-            <span class="status st-${rv.status}" style="font-size:11px;cursor:pointer" title="${fmtN(rv.quantity,0)} ${esc(rv.unit||'Stk')}"
-              onclick="openProjectAndItem(${g.project_id},${g.id},${rv.rev_id})">
-              rev${rv.rev}
-            </span>`).join('')}
+          ${g.revs.map(rv => {
+            // Welcher Stand dieses Teils steckt in dieser Verwendung?
+            const pin = rv.pinned_rev;
+            const title = `${fmtN(rv.quantity,0)} ${esc(rv.unit||'Stk')}`
+              + (pin ? ` · fest auf rev${pin.rev}${rv.rev_outdated ? ' (nicht mehr aktuell)' : ''}`
+                     : ' · folgt automatisch der aktuellen Revision');
+            return `<span style="display:inline-flex;align-items:center;gap:4px">
+              <span class="status st-${rv.status}" style="font-size:11px;cursor:pointer" title="${title}"
+                onclick="openProjectAndItem(${g.project_id},${g.id},${rv.rev_id})">
+                rev${rv.rev}
+              </span>
+              ${pin ? `<span style="font-size:10px;font-family:var(--mono);color:${rv.rev_outdated ? 'var(--amber)' : 'var(--t4)'}" title="${title}">🔒rev${esc(pin.rev)}</span>` : ''}
+            </span>`;
+          }).join('')}
           <span style="font-size:12px;color:var(--t4);align-self:center;margin-left:2px">${g.revs.length} Revision${g.revs.length > 1 ? 'en' : ''}</span>
         </div>
       </div>`).join('')}
