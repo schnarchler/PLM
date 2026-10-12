@@ -15,7 +15,7 @@ async function renderProjectsList() {
     : '';
   setLeftBody(`<div style="display:flex;flex-direction:column;gap:6px;max-width:860px">${projects.map(p => `
     <div onclick="openProject(${p.id})" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s" onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'">
-      <div style="width:38px;height:38px;border-radius:var(--r-sm);background:rgba(142,163,255,.1);border:1px solid rgba(142,163,255,.2);display:grid;place-items:center;flex-shrink:0">
+      <div style="width:38px;height:38px;border-radius:var(--r-sm);background:rgba(157,180,255,.1);border:1px solid rgba(157,180,255,.2);display:grid;place-items:center;flex-shrink:0">
         <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue)">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
       </div>
       <div style="flex:1;min-width:0">
@@ -125,7 +125,7 @@ function renderProjectTree(p) {
   setLeftBody(`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">
       <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${items.length} Items</span>
-      <button onclick="toggleBomFilter()" style="font-size:13px;padding:3px 9px;border-radius:var(--r-xs);cursor:pointer;font-family:var(--sans);border:1px solid ${filterOn?'rgba(142,163,255,.35)':'var(--line2)'};background:${filterOn?'rgba(142,163,255,.1)':'transparent'};color:${filterOn?'var(--blue)':'var(--t3)'}">
+      <button onclick="toggleBomFilter()" style="font-size:13px;padding:3px 9px;border-radius:var(--r-xs);cursor:pointer;font-family:var(--sans);border:1px solid ${filterOn?'rgba(157,180,255,.35)':'var(--line2)'};background:${filterOn?'rgba(157,180,255,.1)':'transparent'};color:${filterOn?'var(--blue)':'var(--t3)'}">
         BOM-Kinder ${filterOn?'ausgeblendet':'sichtbar'}${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
       </button>
     </div>
@@ -174,13 +174,13 @@ function _renderTreeNode(item, map, isRoot) {
   }).join('') : '';
   return `<div class="tree-node">
     <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}
-      style="${co ? 'background:rgba(106,208,214,.07);box-shadow:inset 2px 0 0 var(--teal);' : ''}">
+      style="${co ? 'background:rgba(121,221,227,.07);box-shadow:inset 2px 0 0 var(--teal);' : ''}">
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 20)}
       <span class="tree-num" style="font-size:13px">${item.item_number}</span>
       <span class="tree-name">${esc(item.name)}</span>
       ${item.classification ? _classChip(item.classification) : ''}
-      ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
+      ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(121,221,227,.12);border:1px solid rgba(121,221,227,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
       ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:11px">rev${rev.rev}</span>` : ''}
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" data-item-id="${item.id}" style="display:none">${childHtml}</div>` : ''}
@@ -227,12 +227,12 @@ function openProjectDetail(p) {
       return renderItemFiles(ci, depth + 1) + (qtyBadge ? `<div style="padding:0 0 2px ${28 + depth*16}px">${qtyBadge}</div>` : '');
     }).join('') : '';
     return `<div>
-      <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s;${co?'background:rgba(106,208,214,.07);box-shadow:inset 2px 0 0 var(--teal);':''}" onclick="openItemDetail(${item.id})" onmouseover="this.style.background='${co?'rgba(106,208,214,.12)':'var(--bg3)'}'" onmouseout="this.style.background='${co?'rgba(106,208,214,.07)':''}'" >
+      <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s;${co?'background:rgba(121,221,227,.07);box-shadow:inset 2px 0 0 var(--teal);':''}" onclick="openItemDetail(${item.id})" onmouseover="this.style.background='${co?'rgba(121,221,227,.12)':'var(--bg3)'}'" onmouseout="this.style.background='${co?'rgba(121,221,227,.07)':''}'" >
         ${hasKids ? `<span onclick="event.stopPropagation();const e=document.getElementById('${nid}');const open=e.style.display!=='none';e.style.display=open?'none':'';this.style.transform=open?'':'rotate(90deg)'" style="color:var(--t4);font-size:11px;transition:transform .15s;flex-shrink:0;cursor:pointer">▶</span>` : '<span style="width:11px;flex-shrink:0"></span>'}
         ${_itemChip(item.item_type, 18)}
         <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
         <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1)">${esc(item.name)}</span>
-        ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(106,208,214,.12);border:1px solid rgba(106,208,214,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
+        ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(121,221,227,.12);border:1px solid rgba(121,221,227,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
         ${rev ? `<span class="status st-${rev.status}" style="font-size:11px;flex-shrink:0">rev${rev.rev}</span>` : ''}
       </div>
       ${datasets.length ? `<div style="padding:2px 6px 4px ${28 + depth*16}px;display:flex;flex-direction:column;gap:2px">
@@ -396,7 +396,7 @@ function renderItemDetail(item, activeRevId) {
   const isDOC = item.item_type === 'doc';
   const typeLabel = isASM ? 'ASM' : isDOC ? 'DOC' : 'PRT';
   const typeColor = isASM ? 'var(--blue)' : isDOC ? 'var(--purple)' : 'var(--teal)';
-  const typeBg    = isASM ? 'rgba(142,163,255,.12)' : isDOC ? 'rgba(180,140,255,.12)' : 'rgba(106,208,214,.12)';
+  const typeBg    = isASM ? 'rgba(157,180,255,.12)' : isDOC ? 'rgba(196,162,255,.12)' : 'rgba(121,221,227,.12)';
   const editable = itemIsEditable(item);
   document.getElementById('dp-title').innerHTML =
     `<span style="font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
@@ -721,7 +721,7 @@ function renderBomList(rev, item, locked) {
       ${locked ? '' : `draggable="true" ondragstart="_bomStdDragStart(event)" ondragover="_bomDragOver(event)" ondrop="_bomStdDrop(event,${rev.id})" ondragend="_bomDragEnd()"`}>
       ${locked ? '' : '<span style="color:var(--t4);cursor:grab;padding:0 4px;font-size:13px;flex-shrink:0">⠿</span>'}
       <span style="color:var(--t4);font-size:12px;width:20px;text-align:right;flex-shrink:0">${plmRows.length + idx + 1}</span>
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0">N</span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(157,180,255,.15);color:var(--blue);flex-shrink:0">N</span>
       <span class="bom-num" style="color:var(--t2)">${esc(b.designation)}</span>
       <span style="flex:1;font-size:13px;color:var(--t3)">${b.material ? esc(b.material) : ''}</span>
       ${locked
@@ -739,7 +739,7 @@ function renderBomList(rev, item, locked) {
 
   const devSummary = totalDevHours > 0 ? (() => {
     const cost = hourlyRate > 0 ? totalDevHours * hourlyRate : null;
-    return `<div style="padding:7px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;font-size:13px;background:rgba(245,158,11,.05)">
+    return `<div style="padding:7px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;font-size:13px;background:rgba(245,192,97,.05)">
       <span style="color:var(--amber)">⏱</span>
       <span style="color:var(--t3)">Entwicklungszeit Total:</span>
       <span style="font-family:var(--mono);font-weight:600;color:var(--amber)">${fmtN(totalDevHours,2)} h</span>

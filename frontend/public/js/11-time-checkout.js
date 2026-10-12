@@ -25,7 +25,7 @@ async function loadTimeEntries(orderId) {
         <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(e.date)}</td>
         <td style="font-family:var(--mono);font-size:13px;font-weight:600">${fmtN(e.hours,2)} h</td>
         <td style="color:var(--t2)">${esc(e.description||'')}</td>
-        <td style="text-align:center"><span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(91,211,138,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
+        <td style="text-align:center"><span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(110,222,156,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
         <td style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-sm btn-icon" onclick="openTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
           <button class="btn btn-red btn-sm btn-icon" onclick="delTimeEntry(${e.id})">✕</button>
@@ -286,7 +286,7 @@ function openCheckoutModal(itemId, itemNumber, itemType, hasRel) {
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body">
-      ${isAsm ? `<div style="background:rgba(142,163,255,.08);border:1px solid rgba(142,163,255,.2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:14px;font-size:13px;color:var(--t2)">
+      ${isAsm ? `<div style="background:rgba(157,180,255,.08);border:1px solid rgba(157,180,255,.2);border-radius:var(--r-sm);padding:9px 12px;margin-bottom:14px;font-size:13px;color:var(--t2)">
         Baugruppe: alle Parts aus der BOM werden rekursiv mitgeladen, damit die CAD-Verlinkungen bestehen bleiben.
       </div>` : ''}
       <div style="font-size:13px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Revision</div>
@@ -365,7 +365,7 @@ function _showCheckoutResult(r) {
         <div style="font-size:13px;color:var(--t4);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Ordner</div>
         <div style="font-family:var(--mono);font-size:13px;color:var(--t1);word-break:break-all;user-select:all">${esc(r.folder)}</div>
       </div>
-      ${r.files.some(f=>f.readonly) ? `<div style="background:rgba(239,177,74,.08);border:1px solid rgba(239,177,74,.25);border-radius:var(--r-sm);padding:7px 10px;margin-bottom:10px;font-size:13px;color:var(--amber)">
+      ${r.files.some(f=>f.readonly) ? `<div style="background:rgba(245,192,97,.08);border:1px solid rgba(245,192,97,.25);border-radius:var(--r-sm);padding:7px 10px;margin-bottom:10px;font-size:13px;color:var(--amber)">
         🔒 Freigegebene Dateien (REL) sind schreibgeschützt kopiert worden.
       </div>` : ''}
       <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">

@@ -252,7 +252,7 @@ async function openQuoteDetail(id) {
       <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
         <span style="color:var(--t3)">${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h</span>
         <span style="font-family:var(--mono);font-weight:600;color:${q.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>
-        <span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${q.include_hours?'rgba(91,211,138,.12)':'var(--bg2)'};color:${q.include_hours?'var(--green)':'var(--t3)'}">${q.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
+        <span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${q.include_hours?'rgba(110,222,156,.12)':'var(--bg2)'};color:${q.include_hours?'var(--green)':'var(--t3)'}">${q.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
       </div>
       ${q.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
         <div style="text-align:right;font-size:13px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:

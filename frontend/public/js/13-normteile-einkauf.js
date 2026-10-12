@@ -28,7 +28,7 @@ async function renderNormteile() {
     <div class="sep-label" style="margin-top:12px">${esc(grp)}</div>
     ${items.map(p => `
       <div onclick="openNormteilDetail(${p.id})" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-        <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(142,163,255,.15);color:var(--blue);flex-shrink:0">N</span>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(157,180,255,.15);color:var(--blue);flex-shrink:0">N</span>
         <span style="flex:1;font-size:13px">${esc(p.designation)}</span>
         ${p.material ? `<span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${esc(p.material)}</span>` : ''}
         ${p.unit_price ? `<span style="font-size:11px;color:var(--t3);font-family:var(--mono)">${fmtChf(p.unit_price)}</span>` : ''}

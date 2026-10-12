@@ -97,7 +97,7 @@ function renderDeliveryItems(items, deliveryId) {
         </div>
         ${item.item_number?`<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${item.item_number}</span>`:''}
         <span style="font-size:13px;font-weight:500;flex:1">${esc(item.description)}</span>
-        ${item.rm_name?`<span style="font-size:11px;background:rgba(142,163,255,.12);color:var(--blue);border-radius:3px;padding:1px 6px;font-family:var(--mono);flex-shrink:0">${esc(item.rm_name)}</span>`:''}
+        ${item.rm_name?`<span style="font-size:11px;background:rgba(157,180,255,.12);color:var(--blue);border-radius:3px;padding:1px 6px;font-family:var(--mono);flex-shrink:0">${esc(item.rm_name)}</span>`:''}
         <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${item.unit}</span>
         ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">${fmtCHF(parseFloat(item.unit_price))}</span>`:''}
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="Kurzbeleg">🖶</button>
