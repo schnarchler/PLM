@@ -6,15 +6,45 @@ let editingProjectId = null;
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+// Farben zum schnellen Wiederfinden in der Projektliste — bewusst wenige,
+// damit sie unterscheidbar bleiben, und aus der Palette der App.
+const PROJECT_COLORS = [
+  { v: '',        name: 'ohne' },
+  { v: '#9db4ff', name: 'Blau' },
+  { v: '#79dde3', name: 'Türkis' },
+  { v: '#6ede9c', name: 'Grün' },
+  { v: '#f5c061', name: 'Amber' },
+  { v: '#ff8e8e', name: 'Rot' },
+  { v: '#c4a2ff', name: 'Violett' },
+  { v: '#9aa3b2', name: 'Grau' },
+];
+
+function _renderProjectColors(sel) {
+  const row = document.getElementById('pm-color-row');
+  if (!row) return;
+  row.innerHTML = PROJECT_COLORS.map(c => {
+    const on = (c.v || '') === (sel || '');
+    return `<button type="button" title="${esc(c.name)}" onclick="_pickProjectColor('${c.v}')"
+      style="width:26px;height:26px;border-radius:50%;cursor:pointer;flex-shrink:0;
+        background:${c.v || 'transparent'};
+        border:${c.v ? '2px solid ' + (on ? 'var(--t1)' : 'transparent') : '2px dashed var(--line3)'};
+        box-shadow:${on && c.v ? '0 0 0 2px var(--bg2), 0 0 0 3px ' + c.v : 'none'};
+        display:grid;place-items:center;color:var(--t4);font-size:13px">${c.v ? '' : (on ? '●' : '')}</button>`;
+  }).join('');
+  set('pm-color', sel || '');
+}
+function _pickProjectColor(v) { _renderProjectColors(v); }
+
 function openNewProjectModal() {
   editingProjectId = null;
   set('pm-name', ''); set('pm-desc', ''); set('pm-customer', '');
+  _renderProjectColors('');
   openModal('projectModal');
 }
 
 async function saveProject() {
   const name = V('pm-name'); if (!name) return toast('Name fehlt','err');
-  const body = { name, description: V('pm-desc'), customer: V('pm-customer') };
+  const body = { name, description: V('pm-desc'), customer: V('pm-customer'), color: V('pm-color') || null };
   if (editingProjectId) {
     await api(`/api/projects/${editingProjectId}`, 'PUT', body);
     toast('Projekt aktualisiert','ok');
@@ -30,6 +60,7 @@ async function editProject(id) {
   const p = await api(`/api/projects/${id}`);
   editingProjectId = id;
   set('pm-name',p.name); set('pm-desc',p.description); set('pm-customer',p.customer);
+  _renderProjectColors(p.color || '');
   openModal('projectModal');
 }
 

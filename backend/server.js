@@ -634,10 +634,50 @@ async function initDb() {
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
   try { db.run('ALTER TABLE inventory_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
   try { db.run('ALTER TABLE deliveries ADD COLUMN material_consumed INTEGER DEFAULT 0'); } catch {}
+  try { db.run('ALTER TABLE projects ADD COLUMN color TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE orders ADD COLUMN valid_until TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE orders ADD COLUMN origin_quote_number TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE quotes ADD COLUMN migrated_to_order_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
   try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE delivery_items ADD COLUMN order_item_id INTEGER REFERENCES order_items(id)'); } catch {}
   db.run(`INSERT OR IGNORE INTO counters VALUES ('rm_lot',0)`);
+
+  // Angebote sind keine eigene Sache mehr, sondern die erste Phase eines
+  // Auftrags. Bestehende Angebote wandern einmalig herueber und behalten ihre
+  // ANG-Nummer, damit gedruckte Belege zuordenbar bleiben. Bereits umgewandelte
+  // Angebote (ACCEPTED) haben schon einen Auftrag und werden uebersprungen.
+  migrateOnce('quotes-as-order-phase-v1', () => {
+    let moved = 0, skipped = 0;
+    // ACCEPTED heisst: das Angebot wurde schon in einen Auftrag umgewandelt,
+    // der Auftrag existiert also bereits. Kein zweiter Datensatz dafuer.
+    // ('SKIP' statt null, weil `null ?? 'QUOTE'` zu 'QUOTE' aufloesen wuerde.)
+    const STATUS = { DRAFT: 'QUOTE', SENT: 'QUOTE', ACCEPTED: 'SKIP', DECLINED: 'DECLINED' };
+    for (const q of all('SELECT * FROM quotes ORDER BY id')) {
+      const target = STATUS[q.status] || 'QUOTE';
+      if (target === 'SKIP') { skipped++; continue; }
+      if (get('SELECT 1 as y FROM orders WHERE number=?', [q.number])) { skipped++; continue; }
+      const oid = runGetId(`INSERT INTO orders
+        (number,customer_id,customer_name_free,title,status,notes,order_date,valid_until,
+         tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,origin_quote_number)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [q.number, q.customer_id, q.customer_name_free || null, q.title, target, q.notes || '',
+         q.quote_date || null, q.valid_until || null, q.tax_rate, q.discount_pct,
+         q.payment_terms || '', q.include_tax || 0, q.estimated_hours || 0, q.include_hours || 0, q.number]);
+      for (const qi of all('SELECT * FROM quote_items WHERE quote_id=? ORDER BY COALESCE(position,id),id', [q.id])) {
+        run(`INSERT INTO order_items
+          (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,position,
+           raw_material_id,estimated_hours,printer_name,estimated_print_hours)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [oid, qi.item_id, qi.description, qi.quantity, qi.unit, qi.unit_price, qi.discount_pct,
+           qi.notes || '', qi.position || null, qi.raw_material_id || null, qi.estimated_hours || null,
+           qi.printer_name || '', qi.estimated_print_hours || null]);
+      }
+      run('UPDATE quotes SET migrated_to_order_id=? WHERE id=?', [oid, q.id]);
+      moved++;
+    }
+    if (moved || skipped) console.log(`Migration Angebote -> Auftragsphase: ${moved} übernommen, ${skipped} übersprungen`);
+  });
 
   // Indizes auf Fremdschlüssel- und Filterspalten (idempotent)
   [
@@ -1128,10 +1168,11 @@ app.get('/api/projects', (req, res) => {
 });
 
 app.post('/api/projects', (req, res) => {
-  const { name, description, customer } = req.body;
+  const { name, description, customer, color } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const number = nextProjectNumber();
-  const id = runGetId('INSERT INTO projects (number,name,description,customer) VALUES (?,?,?,?)', [number, name, description||'', customer||'']);
+  const id = runGetId('INSERT INTO projects (number,name,description,customer,color) VALUES (?,?,?,?,?)',
+    [number, name, description||'', customer||'', color||null]);
   log('project', id, 'Created', number + ' - ' + name);
   res.json(get('SELECT * FROM projects WHERE id=?', [id]));
 });
@@ -1155,8 +1196,9 @@ app.get('/api/projects/:id', (req, res) => {
 });
 
 app.put('/api/projects/:id', (req, res) => {
-  const { name, description, customer } = req.body;
-  run("UPDATE projects SET name=?,description=?,customer=?,updated_at=datetime('now') WHERE id=?", [name, description, customer, req.params.id]);
+  const { name, description, customer, color } = req.body;
+  run("UPDATE projects SET name=?,description=?,customer=?,color=?,updated_at=datetime('now') WHERE id=?",
+    [name, description, customer, color||null, req.params.id]);
   log('project', req.params.id, 'Updated', name);
   res.json(get('SELECT * FROM projects WHERE id=?', [req.params.id]));
 });
@@ -2307,8 +2349,25 @@ app.put('/api/customers/:id', (req, res) => {
 });
 
 app.delete('/api/customers/:id', (req, res) => {
-  run('DELETE FROM customers WHERE id=?', [req.params.id]);
-  res.json({ success: true });
+  const c = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
+  if (!c) return res.status(404).json({ error: 'Nicht gefunden' });
+
+  // Belege duerfen ihren Kunden nicht verlieren: ohne Namen bleibt der
+  // Adressblock auf einer nachgedruckten Rechnung leer. Der Name wandert
+  // darum in das Freitextfeld, das es dafuer schon gibt.
+  const touched = {};
+  for (const t of ['orders', 'quotes', 'deliveries']) {
+    const rows = all(`SELECT id FROM ${t} WHERE customer_id=?`, [c.id]);
+    if (!rows.length) continue;
+    run(`UPDATE ${t} SET customer_name_free=COALESCE(NULLIF(customer_name_free,''), ?), customer_id=NULL WHERE customer_id=?`,
+      [c.name, c.id]);
+    touched[t] = rows.length;
+  }
+  run('DELETE FROM customers WHERE id=?', [c.id]);
+  const summary = Object.entries(touched).map(([t, n]) => `${n}× ${t}`).join(', ');
+  log('customer', c.id, 'Gelöscht', summary ? `Name übernommen in ${summary}` : 'ohne Belege');
+  saveDb();
+  res.json({ success: true, kept_name_in: touched });
 });
 
 // ==============================================================
@@ -2329,11 +2388,11 @@ app.get('/api/orders', (req, res) => {
 });
 
 app.post('/api/orders', (req, res) => {
-  const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, status } = req.body;
+  const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, status, valid_until } = req.body;
   if (!title) return res.status(400).json({ error: 'Title required' });
   const number = nextOrderNumber();
-  const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
+  const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
   res.json(get('SELECT * FROM orders WHERE id=?', [id]));
 });
 
@@ -2353,11 +2412,11 @@ app.get('/api/orders/:id', (req, res) => {
 });
 
 app.put('/api/orders/:id', (req, res) => {
-  const { customer_id, customer_name_free, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours } = req.body;
+  const { customer_id, customer_name_free, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, valid_until } = req.body;
   run(`UPDATE orders SET customer_id=?,customer_name_free=?,title=?,status=?,notes=?,order_date=?,delivery_date=?,
-    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,estimated_hours=?,include_hours=?,updated_at=datetime('now') WHERE id=?`,
+    valid_until=?,tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,estimated_hours=?,include_hours=?,updated_at=datetime('now') WHERE id=?`,
     [customer_id||null, customer_name_free||null, title, status, notes, order_date, delivery_date,
-     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, req.params.id]);
+     valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, req.params.id]);
   res.json(get('SELECT * FROM orders WHERE id=?', [req.params.id]));
 });
 
@@ -2559,6 +2618,17 @@ app.post('/api/quotes/:id/convert', (req, res) => {
 app.get('/api/dashboard', (req, res) => {
   const thisMonth = new Date().toISOString().slice(0, 7);
 
+  // Offene Angebote laufen als Auftragsphase QUOTE
+  const openQuotePhase = all(`
+    SELECT o.*, COALESCE(c.name, o.customer_name_free) as customer_name,
+      COUNT(oi.id) as item_count,
+      SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total
+    FROM orders o
+    LEFT JOIN customers c ON o.customer_id = c.id
+    LEFT JOIN order_items oi ON oi.order_id = o.id
+    WHERE o.status='QUOTE'
+    GROUP BY o.id ORDER BY o.number DESC`);
+
   // Open orders (DRAFT + CONFIRMED)
   const openOrders = all(`
     SELECT o.*, COALESCE(c.name, o.customer_name_free) as customer_name,
@@ -2578,7 +2648,7 @@ app.get('/api/dashboard', (req, res) => {
     FROM quotes q
     LEFT JOIN customers c ON q.customer_id = c.id
     LEFT JOIN quote_items qi ON qi.quote_id = q.id
-    WHERE q.status IN ('DRAFT','SENT')
+    WHERE q.status IN ('DRAFT','SENT') AND q.migrated_to_order_id IS NULL
     GROUP BY q.id ORDER BY q.id DESC`);
 
   // PLM items currently in REV (awaiting approval)
@@ -2676,7 +2746,8 @@ app.get('/api/dashboard', (req, res) => {
     }
   }
 
-  res.json({ openOrders, openQuotes, inReview, recentDeliveries, inProduction,
+  res.json({ openOrders, openQuotes: openQuotePhase.length ? openQuotePhase : openQuotes,
+    inReview, recentDeliveries, inProduction,
     revenueMonth: revMonth?.total || 0, revenueTotal: revTotal?.total || 0,
     dueSoon, quotesExpiring,
     rawMatCount, rawMatActive, rawMatValue });
@@ -3991,6 +4062,23 @@ app.get('/api/quotes/:id/quote-data', (req, res) => {
   const hrRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
   q.hourly_rate = hrRow ? parseFloat(hrRow.value) || 0 : 0;
   res.json(q);
+});
+
+// Angebotsdaten aus einem Auftrag in der Phase QUOTE. Gleiche Form wie
+// /api/quotes/:id/quote-data, damit der PDF-Renderer unveraendert bleibt.
+app.get('/api/orders/:id/order-quote-data', (req, res) => {
+  const o = get(`SELECT o.*,c.name as customer_name,c.email as customer_email,
+    c.street as customer_street,c.postal_code as customer_postal_code,
+    c.city as customer_city,c.country as customer_country,c.number as customer_number
+    FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
+  if (!o) return res.status(404).json({ error: 'Not found' });
+  o.quote_date = o.order_date;
+  o.positions = all('SELECT oi.*,i.item_number,i.item_type FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
+  attachSubItems(o.positions);
+  computeTotals(o);
+  const hrRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
+  o.hourly_rate = hrRow ? parseFloat(hrRow.value) || 0 : 0;
+  res.json(o);
 });
 
 // -- EXPORT (ZIP) ----------------------------------------------

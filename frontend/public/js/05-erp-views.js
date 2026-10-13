@@ -476,7 +476,11 @@ async function openOrderDetail(id) {
   state.orderDetailId = o.id;
   _trackRecent('order', o.id, o.title, o.number);
   _pushHistory({ view: 'orders', detailType: 'order', detailId: o.id });
-  document.getElementById('dp-title').innerHTML = `<strong>${o.number}</strong>&nbsp;${esc(o.title)}`;
+  document.getElementById('dp-title').innerHTML = `<strong>${o.number}</strong>&nbsp;${esc(o.title)}`
+    + (o.status === 'QUOTE' ? ` <span class="chip" style="margin-left:6px">Angebot${
+        o.valid_until ? ' · gültig bis ' + fmtD(o.valid_until) : ''}</span>` : '')
+    + (o.origin_quote_number && o.origin_quote_number !== o.number
+        ? ` <span class="chip" style="margin-left:4px" title="Ursprüngliche Angebotsnummer">${esc(o.origin_quote_number)}</span>` : '');
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'od-pos')">Positionen</button>
     <button class="tab" onclick="switchTab(this,'od-fert');loadOrderProduction(${id})">Fertigung${
@@ -536,10 +540,15 @@ async function openOrderDetail(id) {
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openOrderModal(${id})">✏️ Bearbeiten</button>
-        <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>
+        ${o.status === 'QUOTE'
+          ? `<button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'order-quote')">&#128196; Angebot PDF</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>`}
         <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Dublizieren</button>
-        <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🔧 Produktionsauftrag erstellen</button>
-        ${o.status==='DRAFT' ? `<button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>` : ''}
+        ${o.status === 'QUOTE'
+          ? `<button class="btn btn-primary btn-sm" onclick="acceptQuotePhase(${id})">✓ Angebot angenommen</button>
+             <button class="btn btn-ghost btn-sm" onclick="declineQuotePhase(${id})">Abgelehnt</button>`
+          : `<button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🔧 Produktionsauftrag erstellen</button>`}
+        ${(o.status==='DRAFT'||o.status==='QUOTE'||o.status==='DECLINED') ? `<button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>` : ''}
       </div>
     </div>
     <div id="od-time" style="display:none">
@@ -588,6 +597,33 @@ async function _doCreateDelivery(orderId) {
   openDeliveryDetail(d.id);
 }
 
+
+// ── ANGEBOTSPHASE ─────────────────────────────────────────────
+// Ein Angebot ist die erste Phase eines Auftrags. Angenommen heisst: weiter
+// zu "Bestätigt" — ohne neuen Datensatz und ohne Nummernwechsel.
+async function acceptQuotePhase(orderId) {
+  try {
+    await api(`/api/orders/${orderId}/status`, 'PUT', { status: 'CONFIRMED' });
+    toast('Angebot angenommen', 'ok');
+    const rec = (state.orders||[]).find(x => x.id === orderId);
+    if (rec) rec.status = 'CONFIRMED';
+    await renderOrders();
+    openOrderDetail(orderId);
+    loadStats();
+  } catch { toast('Status konnte nicht gesetzt werden', 'err'); }
+}
+
+async function declineQuotePhase(orderId) {
+  try {
+    await api(`/api/orders/${orderId}/status`, 'PUT', { status: 'DECLINED' });
+    toast('Als abgelehnt markiert', 'ok');
+    const rec = (state.orders||[]).find(x => x.id === orderId);
+    if (rec) rec.status = 'DECLINED';
+    await renderOrders();
+    openOrderDetail(orderId);
+    loadStats();
+  } catch { toast('Status konnte nicht gesetzt werden', 'err'); }
+}
 
 // ── FERTIGUNG IM AUFTRAG ──────────────────────────────────────
 // Der Produktionsauftrag bleibt ein eigener Datensatz (Belege und Historie

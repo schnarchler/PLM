@@ -14,14 +14,15 @@ async function renderProjectsList() {
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:${color}"><span style="font-family:var(--mono);font-weight:600">${val}</span><span style="color:var(--t4)">${label}</span></span>`
     : '';
   setLeftBody(`<div style="display:flex;flex-direction:column;gap:6px;max-width:860px">${projects.map(p => `
-    <div onclick="openProject(${p.id})" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s" onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'">
-      <div style="width:38px;height:38px;border-radius:var(--r-sm);background:rgba(157,180,255,.1);border:1px solid rgba(157,180,255,.2);display:grid;place-items:center;flex-shrink:0">
-        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--blue)">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
+    <div onclick="openProject(${p.id})" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'">
+      ${p.color ? `<span style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${esc(p.color)}"></span>` : ''}
+      <div style="width:38px;height:38px;border-radius:var(--r-sm);background:${p.color ? esc(p.color)+'1f' : 'rgba(157,180,255,.1)'};border:1px solid ${p.color ? esc(p.color)+'4d' : 'rgba(157,180,255,.2)'};display:grid;place-items:center;flex-shrink:0;margin-left:${p.color ? '4px' : '0'}">
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${p.color ? esc(p.color) : 'var(--blue)'}">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em">${esc(p.name)}</div>
         <div style="font-size:13px;color:var(--t3);margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${p.number}</span>
+          <span style="font-family:var(--mono);font-size:13px;color:${p.color ? esc(p.color) : 'var(--blue)'}">${p.number}</span>
           ${p.customer ? `<span style="color:var(--t3)">${esc(p.customer)}</span>` : ''}
         </div>
       </div>
@@ -55,7 +56,9 @@ async function openProject(id) {
   _pushHistory({ view: 'projects', detailType: 'project', detailId: p.id });
 
   setLeftHeader(
-    `<div class="breadcrumb"><span onclick="gotoView('projects')">Projekte</span><span class="sep">/</span><strong>${esc(p.name)}</strong><span class="chip" style="margin-left:6px">${p.number}</span></div>`,
+    `<div class="breadcrumb"><span onclick="gotoView('projects')">Projekte</span><span class="sep">/</span>${
+      p.color ? `<span style="width:9px;height:9px;border-radius:50%;background:${esc(p.color)};display:inline-block;margin-right:2px;flex-shrink:0"></span>` : ''
+    }<strong>${esc(p.name)}</strong><span class="chip" style="margin-left:6px${p.color ? ';border-color:'+esc(p.color)+'66;color:'+esc(p.color) : ''}">${p.number}</span></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'asm')">+ Baugruppe</button>
      <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'prt')">+ Part</button>
      <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'doc')">+ Dok</button>`
