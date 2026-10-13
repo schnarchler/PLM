@@ -3252,14 +3252,43 @@ app.post('/api/shutdown', (req, res) => {
   }, 500);
 });
 
-// Launcher-Seite: öffnet PLM per window.open() damit window.close() funktioniert
+// Launcher-Seite: oeffnet PLM per window.open(), damit sich das Fenster am Ende
+// ueber "Beenden" wieder schliessen laesst — window.close() wirkt nur bei
+// Fenstern, die ein Skript geoeffnet hat.
 app.get('/launcher', (req, res) => {
   res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PLM starten…</title>
-  <style>body{background:#15171c;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#99a1b0}</style>
-  </head><body><div>PLM & ERP wird gestartet…</div>
+  <style>
+    body{background:#15171c;display:flex;flex-direction:column;align-items:center;justify-content:center;
+         height:100vh;margin:0;gap:18px;padding:20px;text-align:center;
+         font-family:system-ui,-apple-system,sans-serif;color:#99a1b0}
+    button{background:#f4f6f8;color:#15171c;border:none;border-radius:7px;padding:10px 24px;
+           font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+    button:hover{background:#fff}
+    .hint{font-size:13px;color:#737b8a;max-width:34em;line-height:1.6}
+  </style>
+  </head><body>
+  <div id="msg">PLM &amp; ERP wird geöffnet…</div>
+  <div id="fallback" style="display:none;flex-direction:column;align-items:center;gap:14px">
+    <button type="button" id="openbtn">PLM &amp; ERP öffnen</button>
+    <div class="hint">Der Browser hat das automatische Öffnen blockiert.
+      Über diesen Knopf geöffnet, lässt sich das Fenster am Ende per „Beenden“ wieder schliessen.</div>
+  </div>
   <script>
-    var w = window.open('/', '_blank', 'width='+screen.availWidth+',height='+screen.availHeight+',left=0,top=0');
-    if(w) { window.close(); } else { window.location.href = '/'; }
+    function openApp() {
+      var w = window.open('/', '_blank', 'width=' + screen.availWidth + ',height=' + screen.availHeight + ',left=0,top=0');
+      if (w) { window.close(); return true; }
+      return false;
+    }
+    // Ohne Nutzerklick blockieren viele Browser window.open. Frueher wurde dann
+    // im selben Tab navigiert — dieser Tab laesst sich spaeter nicht schliessen.
+    // Darum lieber einen Knopf anbieten: der Klick macht das Oeffnen erlaubt.
+    if (!openApp()) {
+      document.getElementById('msg').textContent = 'Fast geschafft';
+      document.getElementById('fallback').style.display = 'flex';
+      document.getElementById('openbtn').addEventListener('click', function () {
+        if (!openApp()) window.location.href = '/';
+      });
+    }
   <\/script></body></html>`);
 });
 

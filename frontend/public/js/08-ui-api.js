@@ -177,12 +177,33 @@ async function _doShutdown(checkinFirst) {
   try { fetch('/api/shutdown', { method: 'POST', keepalive: true }); } catch {}
   // Seite sofort ersetzen — Server braucht ~500ms bis process.exit
   // Farben aus den Tokens — das Stylesheet bleibt geladen, nur body wird ersetzt
-  document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:var(--bg0);color:var(--t1);font-family:var(--sans);gap:16px">
+  document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:var(--bg0);color:var(--t1);font-family:var(--sans);gap:16px;text-align:center;padding:20px">
     <div style="font-size:36px;color:var(--t4)">■</div>
     <div style="font-size:17px;font-weight:600">PLM & ERP wurde beendet</div>
-    <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Der Server wurde gestoppt.</div>
-    <button onclick="window.close()" style="background:var(--bg2);border:1px solid var(--line2);color:var(--t1);padding:8px 20px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;font-family:var(--sans)">✕ Tab schliessen</button>
+    <div style="font-size:13px;color:var(--t3)">Der Server wurde gestoppt.</div>
+    <button id="plm-close-btn" style="background:var(--bg2);border:1px solid var(--line2);color:var(--t1);padding:8px 20px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;font-family:var(--sans)">✕ Tab schliessen</button>
+    <div id="plm-close-hint" style="display:none;font-size:13px;color:var(--t3);line-height:1.6;max-width:34em">
+      Dieser Tab lässt sich nicht per Knopf schliessen — das erlaubt der Browser nur
+      für Fenster, die er selbst geöffnet hat.<br>
+      Bitte mit <strong style="color:var(--t1);font-family:var(--mono)">Strg + W</strong>
+      schliessen (Mac: <strong style="color:var(--t1);font-family:var(--mono)">⌘ W</strong>).
+    </div>
   </div>`;
-  // Tab schliessen versuchen (funktioniert wenn Tab per Skript geöffnet wurde)
-  setTimeout(() => window.close(), 600);
+
+  // window.close() wirkt nur bei Fenstern, die per Skript geoeffnet wurden.
+  // Gelingt es nicht, bleiben wir auf der Seite — dann sagen wir, warum,
+  // statt einen Knopf stehen zu lassen, der nichts tut.
+  const tryClose = () => {
+    window.close();
+    setTimeout(() => {
+      if (!window.closed) {
+        const hint = document.getElementById('plm-close-hint');
+        const btn  = document.getElementById('plm-close-btn');
+        if (hint) hint.style.display = '';
+        if (btn)  { btn.disabled = true; btn.style.opacity = '.4'; btn.style.cursor = 'default'; }
+      }
+    }, 500);
+  };
+  document.getElementById('plm-close-btn')?.addEventListener('click', tryClose);
+  setTimeout(tryClose, 600);
 }
