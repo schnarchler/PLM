@@ -156,7 +156,72 @@ function getClassifications() {
 
 function _loadPlmTab() {
   _renderClassList(getClassifications());
+  _loadPlmPrefs();
 }
+
+// ── PLM-VOREINSTELLUNGEN: Workflow und Standard-Klassifizierung ──
+const WORKFLOW_MODES = [
+  { id: 'full', title: 'Mit Freigabe',
+    desc: 'DFT → REV → REL → ECO. Revisionen werden geprüft und freigegeben, '
+        + 'freigegebene Stände sind gesperrt. Neue Revisionen entstehen über einen ECO.' },
+  { id: 'simple', title: 'Ohne Freigabe',
+    desc: 'Alle Revisionen bleiben Entwurf (DFT) und bearbeitbar. Eine neue Revision '
+        + 'legst du direkt an — Dateien, Druckparameter und Stückliste werden übernommen. '
+        + 'Für die Arbeit allein, ohne Prüfschritt.' },
+];
+
+function _renderWorkflowOptions(current) {
+  const el = document.getElementById('st-wf-options');
+  if (!el) return;
+  el.innerHTML = WORKFLOW_MODES.map(m => {
+    const sel = m.id === current;
+    return `<div onclick="_pickWorkflow('${m.id}')" style="display:flex;gap:10px;padding:10px 12px;cursor:pointer;
+      border:1px solid ${sel ? 'var(--blue)' : 'var(--line)'};border-radius:var(--r-sm);
+      background:${sel ? 'var(--blue-glow)' : 'var(--bg2)'}">
+      <span style="color:var(--blue);flex-shrink:0">${sel ? '●' : '○'}</span>
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(m.title)}${m.id === 'full' ? ' <span class="chip" style="font-weight:400">Standard</span>' : ''}</div>
+        <div style="font-size:12.5px;color:var(--t3);margin-top:2px;line-height:1.5">${esc(m.desc)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _pickWorkflow(id) {
+  window._wfPick = id;
+  _renderWorkflowOptions(id);
+}
+
+function _loadPlmPrefs() {
+  const s = state.settings || {};
+  const list = getClassifications();
+  const opts = sel => '<option value="">—</option>'
+    + list.map(c => `<option value="${esc(c.name)}"${c.name === sel ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  const own = document.getElementById('st-class-own');
+  const bought = document.getElementById('st-class-bought');
+  if (own)    own.innerHTML    = opts(s.default_class_own || '');
+  if (bought) bought.innerHTML = opts(s.default_class_bought || '');
+  window._wfPick = s.workflow_mode === 'simple' ? 'simple' : 'full';
+  _renderWorkflowOptions(window._wfPick);
+}
+
+async function _savePlmPrefs() {
+  await api('/api/settings', 'PUT', {
+    default_class_own:    document.getElementById('st-class-own')?.value || '',
+    default_class_bought: document.getElementById('st-class-bought')?.value || '',
+    workflow_mode:        window._wfPick || 'full',
+  });
+  state.settings = await api('/api/settings');
+  const msg = document.getElementById('st-plmprefs-msg');
+  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2000); }
+  toast('Einstellungen gespeichert', 'ok');
+  if (state.item) renderItemDetail(state.item, state.activeRevId);
+}
+
+// Im einfachen Workflow gibt es kein REL — das PLM verhält sich an mehreren
+// Stellen anders. Eine Stelle für die Abfrage, damit es nicht auseinanderläuft.
+function simpleWorkflow() { return (state.settings?.workflow_mode || 'full') === 'simple'; }
+
 
 let _classDragIdx = null;
 
@@ -613,6 +678,20 @@ async function deleteRevision(revId, itemId) {
     openItemDetail(fresh.id);
   } catch(e) {
     toast(e.message || 'Fehler beim Löschen', 'err');
+  }
+}
+
+// Neue Revision ohne Freigabelauf — der Weg im einfachen Workflow.
+async function createNextRevision(itemId) {
+  try {
+    const rev = await api(`/api/items/${itemId}/revisions`, 'POST', {});
+    toast(`rev${rev.rev} angelegt`, 'ok');
+    const fresh = await api(`/api/items/${itemId}`);
+    state.item = fresh;
+    state.activeRevId = rev.id;
+    renderItemDetail(fresh, rev.id);
+  } catch (e) {
+    toast(e.message || 'Revision konnte nicht angelegt werden', 'err');
   }
 }
 

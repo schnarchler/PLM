@@ -504,3 +504,89 @@ async function moveDeliveryItem(itemId, deliveryId, direction) {
   document.getElementById('dd-pos').innerHTML = renderDeliveryItems(d.items||[], deliveryId) +
     `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${deliveryId})">+ Position</button>`;
 }
+
+// ── MATERIALVERBRAUCH BEIM ABSCHLIESSEN ───────────────────────
+// Rohmaterial wird in Spulen gefuehrt, der Verbrauch faellt in Gramm an.
+// Der Dialog zeigt beides und laesst die Menge korrigieren — abgebucht wird
+// nur, was hier bestaetigt wird.
+async function offerMaterialConsumption(deliveryId) {
+  let data;
+  try { data = await api(`/api/deliveries/${deliveryId}/material-usage`); }
+  catch { return; }
+  if (data.delivery.material_consumed) return;
+
+  const usable = (data.rows || []).filter(r => r.qty_to_deduct != null);
+  const unusable = (data.rows || []).filter(r => r.qty_to_deduct == null);
+  if (!usable.length && !unusable.length) return;   // keine Position mit Rohmaterial
+
+  window._matRows = usable;
+
+  const row = (r, i) => {
+    const lotOpts = (r.lots || []).map(l =>
+      `<option value="${esc(l.lot_number || '')}">${l.lot_number ? esc(l.lot_number) : '— ohne Lot —'} · Rest ${fmtN(l.remaining_qty, 2)} ${esc(r.unit)}</option>`).join('');
+    const short = r.qty_to_deduct > (parseFloat(r.stock_qty) || 0);
+    return `<div style="display:flex;flex-direction:column;gap:5px;padding:9px 11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:500;color:var(--t1);flex:1;min-width:0">${esc(r.description)}</span>
+        <span class="chip">${fmtN(r.quantity, 0)}×</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--t3)">
+        ${esc(r.raw_material_name)} · ${fmtN(r.grams_per_piece, 1)} g/Stück × ${fmtN(r.quantity, 0)}
+        = <strong style="color:var(--t2)">${fmtN(r.total_grams, 1)} g</strong>
+        <span style="color:var(--t4)">(Spule ${fmtN(r.spool_weight_g, 0)} g · Quelle: ${esc(r.source)})</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.6px">Abbuchen</span>
+        <input type="number" step="0.0001" min="0" value="${r.qty_to_deduct}" data-idx="${i}"
+          class="fi mat-qty" style="width:96px;font-family:var(--mono);font-size:13px;padding:3px 7px">
+        <span style="font-size:13px;color:var(--t3)">${esc(r.unit)}</span>
+        ${lotOpts ? `<select class="fs mat-lot" data-idx="${i}" style="max-width:230px;font-size:13px;padding:3px 7px">${lotOpts}</select>` : ''}
+        <span style="font-size:12px;color:${short ? 'var(--amber)' : 'var(--t4)'};margin-left:auto">
+          Bestand ${fmtN(r.stock_qty, 2)} ${esc(r.unit)}${short ? ' ⚠ reicht nicht' : ''}</span>
+      </div>
+    </div>`;
+  };
+
+  _showDynModal(`<div class="modal" style="max-width:640px">
+    <div class="modal-head"><div class="modal-title">Material abbuchen · ${esc(data.delivery.number)}</div></div>
+    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+      ${usable.length ? `<div style="font-size:13px;color:var(--t3);margin-bottom:12px">
+        Der Produktionsauftrag ist abgeschlossen. Diese Mengen werden vom Rohmaterial abgezogen —
+        Werte lassen sich vorher anpassen.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:7px">${usable.map(row).join('')}</div>` : ''}
+      ${unusable.length ? `<div class="sep-label">Nicht berechenbar</div>
+        <div style="font-size:12.5px;color:var(--t3)">
+          ${unusable.map(r => `${esc(r.description)} — ${esc(r.raw_material_name)}:
+            ${r.grams_per_piece == null ? 'kein Gewicht hinterlegt' : 'kein Spulengewicht am Rohmaterial'}`).join('<br>')}
+          <div style="margin-top:5px;color:var(--t4)">Diese Positionen bleiben unberührt und können im Lager von Hand gebucht werden.</div>
+        </div>` : ''}
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_skipMaterialConsumption(${deliveryId})">Nicht abbuchen</button>
+      ${usable.length ? `<button class="btn btn-primary" onclick="_doConsumeMaterial(${deliveryId})">Abbuchen</button>` : ''}
+    </div>
+  </div>`);
+}
+
+function _skipMaterialConsumption() { _hideDynModal(); }
+
+async function _doConsumeMaterial(deliveryId) {
+  const rows = window._matRows || [];
+  const qtyEls = [...document.querySelectorAll('.mat-qty')];
+  const lotEls = [...document.querySelectorAll('.mat-lot')];
+  const consumptions = qtyEls.map(el => {
+    const i = parseInt(el.dataset.idx);
+    const lot = lotEls.find(l => parseInt(l.dataset.idx) === i);
+    return { raw_material_id: rows[i].raw_material_id, qty: parseFloat(el.value) || 0, lot_number: lot ? lot.value : '' };
+  }).filter(c => c.qty > 0);
+
+  _hideDynModal();
+  try {
+    const r = await api(`/api/deliveries/${deliveryId}/consume-material`, 'POST', { consumptions });
+    toast(r.booked.length ? `${r.booked.length} Position(en) abgebucht` : 'Nichts abgebucht', 'ok');
+    if (typeof renderRawMaterials === 'function' && state.view === 'rawmaterials') renderRawMaterials();
+  } catch (e) {
+    toast(e.message || 'Abbuchen fehlgeschlagen', 'err');
+  }
+}

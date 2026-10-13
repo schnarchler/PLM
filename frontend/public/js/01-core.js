@@ -42,6 +42,9 @@ async function setDocStatus(type, id, status, el) {
       if (status === 'DELIVERED') { await renderOrders(); }
     }
     toast('Status gespeichert', 'ok');
+    // Beim Abschliessen das verbrauchte Rohmaterial anbieten — mit Dialog,
+    // damit Mengen und Lot vorher geprueft werden koennen.
+    if (type === 'delivery' && status === 'DELIVERED') offerMaterialConsumption(id);
     loadStats();
   } catch(e) {
     // Revert dropdown on failure

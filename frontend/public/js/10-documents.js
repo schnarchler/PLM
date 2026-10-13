@@ -537,6 +537,45 @@ async function generateDoc(id, type) {
   const w = window.open('', '_blank', 'width=900,height=700');
   w.document.write(html);
   w.document.close();
+
+  // Der Rechnungsdruck ist der Moment des Fakturierens — den Status danach
+  // von Hand nachzuziehen wird regelmaessig vergessen.
+  if (!isQuote) offerInvoicedStatus(id);
+}
+
+// Nach dem Rechnungsdruck anbieten, den Auftrag als fakturiert zu markieren.
+async function offerInvoicedStatus(orderId) {
+  const o = (state.orders || []).find(x => x.id === orderId)
+    || await api(`/api/orders/${orderId}`).catch(() => null);
+  if (!o || o.status === 'INVOICED' || o.status === 'CANCELLED') return;
+
+  _showDynModal(`<div class="modal" style="max-width:420px">
+    <div class="modal-head"><div class="modal-title">Rechnung erstellt</div></div>
+    <div class="modal-body" style="font-size:13px;color:var(--t2)">
+      Auftrag <strong style="font-family:var(--mono);color:var(--t1)">${esc(o.number || '')}</strong>
+      steht auf „${esc(ORDER_ST_LABEL[o.status] || o.status)}“.<br><br>
+      Soll er als <strong>fakturiert</strong> markiert werden?
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Später</button>
+      <button class="btn btn-primary" onclick="_markInvoiced(${orderId})">Als fakturiert markieren</button>
+    </div>
+  </div>`);
+}
+
+async function _markInvoiced(orderId) {
+  _hideDynModal();
+  try {
+    await api(`/api/orders/${orderId}/status`, 'PUT', { status: 'INVOICED' });
+    const rec = (state.orders || []).find(x => x.id === orderId);
+    if (rec) rec.status = 'INVOICED';
+    toast('Auftrag als fakturiert markiert', 'ok');
+    if (state.view === 'orders') await renderOrders();
+    else if (typeof openOrderDetail === 'function') openOrderDetail(orderId);
+    loadStats();
+  } catch (e) {
+    toast('Status konnte nicht gesetzt werden', 'err');
+  }
 }
 
 

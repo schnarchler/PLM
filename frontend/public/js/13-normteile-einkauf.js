@@ -532,11 +532,31 @@ async function openPoItemModal(poId) {
   document.getElementById('poi-unit').value = 'Stk';
   document.getElementById('poi-price').value = '';
   document.getElementById('poi-notes').value = '';
-  const [invItems, rawMats] = await Promise.all([api('/api/inventory').catch(() => []), api('/api/raw-materials').catch(() => [])]);
+  const [invItems, rawMats, stdParts] = await Promise.all([
+    api('/api/inventory').catch(() => []),
+    api('/api/raw-materials').catch(() => []),
+    api('/api/standard-parts').catch(() => []),
+  ]);
+  // Normteile, die ueber den Einkauf schon einen Lagerartikel haben, werden
+  // dort gefuehrt — sie doppelt anzubieten wuerde nur verwirren.
+  const linkedStd = new Set(invItems.map(i => i.std_part_id).filter(Boolean));
+  const freeStd = stdParts.filter(sp => !linkedStd.has(sp.id));
   document.getElementById('poi-link-id').innerHTML = '<option value="">— kein —</option>' +
     (invItems.length ? `<optgroup label="Lagerartikel">${invItems.map(i => `<option value="inv:${i.id}">${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join('')}</optgroup>` : '') +
-    (rawMats.length ? `<optgroup label="Rohmaterial">${rawMats.map(r => `<option value="rm:${r.id}">${esc(r.name)}${r.material_type?' · '+esc(r.material_type):''}${r.color?' · '+esc(r.color):''}</option>`).join('')}</optgroup>` : '');
+    (rawMats.length ? `<optgroup label="Rohmaterial">${rawMats.map(r => `<option value="rm:${r.id}">${esc(r.name)}${r.material_type?' · '+esc(r.material_type):''}${r.color?' · '+esc(r.color):''}</option>`).join('')}</optgroup>` : '') +
+    (freeStd.length ? `<optgroup label="Normteile">${freeStd.map(sp => `<option value="std:${sp.id}" data-desig="${esc(sp.designation||'')}" data-price="${sp.unit_price ?? ''}">${esc(sp.designation || sp.name)}</option>`).join('')}</optgroup>` : '');
   openModal('poItemModal');
+}
+
+// Bei Auswahl eines Normteils Bezeichnung und Preis vorbelegen, damit die
+// Position nicht noch einmal abgetippt werden muss.
+function onPoLinkChange(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !sel.value.startsWith('std:')) return;
+  const desc = document.getElementById('poi-desc');
+  const price = document.getElementById('poi-price');
+  if (desc && !desc.value.trim()) desc.value = opt.dataset.desig || opt.textContent.trim();
+  if (price && !price.value && opt.dataset.price) price.value = opt.dataset.price;
 }
 
 async function savePoItem() {
@@ -546,6 +566,7 @@ async function savePoItem() {
   const link = document.getElementById('poi-link-id').value;
   const invId = link.startsWith('inv:') ? link.slice(4) : null;
   const rmId  = link.startsWith('rm:')  ? link.slice(3) : null;
+  const stdId = link.startsWith('std:') ? link.slice(4) : null;
   await api(`/api/purchase-orders/${poId}/items`, 'POST', {
     description: desc,
     quantity: document.getElementById('poi-qty').value,
@@ -553,6 +574,7 @@ async function savePoItem() {
     unit_price: document.getElementById('poi-price').value || null,
     inventory_item_id: invId,
     raw_material_id: rmId,
+    std_part_id: stdId,
     notes: document.getElementById('poi-notes').value,
   });
   toast('Position hinzugefügt', 'ok');
