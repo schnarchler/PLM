@@ -116,6 +116,8 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - Angebot → Auftrag umwandeln
 - PLM-Items in Positionen verknüpfen
 - Lagerbestandsprüfung beim Abbuchen
+- **Fertigung im Auftrag**: Tab „Fertigung" im Auftragsdetail — Positionen, Rohmaterial,
+  Druckparameter, Lieferschein und Status ohne Wechsel in die Produktionsliste
 - **Status läuft mit**: Produktionsauftrag erzeugen bestätigt den Auftrag, der letzte
   gelieferte Produktionsauftrag setzt ihn auf „Geliefert", nach dem Rechnungsdruck
   wird „Fakturiert" angeboten
@@ -229,6 +231,23 @@ Baugruppen die es verwenden  ──►  [ Teil ]  ──►  Teile aus denen es 
   die Unterstückliste **dieser** Revision auf, nicht die der aktuellsten
 - Verwendungen, die nur in älteren Revisionen stehen, werden gezählt und
   in der Fußzeile gemeldet
+
+---
+
+## Fertigung im Auftrag
+
+Ein Produktionsauftrag bleibt ein eigener Datensatz mit eigener Nummer — Lieferscheine
+und Historie laufen unverändert weiter. Bearbeitet wird er aber im Auftrag:
+
+| Wo | Was |
+|---|---|
+| Auftrag → Tab **Fertigung** | Positionen, Rohmaterial, Druckparameter, Lieferschein, Status |
+| Mehrere Lose | als Unterreiter im selben Tab (Teillieferungen bleiben möglich) |
+| Navigation **Produktion** | zeigt standardmäßig nur **eigenständige** Fertigung ohne Auftrag |
+
+Der Auftrag gilt erst als geliefert, wenn alle seine Lose geliefert sind. Produktions-
+aufträge mit Auftragsbezug tragen in der Produktionsliste die Auftragsnummer und
+springen per Klick direkt in den Fertigung-Tab.
 
 ---
 

@@ -473,11 +473,14 @@ async function openOrderDetail(id) {
     api(`/api/time-entries?order_id=${id}`)
   ]);
   const rec = (state.orders||[]).find(x=>x.id===id); if (rec) Object.assign(rec, o);
+  state.orderDetailId = o.id;
   _trackRecent('order', o.id, o.title, o.number);
   _pushHistory({ view: 'orders', detailType: 'order', detailId: o.id });
   document.getElementById('dp-title').innerHTML = `<strong>${o.number}</strong>&nbsp;${esc(o.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'od-pos')">Positionen</button>
+    <button class="tab" onclick="switchTab(this,'od-fert');loadOrderProduction(${id})">Fertigung${
+      (o.deliveries||[]).length ? ` <span class="chip" style="margin-left:5px">${o.deliveries.length}</span>` : ''}</button>
     <button class="tab" onclick="switchTab(this,'od-info')">Details</button>
     <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>`;
   const items = o.items || [];
@@ -514,6 +517,9 @@ async function openOrderDetail(id) {
       ${orderHoursSection}
       ${_renderBillableTimeSection(timeEntries, o.tax_rate??0, o.discount_pct||0, !!o.include_tax, subtotal)}
       <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('order',${id})">+ Position</button>
+    </div>
+    <div id="od-fert" style="display:none">
+      <div id="od-fert-body"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
     </div>
     <div id="od-info" style="display:none">
       <div class="sep-label">Auftragsdaten</div>
@@ -573,9 +579,87 @@ async function _doCreateDelivery(orderId) {
   const include_time = cb ? cb.checked : false;
   _hideDynModal();
   const d = await api(`/api/orders/${orderId}/to-delivery`, 'POST', { include_time });
-  toast(`Produktionsauftrag ${d.number} erstellt`, 'ok');
+  toast(`Fertigungslos ${d.number} erstellt`, 'ok');
+  // Wurde die Fertigung aus dem Auftrag heraus gestartet, dort bleiben —
+  // der Wechsel in die Produktionsliste war genau der stoerende Schritt.
+  _fertLos[orderId] = d.id;
+  if (refreshOrderProductionIfOpen()) return;
   await renderDeliveries();
   openDeliveryDetail(d.id);
+}
+
+
+// ── FERTIGUNG IM AUFTRAG ──────────────────────────────────────
+// Der Produktionsauftrag bleibt ein eigener Datensatz (Belege und Historie
+// laufen weiter), wird aber hier bearbeitet. Kein Wechsel in die
+// Produktionsliste mehr. Mehrere Lose erscheinen als Unterreiter.
+let _fertLos = {};   // orderId -> gewähltes Los
+
+async function loadOrderProduction(orderId, losId) {
+  const host = document.getElementById('od-fert-body');
+  if (!host) return;
+  let o;
+  try { o = await api(`/api/orders/${orderId}`); }
+  catch { host.innerHTML = '<div style="color:var(--red);font-size:13px">Konnte nicht geladen werden.</div>'; return; }
+
+  const lose = o.deliveries || [];
+  // Zaehler im Reiter nachfuehren — so bleibt der Tab aktiv und die Seite
+  // muss nicht neu aufgebaut werden.
+  const tabBtn = document.querySelector('#dp-tabs button[onclick*="od-fert"]');
+  if (tabBtn) tabBtn.innerHTML = 'Fertigung'
+    + (lose.length ? ` <span class="chip" style="margin-left:5px">${lose.length}</span>` : '');
+
+  if (!lose.length) {
+    host.innerHTML = `<div class="empty" style="padding:28px 16px">
+      <div class="empty-text">Noch keine Fertigung angelegt</div>
+      <div style="font-size:13px;color:var(--t3);margin:6px 0 14px">
+        Die Positionen des Auftrags werden übernommen. Der Auftrag wird dabei bestätigt.
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${orderId})">🔧 Fertigung starten</button>
+    </div>`;
+    return;
+  }
+
+  const current = lose.find(l => l.id === (losId || _fertLos[orderId])) || lose[0];
+  _fertLos[orderId] = current.id;
+  const d = await api(`/api/deliveries/${current.id}`).catch(() => null);
+  if (!d) { host.innerHTML = '<div style="color:var(--red);font-size:13px">Los konnte nicht geladen werden.</div>'; return; }
+
+  const losTabs = lose.length > 1 ? `
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+      ${lose.map(l => `<button class="btn btn-sm ${l.id === current.id ? 'btn-primary' : 'btn-ghost'}"
+        onclick="loadOrderProduction(${orderId},${l.id})">${esc(l.number)}
+        <span style="opacity:.7;margin-left:4px">${l.item_count || 0}</span></button>`).join('')}
+      <button class="btn btn-ghost btn-sm" onclick="orderToDelivery(${orderId})" title="Weiteres Fertigungslos">＋</button>
+    </div>` : '';
+
+  host.innerHTML = `
+    ${losTabs}
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:12px">
+      <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</span>
+      ${_stSel('delivery', d.id, d.status)}
+      ${d.delivery_date ? `<span style="font-size:13px;color:var(--t3)">Liefertermin ${fmtD(d.delivery_date)}</span>` : ''}
+      ${d.material_consumed ? '<span class="chip" style="color:var(--green);border-color:var(--green-line)">Material abgebucht</span>' : ''}
+      <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${d.id})">&#128196; Lieferschein</button>
+        <button class="btn btn-ghost btn-sm" onclick="openDeliveryModal(${d.id})">✏️ Kopfdaten</button>
+        ${lose.length === 1 ? `<button class="btn btn-ghost btn-sm" onclick="orderToDelivery(${orderId})" title="Weiteres Fertigungslos">＋ Los</button>` : ''}
+      </div>
+    </div>
+    <div id="dd-pos">
+      ${renderDeliveryItems(d.items || [], d.id)}
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${d.id})">+ Position</button>
+    </div>`;
+}
+
+// Nach Änderungen an einem Los den Tab neu zeichnen, falls er offen ist.
+function refreshOrderProductionIfOpen() {
+  const pane = document.getElementById('od-fert');
+  if (!pane || pane.style.display === 'none') return false;
+  const id = state.orderDetailId;
+  if (!id) return false;
+  loadOrderProduction(id);
+  return true;
 }
 
 // ── SEARCH ────────────────────────────────────────────────────

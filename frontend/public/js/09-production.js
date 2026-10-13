@@ -7,14 +7,38 @@ const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'}
 
 let _deliveryFilter = { text:'', status:'', dateFrom:'', dateTo:'' };
 function _clearDeliveryFilter(){_deliveryFilter={text:'',status:'',dateFrom:'',dateTo:''};renderDeliveries();}
+let _deliveryShowLinked = false;
+function _setDeliveryScope(v) { _deliveryShowLinked = v; renderDeliveries(); }
+
+// Aus der Produktionsliste direkt in den Fertigung-Tab des Auftrags springen.
+async function openOrderFromProduction(orderId) {
+  await gotoView('orders');
+  await openOrderDetail(orderId);
+  showDetail();
+  document.querySelector('#dp-tabs button[onclick*="od-fert"]')?.click();
+}
+
 async function renderDeliveries() {
   setLeftHeader('Produktion', `<button class="btn btn-primary btn-sm" onclick="openDeliveryModal()">+ Produktionsauftrag</button>`);
   const rows = await api('/api/deliveries');
   state.deliveries = rows;
   if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Noch keine Produktionsaufträge</div></div>`); return; }
+  // Fertigung zu einem Auftrag wird im Auftrag selbst bearbeitet (Tab
+  // "Fertigung"). Diese Liste zeigt darum standardmaessig nur eigenstaendige
+  // Produktionsauftraege — sonst pflegt man dasselbe an zwei Stellen.
+  const linked = rows.filter(d => d.order_id).length;
   setLeftBody(_filterBar(_deliveryFilter,[['DRAFT','Entwurf'],['READY','Bereit'],['DELIVERED','Geliefert']],'_clearDeliveryFilter','_delivery')+
-    `<div class="tbl-wrap"><table>
-      <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Pos.</th><th>Status</th><th>Datum</th><th></th></tr></thead>
+    `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">
+      <button class="btn btn-sm ${_deliveryShowLinked ? 'btn-ghost' : 'btn-primary'}"
+        onclick="_setDeliveryScope(false)">Eigenständig</button>
+      <button class="btn btn-sm ${_deliveryShowLinked ? 'btn-primary' : 'btn-ghost'}"
+        onclick="_setDeliveryScope(true)">Alle${linked ? ` (${linked} zu Aufträgen)` : ''}</button>
+      <span style="color:var(--t4);font-size:12.5px">
+        Fertigung zu einem Auftrag bearbeitest du im Auftrag unter „Fertigung“.
+      </span>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Auftrag</th><th>Pos.</th><th>Status</th><th>Datum</th><th></th></tr></thead>
       <tbody id="_delivery-tbody"></tbody>
     </table></div>`);
   _render_deliveryRows();
@@ -24,6 +48,7 @@ function _render_deliveryRows() {
   const t = _deliveryFilter.text.toLowerCase(); const s = _deliveryFilter.status;
   const df = _deliveryFilter.dateFrom; const dt = _deliveryFilter.dateTo;
   const rows = (state.deliveries||[]).filter(d =>
+    (_deliveryShowLinked || !d.order_id) &&
     (!t || d.title.toLowerCase().includes(t) || (d.customer_name||'').toLowerCase().includes(t) || d.number.includes(t)) &&
     (!s || d.status === s) &&
     (!df || (d.delivery_date||'') >= df) &&
@@ -35,6 +60,11 @@ function _render_deliveryRows() {
     <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${d.number}</td>
     <td style="font-weight:500">${esc(d.title)}</td>
     <td style="color:var(--t2)">${d.customer_name||'—'}</td>
+    <td>${d.order_id
+      ? `<span style="font-family:var(--mono);font-size:12px;color:var(--blue);cursor:pointer"
+           onclick="event.stopPropagation();openOrderFromProduction(${d.order_id})"
+           title="Im Auftrag bearbeiten">${esc(d.order_number||'Auftrag')} ↗</span>`
+      : '<span style="color:var(--t4);font-size:12.5px">eigenständig</span>'}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.item_count||0}</td>
     <td>${_stSel('delivery',d.id,d.status)}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
@@ -42,7 +72,8 @@ function _render_deliveryRows() {
       <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Druckansicht">&#128196;</button>
       ${d.status === 'DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>` : ''}
     </td>
-  </tr>`).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
+  </tr>`).join('') || `<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">${
+    _deliveryShowLinked ? 'Keine Treffer' : 'Keine eigenständige Fertigung — alles hängt an Aufträgen.'}</td></tr>`;
 }
 
 async function openDeliveryDetail(id) {
