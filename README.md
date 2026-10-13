@@ -62,6 +62,13 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 Bei ECO: Dateien der freigegebenen Revision werden in die neue DFT-Revision kopiert.  
 Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
 
+**Ohne Freigabe arbeiten:** Unter **Einstellungen → PLM → Freigabe-Workflow** lässt sich
+auf den einfachen Modus umstellen. Dann bleiben alle Revisionen im Status DFT und
+bearbeitbar; statt „In Review“ steht dort **„＋ Neue Revision“**, die Dateien,
+Druckparameter und Stückliste der bisherigen Revision übernimmt. Für die Arbeit allein,
+ohne Prüfschritt. Bestehende freigegebene Revisionen bleiben unangetastet, und der
+ECO-Weg steht dort weiterhin zur Verfügung.
+
 ---
 
 ## Features
@@ -84,6 +91,12 @@ Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
   rechts die Teile aus denen es besteht (siehe unten)
 - **Revisionsstand in der Stückliste** – folgt standardmäßig automatisch der aktuellen
   Revision, pro Position optional fest fixierbar (siehe unten)
+- **Freigabe-Workflow abschaltbar** – unter Einstellungen → PLM wählbar zwischen
+  Freigabelauf (DFT → REV → REL → ECO) und einfachem Betrieb ohne Freigabe
+- **Druckparameter aus 3MF** – beim Hochladen einer `.3mf` an eine Revision werden
+  Schichthöhe, Füllung, Temperaturen, Material und Drucker automatisch übernommen
+- **Klassifizierung automatisch** – neue Teile werden anhand der Quelle als Eigen-
+  oder Kaufteil eingestuft (Vorgaben unter Einstellungen → PLM)
 - **Freie Notizen** pro Item – für alles was nicht in die Beschreibung gehört
 - **Where-Used** – zeigt alle Revisionen der Baugruppen in denen ein Teil verbaut ist,
   inklusive des Standes auf den die jeweilige Verwendung fixiert ist
@@ -103,11 +116,18 @@ Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
 - Angebot → Auftrag umwandeln
 - PLM-Items in Positionen verknüpfen
 - Lagerbestandsprüfung beim Abbuchen
+- **Status läuft mit**: Produktionsauftrag erzeugen bestätigt den Auftrag, der letzte
+  gelieferte Produktionsauftrag setzt ihn auf „Geliefert", nach dem Rechnungsdruck
+  wird „Fakturiert" angeboten
+- **Materialabzug beim Abschliessen** – verbrauchtes Rohmaterial wird beim Setzen auf
+  „Geliefert" vorgerechnet und nach Bestätigung vom Lot abgebucht (siehe unten)
 
 ### Einkauf / Bestellwesen
 - **Lieferantenverwaltung** (LF-0001) mit Kontakt, Adresse, verknüpften Lagerartikeln
 - **Einkaufsbestellungen** (EK-2026-001): ENTWURF → BESTELLT → ERHALTEN / STORNIERT
-- Positionen mit Menge, Einheit, Einzelpreis — verknüpfbar mit Lagerartikel oder Rohmaterial
+- Positionen mit Menge, Einheit, Einzelpreis — verknüpfbar mit Lagerartikel, Rohmaterial oder **Normteil**
+- Normteile: beim ersten Wareneingang wird automatisch ein Lagerartikel angelegt und
+  fest verknüpft — keine doppelte Pflege
 - **Bestellungs-PDF** direkt druckbar / an Lieferant sendbar
 - **Wareneingang**: automatische Einbuchung von Lagerartikel und Rohmaterial
 - Bei Rohmaterial: Lot-Nr.-Abfrage pro Material, wählbar ob gleiche oder individuelle Lot-Nr.
@@ -209,6 +229,27 @@ Baugruppen die es verwenden  ──►  [ Teil ]  ──►  Teile aus denen es 
   die Unterstückliste **dieser** Revision auf, nicht die der aktuellsten
 - Verwendungen, die nur in älteren Revisionen stehen, werden gezählt und
   in der Fußzeile gemeldet
+
+---
+
+## Materialabzug beim Abschliessen
+
+Rohmaterial wird in **Spulen** geführt (`stock_qty`), der Verbrauch fällt in **Gramm**
+an. Über `weight_g` (Gewicht einer vollen Spule) rechnet das System um:
+1840 g bei einer 1000-g-Spule sind 1.84 Stk.
+
+Wird ein Produktionsauftrag auf „Geliefert" gesetzt, erscheint eine Aufstellung der
+Positionen mit zugewiesenem Rohmaterial. Das Gewicht pro Stück kommt in dieser
+Reihenfolge:
+
+1. Filamentgewicht, das an der Produktionsposition erfasst wurde
+2. `filament_weight_total` aus den Druckparametern des verknüpften Teils
+3. hinterlegtes Teilegewicht
+
+Mengen und Lot sind im Dialog korrigierbar; Lots werden nach FIFO vorgeschlagen.
+Erst nach Bestätigung wird gebucht — „Nicht abbuchen" lässt alles unverändert.
+Positionen ohne Gewicht oder ohne Spulengewicht werden getrennt aufgeführt und
+bleiben unberührt. Pro Produktionsauftrag wird nur einmal abgebucht.
 
 ---
 
@@ -318,6 +359,9 @@ Schemaänderungen laufen beim Serverstart automatisch: `initDb()` legt **zuerst*
 eine Tageskopie unter `data/backups/` an, ergänzt dann fehlende Tabellen und
 Spalten und schreibt die Datei zurück. Der Vorgang ist idempotent, ein zweiter
 Start ändert nichts mehr.
+
+Neue Einstellungen (Freigabe-Workflow, Standard-Klassifizierung) starten auf den
+bisherigen Werten — es ändert sich nichts, bis du sie umstellst.
 
 Nach einem Update, das die Farbpalette betrifft, einmal
 **Einstellungen → Daten → Design zurücksetzen** drücken: die Farben der

@@ -182,6 +182,33 @@ async function renderSettings() {
           <button class="btn btn-primary btn-sm" onclick="_saveClassifications()">Speichern</button>
           <span id="st-class-msg" style="font-size:13px;color:var(--t3);margin-left:8px"></span>
         </div>
+
+        <div class="sep-label" style="margin-top:28px">Standard-Klassifizierung</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">
+          Neue Teile bekommen die Klassifizierung automatisch — abhängig davon, ob eine
+          Quelle bzw. ein Download-Link hinterlegt ist. „—“ lässt das Feld leer.
+        </div>
+        <div class="form-row cols2">
+          <div class="fg">
+            <label class="fl">Ohne Quelle (Eigenteil)</label>
+            <select class="fs" id="st-class-own"></select>
+          </div>
+          <div class="fg">
+            <label class="fl">Mit Quelle (Kaufteil)</label>
+            <select class="fs" id="st-class-bought"></select>
+          </div>
+        </div>
+
+        <div class="sep-label" style="margin-top:28px">Freigabe-Workflow</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">
+          Bestimmt, welche Schritte eine Revision durchläuft.
+        </div>
+        <div id="st-wf-options" style="display:flex;flex-direction:column;gap:6px;max-width:560px"></div>
+
+        <div style="margin-top:16px">
+          <button class="btn btn-primary btn-sm" onclick="_savePlmPrefs()">Speichern</button>
+          <span id="st-plmprefs-msg" style="font-size:13px;color:var(--t3);margin-left:8px"></span>
+        </div>
       </div>
 
       <!-- TAB: Daten -->

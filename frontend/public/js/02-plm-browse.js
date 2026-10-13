@@ -1233,15 +1233,25 @@ function renderRevDetail(rev, item) {
   const isASM = item.item_type === 'asm';
   const isDOC = item.item_type === 'doc';
   const locked = rev.status === 'REL' || rev.status === 'OBS' || rev.status === 'ECO';
-  const wfMap = {
+  // Im einfachen Workflow (Einstellungen → PLM) gibt es keine Freigabe:
+  // statt REV/REL legt man direkt die naechste Revision an.
+  const simple = typeof simpleWorkflow === 'function' && simpleWorkflow();
+  const wfMap = simple ? {
+    DFT: [{s:'_NEWREV',label:'＋ Neue Revision',cls:'btn-green'},{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
+    REV: [{s:'DFT',label:'← Zurück zu Entwurf',cls:'btn-ghost'}],
+    REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
+    ECO: [{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
+    OBS: []
+  } : {
     DFT: [{s:'REV',label:'→ In Review',cls:'btn-amber'}],
     REV: [{s:'DFT',label:'← Zurück zu Entwurf',cls:'btn-ghost'},{s:'REL',label:'✓ Freigeben',cls:'btn-green'}],
     REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
     ECO: [{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
     OBS: []
   };
-  const wfBtns = (wfMap[rev.status]||[]).map(b =>
-    `<button class="btn btn-sm ${b.cls}" onclick="openStatusModal(${rev.id},'${b.s}')">${b.label}</button>`).join('');
+  const wfBtns = (wfMap[rev.status]||[]).map(b => b.s === '_NEWREV'
+    ? `<button class="btn btn-sm ${b.cls}" onclick="createNextRevision(${item.id})">${b.label}</button>`
+    : `<button class="btn btn-sm ${b.cls}" onclick="openStatusModal(${rev.id},'${b.s}')">${b.label}</button>`).join('');
 
   return `
     <!-- Rev info -->
@@ -1297,7 +1307,7 @@ function renderRevDetail(rev, item) {
 
     <!-- Workflow -->
     <div class="wf-strip" style="margin-top:16px">
-      <div class="wf-label">Freigabe-Workflow</div>
+      <div class="wf-label">${simple ? 'Revisionen' : 'Freigabe-Workflow'}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${wfBtns || '<span style="color:var(--t3);font-size:13px">Keine weiteren Aktionen möglich</span>'}
       </div>

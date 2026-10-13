@@ -631,6 +631,9 @@ async function initDb() {
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN notes TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE bom ADD COLUMN child_rev_id INTEGER DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE purchase_order_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
+  try { db.run('ALTER TABLE inventory_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
+  try { db.run('ALTER TABLE deliveries ADD COLUMN material_consumed INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
   try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE delivery_items ADD COLUMN order_item_id INTEGER REFERENCES order_items(id)'); } catch {}
@@ -841,6 +844,39 @@ function readZipEntry(entry) {
   return null;
 }
 
+// Druckparameter aus einer 3MF-Datei in print_settings uebernehmen.
+// Slicer liefern Mehrfachwerte als "0.4;0.4" — davon zaehlt der erste.
+function _firstVal(v) {
+  if (v === undefined || v === null) return null;
+  const first = String(v).split(';')[0].trim();
+  return first === '' ? null : first;
+}
+function _num(v) {
+  const f = _firstVal(v);
+  if (f === null) return null;
+  const n = parseFloat(String(f).replace('%', '').replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+// Mapping Slicer-Schluessel -> print_settings-Spalten. Mehrere Kandidaten je
+// Spalte, weil PrusaSlicer, Orca und Bambu unterschiedlich benennen.
+function printSettingsFrom3mf(settings) {
+  const pick = (...keys) => { for (const k of keys) { const v = _firstVal(settings[k]); if (v) return v; } return null; };
+  const pickNum = (...keys) => { for (const k of keys) { const v = _num(settings[k]); if (v !== null) return v; } return null; };
+  const supportRaw = pick('support_material', 'enable_support');
+  return {
+    material:     pick('filament_type', 'filament_settings_id'),
+    color:        pick('filament_colour', 'filament_color'),
+    layer_height: pickNum('layer_height'),
+    infill:       pickNum('fill_density', 'sparse_infill_density'),
+    supports:     supportRaw === null ? null : (supportRaw === '1' || supportRaw.toLowerCase() === 'true' ? 1 : 0),
+    nozzle:       pickNum('nozzle_diameter'),
+    print_temp:   pickNum('temperature', 'nozzle_temperature'),
+    bed_temp:     pickNum('bed_temperature', 'hot_plate_temp'),
+    printer:      pick('printer_settings_id', 'printer_model'),
+  };
+}
+
 function parse3mfSettings(buffer) {
   try {
     const zip = new AdmZip(buffer);
@@ -954,6 +990,9 @@ function log(type, id, action, details) {
   saveDb();
 }
 
+// 'full'   = DFT → REV → REL → ECO → OBS (Standard)
+// 'simple' = ohne Freigabe: Revisionen bleiben DFT, neue Revision direkt anlegbar
+function workflowMode()     { return getSetting('workflow_mode','full') === 'simple' ? 'simple' : 'full'; }
 function itemSep()          { return getSetting('num_sep','-'); }
 function segAsm()           { return getSetting('seg_asm','asm'); }
 function segPrt()           { return getSetting('seg_prt','prt'); }
@@ -1220,8 +1259,13 @@ app.post('/api/projects/:projectId/items', (req, res) => {
     }
   }
 
-  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price) VALUES (?,?,?,?,?,?,?,?)',
-    [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null]);
+  // Klassifizierung ableiten statt abfragen: mit Quelle/Link ist es in aller
+  // Regel ein Kaufteil, ohne ein Eigenteil. Leere Einstellung = keine Zuordnung.
+  const derivedClass = req.body.classification
+    || getSetting(source_url ? 'default_class_bought' : 'default_class_own', '') || null;
+
+  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price,classification) VALUES (?,?,?,?,?,?,?,?,?)',
+    [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null, derivedClass]);
   run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Initial revision']);
   log('item', itemId, 'Created', item_type + ' ' + item_number + ' rev1');
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
@@ -1533,9 +1577,11 @@ app.put('/api/revisions/:id/status', (req, res) => {
     return res.status(400).json({ error: 'Cannot transition from ' + rev.status + ' to ' + status });
 
   if (status === 'REL') {
-    // For assemblies: all BOM children must have at least one REL revision
+    // For assemblies: all BOM children must have at least one REL revision.
+    // Im einfachen Workflow erreicht nie ein Teil den Status REL — die Pruefung
+    // waere dort nicht erfuellbar und wird uebersprungen.
     const item = get('SELECT * FROM items WHERE id=?', [rev.item_id]);
-    if (item && item.item_type === 'asm') {
+    if (item && item.item_type === 'asm' && workflowMode() === 'full') {
       const bomChildren = all('SELECT b.child_item_id FROM bom b WHERE b.parent_rev_id=?', [rev.id]);
       const unreleasedNames = [];
       for (const b of bomChildren) {
@@ -1576,6 +1622,60 @@ app.put('/api/revisions/:id/status', (req, res) => {
 
   log('revision', rev.id, 'Status -> ' + status, description || eco_reason || '');
   res.json(get('SELECT * FROM revisions WHERE id=?', [rev.id]));
+});
+
+// Neue Revision direkt anlegen — der Weg im einfachen Workflow, in dem es
+// kein REL und damit auch kein ECO gibt. Dateien und Druckparameter der
+// bisherigen Revision werden uebernommen, genau wie beim ECO.
+app.post('/api/items/:id/revisions', (req, res) => {
+  const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
+
+  const last = getLatestRevision(item.id);
+  if (last && (last.status === 'REL' || last.status === 'ECO')) {
+    return res.status(400).json({
+      error: 'Die aktuelle Revision ist freigegeben — bitte den ECO-Weg verwenden.' });
+  }
+
+  const newRev = nextRev(last ? last.rev : '0');
+  const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
+    [item.id, newRev, 'DFT', req.body?.description || '']);
+
+  if (last) {
+    // Dateien kopieren
+    for (const ds of all('SELECT * FROM datasets WHERE revision_id=?', [last.id])) {
+      try {
+        const ext = path.extname(ds.filename);
+        const newFile = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+        fs.copyFileSync(path.join(FILES_DIR, ds.filename), path.join(FILES_DIR, newFile));
+        const newName = (ds.original_name || '').replace(`_rev${last.rev}`, `_rev${newRev}`);
+        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
+          [newRevId, ds.ds_type, newFile, newName || ds.original_name, ds.file_size, ds.version, ds.notes]);
+      } catch (e) { console.error('Dataset-Kopie fehlgeschlagen:', e.message); }
+    }
+    // Druckparameter uebernehmen
+    const ps = get('SELECT * FROM print_settings WHERE revision_id=?', [last.id]);
+    if (ps) {
+      run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [newRevId, ps.material, ps.color, ps.layer_height, ps.infill, ps.supports, ps.nozzle,
+         ps.print_temp, ps.bed_temp, ps.printer, ps.notes, ps.printer_cost_hr, ps.filament_price_kg,
+         ps.filament_weight_total, ps.part_weight, ps.print_duration, ps.raw_material_id]);
+    }
+    // Stueckliste uebernehmen, inklusive fixierter Revisionen
+    for (const b of all('SELECT * FROM bom WHERE parent_rev_id=?', [last.id])) {
+      run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position,notes,child_rev_id) VALUES (?,?,?,?,?,?,?)',
+        [newRevId, b.child_item_id, b.quantity, b.unit, b.position, b.notes, b.child_rev_id]);
+    }
+    for (const b of all('SELECT * FROM bom_std_parts WHERE parent_rev_id=?', [last.id])) {
+      run('INSERT INTO bom_std_parts (parent_rev_id,std_part_id,quantity,unit,position,notes) VALUES (?,?,?,?,?,?)',
+        [newRevId, b.std_part_id, b.quantity, b.unit, b.position, b.notes]);
+    }
+  }
+
+  log('item', item.id, 'Neue Revision', `rev${newRev} angelegt`);
+  saveDb();
+  res.json(get('SELECT * FROM revisions WHERE id=?', [newRevId]));
 });
 
 app.delete('/api/revisions/:id', (req, res) => {
@@ -1625,7 +1725,10 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
     printer_cost_hr=excluded.printer_cost_hr, filament_price_kg=excluded.filament_price_kg,
     filament_weight_total=excluded.filament_weight_total, part_weight=excluded.part_weight,
     print_duration=excluded.print_duration, raw_material_id=excluded.raw_material_id`,
-    [rev.id, material, color, layer_height, infill, supports, nozzle, print_temp, bed_temp, printer, notes,
+    // Fehlende Felder als NULL binden — sql.js lehnt undefined ab, und ein
+    // Teil-Payload soll die Position nicht in einen Fehler laufen lassen.
+    [rev.id, material ?? null, color ?? null, layer_height ?? null, infill ?? null, supports ?? null,
+     nozzle ?? null, print_temp ?? null, bed_temp ?? null, printer ?? null, notes ?? null,
      printer_cost_hr||null, filament_price_kg||null, filament_weight_total||null, part_weight||null, print_duration||null,
      raw_material_id||null]);
   log('revision', rev.id, 'Druckparameter gespeichert', [material, printer].filter(Boolean).join(', '));
@@ -1721,6 +1824,28 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
   const id = runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
     [rev.id, dsType, req.file.filename, displayName, req.file.size, version || '1', finalNotes]);
   log('revision', rev.id, 'Dataset Added', displayName + ' (' + dsType + ')');
+
+  // 3MF enthaelt die Slicer-Konfiguration — Druckparameter automatisch
+  // uebernehmen, statt sie noch einmal von Hand einzutippen. Bereits
+  // gefuellte Felder bleiben unangetastet.
+  if (ext === '.3mf') {
+    try {
+      const parsed = parse3mfSettings(fs.readFileSync(path.join(FILES_DIR, req.file.filename)));
+      if (parsed.settings) {
+        const vals = printSettingsFrom3mf(parsed.settings);
+        const cur = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]);
+        const cols = Object.keys(vals).filter(k => vals[k] !== null && (!cur || cur[k] === null || cur[k] === ''));
+        if (cols.length) {
+          if (!cur) run('INSERT INTO print_settings (revision_id) VALUES (?)', [rev.id]);
+          run(`UPDATE print_settings SET ${cols.map(c => c + '=?').join(',')} WHERE revision_id=?`,
+            [...cols.map(c => vals[c]), rev.id]);
+          log('revision', rev.id, 'Druckparameter', `${cols.length} Werte aus ${displayName} übernommen`);
+        }
+      }
+    } catch (e) { console.error('3MF-Auswertung fehlgeschlagen:', e.message); }
+  }
+
+  saveDb();
   res.json(get('SELECT * FROM datasets WHERE id=?', [id]));
 });
 
@@ -3329,6 +3454,109 @@ function autoDeliverOrder(deliveryId) {
   }
 }
 
+// ── MATERIALVERBRAUCH EINES PRODUKTIONSAUFTRAGS ───────────────
+// Rohmaterial wird in Spulen (stock_qty) gefuehrt, der Verbrauch faellt in
+// Gramm an. weight_g ist das Gewicht einer vollen Spule — darueber wird
+// umgerechnet. Ohne weight_g ist keine Umrechnung moeglich.
+function _usedGramsPerPiece(di, item) {
+  // 1. Am Produktionsposten erfasstes Filamentgewicht
+  if (di.print_settings_json) {
+    try {
+      const o = JSON.parse(di.print_settings_json);
+      const raw = o._filament_weight ?? o.filament_weight ?? null;
+      if (raw != null) {
+        const n = parseFloat(String(raw).replace(/[^\d.,-]/g, '').replace(',', '.'));
+        if (Number.isFinite(n) && n > 0) return { grams: n, source: 'Produktionsposition' };
+      }
+    } catch {}
+  }
+  if (!item) return null;
+  // 2. Druckparameter der aktiven Revision des verknuepften Teils
+  const rev = getActiveRevision(item.id);
+  if (rev) {
+    const ps = get('SELECT filament_weight_total, part_weight FROM print_settings WHERE revision_id=?', [rev.id]);
+    const w = ps?.filament_weight_total ?? ps?.part_weight ?? null;
+    const n = w == null ? NaN : parseFloat(w);
+    if (Number.isFinite(n) && n > 0) return { grams: n, source: 'Druckparameter' };
+  }
+  // 3. Hinterlegtes Teilegewicht
+  const eff = getEffectiveWeight(item.id);
+  if (Number.isFinite(eff) && eff > 0) return { grams: eff, source: 'Teilegewicht' };
+  return null;
+}
+
+// Vorschlag berechnen — bucht nichts, zeigt nur was anfallen wuerde.
+app.get('/api/deliveries/:id/material-usage', (req, res) => {
+  const d = get('SELECT * FROM deliveries WHERE id=?', [req.params.id]);
+  if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
+
+  const rows = [];
+  for (const di of all('SELECT * FROM delivery_items WHERE delivery_id=? ORDER BY position', [d.id])) {
+    if (!di.raw_material_id) continue;
+    const mat = get('SELECT * FROM raw_materials WHERE id=?', [di.raw_material_id]);
+    if (!mat) continue;
+    const item = di.item_id ? get('SELECT * FROM items WHERE id=?', [di.item_id]) : null;
+    const per = _usedGramsPerPiece(di, item);
+    const qty = parseFloat(di.quantity) || 0;
+    const totalG = per ? per.grams * qty : null;
+    const spoolG = parseFloat(mat.weight_g) || 0;
+    const lots = all(`SELECT lot_number,
+        SUM(CASE WHEN type='in' THEN qty ELSE -qty END) as remaining_qty,
+        MAX(created_at) as last_date
+      FROM raw_material_movements
+      WHERE raw_material_id=? GROUP BY lot_number
+      HAVING remaining_qty > 0
+      ORDER BY MIN(created_at)`, [mat.id]);   // aelteste zuerst (FIFO)
+    rows.push({
+      delivery_item_id: di.id,
+      description: di.description,
+      quantity: qty,
+      raw_material_id: mat.id,
+      raw_material_name: mat.name,
+      unit: mat.unit || 'Stk',
+      spool_weight_g: spoolG || null,
+      grams_per_piece: per ? per.grams : null,
+      total_grams: totalG,
+      // Umrechnung in die Lagereinheit; ohne Spulengewicht nicht moeglich
+      qty_to_deduct: (totalG != null && spoolG > 0) ? +(totalG / spoolG).toFixed(4) : null,
+      source: per ? per.source : null,
+      stock_qty: mat.stock_qty,
+      lots,
+    });
+  }
+  res.json({
+    delivery: { id: d.id, number: d.number, status: d.status, material_consumed: !!d.material_consumed },
+    rows,
+  });
+});
+
+// Verbrauch buchen. Mengen kommen aus dem Dialog und sind dort korrigierbar.
+app.post('/api/deliveries/:id/consume-material', (req, res) => {
+  const d = get('SELECT * FROM deliveries WHERE id=?', [req.params.id]);
+  if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (d.material_consumed) return res.status(400).json({ error: 'Für diesen Produktionsauftrag wurde bereits Material abgebucht.' });
+
+  const list = Array.isArray(req.body?.consumptions) ? req.body.consumptions : [];
+  const booked = [];
+  for (const c of list) {
+    const qty = parseFloat(c.qty);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    const mat = get('SELECT * FROM raw_materials WHERE id=?', [c.raw_material_id]);
+    if (!mat) continue;
+    const newQty = Math.max(0, (parseFloat(mat.stock_qty) || 0) - qty);
+    run("UPDATE raw_materials SET stock_qty=?,updated_at=datetime('now') WHERE id=?", [newQty, mat.id]);
+    run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,lot_number) VALUES (?,?,?,?,?)',
+      [mat.id, qty, 'out', 'Verbrauch ' + d.number, c.lot_number || '']);
+    booked.push({ raw_material_id: mat.id, name: mat.name, qty, stock_qty: newQty });
+  }
+
+  run('UPDATE deliveries SET material_consumed=1 WHERE id=?', [d.id]);
+  log('delivery', d.id, 'Material abgebucht',
+    booked.length ? booked.map(b => `${b.name}: ${b.qty}`).join(', ') : 'keine Positionen');
+  saveDb();
+  res.json({ booked });
+});
+
 app.put('/api/deliveries/:id/status', (req, res) => {
   const { status } = req.body;
   if (status === 'DELIVERED') {
@@ -3675,6 +3903,13 @@ app.post('/api/orders/:id/to-delivery', (req, res) => {
         [id, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk',
          oi.unit_price||null, oi.notes||'', idx + 1, oi.id]);
     });
+    // Wer einen Produktionsauftrag erzeugt, hat den Auftrag faktisch bestaetigt.
+    // Den Status dafuer von Hand nachzuziehen ist eine Fehlerquelle.
+    if (o.status === 'DRAFT') {
+      run("UPDATE orders SET status='CONFIRMED',updated_at=datetime('now') WHERE id=?", [o.id]);
+      log('order', o.id, 'Bestätigt', 'automatisch beim Erzeugen von ' + number);
+    }
+
     if (req.body.include_time) {
       const hourlyRateRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
       const hourlyRate = parseFloat(hourlyRateRow?.value) || 0;
@@ -3957,6 +4192,27 @@ app.put('/api/purchase-orders/:id/status', (req, res) => {
     const items = all('SELECT * FROM purchase_order_items WHERE po_id=?', [req.params.id]);
     const poNum = get('SELECT number FROM purchase_orders WHERE id=?', [req.params.id])?.number || '';
     for (const item of items) {
+      // Normteile haben keinen eigenen Bestand. Beim ersten Wareneingang wird
+      // ein Lagerartikel angelegt und fest mit dem Normteil verknuepft — danach
+      // laeuft alles ueber den normalen Lagerweg, ohne doppelte Pflege.
+      if (item.std_part_id && item.quantity > 0 && !item.inventory_item_id) {
+        let inv = get('SELECT * FROM inventory_items WHERE std_part_id=?', [item.std_part_id]);
+        if (!inv) {
+          const sp = get('SELECT * FROM standard_parts WHERE id=?', [item.std_part_id]);
+          if (sp) {
+            const newId = runGetId(`INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,notes,std_part_id)
+              VALUES (?,?,?,?,0,0,?,?,?)`,
+              [sp.designation || sp.name || 'Normteil', 'Normteile', sp.std_number || '',
+               item.unit || 'Stk', sp.unit_price ?? null, 'Automatisch aus Einkauf angelegt', sp.id]);
+            inv = get('SELECT * FROM inventory_items WHERE id=?', [newId]);
+            log('inventory', newId, 'Erstellt', `Lagerartikel für Normteil ${sp.designation} aus ${poNum}`);
+          }
+        }
+        if (inv) {
+          run('UPDATE purchase_order_items SET inventory_item_id=? WHERE id=?', [inv.id, item.id]);
+          item.inventory_item_id = inv.id;
+        }
+      }
       if (item.inventory_item_id && item.quantity > 0) {
         run(`UPDATE inventory_items SET stock_qty=stock_qty+?,updated_at=datetime('now') WHERE id=?`, [item.quantity, item.inventory_item_id]);
         runGetId('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
@@ -3996,11 +4252,11 @@ app.delete('/api/purchase-orders/:id', (req, res) => {
 });
 
 app.post('/api/purchase-orders/:id/items', (req, res) => {
-  const { description, quantity, unit, unit_price, inventory_item_id, raw_material_id, notes } = req.body;
+  const { description, quantity, unit, unit_price, inventory_item_id, raw_material_id, std_part_id, notes } = req.body;
   if (!description) return res.status(400).json({ error: 'description required' });
   const pos = (get('SELECT MAX(position) as m FROM purchase_order_items WHERE po_id=?', [req.params.id])?.m || 0) + 1;
-  const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,raw_material_id,notes,position) VALUES (?,?,?,?,?,?,?,?,?)',
-    [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, raw_material_id||null, notes||'', pos]);
+  const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,raw_material_id,std_part_id,notes,position) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, raw_material_id||null, std_part_id||null, notes||'', pos]);
   res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [iid]));
 });
 
