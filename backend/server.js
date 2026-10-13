@@ -2345,6 +2345,10 @@ app.get('/api/orders/:id', (req, res) => {
   if (!o) return res.status(404).json({ error: 'Not found' });
   o.items = all('SELECT oi.*,i.item_number,i.item_type,i.default_price,i.weight_g FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
   o.items.forEach(li => { li.manufacturing_cost = calcLineItemCost(li) || null; });
+  // Fertigungslose zum Auftrag — damit der Fertigung-Tab ohne zweiten Request
+  // auskommt und man nicht in die Produktionsliste wechseln muss.
+  o.deliveries = all(`SELECT d.*, (SELECT COUNT(*) FROM delivery_items di WHERE di.delivery_id=d.id) as item_count
+    FROM deliveries d WHERE d.order_id=? ORDER BY d.id`, [o.id]);
   res.json(o);
 });
 
