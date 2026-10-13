@@ -97,12 +97,15 @@ cd /d "%PLM_DIR%"
 set "PLM_DATA_DIR=%PLM_DATA_DIR%"
 set "PLM_PORT=%PLM_PORT%"
 node server.js
-if %errorlevel% neq 0 (
-    echo.
-    echo  FEHLER: Server beendet sich mit Fehlercode %errorlevel%
-)
+set "PLM_EXIT=%errorlevel%"
 
-echo.
-echo  Server beendet. Druecke eine Taste zum Schliessen...
-pause
+:: Sauber beendet (auch per "Beenden" in der Oberflaeche) -> Fenster schliesst
+:: sich sofort. Nur bei einem Fehler stehen bleiben, damit die Meldung lesbar ist.
+if not "%PLM_EXIT%"=="0" (
+    echo.
+    echo  FEHLER: Server beendet sich mit Fehlercode %PLM_EXIT%
+    echo.
+    echo  Druecke eine Taste zum Schliessen...
+    pause >nul
+)
 exit
