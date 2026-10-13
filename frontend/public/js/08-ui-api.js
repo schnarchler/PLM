@@ -184,7 +184,7 @@ async function _doShutdown(checkinFirst) {
     <button id="plm-close-btn" style="background:var(--bg2);border:1px solid var(--line2);color:var(--t1);padding:8px 20px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;font-family:var(--sans)">✕ Tab schliessen</button>
     <div id="plm-close-hint" style="display:none;font-size:13px;color:var(--t3);line-height:1.6;max-width:34em">
       Dieser Tab lässt sich nicht per Knopf schliessen — das erlaubt der Browser nur
-      für Fenster, die er selbst geöffnet hat.<br>
+      für Tabs, die PLM selbst geöffnet hat (über den Starter).<br>
       Bitte mit <strong style="color:var(--t1);font-family:var(--mono)">Strg + W</strong>
       schliessen (Mac: <strong style="color:var(--t1);font-family:var(--mono)">⌘ W</strong>).
     </div>

@@ -3256,9 +3256,11 @@ app.post('/api/shutdown', (req, res) => {
   }, 500);
 });
 
-// Launcher-Seite: oeffnet PLM per window.open(), damit sich das Fenster am Ende
+// Launcher-Seite: oeffnet PLM per window.open(), damit sich der Tab am Ende
 // ueber "Beenden" wieder schliessen laesst — window.close() wirkt nur bei
-// Fenstern, die ein Skript geoeffnet hat.
+// Browsing-Kontexten, die ein Skript geoeffnet hat.
+// Ohne Feature-Liste (width/height/left/top) oeffnet der Browser einen TAB.
+// Sobald auch nur ein Feature gesetzt ist, erzwingt er ein Popup-Fenster.
 app.get('/launcher', (req, res) => {
   res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PLM starten…</title>
   <style>
@@ -3275,11 +3277,11 @@ app.get('/launcher', (req, res) => {
   <div id="fallback" style="display:none;flex-direction:column;align-items:center;gap:14px">
     <button type="button" id="openbtn">PLM &amp; ERP öffnen</button>
     <div class="hint">Der Browser hat das automatische Öffnen blockiert.
-      Über diesen Knopf geöffnet, lässt sich das Fenster am Ende per „Beenden“ wieder schliessen.</div>
+      Über diesen Knopf geöffnet, lässt sich der Tab am Ende per „Beenden“ wieder schliessen.</div>
   </div>
   <script>
     function openApp() {
-      var w = window.open('/', '_blank', 'width=' + screen.availWidth + ',height=' + screen.availHeight + ',left=0,top=0');
+      var w = window.open('/', '_blank');
       if (w) { window.close(); return true; }
       return false;
     }
