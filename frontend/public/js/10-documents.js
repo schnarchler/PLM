@@ -347,12 +347,17 @@ function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
 }
 
+// type: 'quote' (Angebot aus dem Archiv), 'order-quote' (Angebotsphase eines
+// Auftrags) oder 'invoice'. Die Angebotsvarianten liefern dieselbe Datenform,
+// deshalb reicht ein Renderer.
 async function generateDoc(id, type) {
-  const endpoint = type === 'quote' ? `/api/quotes/${id}/quote-data` : `/api/orders/${id}/invoice-data`;
+  const endpoint = type === 'quote' ? `/api/quotes/${id}/quote-data`
+    : type === 'order-quote' ? `/api/orders/${id}/order-quote-data`
+    : `/api/orders/${id}/invoice-data`;
   const d = await api(endpoint);
   const s = state.settings;
   const today = new Date().toLocaleDateString('de-CH');
-  const isQuote = type === 'quote';
+  const isQuote = type === 'quote' || type === 'order-quote';
   const docLabel = isQuote ? 'Angebot' : 'Rechnung';
   const color = '#1d4ed8';
 
@@ -540,7 +545,7 @@ async function generateDoc(id, type) {
 
   // Der Rechnungsdruck ist der Moment des Fakturierens — den Status danach
   // von Hand nachzuziehen wird regelmaessig vergessen.
-  if (!isQuote) offerInvoicedStatus(id);
+  if (type === 'invoice') offerInvoicedStatus(id);
 }
 
 // Nach dem Rechnungsdruck anbieten, den Auftrag als fakturiert zu markieren.

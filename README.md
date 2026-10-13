@@ -77,6 +77,8 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - Projekte mit konfigurierbarer Nummer (Standard 4-stellig)
 - Baugruppen (ASM), Parts (PRT) und Dokumente (DOC) mit sprechenden Nummern
 - Beliebige Hierarchietiefe (ASM in ASM)
+- **Projektfarben** – jedem Projekt eine Farbe geben; sie erscheint als Streifen in der
+  Liste, färbt die Nummernkachel und markiert das offene Projekt im Brotkrumenpfad
 - Revisionsverwaltung rev1, rev2, … (alle alten Revisionen bleiben erhalten)
 - Freigabe-Workflow: DFT → REV → REL → ECO → neue Rev
 - Stückliste (BOM) pro Revision – mehrere Positionen gleichzeitig hinzufügen (Warenkorb)
@@ -111,9 +113,11 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 ### ERP
 - Kundenverwaltung (KD-0001)
 - Kunde als Freitext eingeben möglich
-- Angebote mit PDF-Export und automatischer Kostenkalkulation
+- **Angebot als Auftragsphase** – ein Vorgang statt zwei Datensätze (siehe unten)
 - Aufträge mit Rechnungs-PDF inkl. Arbeitszeit als Position
-- Angebot → Auftrag umwandeln
+- Angebot annehmen heisst Phasenwechsel — gleiche Nummer, gleiche Positionen
+- **Kunde löschen behält die Belege**: der Name wandert ins Freitextfeld, Rechnungen
+  bleiben vollständig nachdruckbar
 - PLM-Items in Positionen verknüpfen
 - Lagerbestandsprüfung beim Abbuchen
 - **Fertigung im Auftrag**: Tab „Fertigung" im Auftragsdetail — Positionen, Rohmaterial,
@@ -231,6 +235,31 @@ Baugruppen die es verwenden  ──►  [ Teil ]  ──►  Teile aus denen es 
   die Unterstückliste **dieser** Revision auf, nicht die der aktuellsten
 - Verwendungen, die nur in älteren Revisionen stehen, werden gezählt und
   in der Fußzeile gemeldet
+
+---
+
+## Angebot als Auftragsphase
+
+Angebot, Auftrag und Produktionsauftrag waren drei Datensätze in drei Listen für
+denselben Vorgang. Das Angebot ist jetzt die erste **Phase** eines Auftrags:
+
+```
+Angebot ──► Bestätigt ──► Geliefert ──► Fakturiert
+   │
+   └──► Abgelehnt          Entwurf ──► Bestätigt   (Auftrag ohne vorheriges Angebot)
+```
+
+- Ein neuer Vorgang startet wahlweise als **Angebot** oder als **Entwurf**
+- In der Phase Angebot druckt der Beleg-Knopf das **Angebots-PDF**, sonst die Rechnung
+- „Angebot angenommen“ wechselt die Phase — **keine neue Nummer, kein neuer Datensatz,
+  Positionen bleiben stehen**
+- „Gültig bis“ erscheint nur in der Angebotsphase
+
+**Migration:** Beim ersten Start wandern bestehende Angebote automatisch in die neue
+Form. Sie behalten ihre ANG-Nummer, damit gedruckte Belege zuordenbar bleiben; die
+ursprüngliche Nummer steht zusätzlich im Feld `origin_quote_number`. Angebote, die
+bereits in einen Auftrag umgewandelt waren, werden übersprungen — ihr Auftrag existiert
+ja schon. Die alte Angebotstabelle bleibt als Archiv unverändert liegen.
 
 ---
 
@@ -409,5 +438,13 @@ cd backend
 npm test
 ```
 
-Startet den Server mit einer leeren Wegwerf-Datenbank und prüft die wichtigsten
-Abläufe (Aufträge, Preis-Sync Auftrag ↔ Produktion, Lagerbuchungen, Backups).
+36 Tests in drei Dateien:
+
+| Datei | Inhalt |
+|---|---|
+| `test/smoke.test.js` | Aufträge, Preis-Sync Auftrag ↔ Produktion, Lagerbuchungen, Backups |
+| `test/workflow.test.js` | Projektfarben, Klassifizierungs-Ableitung, 3MF-Druckparameter, Revisionsfixierung, einfacher Workflow, Normteil-Einkauf, Materialabzug, Angebotsphase, Kundenlöschung |
+| `test/frontend.test.js` | QR-Encoder (gegen die ISO-Referenzwerte), URL-Absicherung, Datenblatt, Stücklisten-Revisionsanzeige, Mindmap-Layout, Workflow-Umschaltung |
+
+Die ersten beiden starten den Server mit einer leeren Wegwerf-Datenbank, der dritte
+prüft reine Funktionen des Frontends ohne Server und ohne Browser.

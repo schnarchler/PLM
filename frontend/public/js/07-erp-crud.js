@@ -156,7 +156,16 @@ async function openOrderModal(id) {
     document.getElementById('om-include-hours').checked = false;
     document.getElementById('om-title').textContent='Neuer Auftrag';
   }
-  set('om-id',id||''); openModal('orderModal');
+  set('om-id',id||'');
+  _syncOrderQuoteFields();
+  document.getElementById('om-status')?.addEventListener('change', _syncOrderQuoteFields);
+  openModal('orderModal');
+}
+
+// "Gültig bis" gehoert nur zur Angebotsphase.
+function _syncOrderQuoteFields() {
+  const wrap = document.getElementById('om-valid-wrap');
+  if (wrap) wrap.style.display = document.getElementById('om-status')?.value === 'QUOTE' ? '' : 'none';
 }
 
 async function saveOrder() {
