@@ -1,4 +1,4 @@
-// 03-dashboard.js — Dashboard und Changelog
+// 03-dashboard.js — Dashboard und Historie
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── DASHBOARD ─────────────────────────────────────────────────
@@ -9,12 +9,7 @@ async function renderDashboard() {
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
   const [s, d, invItems] = await Promise.all([api('/api/stats'), api('/api/dashboard'), api('/api/inventory')]);
 
-  const ostCls   = {DRAFT:'st-DFT',CONFIRMED:'st-REV',DELIVERED:'st-REL',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
-  const ostLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
-  const qstCls   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
-  const qstLabel = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
-  const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
-  const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+  // Status-Wörter und -Farben aus 01-core.js (stBadge), damit sie überall gleich sind
   const stColors = {DFT:'var(--blue)',REV:'var(--amber)',REL:'var(--green)',ECO:'var(--purple)',OBS:'var(--t3)'};
   const itemIcon = t => _itemChip(t, 18);
 
@@ -35,7 +30,8 @@ async function renderDashboard() {
     </div>`;
 
   const confirmedOrders = d.openOrders.filter(o => o.status === 'CONFIRMED').length;
-  const sentQuotes = d.openQuotes.filter(q => q.status === 'SENT').length;
+  // Angebote sind Aufträge in der Phase „Angebot"
+  const expiringQuotes = (d.quotesExpiring || []).length;
   const invAlert = invCritical.length
     ? `<span style="color:var(--red)">${invCritical.length} kritisch</span>${invWarn.length ? ` · <span style="color:var(--amber)">${invWarn.length} Warnung</span>` : ''}`
     : invWarn.length ? `<span style="color:var(--amber)">${invWarn.length} auf Min.</span>` : '<span style="color:var(--green)">alles ok</span>';
@@ -52,8 +48,8 @@ async function renderDashboard() {
         <div style="font-size:13px;color:var(--t3);margin-top:6px">diesen Monat · <span style="color:var(--t2)">${fmtCHF(d.revenueTotal||0)} gesamt</span></div>
       </div>
       ${kpiTile('Aufträge', d.openOrders.length, confirmedOrders + ' bestätigt', 'var(--blue)', "gotoView('orders')")}
-      ${kpiTile('Angebote', d.openQuotes.length, sentQuotes + ' versendet', 'var(--teal)', "gotoView('quotes')")}
-      ${kpiTile('Lieferungen', activeDeliveries.length, 'aktiv offen', 'var(--amber)', "gotoView('deliveries')")}
+      ${kpiTile('Angebote', d.openQuotes.length, expiringQuotes ? expiringQuotes + ' laufen bald ab' : 'offen', 'var(--teal)', "gotoView('orders')")}
+      ${kpiTile('Produktion', activeDeliveries.length, 'nicht geliefert', 'var(--amber)', "gotoView('deliveries')")}
       ${kpiTile('Freigabe', d.inReview.length, 'warten auf REV', 'var(--purple)', '')}
       ${kpiTile('Lager', invLow.length || '—', invAlert, invCritical.length ? 'var(--red)' : invWarn.length ? 'var(--amber)' : 'var(--green)', "gotoView('inventory')")}
       ${kpiTile('Rohmaterial', d.rawMatActive + ' / ' + d.rawMatCount, d.rawMatValue > 0 ? fmtCHF(d.rawMatValue) + ' Warenwert' : '—', 'var(--teal)', "gotoView('rawmaterials')")}
@@ -65,8 +61,8 @@ async function renderDashboard() {
 
   // ── Aufträge ──
   const ordersHtml = d.openOrders.length ? d.openOrders.map(o => `
-    <div onclick="gotoView('orders')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <span class="status ${ostCls[o.status]||'st-DFT'}" style="flex-shrink:0">${ostLabel[o.status]||o.status}</span>
+    <div onclick="gotoView('orders');openOrderDetail(${o.id})" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      ${stBadge('order', o.status, 'flex-shrink:0')}
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.title)}</div>
         <div style="font-size:13px;color:var(--t3);margin-top:1px">${o.number} · ${esc(o.customer_name||'—')}${o.delivery_date?' · '+fmtD(o.delivery_date):''}</div>
@@ -79,8 +75,8 @@ async function renderDashboard() {
 
   // ── Angebote ──
   const quotesHtml = d.openQuotes.length ? d.openQuotes.map(q => `
-    <div onclick="gotoView('quotes')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <span class="status ${qstCls[q.status]||'st-DFT'}" style="flex-shrink:0">${qstLabel[q.status]||q.status}</span>
+    <div onclick="gotoView('orders');openOrderDetail(${q.id})" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      ${stBadge('order', q.status, 'flex-shrink:0')}
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
         <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}${q.valid_until?' · bis '+fmtD(q.valid_until):''}</div>
@@ -130,7 +126,7 @@ async function renderDashboard() {
     const daysLeft = Math.round((new Date(q.valid_until) - new Date(todayIso)) / 86400000);
     const color = daysLeft < 0 ? 'var(--red)' : daysLeft <= 3 ? 'var(--amber)' : 'var(--t3)';
     const label = daysLeft < 0 ? 'Abgelaufen' : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
-    return `<div onclick="gotoView('quotes');openQuoteDetail(${q.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+    return `<div onclick="gotoView('orders');openOrderDetail(${q.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
         <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}</div>
@@ -151,7 +147,7 @@ async function renderDashboard() {
   const prodHtml = Object.values(grouped).length ? Object.values(grouped).map(g => `
     <div style="border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:6px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3)">
-        <span class="status ${dstCls[g.status]||'st-DFT'}">${dstLabel[g.status]||g.status}</span>
+        ${stBadge('delivery', g.status)}
         <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${g.number}</span>
         <span style="font-size:13px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.customer||'—')}</span>
       </div>
@@ -195,7 +191,7 @@ async function renderDashboard() {
     </div>`;
   }).join('') : `<div style="display:flex;align-items:center;gap:8px;padding:10px;color:var(--green);font-size:13px">
     <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
-    Alle Artikel über Mindestbestand
+    Alle Lagerartikel über Mindestbestand
   </div>`;
 
   setLeftBody(`<div style="max-width:1100px;padding-bottom:24px">
@@ -252,24 +248,36 @@ async function renderDashboard() {
   </div>`);
 }
 
-// ── CHANGELOG ─────────────────────────────────────────────────
+// ── HISTORIE ──────────────────────────────────────────────────
 let _changelogRows = [];
+const HISTORY_TYPE_LABEL = { item: 'Item', revision: 'Revision', project: 'Projekt', order: 'Auftrag',
+  delivery: 'Produktionsauftrag', customer: 'Kunde', inventory: 'Lagerartikel', raw_material: 'Rohmaterial', settings: 'Einstellungen' };
 function exportChangelog() {
   if (!_changelogRows.length) { toast('Keine Daten zum Exportieren','warn'); return; }
   const header = ['Datum','Zeit','Typ','Referenz','Bezeichnung','Aktion','Details'];
   const csvRows = _changelogRows.map(r => {
-    const dt = r.created_at ? r.created_at.replace('T',' ').slice(0,19) : '';
-    const date = fmtD(dt.slice(0,10), ''); const time = dt.slice(11,16);
-    return [date, time, r.entity_type||'', r.ref||'', r.label||'', r.action||'', r.details||''];
+    const local = r.created_at ? parseDbDate(r.created_at) : null;
+    const date = local ? local.toLocaleDateString('de-CH', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
+    const time = local ? local.toLocaleTimeString('de-CH', { hour:'2-digit', minute:'2-digit' }) : '';
+    return [date, time, HISTORY_TYPE_LABEL[r.entity_type] || r.entity_type || '', r.ref||'', r.label||'', r.action||'', r.details||''];
   });
   const csv = [header, ...csvRows].map(row => row.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
-  a.download = 'changelog-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = 'historie-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
 }
+// Klick auf die Referenz öffnet den Datensatz, um den es geht
+function _historyOpen(r) {
+  if (r.item_id) return `gotoPlmItem(${r.item_id})`;
+  if (r.entity_type === 'project' && r.project_id) return `openProject(${r.project_id})`;
+  if (r.entity_type === 'order') return `gotoView('orders').then(()=>openOrderDetail(${r.entity_id}))`;
+  if (r.entity_type === 'delivery') return `gotoView('deliveries').then(()=>openDeliveryDetail(${r.entity_id}))`;
+  if (r.entity_type === 'customer') return `gotoView('customers').then(()=>openCustomerDetail(${r.entity_id}))`;
+  return '';
+}
 async function renderChangelog() {
-  setLeftHeader('Changelog', `
+  setLeftHeader('Historie', `
     <button class="btn btn-ghost btn-sm" onclick="renderChangelog()">↺ Aktualisieren</button>
     <button class="btn btn-ghost btn-sm" onclick="exportChangelog()">&#x2B07; CSV</button>`);
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
@@ -280,13 +288,15 @@ async function renderChangelog() {
     return;
   }
   const actionIcon = a => {
-    if (a.includes('Added') || a.includes('angelegt') || a.includes('Created')) return '✚';
-    if (a.includes('Deleted') || a.includes('gelöscht') || a.includes('Entfernt')) return '✕';
+    if (/hinzugefügt|angelegt|Erstellt|hochgeladen|Neue Revision/.test(a)) return '✚';
+    if (/gelöscht|entfernt/i.test(a)) return '✕';
     if (a.includes('Status')) return '⇄';
     if (a.includes('ECO')) return '⚡';
-    if (a.includes('BOM')) return '📋';
+    if (/Stand|fixiert/.test(a)) return '🔒';
+    if (/BOM|Stückliste/.test(a)) return '📋';
     if (a.includes('Druckparameter')) return '🖨';
-    if (a.includes('Updated') || a.includes('gespeichert')) return '✏';
+    if (a.includes('Sicherung')) return '💾';
+    if (/Geändert|gespeichert|umbenannt|korrigiert/.test(a)) return '✏';
     return '·';
   };
   const typeColor = t => ({item:'var(--blue)',revision:'var(--teal)',project:'var(--amber)'}[t]||'var(--t3)');
@@ -295,7 +305,7 @@ async function renderChangelog() {
   // Group by date
   const byDate = {};
   rows.forEach(r => {
-    const d = r.created_at ? r.created_at.split('T')[0].split(' ')[0] : '?';
+    const d = r.created_at ? parseDbDate(r.created_at).toLocaleDateString('sv-SE') : '?';   // JJJJ-MM-TT in Ortszeit
     (byDate[d] = byDate[d]||[]).push(r);
   });
 
@@ -308,12 +318,12 @@ async function renderChangelog() {
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>
-              ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${r.project_id?'openProject('+r.project_id+')':''}">${itemTypeIcon(r.item_type)} ${esc(r.ref)}</span>` : ''}
+              ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${_historyOpen(r)}">${r.item_type ? itemTypeIcon(r.item_type) : ({ project: '📁', order: '📋', delivery: '🚚', customer: '👤' }[r.entity_type] || '')} ${esc(r.ref)}</span>` : ''}
             </div>
             ${r.details ? `<div style="font-size:13px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${esc(r.details)}</div>` : ''}
             ${r.label ? `<div style="font-size:13px;color:var(--t2);margin-top:1px">${esc(r.label)}</div>` : ''}
           </div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--t3);flex-shrink:0;white-space:nowrap;margin-top:2px">${r.created_at ? new Date(r.created_at).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--t3);flex-shrink:0;white-space:nowrap;margin-top:2px">${r.created_at ? parseDbDate(r.created_at).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
         </div>`).join('')}
     </div>`).join('');
 

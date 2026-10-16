@@ -74,7 +74,14 @@ async function api(url, method='GET', body=null) {
 const V = id => document.getElementById(id)?.value||'';
 const set = (id,v) => { const el=document.getElementById(id); if(el) el.value=v??''; };
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const fmtDate = d => d ? new Date(d).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+// SQLite schreibt Zeitpunkte mit datetime('now') in UTC und ohne Zonenangabe
+// ("2026-10-16 07:34:12"). Der Browser läse das als Ortszeit — darum hier als
+// UTC kennzeichnen, sonst steht jede Uhrzeit um den UTC-Versatz zu früh da.
+const parseDbDate = d => {
+  const s = String(d || '');
+  return new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s) ? s.replace(' ', 'T') + 'Z' : s);
+};
+const fmtDate = d => d ? parseDbDate(d).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 // Nur Datum, TT.MM.JJJJ — string-basiert, damit ISO-Datumswerte nicht durch Zeitzonen verschoben werden
 const fmtD = (d, empty='—') => {
   const m = String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);

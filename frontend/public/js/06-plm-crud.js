@@ -1,4 +1,4 @@
-// 06-plm-crud.js — Projekt/Artikel CRUD, Revisionen, Datensätze, Stückliste, Druckeinstellungen
+// 06-plm-crud.js — Projekt/Item CRUD, Revisionen, Dateien, Stückliste, Druckeinstellungen
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── PROJECT CRUD ──────────────────────────────────────────────
@@ -123,7 +123,7 @@ async function saveAdminSettings() {
   _showDynModal(`<div class="modal" style="max-width:420px">
     <div class="modal-head"><div class="modal-title" style="color:var(--red)">⚠ Admin-Einstellungen speichern</div></div>
     <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2)">
-      Änderungen an Präfixen und Nummernformat gelten nur für <b>neu erstellte</b> Datensätze.<br><br>
+      Änderungen an Präfixen und Nummernformat gelten nur für <b>neu angelegte</b> Datensätze.<br><br>
       Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.<br><br>
       Wirklich speichern?
     </div>
@@ -185,9 +185,40 @@ function getClassifications() {
   return DEFAULT_CLASSIFICATIONS.map(c => ({...c}));
 }
 
-function _loadPlmTab() {
-  _renderClassList(getClassifications());
+// Verwendung je Klassifizierung (Anzahl Items) und Werte, die an Items
+// stehen, aber nicht in der Liste — beides vom Server
+let _classUsage = { usage: [], without: 0 };
+let _classRemovals = [];   // beim Speichern: [{ name, clear }]
+
+async function _loadPlmTab() {
+  _classRemovals = [];
+  _classUsage = await api('/api/classifications/usage').catch(() => ({ usage: [], without: 0 }));
+  _renderClassList(getClassifications().map(c => ({ ...c, orig: c.name })));
   _loadPlmPrefs();
+}
+function _classCount(name) {
+  const n = String(name || '').trim().toLowerCase();
+  return (_classUsage.usage || []).find(u => u.name.toLowerCase() === n)?.count || 0;
+}
+function _renderClassOrphans() {
+  const el = document.getElementById('st-class-orphans');
+  if (!el) return;
+  const inList = new Set(_getCurrentClassList().map(c => (c.orig || c.name).toLowerCase()));
+  const orphans = (_classUsage.usage || []).filter(u => !inList.has(u.name.toLowerCase())
+    && !_classRemovals.some(r => r.name.toLowerCase() === u.name.toLowerCase()));
+  el.innerHTML = orphans.length ? `
+    <div style="font-size:13px;color:var(--amber);margin-bottom:6px">An Items gesetzt, aber nicht in der Liste:</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${orphans.map(o => `
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 9px;border:1px dashed var(--line3);border-radius:12px;font-size:12px;color:var(--t2)">
+        <span style="font-family:var(--mono)">${esc(o.name)}</span><span style="color:var(--t4)">${o.count}</span>
+        <button class="btn btn-ghost btn-sm" style="padding:1px 7px" data-cls="${esc(o.name)}" onclick="_adoptClass(this.dataset.cls)">＋ übernehmen</button>
+      </span>`).join('')}</div>` : '';
+}
+function _adoptClass(name) {
+  const list = _getCurrentClassList();
+  if (list.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
+  list.push({ name, color: _NEUTRAL_CLASS_COLOR, orig: name });   // Items tragen den Namen schon
+  _renderClassList(list);
 }
 
 // ── PLM-VOREINSTELLUNGEN: Workflow und Standard-Klassifizierung ──
@@ -262,7 +293,9 @@ function _renderClassList(list) {
   el.innerHTML = list.map((c, i) => {
     const col = c.color || '#9aa3b2';
     const bg = col + '20'; // hex with 12% alpha approximation
-    return `<div class="cls-row" data-idx="${i}" draggable="true"
+    const used = c.orig ? _classCount(c.orig) : 0;
+    const renamed = c.orig && c.orig !== c.name;
+    return `<div class="cls-row" data-idx="${i}" data-orig="${esc(c.orig || '')}" draggable="true"
       style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);transition:opacity .15s">
       <span class="cls-handle" style="cursor:grab;color:var(--t4);font-size:16px;line-height:1;flex-shrink:0">⠿</span>
       <input type="color" class="cls-color" value="${col}" title="Farbe wählen"
@@ -270,9 +303,12 @@ function _renderClassList(list) {
         oninput="_onClassColorChange()">
       <span class="cls-preview" style="font-family:var(--mono);font-size:13px;padding:2px 8px;border-radius:3px;background:${bg};color:${col};flex-shrink:0">${esc(c.name)}</span>
       <input class="fi cls-name" value="${esc(c.name)}" style="flex:1;font-size:13px;padding:3px 7px;height:28px" oninput="_onClassNameInput(this)">
-      <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})">✕</button>
+      <span class="cls-used" style="font-size:12px;color:var(--t4);white-space:nowrap;flex-shrink:0" title="Items mit dieser Klassifizierung">${used ? used + ' Item' + (used === 1 ? '' : 's') : 'unbenutzt'}</span>
+      <span class="cls-renamed" style="font-size:12px;color:var(--amber);white-space:nowrap;flex-shrink:0;${renamed ? '' : 'display:none'}">war „${esc(c.orig || '')}"</span>
+      <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})" title="Aus der Liste entfernen">✕</button>
     </div>`;
   }).join('');
+  _renderClassOrphans();
 
   el.querySelectorAll('.cls-row').forEach(row => {
     row.addEventListener('dragstart', e => {
@@ -301,6 +337,9 @@ function _onClassNameInput(inp) {
   const row = inp.closest('.cls-row');
   const preview = row?.querySelector('.cls-preview');
   if (preview) preview.textContent = inp.value || '…';
+  // Hinweis, dass beim Speichern umbenannt wird
+  const hint = row?.querySelector('.cls-renamed');
+  if (hint) hint.style.display = row.dataset.orig && row.dataset.orig !== inp.value.trim() ? '' : 'none';
 }
 function _onClassColorChange() {
   const el = document.getElementById('st-class-list');
@@ -319,6 +358,7 @@ function _getCurrentClassList() {
   return [...el.querySelectorAll('.cls-row')].map(row => ({
     name:  row.querySelector('.cls-name')?.value.trim() || '',
     color: row.querySelector('.cls-color')?.value || '#9aa3b2',
+    orig:  row.dataset.orig || '',
   })).filter(c => c.name);
 }
 
@@ -327,26 +367,63 @@ function _addClass() {
   const val = inp?.value.trim();
   if (!val) return;
   const list = _getCurrentClassList();
-  if (list.some(c => c.name === val)) { toast('Bereits vorhanden', 'err'); return; }
-  list.push({ name: val, color: '#9db4ff' });
+  if (list.some(c => c.name.toLowerCase() === val.toLowerCase())) { toast('Bereits vorhanden', 'err'); return; }
+  // Steht der Name schon an Items, gilt er als übernommen statt neu
+  const known = (_classUsage.usage || []).find(u => u.name.toLowerCase() === val.toLowerCase());
+  list.push({ name: known ? known.name : val, color: '#9db4ff', orig: known ? known.name : '' });
   _renderClassList(list);
   inp.value = '';
   inp.focus();
 }
 
+// Entfernen eines benutzten Eintrags: fragen, ob die Items ihn behalten
 function _removeClass(idx) {
   const list = _getCurrentClassList();
-  list.splice(idx, 1);
+  const c = list[idx];
+  if (!c) return;
+  const used = c.orig ? _classCount(c.orig) : 0;
+  if (!used) { list.splice(idx, 1); _renderClassList(list); return; }
+  _showDynModal(`<div class="modal" style="max-width:440px">
+    <div class="modal-head"><div class="modal-title">Klassifizierung entfernen</div></div>
+    <div class="modal-body" style="font-size:13px;color:var(--t2);line-height:1.55">
+      „${esc(c.orig)}" ist an <strong>${used} Item${used === 1 ? '' : 's'}</strong> gesetzt. Was soll beim Speichern mit diesen Items passieren?
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-ghost" onclick="_confirmRemoveClass(${idx},false)">An den Items lassen</button>
+      <button class="btn btn-red" onclick="_confirmRemoveClass(${idx},true)">An den Items entfernen</button>
+    </div>
+  </div>`);
+}
+function _confirmRemoveClass(idx, clear) {
+  _hideDynModal();
+  const list = _getCurrentClassList();
+  const [c] = list.splice(idx, 1);
+  if (c?.orig) _classRemovals.push({ name: c.orig, clear });
   _renderClassList(list);
 }
 
 async function _saveClassifications() {
   const list = _getCurrentClassList();
-  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list) });
+  const lower = list.map(c => c.name.toLowerCase());
+  if (lower.some((n, i) => lower.indexOf(n) !== i)) { toast('Ein Name kommt doppelt vor', 'err'); return; }
+  // Umbenannte Einträge und „an den Items entfernen" gehen an die Items
+  const renames = [
+    ...list.filter(c => c.orig && c.orig !== c.name).map(c => ({ from: c.orig, to: c.name })),
+    ..._classRemovals.filter(r => r.clear).map(r => ({ from: r.name, to: '' })),
+  ];
+  let moved = 0;
+  if (renames.length) {
+    try { moved = (await api('/api/classifications/rename', 'POST', { renames })).renamed || 0; }
+    catch { return; }
+  }
+  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color }) => ({ name, color }))) });
   state.settings = await api('/api/settings');
   const msg = document.getElementById('st-class-msg');
-  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2000); }
-  toast('Klassifizierungen gespeichert', 'ok');
+  const text = moved ? `Gespeichert · ${moved} Item${moved === 1 ? '' : 's'} angepasst` : 'Gespeichert';
+  if (msg) { msg.textContent = text; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 3000); }
+  toast('Klassifizierungen gespeichert' + (moved ? ` · ${moved} Item${moved === 1 ? '' : 's'} angepasst` : ''), 'ok');
+  _loadPlmTab();
 }
 
 // ── DESIGN ZURUECKSETZEN ──────────────────────────────────────
@@ -406,9 +483,9 @@ function resetDesignColors() {
 
 async function _doResetDesignColors() {
   _hideDynModal();
-  const list = _classListForReset().map((c, i) => ({ name: c.name, color: _defaultColorFor(c.name, i) }));
+  const list = _classListForReset().map((c, i) => ({ name: c.name, color: _defaultColorFor(c.name, i), orig: c.orig || c.name }));
 
-  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list) });
+  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color }) => ({ name, color }))) });
   state.settings = await api('/api/settings');
   _renderClassList(list);
 
@@ -479,10 +556,11 @@ async function _loadDelTab() {
             ${_itemChip(i.item_type,15)}
             <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
+            ${i.delivered ? '<span class="chip" title="Wurde geliefert — der Nachweis in den Produktionsaufträgen verliert den Verweis">geliefert</span>' : ''}
             <span style="font-size:13px;color:var(--t3)">${esc(i.project_number||'')}</span>
             <button class="btn btn-red btn-sm" onclick="_forceDelItem(${i.id},'${esc(i.item_number)}')">Löschen</button>
           </div>`).join('')
-        : '<div style="font-size:13px;color:var(--t3)">Keine freigegebenen Items</div>';
+        : '<div style="font-size:13px;color:var(--t3)">Keine freigegebenen oder gelieferten Items</div>';
     }
   }
 
@@ -541,8 +619,8 @@ async function _loadDelTab() {
 }
 
 async function _forceDelItem(id, number) {
-  if (!confirm(`Item ${number} unwiderruflich löschen? Alle Revisionen und Dateien werden entfernt.`)) return;
-  await api(`/api/items/${id}`,'DELETE');
+  if (!confirm(`Item ${number} unwiderruflich löschen? Alle Revisionen und Dateien werden entfernt — auch wenn es schon geliefert wurde.`)) return;
+  await api(`/api/items/${id}?force=1`,'DELETE');
   toast(`${number} gelöscht`,'ok'); _loadDelTab();
 }
 
@@ -648,7 +726,13 @@ async function openEditItemModal(id) {
   set('eim-price', item.default_price != null ? item.default_price : '');
   set('eim-weight', item.weight_g != null ? item.weight_g : '');
   const clSel = document.getElementById('eim-classification');
-  clSel.innerHTML = '<option value="">— keine —</option>' + getClassifications().map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+  // Ein Wert, der nicht (mehr) in der Liste steht, bleibt wählbar — sonst ginge
+  // er beim Speichern stillschweigend verloren
+  const classNames = getClassifications().map(c => c.name);
+  const orphan = item.classification && !classNames.some(n => n.toLowerCase() === item.classification.toLowerCase());
+  clSel.innerHTML = '<option value="">— keine —</option>'
+    + classNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
+    + (orphan ? `<option value="${esc(item.classification)}">${esc(item.classification)} (nicht in der Liste)</option>` : '');
   clSel.value = item.classification || '';
   document.getElementById('eim-title').textContent = 'Bearbeiten: ' + item.item_number;
   openModal('editItemModal');
@@ -731,7 +815,7 @@ const statusHints = {
   REV: 'Revision wird zur Prüfung eingereicht.',
   DFT: 'Revision zurück auf Entwurf setzen.',
   REL: 'Revision freigeben. Alle vorherigen REL-Revisionen werden auf OBS gesetzt.',
-  ECO: 'Engineering Change Order starten. Die aktuelle Revision wird gesperrt (ECO). Eine neue DFT-Revision wird automatisch angelegt.',
+  ECO: 'Änderung (ECO) starten. Die aktuelle Revision wird gesperrt (ECO). Eine neue DFT-Revision wird automatisch angelegt und übernimmt Dateien, Stückliste und Druckparameter.',
   OBS: 'Revision als veraltet markieren.'
 };
 
@@ -742,7 +826,7 @@ async function openStatusModal(revId, targetStatus) {
     if (state.item.default_price == null) warnings.push('Kein Verkaufspreis (VP) hinterlegt');
     if (state.item.weight_g == null)      warnings.push('Kein Gewicht hinterlegt');
     const rev = state.item.revisions?.find(r => r.id === revId);
-    if (!rev?.datasets?.length)           warnings.push('Keine Dateien (Datasets) hochgeladen');
+    if (!rev?.datasets?.length)           warnings.push('Keine Dateien hochgeladen');
     if (warnings.length) {
       const proceed = await _showReleaseWarning(warnings);
       if (!proceed) return;
@@ -807,7 +891,7 @@ function openUploadModal(revId, itemNumber, rev) {
   document.getElementById('upInput').value='';
   // Show auto-rename hint
   const hint = document.getElementById('up-rename-hint');
-  if (hint) hint.textContent = itemNumber ? 'Dateien werden umbenannt zu: ' + itemNumber + '_Rev' + rev + '_NNN.ext' : '';
+  if (hint) hint.textContent = itemNumber ? 'Dateien werden umbenannt zu: ' + itemNumber + '_rev' + rev + '_NNN.ext' : '';
   openModal('uploadModal');
 }
 
@@ -844,7 +928,7 @@ function buildUploadName(originalName, itemNumber, rev, index) {
 }
 
 async function doUpload() {
-  if (!upFiles.length) return toast('Keine Datei ausgewaehlt','err');
+  if (!upFiles.length) return toast('Keine Datei ausgewählt','err');
   const revId = V('up-rev-id');
   const itemNumber = state.uploadItemNumber || '';
   const rev = state.uploadRev || '';

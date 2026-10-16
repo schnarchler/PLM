@@ -171,7 +171,7 @@ function _renderProfitRows() {
       onclick="_profitSortBy('${col}')"${title?` title="${title}"`:''}>${label}${arrow(col)}</th>`;
 
   document.getElementById('profit-thead').innerHTML =
-    th('Projekt','project') + th('Nummer','number') + th('Name / Klasse','name') +
+    th('Projekt','project') + th('Nummer','number') + th('Name / Klassifizierung','name') +
     th('Gew.','weight','right','Gewicht (g)') +
     th('Ø Herst.-kosten','avg_price','right','Gewichteter Ø der kalkulierten Kosten aus Aufträgen (Material + Druck + Arbeit)') +
     th('Ø VP','price','right','Gewichteter Ø Verkaufspreis aus nicht-stornierten Aufträgen') +
@@ -278,7 +278,7 @@ async function openCustomerDetail(id) {
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'cd-orders')">Aufträge <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.orders.length}</span></button>
     <button class="tab" onclick="switchTab(this,'cd-quotes')">Angebote <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.quotes.length}</span></button>
-    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Lieferungen <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.deliveries.length}</span></button>
+    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Produktionsaufträge <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.deliveries.length}</span></button>
     <button class="tab" onclick="switchTab(this,'cd-info')">Stammdaten</button>`;
 
   const orderRows = c.orders.length ? c.orders.map(o => `
@@ -318,7 +318,7 @@ async function openCustomerDetail(id) {
         <div style="font-family:var(--mono);font-size:13px">${fmtChfD(d.total)}</div>
         <div style="font-size:13px;color:var(--t3)">${d.item_count} Pos.</div>
       </div>
-    </div>`).join('') : empty('Keine Lieferungen');
+    </div>`).join('') : empty('Keine Produktionsaufträge');
 
   document.getElementById('dp-body').innerHTML = `
     <div id="cd-orders">
@@ -333,7 +333,7 @@ async function openCustomerDetail(id) {
     </div>
     <div id="cd-deliveries" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:13px;color:var(--t3)">
-        <span>${c.deliveries.length} Lieferungen</span>
+        <span>${c.deliveries.length} Produktionsauftr${c.deliveries.length === 1 ? 'ag' : 'äge'}</span>
         <span style="font-family:var(--mono);color:var(--t1)">Total ${fmtChfD(delivRevTotal)}</span>
       </div>
       ${delivRows}
@@ -483,7 +483,7 @@ async function openOrderDetail(id) {
         ? ` <span class="chip" style="margin-left:4px" title="Ursprüngliche Angebotsnummer">${esc(o.origin_quote_number)}</span>` : '');
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'od-pos')">Positionen</button>
-    <button class="tab" onclick="switchTab(this,'od-fert');loadOrderProduction(${id})">Fertigung${
+    <button class="tab" onclick="switchTab(this,'od-fert');loadOrderProduction(${id})">Produktion${
       (o.deliveries||[]).length ? ` <span class="chip" style="margin-left:5px">${o.deliveries.length}</span>` : ''}</button>
     <button class="tab" onclick="switchTab(this,'od-info')">Details</button>
     <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>`;
@@ -547,7 +547,7 @@ async function openOrderDetail(id) {
         ${o.status === 'QUOTE'
           ? `<button class="btn btn-primary btn-sm" onclick="acceptQuotePhase(${id})">✓ Angebot angenommen</button>
              <button class="btn btn-ghost btn-sm" onclick="declineQuotePhase(${id})">Abgelehnt</button>`
-          : `<button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🔧 Produktionsauftrag erstellen</button>`}
+          : `<button class="btn btn-primary btn-sm" onclick="orderToDelivery(${id})">🔧 Produktionsauftrag anlegen</button>`}
         ${(o.status==='DRAFT'||o.status==='QUOTE'||o.status==='DECLINED') ? `<button class="btn btn-red btn-sm" onclick="delOrder(${id})">🗑 Löschen</button>` : ''}
       </div>
     </div>
@@ -564,7 +564,7 @@ async function orderToDelivery(orderId) {
   const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
   const billableH = billable.reduce((s,e)=>s+(e.hours||0),0);
   _showDynModal(`<div class="modal" style="max-width:400px">
-    <div class="modal-head"><div class="modal-title">Produktionsauftrag erstellen</div>
+    <div class="modal-head"><div class="modal-title">Produktionsauftrag anlegen</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
       <div style="font-size:13px;color:var(--t2)">Alle Positionen des Auftrags werden übernommen.</div>
@@ -588,7 +588,7 @@ async function _doCreateDelivery(orderId) {
   const include_time = cb ? cb.checked : false;
   _hideDynModal();
   const d = await api(`/api/orders/${orderId}/to-delivery`, 'POST', { include_time });
-  toast(`Fertigungslos ${d.number} erstellt`, 'ok');
+  toast(`Produktionsauftrag ${d.number} angelegt`, 'ok');
   // Wurde die Fertigung aus dem Auftrag heraus gestartet, dort bleiben —
   // der Wechsel in die Produktionsliste war genau der stoerende Schritt.
   _fertLos[orderId] = d.id;
@@ -625,10 +625,11 @@ async function declineQuotePhase(orderId) {
   } catch { toast('Status konnte nicht gesetzt werden', 'err'); }
 }
 
-// ── FERTIGUNG IM AUFTRAG ──────────────────────────────────────
+// ── PRODUKTION IM AUFTRAG ─────────────────────────────────────
 // Der Produktionsauftrag bleibt ein eigener Datensatz (Belege und Historie
 // laufen weiter), wird aber hier bearbeitet. Kein Wechsel in die
-// Produktionsliste mehr. Mehrere Lose erscheinen als Unterreiter.
+// Produktionsliste mehr. Mehrere Produktionsaufträge (Teillieferungen)
+// erscheinen als Unterreiter.
 let _fertLos = {};   // orderId -> gewähltes Los
 
 async function loadOrderProduction(orderId, losId) {
@@ -642,16 +643,16 @@ async function loadOrderProduction(orderId, losId) {
   // Zaehler im Reiter nachfuehren — so bleibt der Tab aktiv und die Seite
   // muss nicht neu aufgebaut werden.
   const tabBtn = document.querySelector('#dp-tabs button[onclick*="od-fert"]');
-  if (tabBtn) tabBtn.innerHTML = 'Fertigung'
+  if (tabBtn) tabBtn.innerHTML = 'Produktion'
     + (lose.length ? ` <span class="chip" style="margin-left:5px">${lose.length}</span>` : '');
 
   if (!lose.length) {
     host.innerHTML = `<div class="empty" style="padding:28px 16px">
-      <div class="empty-text">Noch keine Fertigung angelegt</div>
+      <div class="empty-text">Noch kein Produktionsauftrag</div>
       <div style="font-size:13px;color:var(--t3);margin:6px 0 14px">
         Die Positionen des Auftrags werden übernommen. Der Auftrag wird dabei bestätigt.
       </div>
-      <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${orderId})">🔧 Fertigung starten</button>
+      <button class="btn btn-primary btn-sm" onclick="orderToDelivery(${orderId})">🔧 Produktion starten</button>
     </div>`;
     return;
   }
@@ -659,14 +660,14 @@ async function loadOrderProduction(orderId, losId) {
   const current = lose.find(l => l.id === (losId || _fertLos[orderId])) || lose[0];
   _fertLos[orderId] = current.id;
   const d = await api(`/api/deliveries/${current.id}`).catch(() => null);
-  if (!d) { host.innerHTML = '<div style="color:var(--red);font-size:13px">Los konnte nicht geladen werden.</div>'; return; }
+  if (!d) { host.innerHTML = '<div style="color:var(--red);font-size:13px">Produktionsauftrag konnte nicht geladen werden.</div>'; return; }
 
   const losTabs = lose.length > 1 ? `
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
       ${lose.map(l => `<button class="btn btn-sm ${l.id === current.id ? 'btn-primary' : 'btn-ghost'}"
         onclick="loadOrderProduction(${orderId},${l.id})">${esc(l.number)}
         <span style="opacity:.7;margin-left:4px">${l.item_count || 0}</span></button>`).join('')}
-      <button class="btn btn-ghost btn-sm" onclick="orderToDelivery(${orderId})" title="Weiteres Fertigungslos">＋</button>
+      <button class="btn btn-ghost btn-sm" onclick="orderToDelivery(${orderId})" title="Weiterer Produktionsauftrag (Teillieferung)">＋</button>
     </div>` : '';
 
   host.innerHTML = `
@@ -679,11 +680,11 @@ async function loadOrderProduction(orderId, losId) {
       <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${d.id})">&#128196; Lieferschein</button>
         <button class="btn btn-ghost btn-sm" onclick="openDeliveryModal(${d.id})">✏️ Kopfdaten</button>
-        ${lose.length === 1 ? `<button class="btn btn-ghost btn-sm" onclick="orderToDelivery(${orderId})" title="Weiteres Fertigungslos">＋ Los</button>` : ''}
+        ${lose.length === 1 ? `<button class="btn btn-ghost btn-sm" onclick="orderToDelivery(${orderId})" title="Weiterer Produktionsauftrag (Teillieferung)">＋ Produktionsauftrag</button>` : ''}
       </div>
     </div>
     <div id="dd-pos">
-      ${renderDeliveryItems(d.items || [], d.id)}
+      ${renderDeliveryItems(d.items || [], d.id, d.status === 'DELIVERED')}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${d.id})">+ Position</button>
     </div>`;
 }
@@ -698,115 +699,155 @@ function refreshOrderProductionIfOpen() {
   return true;
 }
 
-// ── SEARCH ────────────────────────────────────────────────────
+// ── SUCHE ─────────────────────────────────────────────────────
+// Die Klassifizierung ist ein echter Filter: ein Klick auf einen Chip zeigt
+// nur Items dieser Klassifizierung (auch ohne Suchwort), ein zweiter Klick hebt
+// ihn auf. Die Zahl am Chip gilt für das aktuelle Suchwort. Mehrere Wörter
+// müssen alle vorkommen („Halter PETG").
+let _searchClass = '';
+let searchTimer;
+let _searchSeq = 0;
+
 function renderSearchView() {
   setLeftHeader('Suche', '');
-  const classes = getClassifications();
-  const chips = classes.map(c => {
-    const [color, bg] = _classColor(c.name);
-    return `<span onclick="document.getElementById('globalSearch').value='${esc(c.name)}';onSearch('${esc(c.name)}')"
-      style="font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:12px;background:${bg};color:${color};cursor:pointer;border:1px solid ${color}40;transition:opacity .12s" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">${esc(c.name)}</span>`;
-  }).join('');
   setLeftBody(`
-    <div style="padding:12px 0 8px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);margin-bottom:12px">
-      <span style="font-size:13px;color:var(--t4);align-self:center;margin-right:4px">Klasse:</span>
-      ${chips}
-    </div>
-    <div id="search-results"><div style="padding:20px;text-align:center;color:var(--t3)">Suchbegriff oben eingeben …</div></div>`);
+    <div id="search-chips" style="padding:12px 0 8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-bottom:1px solid var(--line);margin-bottom:12px"></div>
+    <div id="search-results"><div style="padding:20px;text-align:center;color:var(--t3)">Suchbegriff oben eingeben oder eine Klassifizierung wählen …</div></div>`);
+  _runSearch(document.getElementById('globalSearch')?.value || '');
 }
 
-let searchTimer;
-async function onSearch(q) {
+function onSearch(q) {
   clearTimeout(searchTimer);
-  if (!q || q.length < 2) return;
-  searchTimer = setTimeout(async () => {
-    if (state.view !== 'search') { state.view = 'search'; document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active')); renderSearchView(); }
-    const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
-    const fmtSz = b => !b?'—':b<1024?b+'B':b<1048576?(b/1024).toFixed(0)+'KB':(b/1048576).toFixed(1)+'MB';
-    const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMG:'🖼',DOC:'📄'}[t]||'📎');
-    const ostL = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
-    const ostC = {DRAFT:'st-DFT',CONFIRMED:'st-REV',DELIVERED:'st-REL',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
-    const qstL = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
-    const qstC = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
-    const dstL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
-    const dstC = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
-
-    const section = (label, count) => `<div class="sep-label" style="margin-top:16px">${label}${count?` <span style="color:var(--t4);font-weight:400">(${count})</span>`:''}</div>`;
-    const noHits = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer für „${esc(q)}"</div></div>`;
-    const total = (r.projects?.length||0)+(r.items?.length||0)+(r.datasets?.length||0)+(r.orders?.length||0)+(r.quotes?.length||0)+(r.customers?.length||0)+(r.deliveries?.length||0);
-
-    // Sort items: prt/asm first, then doc, then by item_number
-    const typeOrder = { prt: 0, asm: 1, doc: 2 };
-    const sortedItems = (r.items||[]).slice().sort((a, b) =>
-      (typeOrder[a.item_type] ?? 9) - (typeOrder[b.item_type] ?? 9) || a.item_number.localeCompare(b.item_number));
-
-    const html = total ? `
-      ${sortedItems.length ? section('PLM Items', sortedItems.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Nummer</th><th>Name</th><th>Typ</th><th>Klasse</th><th>Projekt</th><th>Rev</th><th>Status</th></tr></thead>
-        <tbody>${sortedItems.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${i.item_number}</td>
-          <td>${esc(i.name)}</td>
-          <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${i.item_type||'—'}</td>
-          <td>${i.classification ? _classChip(i.classification, 10) : '<span style="color:var(--t4)">—</span>'}</td>
-          <td style="color:var(--t3)">${i.project_name}</td>
-          <td style="font-family:var(--mono);font-size:13px">${i.latest_revision?.rev||'—'}</td>
-          <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}">${i.latest_revision.status}</span>`:''}</td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.orders?.length ? section('Aufträge', r.orders.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Lieferdatum</th></tr></thead>
-        <tbody>${r.orders.map(o=>`<tr style="cursor:pointer" onclick="gotoView('orders');openOrderDetail(${o.id})">
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(o.number)}</td>
-          <td>${esc(o.title)}</td><td style="color:var(--t3)">${esc(o.customer_name||'—')}</td>
-          <td><span class="status ${ostC[o.status]||''}">${ostL[o.status]||o.status}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(o.delivery_date)}</td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.quotes?.length ? section('Angebote', r.quotes.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Gültig bis</th></tr></thead>
-        <tbody>${r.quotes.map(q=>`<tr style="cursor:pointer" onclick="gotoView('quotes');openQuoteDetail(${q.id})">
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(q.number)}</td>
-          <td>${esc(q.title)}</td><td style="color:var(--t3)">${esc(q.customer_name||'—')}</td>
-          <td><span class="status ${qstC[q.status]||''}">${qstL[q.status]||q.status}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(q.valid_until)}</td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.deliveries?.length ? section('Produktion', r.deliveries.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Datum</th></tr></thead>
-        <tbody>${r.deliveries.map(d=>`<tr style="cursor:pointer" onclick="gotoView('deliveries');openDeliveryDetail(${d.id})">
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</td>
-          <td>${esc(d.title)}</td><td style="color:var(--t3)">${esc(d.customer_name||'—')}</td>
-          <td><span class="status ${dstC[d.status]||''}">${dstL[d.status]||d.status}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.customers?.length ? section('Kunden', r.customers.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Nr.</th><th>Name</th><th>E-Mail</th><th>Ort</th></tr></thead>
-        <tbody>${r.customers.map(c=>`<tr style="cursor:pointer" onclick="gotoView('customers');openCustomerDetail(${c.id})">
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(c.number)}</td>
-          <td>${esc(c.name)}</td><td style="color:var(--t3)">${esc(c.email||'—')}</td>
-          <td style="color:var(--t3)">${esc(c.city||'—')}</td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.rawMaterials?.length ? section('Rohmaterial', r.rawMaterials.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Artikel-Nr.</th><th>Name</th><th>LOT</th><th style="text-align:right">Bestand</th></tr></thead>
-        <tbody>${r.rawMaterials.map(m=>`<tr style="cursor:pointer" onclick="gotoView('rawmaterials');openRawMatDetail(${m.id})">
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(m.article_number||'—')}</td>
-          <td>${esc(m.name)}</td>
-          <td style="font-family:var(--mono);font-size:12px;color:var(--t3)">${esc(m.lot_number||'—')}</td>
-          <td style="font-family:var(--mono);font-size:13px;text-align:right">${fmtN(m.stock_qty,0)} ${esc(m.unit)}</td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
-      ${r.projects?.length ? section('Projekte', r.projects.length) + `<div class="card-grid">${r.projects.map(p=>`
-        <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>
-        <div class="card-num">${p.number}</div><div class="card-name">${esc(p.name)}</div></div>`).join('')}</div>` : ''}
-      ${r.datasets?.length ? section('Dateien', r.datasets.length) + `<div class="tbl-wrap"><table>
-        <thead><tr><th>Datei</th><th>Item</th><th>Projekt</th><th>Rev</th><th>Grösse</th><th></th></tr></thead>
-        <tbody>${r.datasets.map(d=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${d.project_id},${d.item_id})">
-          <td><span style="margin-right:5px">${dsIcon(d.ds_type)}</span>${esc(d.original_name)}</td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${d.item_number}</td>
-          <td style="color:var(--t3)">${d.project_name}</td>
-          <td style="font-family:var(--mono);font-size:13px">${d.rev||'—'}</td>
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtSz(d.file_size)}</td>
-          <td onclick="event.stopPropagation()"><a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a></td>
-        </tr>`).join('')}</tbody></table></div>` : ''}
-    ` : noHits;
-    const resEl = document.getElementById('search-results');
-    if (resEl) resEl.innerHTML = `<div style="padding-bottom:20px">${html}</div>`;
-    else setLeftBody(`<div style="padding-bottom:20px">${html}</div>`);
+  if ((!q || q.length < 2) && !_searchClass) return;
+  searchTimer = setTimeout(() => {
+    if (state.view !== 'search') {
+      state.view = 'search';
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('ni-search')?.classList.add('active');
+      renderSearchView();
+      return;
+    }
+    _runSearch(q);
   }, 300);
+}
+
+function setSearchClass(name) {
+  _searchClass = _searchClass.toLowerCase() === String(name).toLowerCase() ? '' : name;
+  if (state.view !== 'search') { gotoView('search'); return; }
+  _runSearch(document.getElementById('globalSearch')?.value || '');
+}
+
+function _renderSearchChips(counts) {
+  const el = document.getElementById('search-chips');
+  if (!el) return;
+  const countOf = new Map((counts || []).map(c => [String(c.name || '').toLowerCase(), c.count]));
+  const list = getClassifications();
+  const known = new Set(list.map(c => c.name.toLowerCase()));
+  const orphans = (counts || []).filter(c => c.name && !known.has(c.name.toLowerCase()));
+  const chip = (value, label, color, count, title, dashed) => {
+    const active = !!_searchClass && _searchClass.toLowerCase() === value.toLowerCase();
+    return `<button type="button" data-cls="${esc(value)}" onclick="setSearchClass(this.dataset.cls)" title="${esc(title)}"
+      style="font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer;transition:opacity .12s;
+        background:${active ? color : color + '20'};color:${active ? 'var(--bg0)' : color};
+        border:1px ${dashed ? 'dashed' : 'solid'} ${color}66;opacity:${count || active ? 1 : .45}">
+      ${esc(label)} <span style="opacity:.75">${count || 0}</span></button>`;
+  };
+  el.innerHTML = `<span style="font-size:13px;color:var(--t4);margin-right:4px">Klassifizierung:</span>`
+    + list.map(c => chip(c.name, c.name, c.color || '#9aa3b2', countOf.get(c.name.toLowerCase()),
+        _searchClass.toLowerCase() === c.name.toLowerCase() ? 'Filter aufheben' : `Nur Items mit „${c.name}"`)).join('')
+    + orphans.map(c => chip(c.name, c.name, '#9aa3b2', c.count,
+        `„${c.name}" steht nicht in der Liste (Einstellungen → PLM)`, true)).join('')
+    + chip('__none__', 'ohne', '#737b8a', countOf.get(''), 'Items ohne Klassifizierung', true)
+    + (_searchClass ? `<button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="setSearchClass(_searchClass)">✕ Filter aufheben</button>` : '');
+}
+
+async function _runSearch(q) {
+  q = String(q || '').trim();
+  const seq = ++_searchSeq;
+  const resEl = document.getElementById('search-results');
+  const params = new URLSearchParams({ q });
+  if (_searchClass) params.set('class', _searchClass);
+  let r;
+  try { r = await api('/api/search?' + params); } catch { return; }
+  if (seq !== _searchSeq) return;   // eine neuere Suche läuft schon
+  _renderSearchChips(r.class_counts);
+  if (!resEl) return;
+  if (!_searchClass && q.length < 2) {
+    resEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--t3)">Suchbegriff oben eingeben oder eine Klassifizierung wählen …</div>';
+    return;
+  }
+  resEl.innerHTML = `<div style="padding-bottom:20px">${_renderSearchResults(r, q)}</div>`;
+}
+
+function _renderSearchResults(r, q) {
+  const fmtSz = b => !b?'—':b<1024?b+'B':b<1048576?(b/1024).toFixed(0)+'KB':(b/1048576).toFixed(1)+'MB';
+  const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMAGE:'🖼',DOC:'📄'}[t]||'📎');
+  const section = (label, count, total) => `<div class="sep-label" style="margin-top:16px">${label}${count ? ` <span style="color:var(--t4);font-weight:400">(${total && total > count ? count + ' von ' + total : count})</span>` : ''}</div>`;
+  const filterLabel = _searchClass === '__none__' ? 'ohne Klassifizierung' : `Klassifizierung „${esc(_searchClass)}"`;
+  const noHits = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer${q ? ` für „${esc(q)}"` : ''}${_searchClass ? ' mit ' + filterLabel : ''}</div></div>`;
+  const total = ['projects','items','datasets','orders','customers','deliveries','rawMaterials'].reduce((n, k) => n + (r[k]?.length || 0), 0);
+  if (!total) return noHits;
+
+  // Bauteile und Baugruppen vor Dokumenten, innerhalb davon nach Relevanz (Serverreihenfolge)
+  const typeOrder = { prt: 0, asm: 0, doc: 1 };
+  const items = (r.items || []).map((x, i) => ({ ...x, _i: i }))
+    .sort((a, b) => (typeOrder[a.item_type] ?? 9) - (typeOrder[b.item_type] ?? 9) || a._i - b._i);
+
+  return `
+    ${_searchClass ? `<div style="font-size:13px;color:var(--t3);margin-bottom:4px">Gefiltert nach ${filterLabel}${q ? ` · Suchwort „${esc(q)}"` : ''}</div>` : ''}
+    ${items.length ? section('Items', items.length, r.items_total) + `<div class="tbl-wrap"><table>
+      <thead><tr><th>Nummer</th><th>Name</th><th>Typ</th><th>Klassifizierung</th><th>Projekt</th><th>Revision</th><th>Status</th></tr></thead>
+      <tbody>${items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
+        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</td>
+        <td>${esc(i.name)}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${(i.item_type||'—').toUpperCase()}</td>
+        <td>${i.classification ? _classChip(i.classification, 10) : '<span style="color:var(--t4)">—</span>'}</td>
+        <td style="color:var(--t3)">${esc(i.project_name)}</td>
+        <td style="font-family:var(--mono);font-size:13px">${i.latest_revision ? 'rev' + esc(i.latest_revision.rev) : '—'}</td>
+        <td>${i.latest_revision?`<span class="status st-${i.latest_revision.status}" title="${esc(PLM_ST_LABEL[i.latest_revision.status]||'')}">${i.latest_revision.status}</span>`:''}</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}
+    ${r.orders?.length ? section('Aufträge und Angebote', r.orders.length) + `<div class="tbl-wrap"><table>
+      <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Datum</th></tr></thead>
+      <tbody>${r.orders.map(o=>`<tr style="cursor:pointer" onclick="gotoView('orders');openOrderDetail(${o.id})">
+        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(o.number)}</td>
+        <td>${esc(o.title)}</td><td style="color:var(--t3)">${esc(o.customer_name||'—')}</td>
+        <td>${stBadge('order', o.status)}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)" title="${o.status === 'QUOTE' ? 'gültig bis' : 'Liefertermin'}">${fmtD(o.status === 'QUOTE' ? o.valid_until : o.delivery_date)}</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}
+    ${r.deliveries?.length ? section('Produktionsaufträge', r.deliveries.length) + `<div class="tbl-wrap"><table>
+      <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Lieferdatum</th></tr></thead>
+      <tbody>${r.deliveries.map(d=>`<tr style="cursor:pointer" onclick="${d.order_id ? `openOrderFromProduction(${d.order_id})` : `gotoView('deliveries');openDeliveryDetail(${d.id})`}">
+        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</td>
+        <td>${esc(d.title)}</td><td style="color:var(--t3)">${esc(d.customer_name||'—')}</td>
+        <td>${stBadge('delivery', d.status)}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}
+    ${r.customers?.length ? section('Kunden', r.customers.length) + `<div class="tbl-wrap"><table>
+      <thead><tr><th>Nr.</th><th>Name</th><th>E-Mail</th><th>Ort</th></tr></thead>
+      <tbody>${r.customers.map(c=>`<tr style="cursor:pointer" onclick="gotoView('customers');openCustomerDetail(${c.id})">
+        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(c.number)}</td>
+        <td>${esc(c.name)}</td><td style="color:var(--t3)">${esc(c.email||'—')}</td>
+        <td style="color:var(--t3)">${esc(c.city||'—')}</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}
+    ${r.rawMaterials?.length ? section('Rohmaterial', r.rawMaterials.length) + `<div class="tbl-wrap"><table>
+      <thead><tr><th>Artikel-Nr.</th><th>Name</th><th>Lot</th><th style="text-align:right">Bestand</th></tr></thead>
+      <tbody>${r.rawMaterials.map(m=>`<tr style="cursor:pointer" onclick="gotoView('rawmaterials');openRawMatDetail(${m.id})">
+        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(m.article_number||'—')}</td>
+        <td>${esc(m.name)}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--t3)">${esc(m.lot_number||'—')}</td>
+        <td style="font-family:var(--mono);font-size:13px;text-align:right">${fmtN(m.stock_qty,0)} ${esc(m.unit)}</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}
+    ${r.projects?.length ? section('Projekte', r.projects.length) + `<div class="card-grid">${r.projects.map(p=>`
+      <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>
+      <div class="card-num">${esc(p.number)}</div><div class="card-name">${esc(p.name)}</div></div>`).join('')}</div>` : ''}
+    ${r.datasets?.length ? section('Dateien', r.datasets.length) + `<div class="tbl-wrap"><table>
+      <thead><tr><th>Datei</th><th>Item</th><th>Projekt</th><th>Revision</th><th>Grösse</th><th></th></tr></thead>
+      <tbody>${r.datasets.map(d=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${d.project_id},${d.item_id})">
+        <td><span style="margin-right:5px">${dsIcon(d.ds_type)}</span>${esc(d.original_name)}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.item_number)}</td>
+        <td style="color:var(--t3)">${esc(d.project_name)}</td>
+        <td style="font-family:var(--mono);font-size:13px">${d.rev ? 'rev' + esc(d.rev) : '—'}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtSz(d.file_size)}</td>
+        <td onclick="event.stopPropagation()"><a href="/api/datasets/${d.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Herunterladen" download>&#x2B07;</a></td>
+      </tr>`).join('')}</tbody></table></div>` : ''}`;
 }

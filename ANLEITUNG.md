@@ -8,7 +8,7 @@
 2. [Programmstart](#2-programmstart)
 3. [Oberfläche](#3-oberfläche)
 4. [Dashboard](#4-dashboard)
-5. [PLM — Projekte & Bauteile](#5-plm--projekte--bauteile)
+5. [PLM — Projekte & Items](#5-plm--projekte--items)
 6. [Normteile](#6-normteile)
 7. [Freigabe-Workflow](#7-freigabe-workflow)
 8. [Checkout / Check-in](#8-checkout--check-in)
@@ -21,9 +21,10 @@
 15. [Einkauf / Bestellwesen](#15-einkauf--bestellwesen)
 16. [Kalkulation](#16-kalkulation)
 17. [Suche](#17-suche)
-18. [Changelog](#18-changelog)
+18. [Historie](#18-historie)
 19. [Einstellungen](#19-einstellungen)
 20. [Tastaturkürzel](#20-tastaturkürzel)
+21. [Datensicherung](#21-datensicherung)
 
 ---
 
@@ -31,7 +32,9 @@
 
 PLM & ERP ist ein lokales System zur Verwaltung von Konstruktionsprojekten und Geschäftsvorgängen. Es läuft vollständig im eigenen Netzwerk — ohne Internet oder Cloud-Abhängigkeit.
 
-**PLM** verwaltet: Projekte, Baugruppen, Parts, Dokumente, Revisionen, Stücklisten, Dateien, Zeiten, Normteile, Varianten.
+**PLM** verwaltet: Projekte und Items (Baugruppen, Parts, Dokumente), Revisionen, Stücklisten, Dateien, Zeiten, Normteile, Varianten.
+
+Die verwendeten Begriffe sind in der `README.md` unter **Begriffe** erklärt.
 
 **ERP** verwaltet: Kunden, Angebote mit Kalkulation, Aufträge, Produktion, Lager, Rohmaterial, Einkauf/Bestellwesen.
 
@@ -64,7 +67,7 @@ cd PLM && bash start-plm.sh
 - **Navigation links:** Klick wechselt den Bereich
 - **Listenbereich:** Alle Einträge des aktiven Bereichs
 - **Detailbereich:** Tabs mit Informationen des gewählten Eintrags — mit **Escape** schliessen
-- **Zuletzt geöffnet:** Letzte Bauteile unten in der Navigation
+- **Zuletzt geöffnet:** Zuletzt geöffnete Items und Belege unten in der Navigation
 
 ---
 
@@ -76,17 +79,17 @@ cd PLM && bash start-plm.sh
 | **Aufträge** | Offene Aufträge |
 | **Angebote** | Offene Angebote |
 | **Produktion** | Aktive Produktionsaufträge |
-| **Freigabe** | Bauteile in Prüfung (REV-Status) |
-| **Lager** | Artikel unter Mindestbestand |
+| **Freigabe** | Items in Prüfung (REV-Status) |
+| **Lager** | Lagerartikel unter Mindestbestand |
 | **Einkauf** | Offene Bestellungen (Entwurf + Bestellt) |
 
-**Fällige Produktionsaufträge:** Aufträge mit Lieferdatum in den nächsten 14 Tagen. Überfällige erscheinen rot.
+**Fällige Produktionsaufträge:** Produktionsaufträge mit Lieferdatum in den nächsten 14 Tagen. Überfällige erscheinen rot.
 
-**Ablaufende Angebote:** Angebote die in 14 Tagen ablaufen.
+**Ablaufende Angebote:** Aufträge in der Phase Angebot, deren „Gültig bis“ in den nächsten 14 Tagen liegt.
 
 ---
 
-## 5. PLM — Projekte & Bauteile
+## 5. PLM — Projekte & Items
 
 ### 5.1 Projekte
 
@@ -94,9 +97,9 @@ Projekte sind die oberste Organisationsebene mit automatischer Nummer (z.B. `002
 
 **Projektdetails:**
 - **Info** — Name, Kunde, Beschreibung
-- **Struktur** — Baumansicht aller Bauteile
+- **Struktur** — Baumansicht aller Items
 - **Dokumente** — Projektdokumente
-- **Log** — Änderungshistorie
+- **Log** — Historie des Projekts
 
 ### 5.2 Nummernschema
 
@@ -108,7 +111,7 @@ Part im Projekt:   0028-prt-001
 Dokument:          0028-doc-001
 Aufträge:          AUF-2026-0001
 Angebote:          ANG-2026-0001
-Produktion:        LS-2026-0001
+Produktionsauftrag: LS-2026-0001
 Einkauf:           EK-2026-0001
 Kunden:            KD-0001
 Lieferanten:       LF-0001
@@ -122,20 +125,22 @@ Lieferanten:       LF-0001
 | 🔩 | **PRT** | Part / Einzelteil |
 | 📄 | **DOC** | Dokument (Zeichnung, Spezifikation) |
 
-### 5.4 Bauteil-Detailansicht
+### 5.4 Item-Detailansicht
 
 **Revisionen-Tab:**
 - Verkaufspreis (VP) und Gewicht direkt inline editierbar
+- Revisionen als Reiter — 🚚 kennzeichnet gelieferte Revisionen (siehe 11.3)
+- **⇄ Revisionen vergleichen** — zwei Revisionen gegenüberstellen (siehe 5.13)
 - Stückliste (BOM) mit PLM-Items und Normteilen
-- Dateien (Datasets): CAD, PDF, Bilder, GCode
+- Dateien: CAD, PDF, Bilder, GCode
 - Freigabe-Workflow
 
-**Weitere Tabs:** Changelog, Zeiten, Where-Used, Varianten
+**Weitere Tabs:** Datenblatt, Historie, Zeiten, Verwendung, Aufträge, Varianten
 
 **Schaltflächen im Titel:**
-- **↪** — Item in anderen Projektbereich verschieben
-- **📄** — Dokumentvorlage generieren (Datenblatt, Stückliste, Prüfprotokoll)
-- **⇄** — Dieses Item mit einem anderen vergleichen
+- **↪** — Item in ein anderes Projekt verschieben
+- **📄** — Dokument erstellen (Datenblatt, Stückliste, Prüfprotokoll)
+- **⇄** — Dieses Item mit einem anderen Item vergleichen
 
 ### 5.5 Gewicht
 
@@ -143,12 +148,12 @@ Das Gewicht ⚖ eines Parts wird direkt in der Detailansicht neben dem Verkaufsp
 
 ### 5.6 Klassifizierung
 
-Farbige Chips im Projektbaum und in der Detailansicht. Konfigurierbar unter **Einstellungen → PLM**.
+Farbige Chips im Projektbaum und in der Detailansicht. Konfigurierbar unter **Einstellungen → PLM** (siehe 19). In der Suche filtern die Chips nach Klassifizierung (siehe 17).
 
 ### 5.7 Stückliste (BOM)
 
-In der aktiven Revision einer ASM:
-- **+ Position** → PLM-Item aus dem Projekt suchen
+In der aktiven Revision einer Baugruppe:
+- **+ Position hinzufügen** → PLM-Item aus dem Projekt suchen
 - **⚙ Normteil** → Normteil aus dem Katalog hinzufügen
 - **📐 BOM aus STEP** → Stückliste aus Solid Edge STEP-Export importieren
 
@@ -160,15 +165,15 @@ In der aktiven Revision einer ASM:
 4. Teile werden automatisch per Namensabgleich zugeordnet (✓ = gefunden, ? = manuell zuordnen)
 5. **✓ BOM übernehmen**
 
-### 5.9 Where-Used
+### 5.9 Verwendung
 
-Tab **Where-Used** in der Bauteil-Detailansicht zeigt alle Baugruppen in denen dieses Teil verbaut ist.
+Tab **Verwendung** in der Item-Detailansicht zeigt alle Baugruppen, in denen dieses Item verbaut ist.
 
-Die Ansicht gruppiert nach Baugruppe: Pro ASM werden alle Revisionen aufgelistet in denen das Teil vorkommt, mit farbigem Status-Chip (DFT / REV / REL / ECO / OBS). Klick auf einen Revisions-Chip öffnet direkt diese Revision in der Detailansicht.
+Die Ansicht gruppiert nach Baugruppe: Pro Baugruppe werden alle Revisionen aufgelistet, in denen das Item vorkommt, mit farbigem Status-Chip (DFT / REV / REL / ECO / OBS). Klick auf einen Revisions-Chip öffnet direkt diese Revision in der Detailansicht.
 
 ### 5.10 Variantenverwaltung
 
-Teile die in mehreren Ausführungen existieren (z.B. `Halterung M3`, `Halterung M4`, `Halterung M5`) können als Varianten verknüpft werden.
+Items, die in mehreren Ausführungen existieren (z.B. `Halterung M3`, `Halterung M4`, `Halterung M5`) können als Varianten verknüpft werden.
 
 **Varianten verknüpfen:**
 1. Item öffnen → Tab **Varianten**
@@ -200,9 +205,18 @@ Klick auf eine Vorlage öffnet ein Druckfenster im Browser → **Drucken** oder 
 1. Erstes Item ist bereits vorgewählt
 2. Zweites Item suchen → **Vergleichen**
 3. Beide Items werden nebeneinander dargestellt:
-   - Metadaten (Nummer, Name, Typ, Klassifizierung, Gewicht, Preis)
-   - BOM-Vergleich: Positionen die nur in A, nur in B oder in beiden vorkommen
+   - Kopfdaten (Nummer, Name, Typ, Klassifizierung, Gewicht, Preis)
+   - BOM-Vergleich: Positionen, die nur in A, nur in B oder in beiden vorkommen
    - Dateien beider Items
+
+### 5.13 Revisionen vergleichen
+
+Revisionen-Tab → **⇄ Revisionen vergleichen** (erscheint ab zwei Revisionen).
+
+1. Vorgewählt ist die angezeigte Revision gegen die nächstältere; beide Seiten sind wählbar, **⇄** tauscht sie.
+2. Pro Bereich steht die Zahl der Änderungen: **Kopfdaten**, **Druckparameter**, **Stückliste**, **Normteile**, **Dateien**.
+3. Farben: grün = neu, rot = entfernt, gelb = geändert. **Nur Änderungen** blendet Gleiches aus.
+4. Dateien werden über den Namen ohne `_revN` zugeordnet. Bei gleicher Grösse vergleicht PLM den Inhalt — eine unverändert übernommene Datei gilt als gleich.
 
 ---
 
@@ -218,7 +232,7 @@ Felder ausfüllen → Bezeichnung wird automatisch generiert (z.B. `DIN 912 Zyli
 |------|---------|
 | Norm | DIN |
 | Norm-Nr. | 912 |
-| Größe / Maß | M4x12 |
+| Grösse / Mass | M4x12 |
 | Kurzbezeichnung | Zylinderschraube |
 | Material / Güte | A2-70 |
 | Stückpreis | 0.15 CHF |
@@ -229,7 +243,7 @@ Tab **Dateien** pro Normteil: STEP-Dateien, PDFs, Zeichnungen hochladen (Mehrfac
 
 ### In BOM verwenden
 
-Im BOM-Modal einer Baugruppe → Tab **⚙ Normteil** → Normteil aus Dropdown wählen.
+Im BOM-Dialog einer Baugruppe → Tab **⚙ Normteil** → Normteil aus der Liste wählen.
 
 ### Normteile auschecken
 
@@ -250,12 +264,14 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 | **DFT** | Blau | Entwurf |
 | **REV** | Amber | In Prüfung |
 | **REL** | Grün | Freigegeben |
-| **ECO** | Lila | Engineering Change — ECO-Revision gesperrt, neue DFT wird erstellt |
-| **OBS** | Grau | Abgelöst |
+| **ECO** | Lila | Änderung (Engineering Change) — Revision gesperrt, neue DFT wird angelegt |
+| **OBS** | Grau | Veraltet (abgelöst) |
 
-Bei ECO: Dateien der freigegebenen Revision werden in die neue DFT-Revision kopiert. Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
+Die Knöpfe heissen **→ In Review**, **✓ Freigeben**, **⚡ ECO starten** und **Als veraltet markieren (OBS)**.
 
-Freigegebene Bauteile löschen nur über **Einstellungen → Admin**.
+Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in die neue DFT-Revision übernommen. Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
+
+Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin**.
 
 ---
 
@@ -263,15 +279,15 @@ Freigegebene Bauteile löschen nur über **Einstellungen → Admin**.
 
 ### Workflow
 
-**Auschecken:** Bauteil → **⬇ Auschecken** → Dateitypen wählen → Dateien landen in `<checkout-pfad>/<item-nummer>/` (ohne Zeitstempel, Pfad bleibt bei jedem Checkout identisch).
+**Auschecken:** Item → **⬇ Auschecken** → Dateitypen wählen → Dateien landen in `<checkout-pfad>/<item-nummer>/` (ohne Zeitstempel, Pfad bleibt bei jedem Checkout identisch).
 
 **Arbeiten im CAD:** Dateien bearbeiten oder neue erstellen.
 
-**Einchecken:** **⬆ Einchecken** → Ordner wird gelöscht, Changelog-Eintrag.
+**Einchecken:** **⬆ Einchecken** → Ordner wird gelöscht, Eintrag in der Historie. Ist die Revision bereits geliefert, landen die Dateien in einer neuen Revision.
 
 **Neue Dateien:** PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht (⬆ Checkouts):
-- Im Unterordner eines Bauteils → „Zu Bauteil hinzufügen"
-- Im Hauptordner → „Als neues Bauteil erfassen"
+- Im Unterordner eines Items → „Zum Item hinzufügen"
+- Im Hauptordner → „Als neues Item anlegen"
 
 ### Solid Edge Standardpfad
 
@@ -283,19 +299,19 @@ Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis**
 
 ## 9. Angebote & Kostenkalkulation
 
-### Angebot erstellen
+### Angebot anlegen
 
-Navigation → Angebote → **+ Angebot**
+Ein Angebot ist die erste **Phase eines Auftrags**: Navigation → Aufträge → **+ Auftrag** → Status **Angebot**.
 
-Status: `Entwurf → Versendet → Akzeptiert / Abgelehnt`
+Phasen: `Angebot → Bestätigt → Geliefert → Fakturiert` (oder `Angebot → Abgelehnt`)
 
-**In Auftrag umwandeln:** Angebot → **➜ In Auftrag umwandeln**
+**Angebot angenommen:** Auftrag → **✓ Angebot angenommen** — gleiche Nummer, gleiche Positionen, die Phase wechselt auf Bestätigt.
 
 ### Position hinzufügen mit Kalkulation
 
 Beim Hinzufügen einer Position:
 
-1. **PLM-Item verknüpfen** — suche nach Teilenummer oder Name
+1. **PLM-Item verknüpfen** — suche nach Item-Nummer oder Name
 2. **Rohmaterial wählen** — bei mehreren aktiven Lots erscheint ein Picker zur Lot-Auswahl
 3. **Arbeitszeit (h)** — geschätzte Stunden
 4. **Drucker + Druckzeit (h)** — für Druckkosten
@@ -305,11 +321,11 @@ Beim Hinzufügen einer Position:
    - Druckzeit: `Stunden × Drucker CHF/h`
 6. **„Als Preis übernehmen"** — kalkulierten Preis als Einzelpreis setzen
 
-> Bauteil und Rohmaterial müssen beide ein Gewicht hinterlegt haben, sonst erscheint eine Warnmeldung.
+> Item und Rohmaterial müssen beide ein Gewicht hinterlegt haben, sonst erscheint eine Warnmeldung.
 
-### BOM kalkullieren (Baugruppen)
+### BOM kalkulieren (Baugruppen)
 
-**📦 Aus BOM kalkullieren** — wähle eine Baugruppe, alle BOM-Teile werden als einzelne Positionen mit automatischen Kosten übernommen.
+**📦 Aus BOM kalkulieren** — wähle eine Baugruppe, alle BOM-Teile werden als einzelne Positionen mit automatischen Kosten übernommen.
 
 ---
 
@@ -317,10 +333,10 @@ Beim Hinzufügen einer Position:
 
 Navigation → Aufträge → **+ Auftrag**
 
-Status: `Entwurf → Bestätigt → Geliefert → Fakturiert / Storniert`
+Status: `Angebot → Bestätigt → Geliefert → Fakturiert`, ohne vorheriges Angebot ab `Entwurf`; dazu `Abgelehnt` und `Storniert`
 
 - **Rechnung PDF** — Auftrag → **📄 Rechnung PDF**
-- **Produktionsauftrag erstellen** — Auftrag → **🔧 Produktionsauftrag erstellen**
+- **Produktionsauftrag anlegen** — Auftrag → **🔧 Produktionsauftrag anlegen**; bearbeitet wird er im Tab **Produktion** des Auftrags (mehrere Produktionsaufträge für Teillieferungen möglich)
 - **Lager abbuchen** — Auftragsposition → **📦** (nur wenn genügend Bestand)
 
 Aufträge im Status Entwurf können direkt gelöscht werden. Andere Status nur über **Einstellungen → Admin**.
@@ -329,24 +345,42 @@ Aufträge im Status Entwurf können direkt gelöscht werden. Andere Status nur �
 
 ## 11. Produktion
 
-Navigation → **Produktion** — ersetzt den früheren „Lieferschein"-Begriff für interne Produktionsaufträge.
+Navigation → **Produktion** — Liste der Produktionsaufträge (`LS-…`). Standardmässig nur die eigenständigen; Produktionsaufträge zu einem Auftrag bearbeitest du im Auftrag unter **Produktion**.
 
 **Neuer Produktionsauftrag:** + Produktionsauftrag
 
 Status: `Entwurf → Bereit → Geliefert`
 
-### Position hinzufügen
+### 11.1 Position hinzufügen
 
 - **PLM-Item** verknüpfen
-- **Rohmaterial** zuweisen → übernimmt automatisch Drucktemperatur und Betttemperatur
+- **Rohmaterial** zuweisen → übernimmt automatisch Düsentemperatur und Betttemperatur
 - **3MF-Import** oder manuelle Druckparameter
 - **Drucker** und **Düse** separat wählen
 
-### Lieferschein drucken
+### 11.2 Lieferschein drucken
 
-Druckansicht öffnen → **📄 Lieferschein** — zeigt alle Positionen mit Druckparametern, Rohmaterial und Unterschriftsfeldern.
+**📄 Lieferschein** — zeigt alle Positionen mit Revision, Druckparametern, Rohmaterial und Unterschriftsfeldern.
 
-### Thermodrucker (Pipsta)
+### 11.3 Gelieferter Stand
+
+Jede Position mit PLM-Item zeigt neben der Item-Nummer ihre Revision:
+
+| Kennzeichen | Bedeutung |
+|---|---|
+| `rev2` (blass) | folgt automatisch der aktiven Revision |
+| `🔒 rev1` | fest gewählt bzw. geliefert |
+| `↑rev3` | inzwischen gibt es eine neuere Revision |
+| `3 Teile` | gelieferte Baugruppe mit festgehaltener Struktur |
+
+- **Vor der Lieferung:** Klick auf das Kennzeichen → „Automatisch“ oder „Fest auf Revision“ wählen.
+- **Beim Status „Geliefert“** fixiert PLM die Revision jeder Position, bei Baugruppen zusätzlich die Revision jedes Unterteils.
+- **Gelieferte Revisionen sind gesperrt** — keine Datei-, Stücklisten- oder Druckparameteränderung, kein Löschen. Im Item steht ein Hinweis „Geliefert — revN ist fixiert“; weiter geht es mit **＋ Neue Revision**.
+- **Nach der Lieferung:** Klick auf das Kennzeichen zeigt den gelieferten Stand mit Struktur; eine falsch erfasste Revision lässt sich dort korrigieren.
+- **Status zurück** (z. B. auf „Bereit“): automatisch fixierte Positionen folgen wieder der aktiven Revision, von Hand gewählte bleiben.
+- Item → Tab **Aufträge** listet alle Produktionsaufträge mit ihrem Stand, auch Lieferungen als Teil einer Baugruppe.
+
+### 11.4 Thermodrucker (Pipsta)
 
 Pro Position: **🖶** Kurzbeleg oder **🖶≡** Vollbeleg mit Druckparametern.
 
@@ -365,15 +399,15 @@ Navigation → **Rohmaterial**
 | Marke | z.B. Prusament |
 | Abmessungen | z.B. 2×20×200mm, Ø12mm, 1000g |
 | Gewicht / Stück | Gesamtgewicht der Einheit in Gramm (für Preiskalkulation) |
-| Drucktemp (°C) | Wird bei Zuweisung in Produktion automatisch übernommen |
-| Bett (°C) | Wird bei Zuweisung in Produktion automatisch übernommen |
+| Düsentemperatur (°C) | Wird bei Zuweisung in Produktion automatisch übernommen |
+| Betttemperatur (°C) | Wird bei Zuweisung in Produktion automatisch übernommen |
 | Mindestbestand | Warnschwelle |
 
 Name wird automatisch aus Typ + Farbe + Abmessungen + Marke generiert (editierbar).
 
 ### Lot-Tracking
 
-Jede **Einbuchung** kann eine Lotnummer und einen Einkaufspreis erhalten. Mehrere Lots desselben Materials werden untereinander aufgelistet:
+Jede **Einbuchung** kann eine Lot-Nr. und einen Einkaufspreis erhalten. Mehrere Lots desselben Materials werden untereinander aufgelistet:
 
 ```
 LOT-2025-001    500 g    CHF 24.90/g    ● aktiv
@@ -409,7 +443,7 @@ Bei Aufträgen und Angeboten kann der Kunde per Suchfeld gefunden oder als Freit
 
 Navigation → **Lager**
 
-- PLM-Bauteil verknüpfen → Bestand wird beim Abbuchen aus Aufträgen reduziert
+- PLM-Item verknüpfen → Bestand wird beim Abbuchen aus Aufträgen reduziert
 - **Geplante Menge** = Bestand der in offenen Aufträgen vorgemerkt ist
 - Warnung wenn Bestand ≤ Mindestbestand
 
@@ -445,7 +479,7 @@ ENTWURF ──► BESTELLT ──► ERHALTEN
 | **Erhalten** | Wareneingang gebucht |
 | **Storniert** | Abgebrochen |
 
-### 15.3 Bestellung erstellen
+### 15.3 Bestellung anlegen
 
 1. Einkauf → **+ Bestellung**
 2. Lieferant wählen (aus Lieferantenliste) oder als Freitext eingeben
@@ -493,28 +527,28 @@ Sind mehrere Rohmaterial-Positionen in der Bestellung, kann gewählt werden:
 
 | Modus | Beschreibung |
 |-------|-------------|
-| **Gleiche Lot-Nr. für alle** | Eine Lotnummer gilt für alle Rohmaterial-Positionen |
-| **Individuelle Lot-Nr.** | Jede Position erhält eine eigene Lotnummer |
+| **Gleiche Lot-Nr. für alle** | Eine Lot-Nr. gilt für alle Rohmaterial-Positionen |
+| **Individuelle Lot-Nr.** | Jede Position erhält eine eigene Lot-Nr. |
 
 #### Lot-Nr. pro Stück (bei Menge > 1)
 
 Im Modus **Individuelle Lot-Nr.**: Wenn eine Position eine Menge > 1 hat, wird für jedes einzelne Stück ein separates Eingabefeld angezeigt (Nr. 1, Nr. 2, …).
 
-Stücke mit identischer Lotnummer werden zu einer gemeinsamen Buchung zusammengefasst. Unterschiedliche Lotnummern erzeugen separate Bewegungen in der Buchungshistorie.
+Stücke mit identischer Lot-Nr. werden zu einer gemeinsamen Buchung zusammengefasst. Unterschiedliche Lot-Nr. erzeugen separate Bewegungen in der Buchungshistorie.
 
-**Einbuchen:** Nach Bestätigung wird der Bestand des Rohmaterials aktualisiert und ein Eintrag in der Buchungshistorie erstellt (Typ: Wareneingang, mit Bestellnummer und Lotnummer).
+**Einbuchen:** Nach Bestätigung wird der Bestand des Rohmaterials aktualisiert und ein Eintrag in der Buchungshistorie erstellt (Typ: Wareneingang, mit Bestellnummer und Lot-Nr.).
 
 ---
 
 ## 16. Kalkulation
 
-Navigation → **Kalkulation** — Übersicht aller Parts mit Kostenvergleich.
+Navigation → **Kalkulation** — Übersicht aller Parts und Baugruppen mit Kostenvergleich.
 
 | Spalte | Bedeutung |
 |--------|-----------|
-| **Verkaufspreis** | Listenpreis aus dem PLM |
+| **Verkaufspreis** | Verkaufspreis (VP) aus dem PLM |
 | **Stk. verkauft** | Gesamtmenge aus allen Aufträgen |
-| **Umsatz** | Gesamtumsatz dieses Bauteils |
+| **Umsatz** | Gesamtumsatz dieses Items |
 | **Gewinn total** | Umsatz − (Kosten × verkaufte Stück) |
 
 **CSV-Export** — oben links → **↓ CSV**
@@ -525,17 +559,25 @@ Navigation → **Kalkulation** — Übersicht aller Parts mit Kostenvergleich.
 
 **Öffnen:** Suchfeld oben — oder `Ctrl+K`
 
-Durchsucht gleichzeitig: Projekte, PLM-Items, Normteile, Aufträge, Angebote, Produktion, Kunden, Dateien.
+Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktionsaufträge, Kunden, Rohmaterial, Dateien.
 
-**Schnellfilter:** Klassifizierungs-Chips in der Suchansicht für direkte Filterung.
+- **Mehrere Wörter** müssen alle vorkommen, egal in welchem Feld: „Halter PETG“ findet einen Halter mit „PETG“ in der Beschreibung.
+- Gross-/Kleinschreibung spielt keine Rolle, auch nicht bei Umlauten („öse“ findet „Öse“).
+- Eine exakt eingegebene Item-Nummer steht oben.
+
+**Filter nach Klassifizierung:** Die Chips über den Ergebnissen zeigen pro Klassifizierung die Zahl der Treffer.
+
+- Klick auf einen Chip zeigt nur Items dieser Klassifizierung — auch ohne Suchwort als ganze Liste. Zweiter Klick (oder **✕ Filter aufheben**) hebt ihn auf.
+- **ohne** zeigt Items ohne Klassifizierung.
+- Gestrichelte Chips: Werte, die an Items stehen, aber nicht in der Liste unter Einstellungen → PLM.
 
 ---
 
-## 18. Changelog
+## 18. Historie
 
-Navigation → **Changelog** — vollständige Änderungshistorie aller Aktionen.
+Navigation → **Historie** — vollständiges Protokoll aller Änderungen, nach Tag gruppiert. Klick auf die Nummer öffnet das betroffene Item, Projekt, den Auftrag oder Produktionsauftrag.
 
-Filterbar nach Zeitraum, exportierbar als CSV.
+**⬇ CSV** exportiert die Einträge.
 
 ---
 
@@ -557,24 +599,32 @@ Einstellungen für den Pipsta-Thermodrucker.
 ### 3D-Druck
 Drucker (mit CHF/h), Düsen und Materialprofile.
 
-> Druckparameter werden nicht mehr pro PLM-Bauteil gespeichert, sondern pro Produktionsauftrag. Materialtemperaturen werden direkt im Rohmaterial hinterlegt.
+> Druckparameter einer Revision kommen aus der hochgeladenen 3MF-Datei; in der Produktion lassen sie sich pro Position erfassen. Materialtemperaturen werden direkt im Rohmaterial hinterlegt.
 
 ### PLM
 Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren.
 
+- Neben jedem Eintrag steht, wie viele Items ihn tragen.
+- **Umbenennen** überträgt den neuen Namen beim Speichern auf alle Items (und auf die Standard-Klassifizierung).
+- **Entfernen** eines benutzten Eintrags fragt, ob die Items ihn behalten oder verlieren.
+- Werte, die an Items stehen, aber in der Liste fehlen, erscheinen darunter — **＋ übernehmen** holt sie zurück.
+
+Dazu: Standard-Klassifizierung für neue Items (mit/ohne Quelle) und der Freigabe-Workflow.
+
 ### Daten
 - **Darstellung** — Schriftgrösse (wird serverseitig gespeichert)
 - **Datenpfad** — Datenbank und Dateispeicher. Ändert nur, wo PLM sucht — vorhandene Daten bleiben am alten Ort
-- **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Backups) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
+- **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
 - **CAD-Programm** — Pfad für den 🖥 CAD-Button in der Topbar
 - **Checkout-Verzeichnis** — Zielordner für Checkouts
-- **Datensicherung** — ZIP-Export aller Daten
+- **Datensicherung** — Sicherungen anlegen, wiederherstellen und löschen (siehe 21)
+- **Export** — ZIP-Export aller Daten
 - **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte
 
 ### Admin
 **Vorsicht — Änderungen können Daten dauerhaft beschädigen.**
 
-- Freigegebene Bauteile, Projekte mit Inhalt, abgeschlossene Aufträge/Angebote löschen
+- Freigegebene oder gelieferte Items, Projekte mit Inhalt, abgeschlossene Aufträge, Produktionsaufträge löschen
 - Nummerierungsstruktur: Präfixe, Stellen, Revisionsformat (auch für Einkauf EK und Lieferanten LF)
 
 ---
@@ -589,11 +639,17 @@ Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren.
 
 ---
 
-## Datensicherung
+## 21. Datensicherung
 
-**Einstellungen → Daten → Gesamtexport herunterladen**
+**Einstellungen → Daten → Datensicherung**
 
-ZIP mit `plm.db` + `files/`. Wiederherstellen: ZIP entpacken → Inhalt in `data/`-Ordner → Server neu starten.
+- PLM sichert die Datenbank bei jedem Start einmal pro Tag (die letzten 14 bleiben).
+- **💾 Jetzt sichern** legt eine zusätzliche Sicherung an.
+- **Wiederherstellen** bei einer Sicherung: der Dialog zeigt, was sich ändert (Projekte, Items, Aufträge … jetzt gegen Sicherung). Vorher sichert PLM den jetzigen Stand als „vor Wiederherstellung“ — du kannst also zurück. Danach lädt die Oberfläche neu.
+- **⬆ Aus Datei wiederherstellen…** nimmt eine Sicherung (`.db`) oder einen Gesamtexport (`.zip`).
+- Gelöschte Dateien bleiben 30 Tage im **Papierkorb**; eine wiederhergestellte Sicherung holt sie von dort zurück. Fehlt eine Datei, nennt der Abschlussdialog sie.
+
+**Gesamtexport:** Einstellungen → Daten → Export → ZIP mit `plm.db` + `files/`, lässt sich über „Aus Datei wiederherstellen“ komplett zurückspielen.
 
 ---
 
@@ -606,7 +662,7 @@ Parts:         0028-prt-001 / 0028-asm-001-prt-001
 Dokumente:     0028-doc-001
 Aufträge:      AUF-2026-0001
 Angebote:      ANG-2026-0001
-Produktion:    LS-2026-0001
+Produktionsauftrag: LS-2026-0001
 Einkauf:       EK-2026-0001
 Kunden:        KD-0001
 Lieferanten:   LF-0001

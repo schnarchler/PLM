@@ -33,6 +33,7 @@ async function renderSettings() {
       <span style="color:var(--t2);font-weight:600;font-size:13px">Speicher</span>
       <span>Datenbank: <strong style="color:var(--t1)">${fmtBytes(stor.db_bytes)}</strong></span>
       <span>Dateien: <strong style="color:var(--t1)">${fmtBytes(stor.files_bytes)}</strong></span>
+      ${stor.trash_bytes ? `<span title="Gelöschte Dateien, die eine wiederhergestellte Sicherung noch braucht">Papierkorb: <strong style="color:var(--t1)">${fmtBytes(stor.trash_bytes)}</strong></span>` : ''}
       <span style="margin-left:auto">Gesamt: <strong style="color:var(--blue)">${fmtBytes(stor.total_bytes)}</strong></span>
     </div>` : '';
 
@@ -57,7 +58,7 @@ async function renderSettings() {
           ${fi('company_uid','UID / MwSt-Nr.',s.company_uid,'CHE-123.456.789 MWST')}
         </div>
         <div class="form-row">
-          ${fi('company_street','Straße + Hausnummer',s.company_street,'Industriestraße 42')}
+          ${fi('company_street','Strasse + Hausnummer',s.company_street,'Industriestrasse 42')}
         </div>
         <div class="form-row cols3">
           ${fi('company_postal_code','PLZ',s.company_postal_code,'8000')}
@@ -117,7 +118,7 @@ async function renderSettings() {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
             ${fck('receipt_show_datetime','Datum &amp; Uhrzeit anzeigen',s.receipt_show_datetime)}
             ${fck('receipt_show_customer','Kundenname anzeigen',s.receipt_show_customer)}
-            ${fck('receipt_show_item_number','Artikelnummer anzeigen',s.receipt_show_item_number)}
+            ${fck('receipt_show_item_number','Item-Nummer anzeigen',s.receipt_show_item_number)}
             ${fck('receipt_show_notes','Notizen anzeigen',s.receipt_show_notes)}
           </div>
         </div>
@@ -160,8 +161,8 @@ async function renderSettings() {
             <div class="fg"><label class="fl">Filamentpreis (CHF/kg)</label><input class="fi" id="st-mat-price" type="number" step="0.01" placeholder="22.00"></div>
           </div>
           <div class="form-row cols3">
-            <div class="fg"><label class="fl">Drucktemp (°C)</label><input class="fi" id="st-mat-temp" placeholder="210"></div>
-            <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="st-mat-bed" placeholder="60"></div>
+            <div class="fg"><label class="fl">Düsentemperatur (°C)</label><input class="fi" id="st-mat-temp" placeholder="210"></div>
+            <div class="fg"><label class="fl">Betttemperatur (°C)</label><input class="fi" id="st-mat-bed" placeholder="60"></div>
             <div class="fg"><label class="fl">Notizen</label><input class="fi" id="st-mat-notes" placeholder="optional"></div>
           </div>
           <input type="hidden" id="st-mat-id" value="">
@@ -172,8 +173,10 @@ async function renderSettings() {
       <!-- TAB: PLM -->
       <div class="st-tab-pane" data-tab="plm" hidden>
         <div class="sep-label" style="margin-top:0">Klassifizierungen</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:12px">Verfügbare Klassifizierungen für Bauteile, Baugruppen und Dokumente. Reihenfolge per Drag &amp; Drop ändern.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:12px;line-height:1.55">Verfügbare Klassifizierungen für Bauteile, Baugruppen und Dokumente. Reihenfolge per Drag &amp; Drop ändern.
+          Ein umbenannter Eintrag wird beim Speichern an allen Items übernommen. In der Suche filtern die Chips nach diesen Einträgen.</div>
         <div id="st-class-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div id="st-class-orphans" style="margin-bottom:12px"></div>
         <div style="display:flex;gap:8px;align-items:center">
           <input class="fi" id="st-class-new" placeholder="Neue Klassifizierung…" style="max-width:240px" onkeydown="if(event.key==='Enter')_addClass()">
           <button class="btn btn-ghost btn-sm" onclick="_addClass()">+ Hinzufügen</button>
@@ -251,7 +254,7 @@ async function renderSettings() {
 
         <div class="sep-label" style="margin-top:24px">Daten verschieben</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px">
-          Kopiert das komplette Datenverzeichnis (Datenbank, alle Dateien, Backups) an einen neuen Ort,
+          Kopiert das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort,
           prüft die Kopie und schaltet PLM sofort darauf um — ein Neustart ist nicht nötig.
           Erst nach erfolgreicher Prüfung wird der alte Ordner gelöscht.
         </div>
@@ -303,7 +306,23 @@ async function renderSettings() {
         </div>
 
         <div class="sep-label" style="margin-top:24px">Datensicherung</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten als ZIP-Archiv herunter.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
+          PLM sichert die Datenbank bei jedem Start einmal pro Tag und behält die letzten 14 Tage.
+          Gelöschte Dateien bleiben 30 Tage im Papierkorb, damit eine wiederhergestellte Sicherung sie wiederfindet.
+          Vor jedem Wiederherstellen wird der jetzige Stand automatisch gesichert.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-ghost" onclick="createBackupNow()">💾 Jetzt sichern</button>
+          <label class="btn btn-ghost" style="cursor:pointer" title="Eine Sicherung (.db) oder einen Gesamtexport (.zip) wiederherstellen">
+            ⬆ Aus Datei wiederherstellen…
+            <input type="file" accept=".db,.zip" style="display:none" onchange="restoreBackupFromFile(this)">
+          </label>
+          <span id="st-backup-msg" style="font-size:13px;color:var(--t3)"></span>
+        </div>
+        <div id="st-backup-list" style="margin-top:10px;font-size:13px;color:var(--t3)">Lädt Sicherungen…</div>
+
+        <div class="sep-label" style="margin-top:24px">Export</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Lädt alle PLM-Daten als ZIP-Archiv herunter. Der Gesamtexport lässt sich oben über „Aus Datei wiederherstellen" komplett zurückspielen, inklusive Dateien.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <a class="btn btn-ghost" href="/api/export" download>&#x1F4E6; Gesamtexport (Rohdaten)</a>
           <a class="btn btn-ghost" href="/api/export-named" download title="Dateien werden wie beim Checkout mit korrekten Namen und Ordnerstruktur exportiert">&#x1F4C1; Export mit Klarnamen</a>
@@ -327,13 +346,13 @@ async function renderSettings() {
 
         <div class="sep-label" style="margin-top:0;color:var(--red)">Datensätze löschen</div>
         <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px">
-          <button class="adm-del-tab active" data-deltab="teile"    onclick="_admDelTab('teile')"    style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-1px;font-weight:600">Teile</button>
+          <button class="adm-del-tab active" data-deltab="teile"    onclick="_admDelTab('teile')"    style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-1px;font-weight:600">Items</button>
           <button class="adm-del-tab"        data-deltab="projekte" onclick="_admDelTab('projekte')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Projekte</button>
           <button class="adm-del-tab"        data-deltab="auftraege"  onclick="_admDelTab('auftraege')"  style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Aufträge</button>
           <button class="adm-del-tab"        data-deltab="produktion" onclick="_admDelTab('produktion')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">Produktion</button>
         </div>
         <div id="adm-del-teile">
-          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Freigegebene (REL/OBS) Bauteile, Baugruppen und Dokumente</div>
+          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Freigegebene (REL/OBS/ECO) oder gelieferte Items — Bauteile, Baugruppen und Dokumente</div>
           <div id="st-del-items" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
         <div id="adm-del-projekte" style="display:none">
@@ -343,7 +362,7 @@ async function renderSettings() {
         <div id="adm-del-auftraege" style="display:none">
           <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Aufträge (nicht Entwurf)</div>
           <div id="st-del-orders" style="display:flex;flex-direction:column;gap:4px"></div>
-          <div style="font-size:13px;color:var(--t3);margin:10px 0 6px">Angebote (nicht Entwurf)</div>
+          <div style="font-size:13px;color:var(--t3);margin:10px 0 6px">Alte Angebote aus der Zeit vor der Angebotsphase (Archiv)</div>
           <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
         <div id="adm-del-produktion" style="display:none">
@@ -352,7 +371,7 @@ async function renderSettings() {
         </div>
 
         <div class="sep-label" style="margin-top:28px">Nummernpräfixe</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:12px">Präfixe für neu erstellte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:12px">Präfixe für neu angelegte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.</div>
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-prefix-order" placeholder="AUF"></div>
           <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-prefix-quote" placeholder="ANG"></div>
@@ -376,7 +395,7 @@ async function renderSettings() {
         </div>
 
         <div class="sep-label" style="margin-top:20px">Struktur Item-Nummern</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Gilt nur für <b>neu erstellte</b> Items. Bestehende Nummern werden nicht geändert.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Gilt nur für <b>neu angelegte</b> Items. Bestehende Nummern werden nicht geändert.</div>
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Trennzeichen</label><input class="fi" id="adm-num-sep" placeholder="-" maxlength="3"></div>
           <div class="fg"><label class="fl">Stellen Baugruppe</label><input class="fi" id="adm-pad-asm" type="number" min="1" max="6" placeholder="3"></div>
@@ -425,6 +444,7 @@ async function renderSettings() {
       styleActiveTabs();
       if (b.dataset.tab === 'loeschen') _loadDelTab();
       if (b.dataset.tab === 'plm') _loadPlmTab();
+      if (b.dataset.tab === 'daten') loadBackupList();
     });
   });
 
@@ -442,6 +462,134 @@ async function renderSettings() {
     const ec = document.getElementById('st-cad-path');
     if (ec) ec.value = s.cad_path || '';
   });
+}
+
+// ── SICHERUNGEN ───────────────────────────────────────────────
+// Liste aus backups/ im Datenverzeichnis. Wiederherstellen tauscht die
+// Datenbank im laufenden Betrieb; danach lädt die Oberfläche neu, damit nichts
+// Veraltetes stehen bleibt.
+const BACKUP_KIND_LABEL = { auto: 'täglich', manuell: 'von Hand', 'vor-wiederherstellung': 'vor Wiederherstellung', sonstige: 'Datei' };
+const BACKUP_STAT_LABEL = [['projects', 'Projekte'], ['items', 'Items'], ['revisions', 'Revisionen'], ['datasets', 'Dateien'],
+  ['orders', 'Aufträge'], ['deliveries', 'Produktionsaufträge'], ['customers', 'Kunden']];
+let _backupData = null;
+
+async function loadBackupList() {
+  const el = document.getElementById('st-backup-list');
+  if (!el) return;
+  try { _backupData = await api('/api/backups'); }
+  catch { el.innerHTML = '<span style="color:var(--red)">Sicherungen konnten nicht geladen werden.</span>'; return; }
+  const list = _backupData.backups || [];
+  if (!list.length) { el.innerHTML = 'Noch keine Sicherungen vorhanden.'; return; }
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:5px">${list.map((b, i) => {
+    const ok = b.stats?.ok;
+    const facts = ok ? [['projects', 'Projekt', 'Projekte'], ['items', 'Item', 'Items'], ['orders', 'Auftrag', 'Aufträge']]
+      .filter(([k]) => b.stats[k] != null).map(([k, one, many]) => `${b.stats[k]} ${b.stats[k] === 1 ? one : many}`).join(' · ') : '';
+    return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+      <span class="chip" style="flex-shrink:0">${esc(BACKUP_KIND_LABEL[b.kind] || b.kind)}</span>
+      <div style="flex:1;min-width:200px">
+        <div style="font-family:var(--mono);font-size:12.5px;color:var(--t1)">${esc(b.name)}</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:1px">${fmtDate(b.modified_at)} · ${_fmtBytes(b.size)}${facts ? ' · ' + facts : ''}${ok ? '' : ' · <span style="color:var(--red)">beschädigt</span>'}</div>
+      </div>
+      ${ok ? `<button class="btn btn-ghost btn-sm" onclick="confirmRestoreBackup(${i})">Wiederherstellen</button>` : ''}
+      <button class="btn btn-ghost btn-icon btn-sm" title="Sicherung löschen" onclick="deleteBackup(${i})">✕</button>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function createBackupNow() {
+  const msg = document.getElementById('st-backup-msg');
+  try {
+    const r = await api('/api/backups', 'POST');
+    if (msg) { msg.textContent = 'Gesichert als ' + r.name; msg.style.color = 'var(--green)'; }
+    toast('Sicherung erstellt', 'ok');
+    loadBackupList();
+  } catch {}
+}
+
+async function deleteBackup(i) {
+  const b = _backupData?.backups?.[i];
+  if (!b || !confirm(`Sicherung ${b.name} löschen?`)) return;
+  try { await api(`/api/backups/${encodeURIComponent(b.name)}`, 'DELETE'); toast('Sicherung gelöscht', 'ok'); }
+  catch {}
+  loadBackupList();
+}
+
+// Vorher zeigen, was sich ändert: Kennzahlen jetzt gegen Sicherung
+function confirmRestoreBackup(i) {
+  const b = _backupData?.backups?.[i];
+  if (!b) return;
+  const cur = _backupData.current || {};
+  const rows = BACKUP_STAT_LABEL.filter(([k]) => b.stats[k] != null || cur[k] != null).map(([k, l]) => {
+    const diff = (b.stats[k] ?? 0) - (cur[k] ?? 0);
+    return `<tr><td>${l}</td><td style="text-align:right;font-family:var(--mono)">${cur[k] ?? '—'}</td>
+      <td style="text-align:right;font-family:var(--mono)">${b.stats[k] ?? '—'}</td>
+      <td style="text-align:right;font-family:var(--mono);color:${diff < 0 ? 'var(--red)' : diff > 0 ? 'var(--green)' : 'var(--t4)'}">${diff > 0 ? '+' : ''}${diff || '±0'}</td></tr>`;
+  }).join('');
+  _showDynModal(`<div class="modal" style="max-width:520px">
+    <div class="modal-head"><div class="modal-title">Sicherung wiederherstellen</div></div>
+    <div class="modal-body" style="font-size:13px;color:var(--t2)">
+      <div style="font-family:var(--mono);color:var(--t1)">${esc(b.name)}</div>
+      <div style="color:var(--t3);margin:2px 0 12px">gesichert ${fmtDate(b.modified_at)}${b.stats.last_change ? ' · letzte Änderung darin ' + fmtDate(b.stats.last_change) : ''}</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th></th><th style="text-align:right">Jetzt</th><th style="text-align:right">Sicherung</th><th style="text-align:right">Differenz</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div style="margin-top:12px;line-height:1.55;color:var(--t3)">
+        Alles, was seit dieser Sicherung erfasst wurde, ist danach nicht mehr in PLM.
+        Der jetzige Stand wird vorher als „vor Wiederherstellung" gesichert — du kannst also zurück.
+        Gelöschte Dateien holt PLM aus dem Papierkorb zurück, neuere Dateien bleiben im Dateiordner liegen.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-amber" onclick="_doRestoreBackup(${i})">Wiederherstellen</button>
+    </div>
+  </div>`);
+}
+
+async function _doRestoreBackup(i) {
+  const b = _backupData?.backups?.[i];
+  _hideDynModal();
+  if (!b) return;
+  try { _showRestoreResult(await api(`/api/backups/${encodeURIComponent(b.name)}/restore`, 'POST')); }
+  catch {}
+}
+
+async function restoreBackupFromFile(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (!confirm(`„${file.name}" wiederherstellen?\n\nAlles, was danach erfasst wurde, ist anschliessend nicht mehr in PLM. Der jetzige Stand wird vorher gesichert.`)) return;
+  const msg = document.getElementById('st-backup-msg');
+  if (msg) { msg.textContent = 'Wird wiederhergestellt…'; msg.style.color = 'var(--t3)'; }
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(API + '/api/backups/restore-upload', { method: 'POST', body: fd });
+  const body = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
+  if (!r.ok) {
+    if (msg) { msg.textContent = ''; }
+    toast(body.error || 'Wiederherstellen fehlgeschlagen', 'err');
+    return;
+  }
+  _showRestoreResult(body);
+}
+
+function _showRestoreResult(r) {
+  const f = r.files || {};
+  _showDynModal(`<div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title" style="color:var(--green)">✓ Sicherung wiederhergestellt</div></div>
+    <div class="modal-body" style="font-size:13px;color:var(--t2);line-height:1.6">
+      <div><span style="font-family:var(--mono)">${esc(r.source)}</span> ist jetzt der aktuelle Stand.</div>
+      <div style="color:var(--t3)">Der vorherige Stand liegt als <span style="font-family:var(--mono)">${esc(r.safety_backup)}</span> in der Liste.</div>
+      ${f.extracted ? `<div style="margin-top:8px">${f.extracted} Datei(en) aus dem ZIP ergänzt.</div>` : ''}
+      ${f.restored_from_trash ? `<div style="margin-top:8px">${f.restored_from_trash} gelöschte Datei(en) aus dem Papierkorb zurückgeholt.</div>` : ''}
+      ${f.missing ? `<div style="margin-top:8px;color:var(--amber)">⚠ ${f.missing} Datei(en) fehlen im Dateiordner und im Papierkorb:
+          <div style="font-family:var(--mono);font-size:12px;color:var(--t3);margin-top:4px">${(f.missing_names || []).map(esc).join('<br>')}${f.missing > (f.missing_names || []).length ? '<br>…' : ''}</div></div>` : ''}
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" onclick="location.reload()">Neu laden</button>
+    </div>
+  </div>`);
 }
 
 async function saveCadPath() {

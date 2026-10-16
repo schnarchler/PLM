@@ -60,7 +60,7 @@ async function openNormteilDetail(id) {
         <button class="btn btn-red btn-sm" onclick="delNormteil(${id})">🗑</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-        ${p.size     ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Größe</div><span style="font-family:var(--mono)">${esc(p.size)}</span></div>` : ''}
+        ${p.size     ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Grösse</div><span style="font-family:var(--mono)">${esc(p.size)}</span></div>` : ''}
         ${p.material ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Material</div>${esc(p.material)}</div>` : ''}
         ${p.unit_price!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Stückpreis</div><span style="font-family:var(--mono)">${fmtChf(p.unit_price)}</span></div>` : ''}
       </div>
@@ -133,7 +133,7 @@ async function _loadNormteilForm(id) {
       <div class="fg"><label class="fl">Norm-Nr.</label>
         <input class="fi" id="nt-num" value="${esc(p.std_number||'')}" placeholder="z.B. 912" oninput="_ntAutoDesig()">
       </div>
-      <div class="fg"><label class="fl">Größe / Maß</label>
+      <div class="fg"><label class="fl">Grösse / Mass</label>
         <input class="fi" id="nt-size" value="${esc(p.size||'')}" placeholder="z.B. M4x12" oninput="_ntAutoDesig()">
       </div>
     </div>
@@ -518,7 +518,7 @@ async function savePo() {
     notes: document.getElementById('po-notes').value,
   };
   const po = id ? await api(`/api/purchase-orders/${id}`, 'PUT', body) : await api('/api/purchase-orders', 'POST', body);
-  toast(id ? 'Gespeichert' : 'Bestellung erstellt', 'ok');
+  toast(id ? 'Gespeichert' : 'Bestellung angelegt', 'ok');
   closeModal('poModal');
   await renderPurchasing();
   openPoDetail(po.id);
@@ -765,7 +765,7 @@ async function saveSupplier() {
   const s = id
     ? await api('/api/suppliers/' + id, 'PUT', body)
     : await api('/api/suppliers', 'POST', body);
-  toast(id ? 'Gespeichert' : 'Lieferant erstellt', 'ok');
+  toast(id ? 'Gespeichert' : 'Lieferant angelegt', 'ok');
   closeModal('supplierModal');
   state._poSuppliers = null;
   await renderPurchasing();
