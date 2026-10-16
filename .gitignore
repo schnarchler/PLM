@@ -19,3 +19,6 @@ PLM.code-workspace
 
 # Lokale Konfiguration (persönliche Pfade)
 plm.config
+
+# Screenshots aus Claude-Sitzungen (nur lokal)
+screenshots/
