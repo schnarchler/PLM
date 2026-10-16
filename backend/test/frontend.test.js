@@ -44,7 +44,8 @@ installGlobals();
 global.API = '';
 evalPart('js/08-ui-api.js', 'function helpTip(', 'function setLeftHeader(', 'globalThis.helpTip = helpTip');
 // Rechte und Kacheln — die Freigabe-Knöpfe fragen canRelease()
-const WHO = evalPart('js/16-benutzer.js', 'const ROLE_LABEL', '// kind:', '({ _whoTiles, currentRole, canRelease, isAdmin })');
+const WHO = evalPart('js/16-benutzer.js', 'const ROLE_LABEL', 'async function _saveUser(',
+  '({ _whoTiles, _usersPanel, currentRole, canRelease, isAdmin })');
 
 // ── QR-Encoder ────────────────────────────────────────────────
 const QR = (0, eval)(read('js/14-qr.js')
@@ -513,4 +514,29 @@ test('Historie: Name der Person steht dabei, escaped', () => {
   const item = demoItem({ changelog: [{ action: 'Erstellt', details: '', user_name: 'Anna', created_at: '2026-10-16 10:00:00' }] });
   global.state.item = item;
   assert.match(renderItemSheet(item, 31), /Erstellt <span class="cl-user">Anna<\/span>/, 'auch unter „Letzte Änderung“');
+});
+
+test('Benutzer verwalten: nur Admins, der einzige Admin bleibt Admin', () => {
+  const users = [{ id: 1, name: 'Anna', role: 'admin', active: 1, has_pin: false },
+    { id: 2, name: '<b>Ben</b>', role: 'user', active: 1 }, { id: 3, name: 'Cleo', role: 'superuser', active: 0 }];
+  const team = { mode: 'team', idle_minutes: 30 };
+
+  const asAdmin = WHO._usersPanel(users, team, true);
+  assert.ok(!asAdmin.includes('<b>Ben'), 'Namen escaped');
+  assert.match(asAdmin, /einziger Admin/);
+  assert.ok(!asAdmin.includes('_saveUser(1, { active: false })'), 'einziger Admin nicht deaktivierbar');
+  assert.ok(!/_saveUser\(1, \{ role:/.test(asAdmin), 'einziger Admin nicht herabstufbar');
+  assert.match(asAdmin, /_saveUser\(2, \{ active: false \}\)/, 'andere schon');
+  assert.match(asAdmin, /Ohne PIN kann jede Person die Admin-Kachel wählen/);
+  assert.match(asAdmin, /_saveUser\(3, \{ active: true \}\)/, 'Deaktivierte lassen sich aktivieren');
+
+  const zweiAdmins = WHO._usersPanel([...users, { id: 4, name: 'Dora', role: 'admin', active: 1, has_pin: true }], team, true);
+  assert.match(zweiAdmins, /_saveUser\(1, \{ active: false \}\)/, 'mit zweitem Admin wieder möglich');
+
+  const asUser = WHO._usersPanel(users, team, false);
+  assert.match(asUser, /Personen verwalten dürfen nur Admins/);
+  for (const action of ['_saveUser(', '_addUser(', '_setUserPin(', '_saveIdleMinutes(']) {
+    assert.ok(!asUser.includes(action), `kein ${action} für Nicht-Admins`);
+  }
+  assert.match(asUser, /Nach 30 Minuten ohne Aktivität fragt PLM/);
 });
