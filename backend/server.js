@@ -10,9 +10,10 @@ const initSqlJs = require('sql.js');
 const app  = express();
 const PORT = process.env.PLM_PORT || 3000;
 
-// plm.config liegt an der PLM-Wurzel (eine Ebene über backend/)
+// plm.config liegt an der PLM-Wurzel (eine Ebene über backend/); Tests
+// setzen PLM_CONFIG auf eine eigene Datei.
 // Format: Schlüssel=Wert, Zeilen mit # werden ignoriert
-const PLM_CONFIG_PATH = path.join(__dirname, '..', 'plm.config');
+const PLM_CONFIG_PATH = process.env.PLM_CONFIG || path.join(__dirname, '..', 'plm.config');
 
 function loadConfig() {
   try {
@@ -32,7 +33,10 @@ function saveConfig(obj) {
   try {
     if (fs.existsSync(PLM_CONFIG_PATH)) lines = fs.readFileSync(PLM_CONFIG_PATH, 'utf8').split('\n');
   } catch {}
-  for (const [key, value] of Object.entries(obj)) {
+  for (const [key, raw] of Object.entries(obj)) {
+    // Kein Zeilenumbruch im Wert — sonst liesse sich über das Datenpfad-Feld
+    // eine weitere Zeile, etwa ein Slicer-Pfad, in die Datei schreiben.
+    const value = String(raw ?? '').replace(/[\r\n]+/g, '');
     const idx = lines.findIndex(l => l.trim().startsWith(key + '='));
     if (idx >= 0) lines[idx] = `${key}=${value}`;
     else lines.push(`${key}=${value}`);
@@ -2490,6 +2494,22 @@ function deleteFolderRecursive(dirPath) {
   }
 }
 
+// Ordner und Dateien aus einer Anfrage: nur direkt im Checkout-Verzeichnis.
+// Sonst liesse sich über den Check-in jeder Ordner auf dem PC löschen und
+// über den Import jede Datei einlesen. Symlinks zählen nicht.
+function checkoutFolderFrom(folder, { allowRoot = false } = {}) {
+  if (!folder || typeof folder !== 'string') return null;
+  const root = getCheckoutDir();
+  const abs = path.resolve(folder);
+  if (!(path.dirname(abs) === root || (allowRoot && abs === root))) return null;
+  try { return fs.lstatSync(abs).isDirectory() ? abs : null; } catch { return null; }
+}
+function checkoutFileIn(dir, name) {
+  if (!name || typeof name !== 'string' || name !== path.basename(name) || name.startsWith('.')) return null;
+  const abs = path.join(dir, name);
+  try { return fs.lstatSync(abs).isFile() ? abs : null; } catch { return null; }
+}
+
 app.post('/api/items/:id/checkout', (req, res) => {
   try {
     const { types, mode } = req.body;
@@ -2600,9 +2620,11 @@ app.get('/api/checkout/scan', (req, res) => {
 // Import new files from checkout folder into PLM
 app.post('/api/checkout/import', (req, res) => {
   try {
-    const { mode, item_id, folder, files, new_item } = req.body;
+    const { mode, item_id, files, new_item } = req.body;
 
     if (mode === 'item') {
+      const folder = checkoutFolderFrom(req.body.folder);
+      if (!folder) return res.status(400).json({ error: 'Kein Ordner im Checkout-Verzeichnis' });
       // Add files to existing item's latest non-REL revision
       const item = get('SELECT * FROM items WHERE id=?', [item_id]);
       if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
@@ -2615,9 +2637,9 @@ app.post('/api/checkout/import', (req, res) => {
         rev = get('SELECT * FROM revisions WHERE id=?', [revId]);
       }
       const imported = [];
-      for (const f of files) {
-        const src = path.join(folder, f.name);
-        if (!fs.existsSync(src)) continue;
+      for (const f of files || []) {
+        const src = checkoutFileIn(folder, f.name);
+        if (!src) continue;
         const ext = path.extname(f.name);
         const storedName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
         fs.copyFileSync(src, path.join(FILES_DIR, storedName));
@@ -2647,9 +2669,13 @@ app.post('/api/checkout/import', (req, res) => {
 
     } else if (mode === 'new') {
       // Create new item in given project
-      const { project_id, item_type, name, file_path: filePath, file_name, ds_type } = new_item;
+      const { project_id, item_type, name, file_path, file_name, ds_type } = new_item;
       const project = get('SELECT * FROM projects WHERE id=?', [project_id]);
       if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+      const filePath = file_path ? checkoutFileIn(getCheckoutDir(), path.basename(String(file_path))) : null;
+      if (file_path && (!filePath || path.resolve(String(file_path)) !== filePath)) {
+        return res.status(400).json({ error: 'Keine Datei im Checkout-Verzeichnis' });
+      }
 
       let item_number;
       if (item_type === 'asm') {
@@ -2665,7 +2691,7 @@ app.post('/api/checkout/import', (req, res) => {
       assignShortCode(itemId);
       const revId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Erstellt durch Checkout-Import']);
 
-      if (filePath && fs.existsSync(filePath)) {
+      if (filePath) {
         const ext = path.extname(file_name);
         const storedName = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
         fs.copyFileSync(filePath, path.join(FILES_DIR, storedName));
@@ -2701,9 +2727,11 @@ app.get('/api/checkout/list', (req, res) => {
 
 app.post('/api/checkout/checkin', (req, res) => {
   try {
-    const { folder } = req.body;
-    if (!folder) return res.status(400).json({ error: 'Kein Ordner angegeben' });
-    if (!fs.existsSync(folder)) return res.status(404).json({ error: 'Ordner nicht gefunden: ' + folder });
+    // Gelöscht wird nur ein Ordner, den ein Checkout angelegt hat
+    const folder = checkoutFolderFrom(req.body.folder);
+    if (!folder || !fs.existsSync(path.join(folder, '.checkout.json'))) {
+      return res.status(400).json({ error: 'Kein Checkout-Ordner: ' + String(req.body.folder || '') });
+    }
 
     // Read metadata
     let meta = null;
@@ -2774,19 +2802,160 @@ app.post('/api/checkout/checkin', (req, res) => {
 });
 
 app.post('/api/checkout/open', (req, res) => {
-  const { folder } = req.body;
-  if (!folder) return res.status(400).json({ error: 'Kein Ordner angegeben' });
-  if (!fs.existsSync(folder)) return res.status(404).json({ error: 'Ordner nicht gefunden: ' + folder });
-  const { exec } = require('child_process');
-  // Pass DISPLAY so xdg-open can reach the desktop session
-  const env = { ...process.env, DISPLAY: process.env.DISPLAY || ':0' };
-  const cmd = process.platform === 'win32' ? `explorer "${folder}"`
-    : process.platform === 'darwin' ? `open "${folder}"`
-    : `xdg-open "${folder}"`;
-  exec(cmd, { env }, (err) => {
-    if (err) console.error('xdg-open error:', err.message);
-  });
+  if (!_isLocalRequest(req)) return res.status(403).json({ error: 'Ordner lassen sich nur auf dem PC öffnen, auf dem das PLM läuft.' });
+  const folder = checkoutFolderFrom(req.body.folder, { allowRoot: true });
+  if (!folder) return res.status(400).json({ error: 'Kein Ordner im Checkout-Verzeichnis' });
+  const opener = process.platform === 'win32' ? 'explorer' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  launchProgram({ cmd: opener, args: [] }, folder).catch(e => console.error('Ordner öffnen:', e.message));
   res.json({ success: true });
+});
+
+// ── SLICER ────────────────────────────────────────────────────
+// „Im Slicer öffnen": Die Modelldatei wird als Arbeitskopie nach
+// <Checkout>/Slicer gelegt und der gewählte Slicer damit gestartet. Der
+// Dateiname beginnt mit dem Kurzcode, so trägt ihn auch der G-Code.
+// In den Einstellungen wird nur gewählt, welcher Slicer — das Programm wird
+// an den üblichen Orten gesucht. Ein eigener Pfad geht nur über plm.config:
+// Die API ist ohne Anmeldung im Netz erreichbar, ein dort einstellbarer
+// Programmpfad liesse jeden im Netz Programme auf diesem PC starten.
+const SLICERS = [
+  { id: 'prusa', name: 'PrusaSlicer', configKey: 'prusaslicer',
+    commands: ['prusa-slicer', 'PrusaSlicer', 'prusaslicer'], flatpak: 'com.prusa3d.PrusaSlicer',
+    appImage: /prusa-?slicer/i, win: ['Prusa3D\\PrusaSlicer\\prusa-slicer.exe'],
+    mac: 'PrusaSlicer.app/Contents/MacOS/PrusaSlicer' },
+  { id: 'bambu', name: 'Bambu Studio', configKey: 'bambustudio',
+    commands: ['bambu-studio', 'BambuStudio', 'bambustudio'], flatpak: 'com.bambulab.BambuStudio',
+    appImage: /bambu-?studio/i, win: ['Bambu Studio\\bambu-studio.exe'],
+    mac: 'BambuStudio.app/Contents/MacOS/BambuStudio' },
+];
+const SLICER_EXTS = ['.stl', '.3mf', '.obj', '.step', '.stp', '.amf'];
+
+function _isFile(p) { try { return fs.statSync(p).isFile(); } catch { return false; } }
+function _onPath(cmd) {
+  const exts = process.platform === 'win32' ? ['.exe', ''] : [''];
+  for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean))
+    for (const e of exts) { const p = path.join(dir, cmd + e); if (_isFile(p)) return p; }
+  return null;
+}
+
+// Wo ist der Slicer installiert? → { cmd, args, where }, { error } oder null
+function findSlicer(s) {
+  const custom = (loadConfig()[s.configKey] || '').trim();
+  if (custom) return _isFile(custom) ? { cmd: custom, args: [], where: custom }
+    : { error: `Pfad aus plm.config nicht gefunden: ${custom}` };
+  for (const c of s.commands) { const p = _onPath(c); if (p) return { cmd: p, args: [], where: p }; }
+  const home = os.homedir();
+  const at = p => (_isFile(p) ? { cmd: p, args: [], where: p } : null);
+  if (process.platform === 'win32') {
+    const roots = [process.env.ProgramW6432, process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean);
+    for (const r of roots) for (const rel of s.win) { const hit = at(path.join(r, rel)); if (hit) return hit; }
+    return null;
+  }
+  if (process.platform === 'darwin') {
+    for (const r of ['/Applications', path.join(home, 'Applications')]) { const hit = at(path.join(r, s.mac)); if (hit) return hit; }
+    return null;
+  }
+  const flatpak = _onPath('flatpak');
+  if (flatpak && ['/var/lib/flatpak', path.join(home, '.local/share/flatpak')]
+      .some(r => fs.existsSync(path.join(r, 'app', s.flatpak)))) {
+    return { cmd: flatpak, args: ['run', s.flatpak], where: 'Flatpak ' + s.flatpak };
+  }
+  const dirs = ['Applications', 'AppImages', '.local/bin', 'Downloads', 'Desktop', 'Schreibtisch']
+    .map(d => path.join(home, d)).concat('/opt');
+  for (const dir of dirs) {
+    let names; try { names = fs.readdirSync(dir); } catch { continue; }
+    // Bei mehreren Versionen die mit dem höchsten Namen
+    const hit = names.filter(n => /\.appimage$/i.test(n) && s.appImage.test(n)).sort().pop();
+    if (hit) return at(path.join(dir, hit));
+  }
+  return null;
+}
+
+function slicerStatus() {
+  const chosen = getSetting('slicer', '');
+  const slicers = SLICERS.map(s => {
+    const f = findSlicer(s);
+    return { id: s.id, name: s.name, config_key: s.configKey, found: !!(f && !f.error), where: f?.where || null, error: f?.error || null };
+  });
+  // Nichts gewählt: der erste installierte
+  const active = SLICERS.some(s => s.id === chosen) ? chosen : (slicers.find(s => s.found)?.id || '');
+  return { chosen, active, slicers };
+}
+
+// Programme starten nur für Aufrufe von diesem PC — von einem anderen Gerät
+// aus ginge das Fenster ohnehin hier auf. Der Host wird mitgeprüft: Eine
+// fremde Webseite kann den Browser per DNS-Rebinding auf 127.0.0.1 lenken,
+// schickt dann aber ihren eigenen Namen als Host mit.
+function _isLocalRequest(req) {
+  const own = Object.values(os.networkInterfaces()).flat().filter(Boolean).map(i => i.address.toLowerCase());
+  const name = os.hostname().toLowerCase();
+  const host = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[(.*)\]$/, '$1');
+  if (!['localhost', '127.0.0.1', '::1', name, name + '.local', ...own].includes(host)) return false;
+  const a = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '').toLowerCase();
+  return a === '127.0.0.1' || a === '::1' || own.includes(a);
+}
+
+// K7M-3_Halter.stl — mehrere Modelle gleichen Typs in einer Revision mit _2, _3
+function slicerFileName(ds, ext) {
+  const code = ds.short_code ? printCode(ds.short_code, ds.rev) : `${ds.item_number}_rev${ds.rev}`;
+  const name = (ds.item_name || '').replace(/[^a-zA-Z0-9äöüÄÖÜß _-]/g, '_').replace(/\s+/g, '_')
+    .replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const same = all('SELECT id, original_name FROM datasets WHERE revision_id=? ORDER BY id', [ds.revision_id])
+    .filter(d => path.extname(d.original_name || '').toLowerCase() === ext);
+  const n = same.findIndex(d => d.id === ds.id);
+  return (code + (name ? '_' + name : '') + (n > 0 ? '_' + (n + 1) : '')).replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, '_') + ext;
+}
+
+function _sameContent(a, b) {
+  try { return fs.statSync(a).size === fs.statSync(b).size && fs.readFileSync(a).equals(fs.readFileSync(b)); }
+  catch { return false; }
+}
+
+// Ohne Shell starten — Pfade mit Leerzeichen oder Sonderzeichen bleiben ein Argument
+function launchProgram(found, file = null) {
+  return new Promise((resolve, reject) => {
+    const env = { ...process.env };
+    if (process.platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) env.DISPLAY = ':0';
+    const args = file ? [...found.args, file] : found.args;
+    const child = require('child_process').spawn(found.cmd, args, { detached: true, stdio: 'ignore', env });
+    child.once('error', reject);
+    child.once('spawn', () => { child.unref(); resolve(); });
+  });
+}
+
+app.get('/api/slicers', (req, res) => {
+  res.json({ ...slicerStatus(), local: _isLocalRequest(req) });
+});
+
+app.post('/api/datasets/:id/open-in-slicer', async (req, res) => {
+  if (!_isLocalRequest(req)) return res.status(403).json({ error: 'Der Slicer lässt sich nur auf dem PC öffnen, auf dem das PLM läuft.' });
+  const ds = get(`SELECT d.*, r.rev, i.item_number, i.name AS item_name, i.short_code
+    FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id WHERE d.id=?`, [req.params.id]);
+  if (!ds) return res.status(400).json({ error: 'Datei nicht mehr vorhanden' });
+  const ext = path.extname(ds.original_name || '').toLowerCase();
+  if (!SLICER_EXTS.includes(ext)) return res.status(400).json({ error: `${ext || 'Diese Datei'} lässt sich im Slicer nicht öffnen` });
+  const src = path.join(FILES_DIR, ds.filename);
+  if (!_isFile(src)) return res.status(400).json({ error: 'Datei fehlt im Datenverzeichnis' });
+
+  const sl = SLICERS.find(s => s.id === slicerStatus().active);
+  if (!sl) return res.status(400).json({ error: 'Kein Slicer installiert — siehe Einstellungen → 3D-Druck' });
+  const found = findSlicer(sl);
+  if (!found || found.error) return res.status(400).json({ error: `${sl.name} nicht gefunden${found?.error ? ' (' + found.error + ')' : ''} — siehe Einstellungen → 3D-Druck` });
+
+  // Eine vorhandene, abweichende Arbeitskopie bleibt stehen: Ein im Slicer
+  // gespeichertes Projekt (Kurzcode gesetzt, Teile angeordnet) ginge sonst verloren.
+  const dir = path.join(getCheckoutDir(), 'Slicer');
+  const dest = path.join(dir, slicerFileName(ds, ext));
+  let kept = false;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    if (!_isFile(dest)) fs.copyFileSync(src, dest);
+    else kept = !_sameContent(src, dest);
+  } catch (e) { return res.status(500).json({ error: 'Arbeitskopie fehlgeschlagen: ' + e.message }); }
+
+  try { await launchProgram(found, dest); }
+  catch (e) { return res.status(500).json({ error: `${sl.name} liess sich nicht starten: ${e.message}` }); }
+  res.json({ ok: true, slicer: sl.name, file: dest, kept });
 });
 
 app.get('/api/datasets/:id/download', (req, res) => {
@@ -3749,7 +3918,14 @@ app.get('/api/settings', (req, res) => {
   res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
 });
 
+// Bestimmt, wo der Check-in Ordner löscht — nur vom PC aus änderbar
+const LOCAL_ONLY_SETTINGS = ['checkout_dir'];
+
 app.put('/api/settings', (req, res) => {
+  const changed = LOCAL_ONLY_SETTINGS.filter(k => k in req.body && String(req.body[k] ?? '') !== getSetting(k, ''));
+  if (changed.length && !_isLocalRequest(req)) {
+    return res.status(403).json({ error: 'Das Checkout-Verzeichnis lässt sich nur auf dem PC ändern, auf dem das PLM läuft.' });
+  }
   Object.entries(req.body).forEach(([k, v]) => {
     db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, String(v??'')]);
   });
@@ -3971,15 +4147,33 @@ app.delete('/api/material-presets/:id', (req, res) => {
 });
 
 // -- SHUTDOWN --------------------------------------------------
-app.post('/api/launch-cad', (req, res) => {
-  const cadPath = get("SELECT value FROM settings WHERE key='cad_path'")?.value;
-  if (!cadPath) return res.status(400).json({ error: 'Kein CAD-Pfad konfiguriert' });
-  const { exec } = require('child_process');
-  const env = { ...process.env, DISPLAY: process.env.DISPLAY || ':0' };
-  const cmd = process.platform === 'win32' ? `"${cadPath}"` : `"${cadPath}"`;
-  exec(cmd, { env, detached: true }, (err) => {
-    if (err) console.error('CAD launch error:', err.message);
-  });
+// CAD-Programm: Pfad in plm.config (cad_path=…), aus demselben Grund wie
+// beim Slicer. Programmpfade gehören ohnehin zum PC, nicht zu den Daten —
+// das Datenverzeichnis kann zwischen PCs geteilt sein.
+function cadStatus() {
+  const where = (loadConfig().cad_path || '').trim();
+  const legacy = (getSetting('cad_path', '') || '').trim();
+  return { configured: !!where, found: !!where && _isFile(where), where: where || null,
+    legacy_path: !where && legacy ? legacy : null };
+}
+// Früher stand der Pfad in der Datenbank. Gilt er auf diesem PC, wandert er
+// einmalig nach plm.config.
+function migrateCadPath() {
+  const old = (getSetting('cad_path', '') || '').trim();
+  if (!old || loadConfig().cad_path || !_isFile(old)) return;
+  saveConfig({ cad_path: old });
+  console.log('CAD-Pfad nach plm.config übernommen: ' + old);
+}
+
+app.get('/api/cad', (req, res) => res.json({ ...cadStatus(), local: _isLocalRequest(req) }));
+
+app.post('/api/launch-cad', async (req, res) => {
+  if (!_isLocalRequest(req)) return res.status(403).json({ error: 'Das CAD-Programm lässt sich nur auf dem PC starten, auf dem das PLM läuft.' });
+  const cad = cadStatus();
+  if (!cad.configured) return res.status(400).json({ error: 'Kein CAD-Programm eingetragen — in plm.config cad_path=… setzen' });
+  if (!cad.found) return res.status(400).json({ error: 'CAD-Programm nicht gefunden: ' + cad.where });
+  try { await launchProgram({ cmd: cad.where, args: [] }); }
+  catch (e) { return res.status(500).json({ error: 'CAD-Programm liess sich nicht starten: ' + e.message }); }
   res.json({ success: true });
 });
 
@@ -3991,47 +4185,32 @@ app.post('/api/shutdown', (req, res) => {
   }, 500);
 });
 
-// Launcher-Seite: oeffnet PLM per window.open(), damit sich der Tab am Ende
-// ueber "Beenden" wieder schliessen laesst — window.close() wirkt nur bei
-// Browsing-Kontexten, die ein Skript geoeffnet hat.
-// Ohne Feature-Liste (width/height/left/top) oeffnet der Browser einen TAB.
-// Sobald auch nur ein Feature gesetzt ist, erzwingt er ein Popup-Fenster.
-app.get('/launcher', (req, res) => {
-  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PLM starten…</title>
-  <style>
-    body{background:#15171c;display:flex;flex-direction:column;align-items:center;justify-content:center;
-         height:100vh;margin:0;gap:18px;padding:20px;text-align:center;
-         font-family:system-ui,-apple-system,sans-serif;color:#99a1b0}
-    button{background:#f4f6f8;color:#15171c;border:none;border-radius:7px;padding:10px 24px;
-           font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
-    button:hover{background:#fff}
-    .hint{font-size:13px;color:#737b8a;max-width:34em;line-height:1.6}
-  </style>
-  </head><body>
-  <div id="msg">PLM &amp; ERP wird geöffnet…</div>
-  <div id="fallback" style="display:none;flex-direction:column;align-items:center;gap:14px">
-    <button type="button" id="openbtn">PLM &amp; ERP öffnen</button>
-    <div class="hint">Der Browser hat das automatische Öffnen blockiert.
-      Über diesen Knopf geöffnet, lässt sich der Tab am Ende per „Beenden“ wieder schliessen.</div>
-  </div>
-  <script>
-    function openApp() {
-      var w = window.open('/', '_blank');
-      if (w) { window.close(); return true; }
-      return false;
-    }
-    // Ohne Nutzerklick blockieren viele Browser window.open. Frueher wurde dann
-    // im selben Tab navigiert — dieser Tab laesst sich spaeter nicht schliessen.
-    // Darum lieber einen Knopf anbieten: der Klick macht das Oeffnen erlaubt.
-    if (!openApp()) {
-      document.getElementById('msg').textContent = 'Fast geschafft';
-      document.getElementById('fallback').style.display = 'flex';
-      document.getElementById('openbtn').addEventListener('click', function () {
-        if (!openApp()) window.location.href = '/';
-      });
-    }
-  <\/script></body></html>`);
-});
+// ── VERSION ───────────────────────────────────────────────────
+// Major.Minor aus package.json, dahinter die Anzahl Commits — zählt mit
+// jedem Commit von selbst hoch. Dazu Commit, Datum und ob nicht committete
+// Änderungen laufen. Ohne Git (Kopie ohne .git, Git nicht installiert)
+// bleibt die Nummer aus package.json.
+const APP_VERSION = (() => {
+  const pkg = require('./package.json').version || '0.0.0';
+  const info = { version: pkg, commit: null, date: null, dirty: false };
+  const git = args => require('child_process').execFileSync('git', args, {
+    cwd: path.join(__dirname, '..'), timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
+  }).toString().trim();
+  try {
+    const count = git(['rev-list', '--count', 'HEAD']);
+    const [commit, date] = git(['log', '-1', '--format=%h %cI']).split(' ');
+    Object.assign(info, { version: pkg.split('.').slice(0, 2).join('.') + '.' + count, commit, date });
+    info.dirty = git(['status', '--porcelain', '--untracked-files=no']) !== '';
+  } catch {}
+  return info;
+})();
+
+app.get('/api/version', (req, res) => res.json({ ...APP_VERSION, data_dir: DATA_DIR }));
+
+// Startbildschirm: öffnet PLM per window.open(), damit sich der Tab am Ende
+// über "Beenden" wieder schliessen lässt — window.close() wirkt nur bei
+// Browsing-Kontexten, die ein Skript geöffnet hat.
+app.get('/launcher', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'launcher.html')));
 
 // ==============================================================
 // 3MF PARSE
@@ -5384,18 +5563,23 @@ app.delete('/api/purchase-orders/:id/items/:itemId', (req, res) => {
 // ==============================================================
 // INVENTORY
 // ==============================================================
+// „Geplant" sind nur Aufträge, die noch ans Lager gehen: in Arbeit, nicht
+// geliefert. Angebote sind nicht zugesagt, Geliefertes und Fakturiertes ist
+// schon raus, Abgelehntes und Storniertes kommt nicht.
+const STOCK_PLANNED_STATUSES = ['DRAFT', 'CONFIRMED'];
+const STOCK_PLANNED_SQL = STOCK_PLANNED_STATUSES.map(s => `'${s}'`).join(',');
+
 // Stock check for a PLM item: returns linked inventory item + planned qty in open orders
 app.get('/api/inventory/stock-check', (req, res) => {
   const { item_id } = req.query;
   if (!item_id) return res.json(null);
   const inv = get(`SELECT ii.* FROM inventory_items ii WHERE ii.item_id=? LIMIT 1`, [parseInt(item_id)]);
   if (!inv) return res.json(null);
-  // Planned = sum of quantities in orders that are not DELIVERED or CANCELLED
   const planned = get(`
     SELECT COALESCE(SUM(oi.quantity),0) as qty
     FROM order_items oi
     JOIN orders o ON oi.order_id=o.id
-    WHERE oi.item_id=? AND o.status NOT IN ('DELIVERED','CANCELLED')
+    WHERE oi.item_id=? AND o.status IN (${STOCK_PLANNED_SQL})
   `, [parseInt(item_id)]);
   res.json({ ...inv, planned_qty: planned?.qty || 0 });
 });
@@ -5405,7 +5589,7 @@ app.get('/api/inventory', (req, res) => {
   const base = `SELECT ii.*, s.name as supplier_name, it.item_number as linked_item_number, it.name as linked_item_name,
     COALESCE((
       SELECT SUM(oi.quantity) FROM order_items oi JOIN orders o ON oi.order_id=o.id
-      WHERE oi.item_id=ii.item_id AND ii.item_id IS NOT NULL AND o.status NOT IN ('DELIVERED','CANCELLED')
+      WHERE oi.item_id=ii.item_id AND ii.item_id IS NOT NULL AND o.status IN (${STOCK_PLANNED_SQL})
     ), 0) as planned_qty
     FROM inventory_items ii
     LEFT JOIN suppliers s ON ii.supplier_id=s.id
@@ -5845,9 +6029,12 @@ app.get('*', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
 
 // -- START ------------------------------------------------------
 initDb().then(() => {
+  migrateCadPath();
   app.listen(PORT, '0.0.0.0', () => {
     console.log('');
-    console.log('  PLM & ERP laeuft auf http://localhost:' + PORT);
+    console.log('  PLM & ERP ' + APP_VERSION.version + (APP_VERSION.commit ? ' (' + APP_VERSION.commit
+      + (APP_VERSION.dirty ? ', nicht committete Änderungen' : '') + ')' : ''));
+    console.log('  laeuft auf http://localhost:' + PORT);
     console.log('  Datenpfad: ' + DATA_DIR);
     console.log('');
   });

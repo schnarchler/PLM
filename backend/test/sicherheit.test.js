@@ -1,0 +1,185 @@
+// Absicherung der Endpunkte, die Programme starten oder mit Pfaden aus der
+// Anfrage arbeiten: Check-in löscht nur Checkout-Ordner, Import liest nur
+// aus dem Checkout-Verzeichnis, Programme starten ohne Shell und nur für
+// Anfragen von diesem PC, der CAD-Pfad steht in plm.config.
+//
+// Ausführen:  npm test   (im backend/-Ordner)
+
+const { test, before, after } = require('node:test');
+const assert = require('node:assert');
+const { spawn } = require('node:child_process');
+const http = require('node:http');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const PORT = 3992;
+const BASE = `http://127.0.0.1:${PORT}`;
+const skip = process.platform === 'win32' ? 'Schein-CAD ist ein Shell-Skript' : false;
+let serverProc, tmp, dataDir, cfgFile, victim, coDir;
+
+async function api(url, method = 'GET', body = null) {
+  const opts = { method, headers: {} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(BASE + url, opts);
+  if (!r.ok) throw new Error(`${method} ${url} → HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function status(url, method, body) {
+  const r = await fetch(BASE + url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+}
+// Anfrage mit fremdem Host — wie eine Webseite nach DNS-Rebinding
+function foreignHost(url, method, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body ?? {});
+    const req = http.request({ host: '127.0.0.1', port: PORT, path: url, method,
+      headers: { Host: 'boese.example:' + PORT, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
+    res => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+async function waitFor(fn, ms = 3000) {
+  for (let t = 0; t < ms; t += 50) { const v = fn(); if (v) return v; await new Promise(r => setTimeout(r, 50)); }
+  return fn();
+}
+
+async function startServer() {
+  serverProc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
+    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT), PLM_CONFIG: cfgFile }, stdio: 'ignore',
+    cwd: tmp,   // eine Shell würde "touch" hier ausführen
+  });
+  for (let i = 0; i < 60; i++) {
+    try { await fetch(BASE + '/api/stats'); return; }
+    catch { await new Promise(r => setTimeout(r, 200)); }
+  }
+  throw new Error('Server startet nicht');
+}
+async function stopServer() {
+  if (!serverProc) return;
+  const done = new Promise(r => serverProc.once('exit', r));
+  serverProc.kill();
+  await done;
+  serverProc = null;
+}
+
+before(async () => {
+  if (skip) return;
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-sec-'));
+  dataDir = path.join(tmp, 'data');
+  fs.mkdirSync(dataDir);
+  coDir = path.join(dataDir, 'checkout');
+  // Ein fremder Ordner mit einer Datei, die nichts im PLM verloren hat
+  victim = path.join(tmp, 'privat');
+  fs.mkdirSync(victim);
+  fs.writeFileSync(path.join(victim, 'geheim.txt'), 'geheim');
+  fs.writeFileSync(path.join(victim, '.checkout.json'), JSON.stringify({ item_id: 1, item_number: 'X' }));
+  cfgFile = path.join(tmp, 'plm.config');
+  fs.writeFileSync(cfgFile, 'data_dir=' + dataDir + '\n');
+  await startServer();
+});
+
+after(async () => {
+  await stopServer();
+  if (tmp) try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+});
+
+test('Check-in löscht keinen Ordner ausserhalb des Checkout-Verzeichnisses', { skip }, async () => {
+  fs.mkdirSync(coDir, { recursive: true });
+  for (const folder of [victim, path.join(coDir, '..', '..', 'privat'), coDir, tmp]) {
+    const r = await status('/api/checkout/checkin', 'POST', { folder });
+    assert.strictEqual(r.status, 400, folder);
+  }
+  assert.ok(fs.existsSync(path.join(victim, 'geheim.txt')), 'fremder Ordner ist noch da');
+
+  // Unterordner ohne .checkout.json (z.B. der Slicer-Ordner) bleibt auch stehen
+  const slicer = path.join(coDir, 'Slicer');
+  fs.mkdirSync(slicer, { recursive: true });
+  assert.strictEqual((await status('/api/checkout/checkin', 'POST', { folder: slicer })).status, 400);
+  assert.ok(fs.existsSync(slicer));
+});
+
+test('Check-in eines echten Checkouts funktioniert weiter', { skip }, async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Sicher' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Teil', item_type: 'prt' });
+  const rev = (await api(`/api/items/${teil.id}`)).revisions[0];
+  const form = new FormData();
+  form.append('file', new Blob(['solid a\nendsolid a\n']), 'teil.stl');
+  await fetch(`${BASE}/api/revisions/${rev.id}/datasets`, { method: 'POST', body: form });
+  const co = await api(`/api/items/${teil.id}/checkout`, 'POST', {});
+  assert.ok(co.folder.startsWith(coDir));
+  await api('/api/checkout/checkin', 'POST', { folder: co.folder });
+  assert.ok(!fs.existsSync(co.folder), 'Checkout-Ordner ist weg');
+});
+
+test('Import liest nur Dateien aus dem Checkout-Verzeichnis', { skip }, async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Import' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Teil', item_type: 'prt' });
+  const co = path.join(coDir, 'ordner');
+  fs.mkdirSync(co, { recursive: true });
+  const r = await api('/api/checkout/import', 'POST',
+    { mode: 'item', item_id: teil.id, folder: co, files: [{ name: '../../../privat/geheim.txt' }] });
+  assert.strictEqual(r.count, 0, 'Pfad mit ../ wird übergangen');
+  assert.strictEqual((await status('/api/checkout/import', 'POST',
+    { mode: 'item', item_id: teil.id, folder: victim, files: [{ name: 'geheim.txt' }] })).status, 400);
+  const neu = await status('/api/checkout/import', 'POST', { mode: 'new',
+    new_item: { project_id: proj.id, item_type: 'prt', name: 'Klau', file_path: path.join(victim, 'geheim.txt'), file_name: 'geheim.txt' } });
+  assert.strictEqual(neu.status, 400);
+});
+
+test('Ordner öffnen: nur Checkout-Ordner, nur von diesem PC', { skip }, async () => {
+  assert.strictEqual((await status('/api/checkout/open', 'POST', { folder: victim })).status, 400);
+  assert.strictEqual(await foreignHost('/api/checkout/open', 'POST', { folder: coDir }), 403);
+});
+
+test('Checkout-Verzeichnis lässt sich nur von diesem PC aus ändern', { skip }, async () => {
+  assert.strictEqual(await foreignHost('/api/settings', 'PUT', { checkout_dir: tmp }), 403);
+  assert.strictEqual(await foreignHost('/api/settings', 'PUT', { company_name: 'Firma', checkout_dir: '' }), 200,
+    'unverändert mitgeschickt ist erlaubt (Einstellungen speichern von einem anderen Gerät)');
+  assert.strictEqual((await api('/api/settings')).checkout_dir ?? '', '');
+});
+
+test('CAD: Pfad aus plm.config, Start ohne Shell, nur von diesem PC', { skip }, async () => {
+  assert.strictEqual((await api('/api/cad')).configured, false);
+  assert.strictEqual((await status('/api/launch-cad', 'POST')).status, 400);
+
+  // Ein Programmname mit $( ) — eine Shell führt das auch in "…" aus (so lief der alte Start)
+  const log = path.join(tmp, 'cad.log');
+  const pwned = path.join(tmp, 'gehackt');
+  const cad = path.join(tmp, 'cad $(touch gehackt)');
+  fs.writeFileSync(cad, `#!/bin/sh\necho gestartet > '${log}'\n`);
+  fs.chmodSync(cad, 0o755);
+  fs.appendFileSync(cfgFile, 'cad_path=' + cad + '\n');
+
+  const st = await api('/api/cad');
+  assert.deepStrictEqual([st.configured, st.found, st.where, st.local], [true, true, cad, true]);
+  assert.strictEqual(await foreignHost('/api/launch-cad', 'POST'), 403);
+  await api('/api/launch-cad', 'POST');
+  assert.ok(await waitFor(() => fs.existsSync(log)), 'Programm wurde gestartet');
+  assert.ok(!fs.existsSync(pwned), 'keine Shell');
+});
+
+test('CAD: alter Pfad aus der Datenbank wandert beim Start nach plm.config', { skip }, async () => {
+  fs.writeFileSync(cfgFile, 'data_dir=' + dataDir + '\n');
+  const cad = path.join(tmp, 'altes-cad');
+  fs.writeFileSync(cad, '#!/bin/sh\n'); fs.chmodSync(cad, 0o755);
+  await api('/api/settings', 'PUT', { cad_path: cad });
+  const vorher = await api('/api/cad');
+  assert.strictEqual(vorher.configured, false, 'die Datenbank zählt nicht mehr');
+  assert.strictEqual(vorher.legacy_path, cad);
+
+  await stopServer();
+  await startServer();
+  assert.match(fs.readFileSync(cfgFile, 'utf8'), new RegExp('^cad_path=' + cad.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'm'));
+  const nachher = await api('/api/cad');
+  assert.deepStrictEqual([nachher.configured, nachher.found, nachher.legacy_path], [true, true, null]);
+});
+
+test('Version: aus package.json und Git', { skip }, async () => {
+  const v = await api('/api/version');
+  const pkg = require('../package.json').version.split('.').slice(0, 2).join('.');
+  assert.ok(v.version === require('../package.json').version || v.version.startsWith(pkg + '.'), v.version);
+  if (v.commit) assert.match(v.commit, /^[0-9a-f]{7,}$/);
+  assert.strictEqual(v.data_dir, dataDir);
+});

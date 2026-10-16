@@ -24,6 +24,10 @@ function switchTab(btn, targetId) {
 }
 
 // ── UI HELPERS ────────────────────────────────────────────────
+// „?" mit Hilfetext, der beim Überfahren erscheint (oder per Tab-Taste fokussiert)
+function helpTip(text) {
+  return `<span class="help-q" tabindex="0" aria-label="Hilfe">?<span class="help-pop" role="tooltip">${esc(text)}</span></span>`;
+}
 function setLeftHeader(title, actionsHtml) {
   if (typeof title === 'string' && !title.includes('<')) {
     document.getElementById('left-title').innerHTML = `<strong>${title}</strong>`;

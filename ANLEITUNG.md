@@ -597,7 +597,9 @@ Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen, Angeboten und 
 Einstellungen für den Pipsta-Thermodrucker.
 
 ### 3D-Druck
-Drucker (mit CHF/h), Düsen und Materialprofile.
+Slicer, Drucker (mit CHF/h), Düsen und Materialprofile.
+
+**Slicer** — PrusaSlicer oder Bambu Studio für „Im Slicer öffnen“ (Datenblatt und Dateien einer Revision). Das Programm wird an den üblichen Orten gesucht; ist keiner installiert, bleibt der Knopf grau. Liegt es woanders: in `plm.config` `prusaslicer=…` bzw. `bambustudio=…` eintragen. Die Arbeitskopie landet als `<Kurzcode>_<Name>.stl` im Unterordner `Slicer` des Checkout-Verzeichnisses; eine im Slicer gespeicherte Kopie wird nicht überschrieben.
 
 > Druckparameter einer Revision kommen aus der hochgeladenen 3MF-Datei; in der Produktion lassen sie sich pro Position erfassen. Materialtemperaturen werden direkt im Rohmaterial hinterlegt.
 
@@ -615,8 +617,8 @@ Dazu: Standard-Klassifizierung für neue Items (mit/ohne Quelle) und der Freigab
 - **Darstellung** — Schriftgrösse (wird serverseitig gespeichert)
 - **Datenpfad** — Datenbank und Dateispeicher. Ändert nur, wo PLM sucht — vorhandene Daten bleiben am alten Ort
 - **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
-- **CAD-Programm** — Pfad für den 🖥 CAD-Button in der Topbar
-- **Checkout-Verzeichnis** — Zielordner für Checkouts
+- **CAD-Programm** — zeigt, ob das Programm für den 🖥 CAD-Button gefunden wird. Der Pfad steht in `plm.config` (`cad_path=…`), nicht in der Oberfläche: Die Einstellungen sind ohne Anmeldung im ganzen Netz erreichbar
+- **Checkout-Verzeichnis** — Zielordner für Checkouts; nur am PC änderbar, auf dem das PLM läuft
 - **Datensicherung** — Sicherungen anlegen, wiederherstellen und löschen (siehe 21)
 - **Export** — ZIP-Export aller Daten
 - **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte

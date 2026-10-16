@@ -41,6 +41,8 @@ function installGlobals() {
   global.TextEncoder = require('node:util').TextEncoder;
 }
 installGlobals();
+global.API = '';
+evalPart('js/08-ui-api.js', 'function helpTip(', 'function setLeftHeader(', 'globalThis.helpTip = helpTip');
 
 // ── QR-Encoder ────────────────────────────────────────────────
 const QR = (0, eval)(read('js/14-qr.js')
@@ -170,6 +172,55 @@ test('Datenblatt: freigegebene Teile sind nicht bearbeitbar', () => {
   const item = demoItem({ revisions: [{ id: 31, rev: '2', status: 'REL', datasets: [] }] });
   global.state.item = item;
   assert.ok(!renderItemSheet(item, 31).includes('✏ Bearbeiten'));
+});
+
+test('Datenblatt: Kurzcode kompakt, die Anleitung steht nur im ?', () => {
+  const item = demoItem({ short_code: 'K7M' });
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  assert.match(h, /class="print-code-val">K7M-2</);
+  assert.match(h, /class="help-q"[^>]*>\?<span class="help-pop" role="tooltip">Im Slicer mit dem Textwerkzeug/);
+  assert.ok(!h.includes('print-code-hint'), 'kein sichtbarer Absatz mehr');
+});
+
+test('Datenblatt: 3D-Vorschau und Slicer nur, wenn die Revision ein Modell hat', () => {
+  const plain = demoItem();
+  global.state.item = plain;
+  const none = renderItemSheet(plain, 31);
+  assert.ok(!none.includes('3D-Vorschau') && !none.includes('Slicer öffnen'));
+
+  const stl = { id: 5, ds_type: 'STL', original_name: 'P1042_rev2.stl' };
+  const item = demoItem({ revisions: [{ id: 31, rev: '2', status: 'DFT', datasets: [stl] }] });
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  assert.match(h, /3D-Vorschau/);
+  assert.match(h, /id="stl-c-sheet31" data-stl-url="\/api\/datasets\/5\/download"/);
+  assert.match(h, /Slicer öffnen/);
+});
+
+test('Datenblatt: Slicer-Knopf ist ausgegraut, solange keiner nutzbar ist', () => {
+  const stl = { id: 5, ds_type: 'STL', original_name: 'P1042_rev2.stl' };
+  const tmf = { id: 6, ds_type: 'CAD', original_name: 'P1042_rev2.3mf' };
+  const item = demoItem({ revisions: [{ id: 31, rev: '2', status: 'DFT', datasets: [stl, tmf] }] });
+  global.state.item = item;
+  const prusa = found => ({ id: 'prusa', name: 'PrusaSlicer', found });
+  const cases = [
+    [{ local: true, active: '', slicers: [prusa(false)] }, /Kein Slicer installiert/],
+    [{ local: true, active: 'prusa', slicers: [prusa(false)] }, /PrusaSlicer ist nicht installiert/],
+    [{ local: false, active: 'prusa', slicers: [prusa(true)] }, /Nur auf dem PC möglich/],
+  ];
+  try {
+    for (const [st, why] of cases) {
+      global.state.slicer = st;
+      const h = renderItemSheet(item, 31);
+      assert.match(h, new RegExp(`<span title="${why.source}[^"]*" style="display:inline-flex"><button class="btn btn-ghost btn-sm" disabled>🖨 Im Slicer öffnen`));
+      assert.ok(!h.includes('openInSlicer('));
+    }
+    global.state.slicer = { local: true, active: 'prusa', slicers: [prusa(true)] };
+    const h = renderItemSheet(item, 31);
+    assert.match(h, /onclick="openInSlicer\(6\)"[^>]*>🖨 In PrusaSlicer öffnen/, 'das 3MF-Projekt vor dem STL');
+    assert.match(h, /data-stl-url="\/api\/datasets\/5\/download"/, 'Vorschau bleibt beim STL');
+  } finally { global.state.slicer = null; }
 });
 
 // ── Stücklistenposition: Revisionsanzeige ─────────────────────

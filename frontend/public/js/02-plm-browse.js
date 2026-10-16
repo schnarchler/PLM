@@ -386,6 +386,7 @@ async function openItemDetail(itemId, revId) {
   state.activeRevId = preferredRev?.id || item.revisions?.[0]?.id || null;
   _trackRecent('item', item.id, item.name, item.item_number, item.item_type);
 
+  state._detailItemId = null;   // neu geöffnet → Datenblatt, nicht der zuletzt offene Tab
   renderItemDetail(item, state.activeRevId);
   showDetail();
 }
@@ -401,6 +402,11 @@ function renderItemDetail(item, activeRevId) {
   const typeColor = isASM ? 'var(--blue)' : isDOC ? 'var(--purple)' : 'var(--teal)';
   const typeBg    = isASM ? 'rgba(157,180,255,.12)' : isDOC ? 'rgba(196,162,255,.12)' : 'rgba(121,221,227,.12)';
   const editable = itemIsEditable(item);
+  // Beim Neuzeichnen desselben Items (Revision gewechselt, Datei hochgeladen …)
+  // im offenen Tab bleiben; ein neu geöffnetes Item beginnt mit dem Datenblatt.
+  const keepTab = state._detailItemId === item.id
+    ? document.querySelector('#dp-tabs .tab.active')?.dataset.pane : null;
+  state._detailItemId = item.id;
   document.getElementById('dp-title').innerHTML =
     `<span style="font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
@@ -414,12 +420,12 @@ function renderItemDetail(item, activeRevId) {
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemMindmap(${item.id})" title="Abhängigkeiten als Mindmap">⌗</button>`;
 
   const tabs = `
-    <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
-    <button class="tab" onclick="switchTab(this,'it-sheet')">Datenblatt</button>
-    <button class="tab" onclick="switchTab(this,'it-log')">Historie</button>
-    ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}
-    <button class="tab" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Verwendung</button>
-    <button class="tab" onclick="switchTab(this,'it-erp');loadErpUsage(${item.id})">Aufträge</button>`;
+    <button class="tab active" data-pane="it-sheet" onclick="switchTab(this,'it-sheet');_initVisibleStl()">Datenblatt</button>
+    <button class="tab" data-pane="it-revs" onclick="switchTab(this,'it-revs');_initVisibleStl()">Revisionen</button>
+    <button class="tab" data-pane="it-log" onclick="switchTab(this,'it-log')">Historie</button>
+    ${!isDOC ? `<button class="tab" data-pane="it-time" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}
+    <button class="tab" data-pane="it-whereused" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Verwendung</button>
+    <button class="tab" data-pane="it-erp" onclick="switchTab(this,'it-erp');loadErpUsage(${item.id})">Aufträge</button>`;
   document.getElementById('dp-tabs').innerHTML = tabs;
   if (!isDOC) {
     const activeCheckout = state.checkouts.find(c => c.item_id === item.id);
@@ -433,7 +439,8 @@ function renderItemDetail(item, activeRevId) {
   const rev = item.revisions?.find(r => r.id === activeRevId) || item.revisions?.[0];
 
   document.getElementById('dp-body').innerHTML = `
-    <div id="it-revs">
+    ${renderItemSheet(item, activeRevId)}
+    <div id="it-revs" style="display:none">
       ${(() => {
         const activeRev = item.active_revision || (item.revisions||[])[0];
         const bom = activeRev?.bom || [];
@@ -486,7 +493,6 @@ function renderItemDetail(item, activeRevId) {
       </div>
       ${rev ? renderRevDetail(rev, item) : '<div style="color:var(--t3)">Keine Revision</div>'}
     </div>
-    ${renderItemSheet(item, activeRevId)}
     <div id="it-log" style="display:none">
       ${(item.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
@@ -503,11 +509,8 @@ function renderItemDetail(item, activeRevId) {
       <div id="it-erp-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
     </div>
     ${renderVariantsSection(item)}`;
-  setTimeout(() => {
-    document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
-      if (!c._stlInit) { c._stlInit = true; initSTLViewer(c.id, c.dataset.stlUrl); }
-    });
-  }, 0);
+  if (keepTab && keepTab !== 'it-sheet') document.querySelector(`#dp-tabs .tab[data-pane="${keepTab}"]`)?.click();
+  setTimeout(_initVisibleStl, 0);
 }
 
 // ── DATENBLATT-TAB ────────────────────────────────────────────
@@ -537,6 +540,68 @@ function _fmtHours(h) {
   if (!n) return null;
   const hh = Math.floor(n), mm = Math.round((n - hh) * 60);
   return hh ? `${hh} h${mm ? ' ' + mm + ' min' : ''}` : `${mm} min`;
+}
+
+// ── 3D-VORSCHAU UND SLICER ────────────────────────────────────
+function _stlFiles(rev) {
+  return (rev?.datasets || []).filter(d => dtClass(d.original_name, d.ds_type) === 'dt-STL');
+}
+
+// Vorschau der STL-Dateien einer Revision. key trennt Datenblatt und
+// Revisionen-Tab, die dieselbe Revision gleichzeitig enthalten.
+function _stlPreview(key, stls, top = '12px') {
+  if (!stls.length) return '';
+  const url = d => `${API}/api/datasets/${d.id}/download`;
+  const sel = stls.length > 1
+    ? `<select style="margin-left:auto;font-size:13px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('${key}', this.value)">
+        ${stls.map(d => `<option value="${url(d)}">${esc(d.original_name)}</option>`).join('')}</select>`
+    : '';
+  return `<div class="sep-label" style="margin-top:${top}">3D-Vorschau${sel}</div>
+    <div style="position:relative;width:100%;height:220px;border-radius:var(--r);overflow:hidden;margin-bottom:10px">
+      <canvas id="stl-c-${key}" data-stl-url="${url(stls[0])}" style="width:100%;height:100%;display:block;cursor:grab"></canvas>
+      <div id="stl-load-${key}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--t3);font-size:13px;pointer-events:none">Lade…</div>
+    </div>`;
+}
+
+// Erst starten, wenn der Tab sichtbar ist — in einem versteckten Tab hat die
+// Zeichenfläche noch keine Breite, das Modell käme verzerrt.
+function _initVisibleStl() {
+  document.querySelectorAll('canvas[data-stl-url]').forEach(c => {
+    if (!c._stlInit && c.offsetParent !== null) { c._stlInit = true; initSTLViewer(c.id, c.dataset.stlUrl); }
+  });
+}
+
+const SLICER_FILE_EXTS = ['stl', '3mf', 'obj', 'step', 'stp', 'amf'];
+const _extOf = d => String(d.original_name || '').split('.').pop().toLowerCase();
+function _isSlicerFile(d) { return SLICER_FILE_EXTS.includes(_extOf(d)); }
+// Fürs Datenblatt: das 3MF-Projekt (mit Druckeinstellungen) vor dem nackten Modell
+function _slicerModelFile(rev) {
+  const files = (rev?.datasets || []).filter(_isSlicerFile);
+  return files.find(d => _extOf(d) === '3mf') || files.find(d => _extOf(d) === 'stl') || files[0] || null;
+}
+
+// Ausgegraut, wenn kein Slicer installiert ist oder dieses Gerät nicht der PC mit dem PLM ist
+function _slicerButton(ds, compact) {
+  const st = state.slicer;
+  const sl = st?.slicers?.find(s => s.id === st.active);
+  const why = !st ? 'Slicer-Status nicht geladen'
+    : !st.local ? 'Nur auf dem PC möglich, auf dem das PLM läuft'
+    : !sl ? 'Kein Slicer installiert — Einstellungen → 3D-Druck'
+    : !sl.found ? `${sl.name} ist nicht installiert — Einstellungen → 3D-Druck` : '';
+  const cls = compact ? 'btn btn-icon btn-ghost btn-sm' : 'btn btn-ghost btn-sm';
+  const label = compact ? '🖨' : why ? '🖨 Im Slicer öffnen' : `🖨 In ${esc(sl.name)} öffnen`;
+  // Deaktivierte Knöpfe zeigen nicht in jedem Browser ihren title — daher am Span
+  if (why) return `<span title="${esc(why)}" style="display:inline-flex"><button class="${cls}" disabled>${label}</button></span>`;
+  return `<button class="${cls}" onclick="openInSlicer(${ds.id})" title="${esc(ds.original_name)} in ${esc(sl.name)} öffnen">${label}</button>`;
+}
+
+async function openInSlicer(dsId) {
+  try {
+    const r = await api(`/api/datasets/${dsId}/open-in-slicer`, 'POST', {});
+    toast(r.kept
+      ? `Vorhandene Arbeitskopie in ${r.slicer} geöffnet — sie weicht von der Datei im PLM ab. Zum Neuladen die Kopie im Ordner „Slicer“ löschen.`
+      : `${r.slicer} wird geöffnet…`, 'ok');
+  } catch { /* api() meldet den Fehler */ }
 }
 
 function renderItemSheet(item, activeRevId) {
@@ -732,33 +797,37 @@ function renderItemSheet(item, activeRevId) {
   // -- Kurzcode zum Aufdrucken: folgt der gewählten Revision
   const pcode = item.short_code && item.item_type !== 'doc' ? item.short_code + (rev ? '-' + rev.rev : '') : '';
   const codeBlock = pcode ? `<div class="print-code">
-      <div>
-        <div class="ps-label">Kurzcode${rev ? ' · rev' + esc(rev.rev) : ''}</div>
-        <div class="print-code-val">${esc(pcode)}</div>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="copyText('${esc(pcode)}','${esc(pcode)} kopiert')" title="Für das Textwerkzeug im Slicer">⧉ Kopieren</button>
-      <div class="print-code-hint">Im Slicer mit dem Textwerkzeug aufs Teil setzen — am besten vertieft
-        auf der Unterseite, mindestens 3 mm hoch. Bei einer neuen Revision nur die Zahl nach dem Strich anpassen.</div>
+      <span class="print-code-label">Kurzcode</span>
+      <span class="print-code-val">${esc(pcode)}</span>
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="copyText('${esc(pcode)}','${esc(pcode)} kopiert')" title="Kopieren — für das Textwerkzeug im Slicer">⧉</button>
+      ${helpTip('Im Slicer mit dem Textwerkzeug aufs Teil setzen — am besten vertieft auf der Unterseite, '
+        + 'mindestens 3 mm hoch. Die Zahl nach dem Strich ist die Revision: Bei einer neuen Revision nur sie anpassen.')}
     </div>` : '';
+
+  // -- Slicer und 3D-Vorschau der gewählten Revision; ohne Datei nichts davon
+  const modelFile = _slicerModelFile(rev);
+  const slicerBtn = modelFile ? _slicerButton(modelFile, false) : '';
+  const stlBlock = rev ? _stlPreview('sheet' + rev.id, _stlFiles(rev), '0') : '';
 
   // -- QR-Code der Teilenummer
   const qr = typeof qrSvg === 'function'
     ? qrSvg(item.item_number, 104, { dark: '#0d0f14', light: '#f4f6f8' })
     : '';
 
-  return `<div id="it-sheet" style="display:none">
+  return `<div id="it-sheet">
     <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;flex-wrap:wrap">
       <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          ${codeBlock}
           ${coBadge}
           ${checkout ? `<span style="font-size:13px;color:var(--t3)">${esc(checkout.folder || '')}</span>` : ''}
         </div>
         <div class="btn-row">
+          ${slicerBtn}
           <button class="btn btn-ghost btn-sm" onclick="openItemMindmap(${item.id})">⌗ Mindmap</button>
           <button class="btn btn-ghost btn-sm" onclick="window._docTemplateItem=state.item;generateItemTemplate('datenblatt')">&#128196; Als PDF</button>
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
         </div>
-        ${codeBlock}
       </div>
       ${qr ? `<div style="flex-shrink:0;text-align:center">
         <div style="background:#f4f6f8;padding:5px;border-radius:var(--r-sm);line-height:0">${qr}</div>
@@ -766,7 +835,9 @@ function renderItemSheet(item, activeRevId) {
       </div>` : ''}
     </div>
 
-    <div class="sep-label" style="margin-top:0">Beschreibung</div>
+    ${stlBlock}
+
+    <div class="sep-label"${stlBlock ? '' : ' style="margin-top:0"'}>Beschreibung</div>
     ${descBlock}
 
     <div class="sep-label">Quelle</div>
@@ -1068,15 +1139,16 @@ function initSTLViewer(canvasId, url) {
   }).catch(e=>{if(loadDiv)loadDiv.textContent='Fehler beim Laden.';console.error('STL viewer:',e);});
 }
 
-function switchSTLViewer(revId, url) {
-  const canvasId = 'stl-c-' + revId;
+function switchSTLViewer(key, url) {
+  const canvasId = 'stl-c-' + key;
   const old = document.getElementById(canvasId);
   if (!old) return;
-  const loadDiv = document.getElementById('stl-load-' + revId);
+  const loadDiv = document.getElementById('stl-load-' + key);
   if (loadDiv) { loadDiv.style.display = ''; loadDiv.textContent = 'Lade…'; }
   const nc = document.createElement('canvas');
   nc.id = canvasId; nc.style.cssText = 'width:100%;height:100%;display:block;cursor:grab';
   nc.dataset.stlUrl = url;
+  nc._stlInit = true;
   old.replaceWith(nc);
   initSTLViewer(canvasId, url);
 }
@@ -1321,20 +1393,7 @@ function renderRevDetail(rev, item) {
     </div>
     ` : ''}
 
-    ${(() => {
-      const stls = (rev.datasets||[]).filter(d => dtClass(d.original_name, d.ds_type) === 'dt-STL');
-      if (!stls.length) return '';
-      const fUrl = API+'/api/datasets/'+stls[0].id+'/download';
-      const sel = stls.length > 1
-        ? '<select style="margin-left:auto;font-size:13px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('+rev.id+', this.value)">'
-          + stls.map(d => '<option value="'+API+'/api/datasets/'+d.id+'/download">'+esc(d.original_name)+'</option>').join('')+'</select>'
-        : '';
-      return '<div class="sep-label" style="margin-top:12px">3D-Vorschau'+sel+'</div>'
-        +'<div style="position:relative;width:100%;height:220px;border-radius:var(--r);overflow:hidden;margin-bottom:10px">'
-        +'<canvas id="stl-c-'+rev.id+'" data-stl-url="'+fUrl+'" style="width:100%;height:100%;display:block;cursor:grab"></canvas>'
-        +'<div id="stl-load-'+rev.id+'" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--t3);font-size:13px;pointer-events:none">Lade…</div>'
-        +'</div>';
-    })()}
+    ${_stlPreview(rev.id, _stlFiles(rev))}
 
     <!-- Dateien -->
     <div class="sep-label" style="margin-top:12px">Dateien
@@ -1397,6 +1456,7 @@ function renderDatasets(datasets, revId, locked) {
             <div class="ds-name">${esc(_cleanDsName(f.original_name))}</div>
             <div class="ds-meta">v${f.version} · ${fmtSize(f.file_size)} · ${fmtDate(f.uploaded_at)}${f.notes?' · '+esc(f.notes):''}</div>
           </div>
+          ${_isSlicerFile(f) ? _slicerButton(f, true) : ''}
           <a href="${API}/api/datasets/${f.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="openEditDatasetModal(${f.id},'${esc(f.original_name)}','${esc(f.notes||'')}')" title="Info bearbeiten">✏️</button>`}
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delDataset(${f.id},${revId})" title="Löschen">&#x2715;</button>`}
