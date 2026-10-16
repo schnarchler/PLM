@@ -329,10 +329,10 @@ body {
 .partner-sum { display: flex; justify-content: space-between; padding: 8px 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--r); font-size: 13px; color: var(--t3); }
 
 /* ── KURZCODE ── */
-.print-code { display: inline-flex; align-items: center; gap: 8px; padding: 2px 8px 2px 10px;
+.print-code { display: inline-flex; align-items: center; gap: 10px; padding: 4px 8px 4px 12px;
   background: var(--bg2); border: 1px solid var(--line2); border-radius: var(--r-sm); }
 .print-code-label { font-size: 11px; color: var(--t3); text-transform: uppercase; letter-spacing: .05em; }
-.print-code-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--t1); letter-spacing: .06em; }
+.print-code-val { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--t1); letter-spacing: .06em; line-height: 1.1; }
 
 /* ── HILFETEXT („?") ── */
 .help-q { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
