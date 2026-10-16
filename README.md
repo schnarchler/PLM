@@ -15,7 +15,8 @@ cd backend && npm install && node server.js
 **Windows:**  
 Doppelklick auf **`START-PLM.bat`**
 
-→ Browser öffnet sich auf `http://localhost:3000`  
+→ Browser öffnet sich von selbst, auf `http://localhost:3000` oder, wenn der Port belegt
+ist, auf dem nächsten freien (wird in `plm.config` als `port=` gemerkt)  
 Beim ersten Start werden alle Node-Pakete automatisch installiert.  
 `plm.config` wird automatisch erstellt wenn sie fehlt.
 
@@ -515,7 +516,7 @@ PLM/
 │       │   ├── 15-mindmap.js ← Abhängigkeitsgraph (SVG, Pan/Zoom)
 │       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
 │       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
-├── plm.config             ← Konfiguration dieses PCs: data_dir, cad_path, prusaslicer, bambustudio (wird auto-erstellt)
+├── plm.config             ← Konfiguration dieses PCs: data_dir, port, cad_path, prusaslicer, bambustudio (wird auto-erstellt)
 ├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md
@@ -526,8 +527,8 @@ PLM/
 ## Sicherheit
 
 PLM hat keine Anmeldung: Wer die Oberfläche erreicht, darf alles. Der Server lauscht auf
-Port 3000 aller Netzwerkschnittstellen. Ob andere Geräte herankommen, entscheidet die
-Firewall des PCs.
+Port 3000 (oder dem gemerkten Ausweich-Port) aller Netzwerkschnittstellen. Ob andere
+Geräte herankommen, entscheidet die Firewall des PCs.
 
 - Anfragen fremder Webseiten (fremder Origin oder Host) werden abgewiesen, es gibt keine CORS-Freigabe.
 - CAD, Slicer und „Ordner öffnen“ starten ohne Shell und nur für Anfragen vom PC selbst.

@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=PLM & ERP
 Comment=PLM & ERP System starten
-Exec=bash -c 'cd "$(dirname "%k")"/backend && node server.js & sleep 2 && xdg-open http://localhost:3000/launcher'
+Exec=bash -c 'cd "$(dirname "%k")"/backend && PLM_OPEN_BROWSER=1 node server.js'
 Icon=PLM-ERP
 Terminal=false
 Categories=Office;Engineering;

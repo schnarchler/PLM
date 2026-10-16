@@ -6,7 +6,6 @@ title PLM ^& ERP
 powershell -NoProfile -Command "Unblock-File -LiteralPath '%~f0'" >nul 2>&1
 
 :: Konfiguration
-set "PLM_PORT=3000"
 set "PLM_DIR=%~dp0backend"
 set "PLM_DATA_DIR="
 
@@ -81,21 +80,19 @@ if not exist "%PLM_DATA_DIR%\files" mkdir "%PLM_DATA_DIR%\files"
 :: Info
 echo.
 echo  =========================================
-echo   PLM ^& ERP startet auf Port %PLM_PORT%
+echo   PLM ^& ERP startet
 echo   Daten: %PLM_DATA_DIR%
 echo  =========================================
 echo.
-echo  Browser wird in 4 Sekunden geoeffnet...
+echo  Der Browser oeffnet sich, sobald der Server bereit ist.
 echo  Fenster NICHT schliessen - Strg+C zum Beenden
 echo.
 
-:: Browser nach Verzoegerung oeffnen (via Launcher fuer window.close() Support)
-start "" cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:%PLM_PORT%/launcher"
-
-:: Server starten - Umgebungsvariable direkt mitgeben
+:: Server starten. Den Port waehlt er selbst (3000, sonst der naechste freie)
+:: und oeffnet dann den Browser - nur er weiss, welchen Port er bekommen hat.
 cd /d "%PLM_DIR%"
 set "PLM_DATA_DIR=%PLM_DATA_DIR%"
-set "PLM_PORT=%PLM_PORT%"
+set "PLM_OPEN_BROWSER=1"
 node server.js
 set "PLM_EXIT=%errorlevel%"
 
