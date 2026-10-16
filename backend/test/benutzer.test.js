@@ -175,3 +175,18 @@ test('Nach einer Pause fragt PLM bei der nächsten Änderung nach — Lesen zäh
     await req('/api/settings', { method: 'PUT', body: { user_idle_minutes: '30' }, cookie: anna });
   }
 });
+
+test('Zurück auf eine Person: wieder allein, ohne Auswahl — und wieder Team beim Aktivieren', async () => {
+  // Stand: Anna (Admin, PIN) und Cleo aktiv, Ben deaktiviert
+  await ok(`/api/users/${ids.cleo}`, { method: 'PUT', body: { active: false }, cookie: anna });
+  const s = (await ok('/api/session')).body;
+  assert.deepStrictEqual([s.mode, s.user.name, s.user.role], ['single', 'Anna Muster', 'admin'], 'ohne Cookie: allein');
+  const p = (await ok('/api/projects', { method: 'POST', body: { name: 'Wieder allein' } })).body;
+  assert.strictEqual((await log(e => e.entity_type === 'project' && e.entity_id === p.id)).user_name, 'Anna Muster');
+  assert.strictEqual((await req('/api/settings', { method: 'PUT', body: { company_name: 'Allein GmbH' } })).status, 200,
+    'allein darf man alles, auch ohne PIN');
+
+  await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { active: true } });
+  assert.strictEqual((await ok('/api/session')).body.mode, 'team');
+  assert.strictEqual((await req('/api/projects', { method: 'POST', body: { name: 'Wer?' } })).status, 401, 'wieder fragen');
+});
