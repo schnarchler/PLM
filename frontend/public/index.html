@@ -20,7 +20,8 @@
   </div>
   <div class="tb-search">
     <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="globalSearch" placeholder="Suche: Nummer, Name, Beschreibung …" oninput="onSearch(this.value)">
+    <input id="globalSearch" placeholder="Suche: Nummer, Kurzcode, Name …" oninput="onSearch(this.value)"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();onSearchEnter(this.value)}">
   </div>
   <div class="tb-right">
     <button id="tb-cad-btn" class="btn btn-ghost btn-sm" onclick="launchCad()" title="CAD-Programm starten" style="font-size:11px">🖥 CAD</button>
@@ -343,22 +344,40 @@
 </div>
 
 <div class="overlay" id="supplierModal">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-head"><div class="modal-title" id="sup-modal-title">Lieferant</div><button class="btn btn-icon btn-ghost" onclick="closeModal('supplierModal')">✕</button></div>
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title" id="sup-modal-title">Neuer Lieferant</div><button class="btn btn-icon btn-ghost" onclick="closeModal('supplierModal')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="sup-edit-id">
-      <div class="form-row"><div class="fg"><label class="fl">Name *</label><input class="fi" id="sup-name"></div></div>
-      <div class="form-row" style="display:flex;gap:10px">
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">Name / Firma *</label><input class="fi" id="sup-name"></div>
         <div class="fg"><label class="fl">Kontaktperson</label><input class="fi" id="sup-contact"></div>
+      </div>
+      <div class="form-row cols2">
+        <div class="fg"><label class="fl">E-Mail</label><input class="fi" id="sup-email" type="email"></div>
         <div class="fg"><label class="fl">Telefon</label><input class="fi" id="sup-phone"></div>
       </div>
-      <div class="form-row" style="display:flex;gap:10px">
-        <div class="fg"><label class="fl">E-Mail</label><input class="fi" id="sup-email"></div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Strasse + Nr.</label><input class="fi" id="sup-street" placeholder="Industriestrasse 4"></div>
       </div>
-      <div class="form-row"><div class="fg"><label class="fl">Adresse</label><textarea class="fi" id="sup-address" rows="2"></textarea></div></div>
-      <div class="form-row"><div class="fg"><label class="fl">Notizen</label><textarea class="fi" id="sup-notes" rows="2"></textarea></div></div>
+      <div class="form-row cols3">
+        <div class="fg"><label class="fl">PLZ</label><input class="fi" id="sup-plz" placeholder="8000"></div>
+        <div class="fg"><label class="fl">Ort</label><input class="fi" id="sup-city" placeholder="Zürich"></div>
+        <div class="fg"><label class="fl">Land</label><input class="fi" id="sup-country" placeholder="Schweiz"></div>
+      </div>
+      <div class="form-row" id="sup-legacy" style="display:none">
+        <div style="font-size:13px;color:var(--t3);background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px">
+          Bisherige Adresse (bitte in die Felder oben übernehmen):
+          <div id="sup-legacy-text" style="white-space:pre-wrap;color:var(--t2);margin-top:4px"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="sup-notes"></textarea></div>
+      </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary" onclick="saveSupplier()">Speichern</button></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('supplierModal')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveSupplier()">Speichern</button>
+    </div>
   </div>
 </div>
 

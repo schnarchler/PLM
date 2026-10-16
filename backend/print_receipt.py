@@ -46,6 +46,7 @@ def build_receipt(data):
     s_no  = data.get('show_notes',     True)
     header=data.get('header') or 'PLM & ERP'
     name=data.get('name') or '-'; number=data.get('number') or ''
+    code=data.get('code') or ''  # Kurzcode wie auf dem Teil, z.B. K7M-3
     desc=data.get('desc') or ''; qty=data.get('qty',1); unit=data.get('unit','Stk')
     price=data.get('price'); params=data.get('params') or {}
     customer=data.get('customer') or ''; notes=data.get('notes') or ''
@@ -56,6 +57,7 @@ def build_receipt(data):
     if s_dt: o+=row(now,small=True,centered=True,w=w)
     if s_cu and customer: o+=row(customer,small=True,centered=True,w=w)
     o+=sep(w)
+    if code: o+=row(code,bold=True,centered=True,w=w)
     if s_nr and number: o+=row(number,bold=True,w=w)
     o+=row(name,bold=True,w=w)
     if desc and desc!=name: o+=row(desc,small=True,w=w)
@@ -164,8 +166,10 @@ def build_multi_receipt(data):
     o+=sep(w)
     for item in items:
         name=item.get('name') or '-'; number=item.get('number') or ''
+        code=item.get('code') or ''
         qty=item.get('qty',1); unit=item.get('unit','Stk')
         price=item.get('price'); notes=item.get('notes') or ''
+        if code: o+=row(code,bold=True,w=w)
         if s_nr and number: o+=row(number,small=True,w=w)
         o+=row(name,bold=True,w=w)
         if s_no and notes: o+=row(notes,small=True,w=w)
