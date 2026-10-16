@@ -334,6 +334,36 @@ body {
 .print-code-label { font-size: 11px; color: var(--t3); text-transform: uppercase; letter-spacing: .05em; }
 .print-code-val { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--t1); letter-spacing: .06em; line-height: 1.1; }
 
+/* ── BENUTZER ── */
+.tb-user { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px 0 3px; border-radius: 999px;
+  background: var(--bg2); border: 1px solid var(--line); color: var(--t1); font: 500 12px var(--sans); cursor: pointer; }
+.tb-user:hover { background: var(--bg3); border-color: var(--line3); }
+.tb-user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-user-role { font: 500 10px var(--mono); color: var(--t3); }
+.who-overlay { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; padding: 24px 16px;
+  background: rgba(10,12,16,.72); backdrop-filter: blur(3px); }
+.who-card { width: 100%; max-width: 560px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 26px 24px 20px;
+  background: var(--bg1); border: 1px solid var(--line2); border-radius: 16px; box-shadow: 0 28px 70px rgba(0,0,0,.5); }
+.who-title { font-size: 20px; font-weight: 700; color: var(--t1); }
+.who-sub { font-size: 13px; color: var(--t3); margin: 4px 0 18px; }
+.who-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.who-tile { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 16px 10px 12px; min-width: 0;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; color: var(--t1); font: inherit; cursor: pointer;
+  transition: background .12s var(--ease), border-color .12s var(--ease); }
+.who-tile:hover, .who-tile:focus-visible { background: var(--bg3); border-color: var(--blue); outline: none; }
+.who-tile.current { border-color: rgba(157,180,255,.55); box-shadow: inset 0 0 0 1px rgba(157,180,255,.25); }
+.who-tile.picked { border-color: var(--blue); }
+.who-name { font-size: 14px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.who-role { font-size: 11px; color: var(--t3); }
+.who-pin { margin-top: 16px; }
+.who-err { min-height: 1em; margin-top: 6px; font-size: 12px; color: var(--red); }
+.who-foot { display: flex; justify-content: flex-end; margin-top: 16px; }
+.cl-user { display: inline-block; margin-left: 6px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--bg2); font-size: 11px; font-weight: 500; color: var(--t3); white-space: nowrap; vertical-align: 1px; }
+.user-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.st-notice { margin-bottom: 14px; padding: 9px 12px; border: 1px solid var(--amber-line); border-radius: var(--r);
+  background: var(--amber-soft); font-size: 13px; color: var(--t1); line-height: 1.5; }
+
 /* ── HILFETEXT („?") ── */
 .help-q { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
   width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line2); color: var(--t3);

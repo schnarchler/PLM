@@ -193,6 +193,7 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items)
 - **Daten** – Schriftgrösse, **Design zurücksetzen**, Checkout-Ordner, CAD-Programm,
   **Sicherungen anlegen und wiederherstellen**, Export
+- **Benutzer** – wer mit PLM arbeitet (User, Superuser, Admin); Namen in Historie und Freigabe
 - **Admin** – Nummerierungsstruktur, Datensätze löschen
 
 ---
@@ -536,7 +537,8 @@ Geräte herankommen, entscheidet die Firewall des PCs.
 - Check-in und Import arbeiten nur im Checkout-Verzeichnis, und dieses lässt sich nur am PC ändern.
 - Paketlücken prüfen: `cd backend && npm audit --omit=dev`
 
-Wie Benutzer, Rollen und Anmeldung aussehen könnten, beschreibt
+Die Benutzer (Einstellungen → Benutzer) dienen der Nachvollziehbarkeit, nicht als Schutz:
+gewählt wird ohne Passwort, nur Admins können eine PIN haben. Details und Grenzen in
 [KONZEPT-BENUTZERVERWALTUNG.md](KONZEPT-BENUTZERVERWALTUNG.md).
 
 ---

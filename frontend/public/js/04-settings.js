@@ -37,8 +37,13 @@ async function renderSettings() {
       <span style="margin-left:auto">Gesamt: <strong style="color:var(--blue)">${fmtBytes(stor.total_bytes)}</strong></span>
     </div>` : '';
 
+  // Im Team ändern nur Admins Einstellungen — der Server prüft es ohnehin
+  const notAdmin = state.session?.mode === 'team' && !isAdmin()
+    ? `<div class="st-notice">Einstellungen ändern dürfen nur Admins. Gewählt ist ${esc(state.session.user?.name || 'niemand')}
+        (${esc(ROLE_LABEL[state.session.user?.role] || '—')}) — Schriftgrösse und Personenwahl gehen trotzdem.</div>` : '';
   setLeftBody(`
     <div style="max-width:720px">
+      ${notAdmin}
       ${storHtml}
       <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px">
         <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Firma</button>
@@ -47,7 +52,14 @@ async function renderSettings() {
         <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">3D-Druck</button>
         <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
         <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Daten</button>
+        <button class="st-tab-btn"        data-tab="benutzer" onclick="_stTab('benutzer')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">Benutzer</button>
         <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
+      </div>
+
+      <!-- TAB: Benutzer -->
+      <div class="st-tab-pane" data-tab="benutzer" hidden>
+        <div class="sep-label" style="margin-top:0">Wer arbeitet mit PLM?</div>
+        <div id="st-users-box" style="font-size:13px;color:var(--t3)">Lädt…</div>
       </div>
 
       <!-- TAB: Firma -->
@@ -439,6 +451,7 @@ async function renderSettings() {
     b.addEventListener('click', () => {
       styleActiveTabs();
       if (b.dataset.tab === 'loeschen') _loadDelTab();
+      if (b.dataset.tab === 'benutzer') _renderUsersSettings();
       if (b.dataset.tab === 'plm') _loadPlmTab();
       if (b.dataset.tab === 'daten') loadBackupList();
     });
@@ -560,13 +573,9 @@ async function restoreBackupFromFile(input) {
   if (msg) { msg.textContent = 'Wird wiederhergestellt…'; msg.style.color = 'var(--t3)'; }
   const fd = new FormData();
   fd.append('file', file);
-  const r = await fetch(API + '/api/backups/restore-upload', { method: 'POST', body: fd });
-  const body = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
-  if (!r.ok) {
-    if (msg) { msg.textContent = ''; }
-    toast(body.error || 'Wiederherstellen fehlgeschlagen', 'err');
-    return;
-  }
+  let body;
+  try { body = await apiForm('/api/backups/restore-upload', fd); }
+  catch { if (msg) msg.textContent = ''; return; }   // apiForm meldet den Fehler
   _showRestoreResult(body);
 }
 

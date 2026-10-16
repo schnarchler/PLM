@@ -577,7 +577,9 @@ Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktion
 
 Navigation → **Historie** — vollständiges Protokoll aller Änderungen, nach Tag gruppiert. Klick auf die Nummer öffnet das betroffene Item, Projekt, den Auftrag oder Produktionsauftrag.
 
-**⬇ CSV** exportiert die Einträge.
+Sind Personen angelegt (Einstellungen → **Benutzer**), steht neben jedem Eintrag, wer ihn gemacht hat — auch in der Historie eines Items oder Projekts und unter „Letzte Änderung“ im Datenblatt. Ältere Einträge haben keinen Namen.
+
+**⬇ CSV** exportiert die Einträge, mit der Person als eigener Spalte.
 
 ---
 
@@ -622,6 +624,17 @@ Dazu: Standard-Klassifizierung für neue Items (mit/ohne Quelle) und der Freigab
 - **Datensicherung** — Sicherungen anlegen, wiederherstellen und löschen (siehe 21)
 - **Export** — ZIP-Export aller Daten
 - **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte
+
+### Benutzer
+Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Passwort.
+
+- **Allein:** Namen eintragen („Dein Name“). PLM fragt nie, wer dran ist; der Name steht in der Historie und bei Freigaben.
+- **Team (ab zwei Personen):** Beim Öffnen erscheint **Wer ist dran?** — ein Klick auf die eigene Kachel. Der Name steht oben rechts, ein Klick darauf wechselt die Person. Nach einer Pause (einstellbar, Standard 30 Minuten, 0 = nie) fragt PLM bei der nächsten Änderung einmal **Weiter als …?**; danach wird die Änderung ausgeführt.
+- **Rollen:** **User** ändert, gibt aber nicht frei. **Superuser** gibt zusätzlich frei (REL) und markiert als veraltet (OBS). **Admin** darf alles: Einstellungen, Personen, Stammdaten löschen, Sicherungen zurückspielen.
+- **PIN:** Admins können eine PIN setzen. Sie wird beim Wechsel zu diesem Admin abgefragt, nicht beim Weitermachen nach einer Pause.
+- **Deaktivieren** statt löschen: Die Person bleibt in der Historie, steht aber nicht mehr zur Auswahl. Es braucht immer mindestens einen aktiven Admin.
+
+Hintergrund und Grenzen: [KONZEPT-BENUTZERVERWALTUNG.md](KONZEPT-BENUTZERVERWALTUNG.md).
 
 ### Admin
 **Vorsicht — Änderungen können Daten dauerhaft beschädigen.**

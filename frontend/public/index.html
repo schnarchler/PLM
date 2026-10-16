@@ -25,6 +25,7 @@
       onkeydown="if(event.key==='Enter'){event.preventDefault();onSearchEnter(this.value)}">
   </div>
   <div class="tb-right">
+    <button id="tb-user" class="tb-user" onclick="onUserChip()" style="display:none"></button>
     <button id="tb-cad-btn" class="btn btn-ghost btn-sm" onclick="launchCad()" title="CAD-Programm starten" style="font-size:11px">🖥 CAD</button>
     <button id="tb-checkout-btn" class="btn btn-ghost btn-sm" onclick="showCheckoutList()" title="Aktive Checkouts anzeigen" style="font-size:11px">⬆ Checkouts</button>
     <button class="btn btn-red btn-sm" onclick="shutdownServer()" title="Server beenden">&#9632; Beenden</button>
@@ -917,5 +918,6 @@
 <script src="js/13-normteile-einkauf.js"></script>
 <script src="js/14-qr.js"></script>
 <script src="js/15-mindmap.js"></script>
+<script src="js/16-benutzer.js"></script>
 </body>
 </html>

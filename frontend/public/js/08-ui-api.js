@@ -28,6 +28,11 @@ function switchTab(btn, targetId) {
 function helpTip(text) {
   return `<span class="help-q" tabindex="0" aria-label="Hilfe">?<span class="help-pop" role="tooltip">${esc(text)}</span></span>`;
 }
+
+// Wer hat den Historien-Eintrag gemacht? Ältere Einträge haben keinen Namen.
+function _clUser(entry) {
+  return entry?.user_name ? ` <span class="cl-user">${esc(entry.user_name)}</span>` : '';
+}
 function setLeftHeader(title, actionsHtml) {
   if (typeof title === 'string' && !title.includes('<')) {
     document.getElementById('left-title').innerHTML = `<strong>${title}</strong>`;
@@ -62,16 +67,36 @@ async function loadStats() {
 }
 
 // ── API ───────────────────────────────────────────────────────
-async function api(url, method='GET', body=null) {
+async function api(url, method='GET', body=null, _again=true) {
   const opts = { method, headers: {} };
   if (body) { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
   const r = await fetch(API+url, opts);
   if (!r.ok) {
     const e = await r.json().catch(() => ({ error: 'HTTP '+r.status }));
+    if (_again && await _askOnUserError(e)) return api(url, method, body, false);
     if (r.status !== 404) toast(e.error||'Serverfehler', 'err');
     throw new Error(e.error||'HTTP '+r.status);
   }
   return r.json();
+}
+
+// Datei-Uploads: wie api(), mit FormData
+async function apiForm(url, fd, _again = true) {
+  const r = await fetch(API + url, { method: 'POST', body: fd });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
+    if (_again && await _askOnUserError(e)) return apiForm(url, fd, false);
+    toast(e.error || 'Hochladen fehlgeschlagen', 'err');
+    throw new Error(e.error || 'HTTP ' + r.status);
+  }
+  return r.json().catch(() => ({}));
+}
+
+// „Wer ist dran?" — der Server verlangt eine Auswahl (401) oder fragt nach
+// einer Pause nach (428). Wählt jemand, wird die Anfrage wiederholt.
+async function _askOnUserError(e) {
+  if (!(e.need_user || e.confirm_user) || typeof askWhoIsThere !== 'function') return false;
+  return askWhoIsThere(e.confirm_user ? 'confirm' : 'select');
 }
 
 // ── UTILS ─────────────────────────────────────────────────────

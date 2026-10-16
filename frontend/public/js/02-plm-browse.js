@@ -297,7 +297,7 @@ function openProjectDetail(p) {
     <div id="pt-log" style="display:none">
       ${(p.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
-        <div><div class="cl-action">${cl.action}</div><div class="cl-detail">${cl.details||''}</div></div>
+        <div><div class="cl-action">${esc(cl.action)}${_clUser(cl)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
         <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>'}
     </div>`;
   showDetail();
@@ -333,11 +333,13 @@ function renderProjectDocs(p) {
 async function uploadDocs(input, projectId) {
   const files = Array.from(input.files);
   if (!files.length) return;
-  for (const file of files) {
-    const fd = new FormData();
-    fd.append('file', file);
-    await fetch(`/api/projects/${projectId}/documents`, { method: 'POST', body: fd });
-  }
+  try {
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('file', file);
+      await apiForm(`/api/projects/${projectId}/documents`, fd);
+    }
+  } catch { input.value = ''; return; }   // apiForm meldet den Fehler
   toast(files.length === 1 ? 'Dokument hochgeladen' : files.length + ' Dokumente hochgeladen', 'ok');
   input.value = '';
   const p = await api(`/api/projects/${projectId}`);
@@ -496,7 +498,7 @@ function renderItemDetail(item, activeRevId) {
     <div id="it-log" style="display:none">
       ${(item.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
-        <div><div class="cl-action">${cl.action}</div><div class="cl-detail">${cl.details||''}</div></div>
+        <div><div class="cl-action">${esc(cl.action)}${_clUser(cl)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
         <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>'}
     </div>
     ${!isDOC ? `<div id="it-time" style="display:none">
@@ -780,7 +782,7 @@ function renderItemSheet(item, activeRevId) {
     ? `<div class="cl-row" style="padding:0;border:none">
         <div class="cl-dot"></div>
         <div class="cl-body">
-          <div class="cl-action">${esc(lastLog.action)}</div>
+          <div class="cl-action">${esc(lastLog.action)}${_clUser(lastLog)}</div>
           ${lastLog.details ? `<div class="cl-detail">${esc(lastLog.details)}</div>` : ''}
         </div>
         <div class="cl-time">${fmtDate(lastLog.created_at)}</div>
@@ -1361,9 +1363,12 @@ function renderRevDetail(rev, item) {
       && (rev.status === 'DFT' || rev.status === 'REV') && !actions.some(a => a.s === '_NEWREV')) {
     actions.unshift({ s: '_NEWREV', label: '＋ Neue Revision', cls: 'btn-green' });
   }
+  // Freigeben und Veralten dürfen Superuser und Admins (allein: man selbst)
   const wfBtns = actions.map(b => b.s === '_NEWREV'
     ? `<button class="btn btn-sm ${b.cls}" onclick="createNextRevision(${item.id})">${b.label}</button>`
-    : `<button class="btn btn-sm ${b.cls}" onclick="openStatusModal(${rev.id},'${b.s}')">${b.label}</button>`).join('');
+    : (['REL', 'OBS'].includes(b.s) && !canRelease()
+      ? `<span title="Freigeben dürfen nur Superuser und Admins" style="display:inline-flex"><button class="btn btn-sm ${b.cls}" disabled>${b.label}</button></span>`
+      : `<button class="btn btn-sm ${b.cls}" onclick="openStatusModal(${rev.id},'${b.s}')">${b.label}</button>`)).join('');
 
   return `
     <!-- Rev info -->

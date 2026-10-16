@@ -91,10 +91,12 @@ async function openNormteilDetail(id) {
 async function uploadNtFiles(stdPartId, input) {
   const files = Array.from(input.files);
   if (!files.length) return;
-  for (const file of files) {
-    const fd = new FormData(); fd.append('file', file);
-    await fetch(`/api/standard-parts/${stdPartId}/files`, { method: 'POST', body: fd });
-  }
+  try {
+    for (const file of files) {
+      const fd = new FormData(); fd.append('file', file);
+      await apiForm(`/api/standard-parts/${stdPartId}/files`, fd);
+    }
+  } catch { return; }   // apiForm meldet den Fehler
   toast(`${files.length} Datei${files.length>1?'en':''} hochgeladen`, 'ok');
   openNormteilDetail(stdPartId);
 }

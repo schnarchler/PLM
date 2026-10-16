@@ -302,6 +302,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadStats();
   loadCheckouts();
   loadSlicerStatus();
+  // Ab zwei Personen: beim Öffnen fragen, wer dran ist
+  loadSession().then(s => { if (s?.mode === 'team' && !s.user) askWhoIsThere('select'); });
   _renderRecent();
   setupUploadDrag();
   api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal('', d.config_file); }).catch(() => {});
