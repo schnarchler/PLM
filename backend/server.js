@@ -7,7 +7,6 @@ const crypto   = require('crypto');
 const initSqlJs = require('sql.js');
 
 const app  = express();
-const PORT = process.env.PLM_PORT || 3000;
 
 // plm.config liegt an der PLM-Wurzel (eine Ebene über backend/); Tests
 // setzen PLM_CONFIG auf eine eigene Datei.
@@ -6051,15 +6050,110 @@ app.post('/api/orders/:id/clone', (req, res) => {
 app.get('*', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
 
 // -- START ------------------------------------------------------
-initDb().then(() => {
+// Erst den Port wählen, dann die Datenbank öffnen: Zwei Server auf derselben
+// Datei überschreiben sich gegenseitig.
+// - Läuft PLM mit denselben Daten schon (irgendwo im Portbereich), wird derselbe
+//   Stand weiterbenutzt, ein älterer über „Beenden“ abgelöst.
+// - Ein PLM mit anderen Daten oder ein fremdes Programm bleibt in Ruhe; PLM
+//   nimmt den nächsten freien Port und merkt ihn sich in plm.config. Der
+//   Browser speichert Ansichten pro Port — ein wechselnder Port verlöre sie.
+// - PLM_PORT (Tests) heisst: genau dieser Port oder ein Fehler.
+// Ausgaben ohne Umlaute — die Windows-Konsole zeigt sie nicht überall richtig.
+const PORT_RANGE = 20;
+const PORT_FIXED = parseInt(process.env.PLM_PORT, 10) || null;
+const PREFERRED_PORT = PORT_FIXED || (parseInt(_config.port, 10) > 0 ? parseInt(_config.port, 10) : 3000);
+let PORT = PREFERRED_PORT;
+
+function portFree(port) {
+  return new Promise(resolve => {
+    const probe = require('net').createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '0.0.0.0');
+  });
+}
+
+// Welches PLM antwortet auf dem Port? null = keines (anderes Programm)
+async function runningPlm(port) {
+  const ask = async p => {
+    const r = await fetch(`http://127.0.0.1:${port}${p}`, { signal: AbortSignal.timeout(1500) });
+    return r.ok ? await r.json() : null;
+  };
+  try { const v = await ask('/api/version'); if (v?.version) return v; } catch {}
+  // Ältere Stände kennen /api/version noch nicht, wohl aber /api/data-path
+  try { const d = await ask('/api/data-path'); if (d?.data_dir) return { version: null, data_dir: d.data_dir }; } catch {}
+  return null;
+}
+
+const _cmpVersion = (a, b) => {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+  return 0;
+};
+const _samePath = (a, b) => process.platform === 'win32'
+  ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b);
+const _startFail = msg => { console.error('\n  FEHLER: ' + msg + '\n'); process.exit(1); };
+
+// Die Startskripte setzen PLM_OPEN_BROWSER=1 — nur der Server weiss, welchen
+// Port er bekommen hat.
+function openBrowser(port) {
+  if (process.env.PLM_OPEN_BROWSER !== '1') return Promise.resolve();
+  const url = `http://localhost:${port}/launcher`;
+  const cmd = process.platform === 'win32' ? 'explorer' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  return launchProgram({ cmd, args: [] }, url).catch(e => console.log(`  Browser bitte selbst oeffnen: ${url} (${e.message})`));
+}
+
+async function choosePort() {
+  const range = PORT_FIXED ? [PORT_FIXED] : Array.from({ length: PORT_RANGE }, (_, i) => PREFERRED_PORT + i);
+  const free = new Map();
+  for (const p of range) free.set(p, await portFree(p));
+
+  for (const p of range.filter(q => !free.get(q))) {
+    const other = await runningPlm(p);
+    if (!other?.data_dir || !_samePath(other.data_dir, DATA_DIR)) continue;
+    const label = other.version ? 'Version ' + other.version : 'eine aeltere Version';
+    const identical = other.version === APP_VERSION.version && other.commit === APP_VERSION.commit
+      && !other.dirty && !APP_VERSION.dirty;
+    const newer = other.version && _cmpVersion(other.version, APP_VERSION.version) > 0;
+    if (identical || newer) {
+      console.log(`\n  PLM laeuft bereits (${label}${newer ? ', neuer als dieser Start' : ''}) auf http://localhost:${p}\n`);
+      await openBrowser(p);
+      process.exit(0);
+    }
+    console.log(`\n  Auf Port ${p} laeuft noch PLM ${label} mit denselben Daten - wird beendet und abgeloest.`);
+    try { await fetch(`http://127.0.0.1:${p}/api/shutdown`, { method: 'POST', signal: AbortSignal.timeout(3000) }); } catch {}
+    for (let i = 0; i < 40 && !(await portFree(p)); i++) await new Promise(r => setTimeout(r, 250));
+    if (!(await portFree(p))) _startFail(`Das laufende PLM auf Port ${p} hat sich nicht beendet. Fenster schliessen oder STOP-PLM ausfuehren.`);
+    free.set(p, true);
+  }
+
+  const port = range.find(p => free.get(p));
+  if (!port) {
+    _startFail(PORT_FIXED ? `Port ${PORT_FIXED} ist belegt.`
+      : `Kein freier Port zwischen ${range[0]} und ${range[range.length - 1]}.`);
+  }
+  if (port !== PREFERRED_PORT) {
+    saveConfig({ port });
+    console.log(`\n  Port ${PREFERRED_PORT} ist belegt - PLM nutzt Port ${port} (in plm.config gespeichert).`);
+  }
+  return port;
+}
+
+choosePort().then(p => { PORT = p; }).then(initDb).then(() => {
   migrateCadPath();
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('  PLM & ERP ' + APP_VERSION.version + (APP_VERSION.commit ? ' (' + APP_VERSION.commit
-      + (APP_VERSION.dirty ? ', nicht committete Änderungen' : '') + ')' : ''));
+      + (APP_VERSION.dirty ? ', nicht committete Aenderungen' : '') + ')' : ''));
     console.log('  laeuft auf http://localhost:' + PORT);
     console.log('  Datenpfad: ' + DATA_DIR);
     console.log('');
+    openBrowser(PORT);
+  });
+  server.on('error', err => {
+    console.error('\n  FEHLER: ' + (err.code === 'EADDRINUSE'
+      ? `Port ${PORT} wurde gerade von einem anderen Programm belegt.` : err.message) + '\n');
+    process.exit(1);
   });
 }).catch(err => {
   console.error('Fehler beim Starten:', err);

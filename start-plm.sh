@@ -19,7 +19,6 @@ fi
 
 cd "$SCRIPT_DIR/backend"
 npm install --silent 2>/dev/null
-PLM_DATA_DIR="$PLM_DATA_DIR" node server.js &
-sleep 2
-xdg-open http://localhost:3000/launcher 2>/dev/null &
-wait
+# Den Port waehlt der Server selbst (3000, sonst der naechste freie) und
+# oeffnet dann den Browser - nur er weiss, welchen Port er bekommen hat.
+PLM_DATA_DIR="$PLM_DATA_DIR" PLM_OPEN_BROWSER=1 node server.js
