@@ -5,10 +5,10 @@
 function showDetail() { document.getElementById('detail-panel').classList.remove('hidden'); }
 function closeDetail() { document.getElementById('detail-panel').classList.add('hidden'); }
 function _markActiveRow(id) {
-  document.querySelectorAll('#left-body tr.row-active').forEach(r => r.classList.remove('row-active'));
+  document.querySelectorAll('#left-body .row-active').forEach(r => r.classList.remove('row-active'));
   if (id != null) {
-    const tr = document.querySelector(`#left-body tr[data-id="${id}"]`);
-    if (tr) tr.classList.add('row-active');
+    const el = document.querySelector(`#left-body tr[data-id="${id}"], #left-body .card[data-id="${id}"]`);
+    if (el) el.classList.add('row-active');
   }
 }
 function switchTab(btn, targetId) {
