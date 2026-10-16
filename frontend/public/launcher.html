@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLM & ERP starten</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Farben und Schriften wie in styles.css — die App ist nur dunkel */
+  :root {
+    --bg0: #15171c; --bg1: #1b1e24; --bg2: #22262e; --line: #323743; --line2: #3f4552;
+    --t1: #f4f6f8; --t2: #c3c9d4; --t3: #99a1b0; --t4: #737b8a;
+    --blue: #9db4ff; --green: #6ede9c; --amber: #f5c061;
+    --sans: 'Manrope', 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; margin: 0; }
+  body {
+    display: grid; place-items: center; min-height: 100vh; padding: 24px 16px;
+    background: radial-gradient(900px 520px at 50% -8%, rgba(157,180,255,.17), transparent 62%), var(--bg0);
+    color: var(--t3); font-family: var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  .card {
+    width: 100%; max-width: 400px; padding: 36px 30px 24px; text-align: center;
+    background: rgba(27,30,36,.88); border: 1px solid var(--line); border-radius: 18px;
+    box-shadow: 0 28px 70px rgba(0,0,0,.45);
+    animation: rise .45s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+  .logo {
+    width: 92px; height: 92px; margin: 0 auto 18px; border-radius: 22px; background: #fff;
+    display: grid; place-items: center;
+    box-shadow: 0 12px 32px rgba(157,180,255,.20), 0 0 0 1px rgba(255,255,255,.08);
+  }
+  .logo img { width: 80px; height: 80px; display: block; }
+  h1 { margin: 0; color: var(--t1); font-size: 26px; font-weight: 800; letter-spacing: -.015em; }
+  h1 span { color: var(--t4); font-weight: 600; }
+  .tag { margin: 6px 0 24px; font-size: 14px; }
+  .status { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 14px; font-size: 13px; color: var(--t2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(110,222,156,.15); }
+  button {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 13px 18px; border: 0; border-radius: 10px; cursor: pointer;
+    background: var(--blue); color: #10131a; font: 700 15px var(--sans);
+    transition: background .15s, transform .15s;
+  }
+  button:hover { background: #b6c7ff; }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--t1); outline-offset: 3px; }
+  .kbd { font: 600 11px var(--mono); padding: 2px 6px; border-radius: 5px; background: rgba(16,19,26,.14); }
+  .hint { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--t4); }
+  .meta { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 7px; font-size: 12px; text-align: left; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 0; }
+  .row > span { flex-shrink: 0; }
+  .row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--t2); font: 500 12px var(--mono); }
+  .row b.ver { padding: 2px 9px; border-radius: 999px; color: var(--blue); font-weight: 600;
+    background: rgba(157,180,255,.12); border: 1px solid rgba(157,180,255,.32); }
+  .warn { color: var(--amber); }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="logo"><img src="/favicon.png" alt=""></div>
+  <h1>PLM <span>·</span> ERP</h1>
+  <p class="tag">Bauteile, Revisionen, Aufträge und Lager</p>
+  <div class="status"><span class="dot"></span>Server läuft</div>
+  <button type="button" id="openbtn" autofocus>PLM &amp; ERP öffnen <span class="kbd">Enter</span></button>
+  <p class="hint" id="hint" hidden>Der Browser hat das automatische Öffnen blockiert. Über diesen Knopf geöffnet,
+    lässt sich der Tab am Ende per „Beenden“ wieder schliessen.</p>
+  <div class="meta">
+    <div class="row"><span>Version</span><b class="ver" id="v-version">…</b></div>
+    <div class="row"><span>Stand</span><b id="v-build">…</b></div>
+    <div class="row"><span>Daten</span><b id="v-data">…</b></div>
+  </div>
+</main>
+<script>
+  // Ohne Feature-Liste (width/height/left/top) öffnet der Browser einen Tab —
+  // sobald auch nur ein Feature gesetzt ist, ein Popup-Fenster.
+  function openApp() {
+    var w = window.open('/', '_blank');
+    if (w) { window.close(); return true; }
+    return false;
+  }
+  // Ohne Nutzerklick blockieren viele Browser window.open. Nicht im selben Tab
+  // weiternavigieren — dieser Tab liesse sich später nicht schliessen. Der
+  // Klick auf den Knopf macht das Öffnen erlaubt.
+  if (!openApp()) document.getElementById('hint').hidden = false;
+  document.getElementById('openbtn').addEventListener('click', function () {
+    if (!openApp()) window.location.href = '/';
+  });
+
+  function text(id, value, title) {
+    var el = document.getElementById(id);
+    el.textContent = value;
+    if (title) el.title = title;
+    return el;
+  }
+  fetch('/api/version').then(function (r) { return r.json(); }).then(function (v) {
+    text('v-version', v.version);
+    var date = v.date ? new Date(v.date).toLocaleDateString('de-CH') : '';
+    text('v-build', [date, v.commit].filter(Boolean).join(' · ') || '—', v.date || '');
+    if (v.dirty) {
+      var w = document.createElement('span');
+      w.className = 'warn';
+      w.textContent = ' · geändert';
+      w.title = 'Es laufen Änderungen, die noch nicht committet sind';
+      document.getElementById('v-build').appendChild(w);
+    }
+    // Die letzten zwei Ordner zeigen, ob die richtigen Daten geladen sind
+    var parts = String(v.data_dir || '').split(/[\\/]/).filter(Boolean);
+    text('v-data', parts.slice(-2).join('/') || '—', v.data_dir || '');
+  }).catch(function () { text('v-version', '—'); text('v-build', '—'); text('v-data', '—'); });
+</script>
+</body>
+</html>

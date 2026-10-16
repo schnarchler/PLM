@@ -66,7 +66,37 @@ async function setDocStatus(type, id, status, el) {
     toast('Status konnte nicht gespeichert werden', 'err');
   }
 }
-let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [] };
+let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [], slicer: null, cad: null };
+
+// Laufende Version neben dem Logo; „geändert", wenn nicht committete Änderungen laufen
+async function loadVersion() {
+  const el = document.getElementById('tb-ver');
+  try {
+    const v = await api('/api/version');
+    el.textContent = 'v' + v.version + (v.dirty ? ' · geändert' : '');
+    el.classList.toggle('dirty', !!v.dirty);
+    el.title = [v.date ? 'Stand ' + new Date(v.date).toLocaleDateString('de-CH') : '', v.commit,
+      v.dirty ? 'mit Änderungen, die noch nicht committet sind' : ''].filter(Boolean).join(' · ');
+  } catch {}
+}
+
+// CAD-Knopf oben: sichtbar, sobald in plm.config ein Programm eingetragen ist
+async function loadCadStatus() {
+  try { state.cad = await api('/api/cad'); } catch { state.cad = null; }
+  const btn = document.getElementById('tb-cad-btn');
+  if (!btn) return;
+  const c = state.cad;
+  const why = !c?.configured ? '' : !c.local ? 'Nur auf dem PC möglich, auf dem das PLM läuft'
+    : !c.found ? 'CAD-Programm nicht gefunden: ' + c.where : '';
+  btn.style.display = c?.configured ? '' : 'none';
+  btn.disabled = !!why;
+  btn.title = why || 'CAD-Programm starten';
+}
+
+// Für „Im Slicer öffnen": gewählter Slicer, ob installiert, ob dieser PC
+async function loadSlicerStatus() {
+  try { state.slicer = await api('/api/slicers'); } catch { state.slicer = null; }
+}
 
 async function loadCheckouts() {
   try {
@@ -265,12 +295,13 @@ async function setFontScale(scale) {
 window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
   _applyFontScale();
-  const cadBtn = document.getElementById('tb-cad-btn');
-  if (cadBtn) cadBtn.style.display = state.settings?.cad_path ? '' : 'none';
+  loadVersion();
+  loadCadStatus();
   history.replaceState({ view: 'dashboard' }, '');
   gotoView('dashboard');
   loadStats();
   loadCheckouts();
+  loadSlicerStatus();
   _renderRecent();
   setupUploadDrag();
   api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal('', d.config_file); }).catch(() => {});

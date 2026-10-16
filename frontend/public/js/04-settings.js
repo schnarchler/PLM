@@ -135,7 +135,12 @@ async function renderSettings() {
 
       <!-- TAB: 3D-Druck -->
       <div class="st-tab-pane" data-tab="druck3d" hidden>
-        <div class="sep-label" style="margin-top:0">Drucker</div>
+        <div class="sep-label" style="margin-top:0">Slicer</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Für „Im Slicer öffnen“ im Datenblatt und bei den Dateien einer Revision.
+          Das Programm wird an den üblichen Installationsorten gesucht.</div>
+        <div id="st-slicer-box" style="font-size:13px;color:var(--t3)">Sucht installierte Slicer…</div>
+
+        <div class="sep-label" style="margin-top:20px">Drucker</div>
         <div id="st-printers-list" style="margin-bottom:8px"></div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <input class="fi" id="st-pr-name" style="width:200px" placeholder="Druckername">
@@ -280,17 +285,8 @@ async function renderSettings() {
         </div>
 
         <div class="sep-label" style="margin-top:20px">CAD-Programm</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Pfad zur ausführbaren Datei des CAD-Programms. Wird über den CAD-Button in der Topbar gestartet.</div>
-        <div class="form-row">
-          <div class="fg">
-            <label class="fl">CAD-Pfad</label>
-            <input class="fi" id="st-cad-path" placeholder="z.B. /usr/bin/solidedge oder C:\\Program Files\\...">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" onclick="saveCadPath()">Pfad speichern</button>
-          <span id="st-cad-msg" style="font-size:13px;color:var(--t3)"></span>
-        </div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Wird über den CAD-Knopf oben gestartet.</div>
+        <div id="st-cad-box" style="font-size:13px;color:var(--t3)">Prüft das CAD-Programm…</div>
 
         <div class="sep-label" style="margin-top:20px">Checkout-Verzeichnis</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Ordner, in den ausgecheckte CAD-Dateien kopiert werden. Leer lassen für Standard: <code style="font-family:var(--mono)">[Datenverzeichnis]/checkout</code></div>
@@ -449,6 +445,8 @@ async function renderSettings() {
   });
 
   loadAndRenderPrinterConfig();
+  _renderSlicerSettings();
+  _renderCadSettings();
   api('/api/data-path').then(d => {
     document.getElementById('st-datapath-info').innerHTML =
       `DB: <code style="user-select:all">${d.db_path}</code><br>Dateien: <code style="user-select:all">${d.files_dir}</code>`
@@ -459,8 +457,6 @@ async function renderSettings() {
   api('/api/settings').then(s => {
     const el = document.getElementById('st-checkout-dir');
     if (el) el.value = s.checkout_dir || '';
-    const ec = document.getElementById('st-cad-path');
-    if (ec) ec.value = s.cad_path || '';
   });
 }
 
@@ -592,23 +588,74 @@ function _showRestoreResult(r) {
   </div>`);
 }
 
-async function saveCadPath() {
-  const val = document.getElementById('st-cad-path')?.value.trim() || '';
-  await api('/api/settings', 'PUT', { cad_path: val });
-  const msg = document.getElementById('st-cad-msg');
-  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
+// ── SLICER ────────────────────────────────────────────────────
+// Gewählt wird nur der Slicer, nicht der Pfad: Die Einstellungen sind ohne
+// Anmeldung im Netz erreichbar — ein Programmpfad gehört in plm.config.
+async function _renderSlicerSettings() {
+  const box = document.getElementById('st-slicer-box');
+  if (!box) return;
+  await loadSlicerStatus();
+  const st = state.slicer;
+  if (!st) { box.textContent = 'Slicer-Status konnte nicht geladen werden.'; return; }
+  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">
+      ${st.slicers.map(s => `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--t2)">
+        <input type="radio" name="st-slicer" value="${s.id}" ${st.active === s.id ? 'checked' : ''}
+          onchange="saveSlicerChoice(this.value)" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
+        <span style="min-width:96px">${esc(s.name)}</span>
+        ${s.found
+          ? `<span class="chip" style="color:var(--green)">installiert</span>
+             <span style="font-size:12px;color:var(--t4);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(s.where)}">${esc(s.where)}</span>`
+          : `<span class="chip">nicht gefunden</span>${s.error ? `<span style="font-size:12px;color:var(--amber)">${esc(s.error)}</span>` : ''}`}
+      </label>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+      <button class="btn btn-ghost btn-sm" onclick="_renderSlicerSettings()">↻ Neu suchen</button>
+      <span id="st-slicer-msg" style="font-size:13px"></span>
+    </div>
+    <div style="font-size:11px;color:var(--t4);margin-top:6px;line-height:1.5">
+      Woanders installiert? In der Konfigdatei <code style="font-family:var(--mono)">plm.config</code>
+      <code style="font-family:var(--mono)">prusaslicer=/pfad/zum/programm</code> bzw.
+      <code style="font-family:var(--mono)">bambustudio=…</code> eintragen und neu suchen.
+      Arbeitskopien landen im Unterordner <code style="font-family:var(--mono)">Slicer</code> des Checkout-Verzeichnisses.
+    </div>`;
+}
+
+async function saveSlicerChoice(id) {
+  await api('/api/settings', 'PUT', { slicer: id });
   state.settings = await api('/api/settings');
-  const btn = document.getElementById('tb-cad-btn');
-  if (btn) btn.style.display = val ? '' : 'none';
+  await _renderSlicerSettings();
+  const msg = document.getElementById('st-slicer-msg');
+  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
+}
+
+// CAD-Programm: wie beim Slicer nur der Status — der Pfad steht in plm.config
+async function _renderCadSettings() {
+  const box = document.getElementById('st-cad-box');
+  if (!box) return;
+  await loadCadStatus();
+  const c = state.cad;
+  if (!c) { box.textContent = 'Status konnte nicht geladen werden.'; return; }
+  const code = t => `<code style="font-family:var(--mono)">${esc(t)}</code>`;
+  const chip = !c.configured ? '<span class="chip">nicht eingetragen</span>'
+    : c.found ? '<span class="chip" style="color:var(--green)">gefunden</span>'
+    : '<span class="chip" style="color:var(--amber)">nicht gefunden</span>';
+  box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;min-width:0">
+      ${chip}
+      ${c.where ? `<span style="font-size:12px;color:var(--t4);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(c.where)}">${esc(c.where)}</span>` : ''}
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto;flex-shrink:0" onclick="_renderCadSettings()">↻ Neu prüfen</button>
+    </div>
+    ${c.legacy_path ? `<div style="font-size:12px;color:var(--amber);margin-top:6px">Früher eingetragen: ${code(c.legacy_path)} — auf diesem PC nicht vorhanden.</div>` : ''}
+    <div style="font-size:11px;color:var(--t4);margin-top:6px;line-height:1.5">
+      In der Konfigdatei ${code('plm.config')} als ${code('cad_path=/pfad/zum/programm')} eintragen, dann neu prüfen.
+      Nicht hier in der Oberfläche, weil die Einstellungen ohne Anmeldung im ganzen Netz erreichbar sind.
+    </div>`;
 }
 
 async function launchCad() {
-  const path = state.settings?.cad_path;
-  if (!path) { toast('Kein CAD-Pfad konfiguriert — bitte unter Einstellungen → System hinterlegen', 'err'); return; }
   try {
     await api('/api/launch-cad', 'POST');
     toast('CAD wird gestartet…', 'ok');
-  } catch(e) { toast('CAD konnte nicht gestartet werden', 'err'); }
+  } catch { /* api() meldet den Fehler */ }
 }
 
 async function saveCheckoutDir() {

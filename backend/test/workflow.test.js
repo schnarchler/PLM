@@ -239,6 +239,22 @@ test('Auftrag: Status läuft beim Fertigen mit, Material wird abgebucht', async 
   assert.strictEqual((await api(`/api/orders/${order.id}`)).status, 'DELIVERED', 'alle Lose fertig → Auftrag geliefert');
 });
 
+test('Lager: „Geplant" zählt nur Aufträge, die noch ans Lager gehen', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Lagerplanung' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Clip', item_type: 'prt' });
+  const inv = await api('/api/inventory', 'POST', { name: 'Clip', item_id: teil.id });
+  // Zweierpotenzen: an der Summe ist ablesbar, welche Aufträge mitzählen
+  const qty = { DRAFT: 1, CONFIRMED: 2, QUOTE: 4, DELIVERED: 8, INVOICED: 16, DECLINED: 32, CANCELLED: 64 };
+  for (const [status, quantity] of Object.entries(qty)) {
+    const o = await api('/api/orders', 'POST', { title: 'Plan ' + status, status });
+    await api(`/api/orders/${o.id}/items`, 'POST', { description: 'Clip', quantity, unit: 'Stk', unit_price: 1, item_id: teil.id });
+    assert.strictEqual((await api(`/api/orders/${o.id}`)).status, status);
+  }
+  const row = (await api('/api/inventory')).find(i => i.id === inv.id);
+  assert.strictEqual(row.planned_qty, 3, 'nur in Arbeit und bestätigt');
+  assert.strictEqual((await api(`/api/inventory/stock-check?item_id=${teil.id}`)).planned_qty, 3);
+});
+
 test('Angebot ist eine Phase des Auftrags', async () => {
   const ang = await api('/api/orders', 'POST', { title: 'Angebot Gehäuse', status: 'QUOTE', valid_until: '2026-12-31' });
   assert.strictEqual(ang.status, 'QUOTE');

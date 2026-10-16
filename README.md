@@ -188,7 +188,7 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 ### Einstellungen / Admin
 - **Firma** – Name, Adresse, Bankverbindung, Logo
 - **Kalkulation** – Stundenansatz, Maschinenkosten, Standardwerte
-- **3D-Druck** – Drucker, Düsen, Materialprofile
+- **3D-Druck** – Slicer (PrusaSlicer / Bambu Studio), Drucker, Düsen, Materialprofile
 - **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items)
 - **Daten** – Schriftgrösse, **Design zurücksetzen**, Checkout-Ordner, CAD-Programm,
   **Sicherungen anlegen und wiederherstellen**, Export
@@ -515,7 +515,7 @@ PLM/
 │       │   ├── 15-mindmap.js ← Abhängigkeitsgraph (SVG, Pan/Zoom)
 │       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
 │       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
-├── plm.config             ← Datenpfad-Konfiguration (wird auto-erstellt)
+├── plm.config             ← Konfiguration dieses PCs: data_dir, cad_path, prusaslicer, bambustudio (wird auto-erstellt)
 ├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md
@@ -533,6 +533,10 @@ node server.js
 
 Datenbank und `plm.config` liegen ausserhalb des Repositories und stehen in der
 `.gitignore` — ein Pull fasst sie nicht an.
+
+Welche Version läuft, steht oben links neben dem Logo und auf dem Startbildschirm:
+`2.0.282` = Major.Minor aus `backend/package.json`, dahinter die Anzahl Commits.
+„geändert“ heisst, es laufen Änderungen, die noch nicht committet sind.
 
 Schemaänderungen laufen beim Serverstart automatisch: `initDb()` legt **zuerst**
 eine Tageskopie unter `data/backups/` an, `applySchema()` ergänzt dann fehlende Tabellen
