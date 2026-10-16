@@ -57,7 +57,7 @@
     </button>
     <button class="nav-item" id="ni-changelog" onclick="gotoView('changelog')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-      Changelog
+      Historie
     </button>
   </div>
   <div class="nav-sep"></div>
@@ -131,7 +131,7 @@
     <div class="panel-header">
       <div class="panel-title" id="dp-title">—</div>
       <div class="ph-spacer"></div>
-      <button class="btn btn-icon btn-ghost" onclick="closeDetail()" title="Schließen">✕</button>
+      <button class="btn btn-icon btn-ghost" onclick="closeDetail()" title="Schliessen">✕</button>
     </div>
     <div class="tabs" id="dp-tabs"></div>
     <div class="tab-body" id="dp-body"></div>
@@ -185,7 +185,7 @@
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="im-url" type="url" placeholder="https://…"></div>
-        <div class="fg"><label class="fl">Listenpreis (CHF)</label><input class="fi" id="im-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="fg"><label class="fl">Verkaufspreis (CHF)</label><input class="fi" id="im-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
       </div>
       <input type="hidden" id="im-project-id">
       <input type="hidden" id="im-parent-id">
@@ -207,7 +207,7 @@
         <div class="fg"><label class="fl">Beschreibung / Kommentar</label><textarea class="ft" id="sm-desc" placeholder="Was hat sich geändert?"></textarea></div>
       </div>
       <div class="form-row" id="sm-eco-row" style="display:none">
-        <div class="fg"><label class="fl">ECO-Begründung *</label><textarea class="ft" id="sm-eco" placeholder="Warum wird das freigegebene Teil geändert?"></textarea></div>
+        <div class="fg"><label class="fl">ECO-Grund *</label><textarea class="ft" id="sm-eco" placeholder="Warum wird das freigegebene Item geändert?"></textarea></div>
       </div>
       <input type="hidden" id="sm-rev-id">
       <input type="hidden" id="sm-target-status">
@@ -269,7 +269,7 @@
 
 <div class="overlay" id="poModal">
   <div class="modal" style="max-width:520px">
-    <div class="modal-head"><div class="modal-title" id="po-modal-title">Bestellung erstellen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('poModal')">✕</button></div>
+    <div class="modal-head"><div class="modal-title" id="po-modal-title">Bestellung anlegen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('poModal')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="po-edit-id">
       <div class="form-row">
@@ -367,7 +367,7 @@
     <div class="modal-head"><div class="modal-title">Vergleichen mit…</div><button class="btn btn-icon btn-ghost" onclick="closeModal('itemCompareModal')">✕</button></div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Zweites Item suchen für den Vergleich.</div>
-      <input class="fi" id="cmp-search" placeholder="Teilenummer oder Name…" autocomplete="off"
+      <input class="fi" id="cmp-search" placeholder="Item-Nummer oder Name…" autocomplete="off"
         oninput="_compareSearch(this.value)"
         onkeydown="if(event.key==='Escape')closeModal('itemCompareModal')">
       <div id="cmp-results" style="margin-top:8px;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;max-height:320px;overflow-y:auto"></div>
@@ -377,7 +377,7 @@
 
 <div class="overlay" id="docTemplateModal">
   <div class="modal" style="max-width:440px">
-    <div class="modal-head"><div class="modal-title">Dokument generieren</div><button class="btn btn-icon btn-ghost" onclick="closeModal('docTemplateModal')">✕</button></div>
+    <div class="modal-head"><div class="modal-title">Dokument erstellen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('docTemplateModal')">✕</button></div>
     <div class="modal-body">
       <div id="dtpl-cards" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
@@ -390,7 +390,7 @@
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Item suchen und als Variante verknüpfen. Beide Items werden Teil derselben Variantengruppe.</div>
       <div style="position:relative">
-        <input class="fi" id="lv-search" placeholder="Teilenummer oder Name…" autocomplete="off"
+        <input class="fi" id="lv-search" placeholder="Item-Nummer oder Name…" autocomplete="off"
           oninput="_variantSearch(this.value)"
           onkeydown="if(event.key==='Escape')closeModal('linkVariantModal')">
       </div>
@@ -411,7 +411,7 @@
         <div class="form-row" style="margin-bottom:0">
           <div class="fg">
             <div style="position:relative">
-              <input class="fi" id="bom-child-search" placeholder="Teilenummer oder Name suchen — Enter oder anklicken zum Hinzufügen…" autocomplete="off"
+              <input class="fi" id="bom-child-search" placeholder="Item-Nummer oder Name suchen — Enter oder anklicken zum Hinzufügen…" autocomplete="off"
                 oninput="_bomItemSearch(this.value)"
                 onkeydown="if(event.key==='Escape'){document.getElementById('bom-child-results').style.display='none'}"
                 onblur="setTimeout(()=>{const r=document.getElementById('bom-child-results');if(r)r.style.display='none'},200)">
@@ -447,7 +447,7 @@
       </div>
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Telefon</label><input class="fi" id="cm-phone"></div>
-        <div class="fg"><label class="fl">Straße + Nr.</label><input class="fi" id="cm-street" placeholder="Musterstraße 12"></div>
+        <div class="fg"><label class="fl">Strasse + Nr.</label><input class="fi" id="cm-street" placeholder="Musterstrasse 12"></div>
       </div>
       <div class="form-row cols3">
         <div class="fg"><label class="fl">PLZ</label><input class="fi" id="cm-plz" placeholder="8000"></div>
@@ -593,14 +593,14 @@
       <!-- PLM Item search -->
       <div class="form-row" style="margin-bottom:6px">
         <div class="fg">
-          <label class="fl">PLM Item verknüpfen <span style="color:var(--t3)">(optional)</span></label>
+          <label class="fl">PLM-Item verknüpfen <span style="color:var(--t3)">(optional)</span></label>
           <div id="li-plm-selected" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 10px;margin-bottom:6px;align-items:center;gap:8px">
             <span id="li-plm-badge" style="font-family:var(--mono);font-size:10px;color:var(--blue)"></span>
             <span id="li-plm-name" style="font-size:12px;flex:1"></span>
             <button class="btn btn-icon btn-ghost btn-sm" onclick="clearLinkedItem()" title="Verknüpfung aufheben">✕</button>
           </div>
           <div style="position:relative">
-            <input class="fi" id="li-plm-search" placeholder="Teilenummer oder Name suchen…" oninput="searchItemsForLine(this.value)" autocomplete="off">
+            <input class="fi" id="li-plm-search" placeholder="Item-Nummer oder Name suchen…" oninput="searchItemsForLine(this.value)" autocomplete="off">
             <div id="li-plm-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto"></div>
           </div>
         </div>
@@ -711,7 +711,7 @@
         <div class="fg"><label class="fl">Beschreibung</label><textarea class="ft" id="eim-desc"></textarea></div>
       </div>
       <div class="form-row cols3">
-        <div class="fg"><label class="fl">Listenpreis (CHF)</label><input class="fi" id="eim-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="fg"><label class="fl">Verkaufspreis (CHF)</label><input class="fi" id="eim-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
         <div class="fg"><label class="fl">Gewicht (g)</label><input class="fi" id="eim-weight" type="number" step="0.1" min="0" placeholder="z.B. 45.5"></div>
         <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="eim-url" type="url" placeholder="https://…"></div>
       </div>
@@ -784,21 +784,21 @@
       <!-- PLM Item link -->
       <div class="form-row" style="margin-bottom:6px">
         <div class="fg">
-          <label class="fl">PLM Item verknüpfen <span style="color:var(--t3)">(optional)</span></label>
+          <label class="fl">PLM-Item verknüpfen <span style="color:var(--t3)">(optional)</span></label>
           <div id="dim-plm-selected" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 10px;margin-bottom:6px;align-items:center;gap:8px">
             <span id="dim-plm-badge" style="font-family:var(--mono);font-size:10px;color:var(--blue)"></span>
             <span id="dim-plm-name" style="font-size:12px;flex:1"></span>
             <button class="btn btn-icon btn-ghost btn-sm" onclick="clearDimLinkedItem()">✕</button>
           </div>
           <div style="position:relative">
-            <input class="fi" id="dim-plm-search" placeholder="Teilenummer oder Name suchen…" oninput="searchItemsForDim(this.value)" autocomplete="off">
+            <input class="fi" id="dim-plm-search" placeholder="Item-Nummer oder Name suchen…" oninput="searchItemsForDim(this.value)" autocomplete="off">
             <div id="dim-plm-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:180px;overflow-y:auto"></div>
           </div>
           <div id="dim-stock-info" style="display:none;margin-top:6px;font-size:11px;padding:6px 10px;border-radius:var(--r-sm);border:1px solid var(--line2)"></div>
         </div>
       </div>
       <div class="form-row">
-        <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="dim-desc" placeholder="Bezeichnung des Bauteils"></div>
+        <div class="fg"><label class="fl">Beschreibung *</label><input class="fi" id="dim-desc" placeholder="Bezeichnung des Items"></div>
       </div>
       <div class="form-row cols3">
         <div class="fg"><label class="fl">Menge</label><input class="fi" id="dim-qty" type="number" value="1" min="0.001" step="1"></div>
@@ -840,9 +840,9 @@
             <div class="fg"><label class="fl">Farbe</label><input class="fi" id="dim-man-color" placeholder="z.B. Schwarz"></div>
           </div>
           <div class="form-row cols3">
-            <div class="fg"><label class="fl">Layer (mm)</label><input class="fi" id="dim-man-layer" placeholder="0.2"></div>
-            <div class="fg"><label class="fl">Infill (%)</label><input class="fi" id="dim-man-infill" placeholder="20"></div>
-            <div class="fg"><label class="fl">Supports</label>
+            <div class="fg"><label class="fl">Schichthöhe (mm)</label><input class="fi" id="dim-man-layer" placeholder="0.2"></div>
+            <div class="fg"><label class="fl">Füllung (%)</label><input class="fi" id="dim-man-infill" placeholder="20"></div>
+            <div class="fg"><label class="fl">Stützen</label>
               <select class="fs" id="dim-man-sup"><option value="">—</option><option>Nein</option><option>Ja (Normal)</option><option>Ja (Tree)</option></select>
             </div>
           </div>
@@ -850,14 +850,14 @@
             <div class="fg"><label class="fl">Düse (mm)</label>
               <select class="fs" id="dim-man-nozzle"><option value="">—</option></select>
             </div>
-            <div class="fg"><label class="fl">Drucktemp (°C)</label><input class="fi" id="dim-man-temp" placeholder="215"></div>
-            <div class="fg"><label class="fl">Bett (°C)</label><input class="fi" id="dim-man-bed" placeholder="60"></div>
+            <div class="fg"><label class="fl">Düsentemperatur (°C)</label><input class="fi" id="dim-man-temp" placeholder="215"></div>
+            <div class="fg"><label class="fl">Betttemperatur (°C)</label><input class="fi" id="dim-man-bed" placeholder="60"></div>
           </div>
           <div class="form-row cols2">
             <div class="fg"><label class="fl">Drucker</label>
               <select class="fs" id="dim-man-printer"><option value="">— kein —</option></select>
             </div>
-            <div class="fg"><label class="fl">Filament (g)</label><input class="fi" id="dim-man-fw" type="number" step="0.1" placeholder="45.5"></div>
+            <div class="fg"><label class="fl">Filamentgewicht (g)</label><input class="fi" id="dim-man-fw" type="number" step="0.1" placeholder="45.5"></div>
           </div>
           <div class="form-row cols2">
             <div class="fg"><label class="fl">Druckdauer (h)</label><input class="fi" id="dim-man-dur" type="number" step="0.01" placeholder="3.5"></div>

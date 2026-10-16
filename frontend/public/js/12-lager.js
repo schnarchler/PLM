@@ -2,7 +2,9 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── LAGER / BESTAND ───────────────────────────────────────────
-const INV_CATS = ['3D Druck','Filament','Hardware','Elektronik','Komponenten','Werkzeug','Verbrauchsmaterial','Sonstiges'];
+// 'Normteile' vergibt der Server beim ersten Wareneingang eines Normteils — muss
+// hier stehen, sonst setzt das Bearbeiten-Formular stillschweigend '3D Druck'
+const INV_CATS = ['3D Druck','Filament','Hardware','Elektronik','Komponenten','Normteile','Werkzeug','Verbrauchsmaterial','Sonstiges'];
 
 let _invSort = { col: 'name', dir: 1 };
 
@@ -565,8 +567,8 @@ async function openRawMatDetail(id) {
           ${item.color      ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
           ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">Abmessungen:</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
           ${item.weight_g != null ? `<div style="font-size:13px"><span style="color:var(--t4)">Gewicht:</span> <span style="font-family:var(--mono)">${fmtN(item.weight_g,1)} g</span></div>` : ''}
-          ${item.print_temp ? `<div style="font-size:13px"><span style="color:var(--t4)">Drucktemp:</span> <span style="font-family:var(--mono)">${item.print_temp}°C</span></div>` : ''}
-          ${item.bed_temp   ? `<div style="font-size:13px"><span style="color:var(--t4)">Bett:</span> <span style="font-family:var(--mono)">${item.bed_temp}°C</span></div>` : ''}
+          ${item.print_temp ? `<div style="font-size:13px"><span style="color:var(--t4)">Düsentemperatur:</span> <span style="font-family:var(--mono)">${item.print_temp}°C</span></div>` : ''}
+          ${item.bed_temp   ? `<div style="font-size:13px"><span style="color:var(--t4)">Betttemperatur:</span> <span style="font-family:var(--mono)">${item.bed_temp}°C</span></div>` : ''}
           ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${item.unit}</div>` : ''}
           <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
         </div>
@@ -676,7 +678,7 @@ async function _loadRawMatForm(id) {
           ${[...new Set((state.rawMaterials||[]).map(m=>m.brand).filter(Boolean))].map(b=>`<option value="${esc(b)}">`).join('')}
         </datalist>
       </div>
-      <div class="fg"><label class="fl">Lotnummer</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="z.B. LOT-2024-001"></div>
+      <div class="fg"><label class="fl">Lot-Nr.</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="z.B. LOT-2024-001"></div>
       <div class="fg"><label class="fl">Einheit</label>
         <select class="fs" id="rm-unit">
           ${['Stk','g','kg','m','cm','mm','ml','l'].map(u=>`<option ${(item.unit||'Stk')===u?'selected':''}>${u}</option>`).join('')}
@@ -713,9 +715,9 @@ async function _loadRawMatForm(id) {
     </div>` : ''}
     <div class="sep-label" style="margin-top:4px">Druckparameter (optional)</div>
     <div class="form-row cols2">
-      <div class="fg"><label class="fl">Drucktemp (°C)</label>
+      <div class="fg"><label class="fl">Düsentemperatur (°C)</label>
         <input class="fi" type="number" id="rm-print-temp" value="${item.print_temp||''}" placeholder="z.B. 215" min="0" step="1"></div>
-      <div class="fg"><label class="fl">Bett (°C)</label>
+      <div class="fg"><label class="fl">Betttemperatur (°C)</label>
         <input class="fi" type="number" id="rm-bed-temp" value="${item.bed_temp||''}" placeholder="z.B. 60" min="0" step="1"></div>
     </div>
     <div class="form-row">
@@ -863,7 +865,7 @@ function editLotRow(movId, lotNr, qty, price, unit, matId) {
     <div class="modal-head"><div class="modal-title">Lot bearbeiten</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body">
       <div class="form-row cols2">
-        <div class="fg"><label class="fl">Lotnummer</label>
+        <div class="fg"><label class="fl">Lot-Nr.</label>
           <input class="fi" id="el-lot" value="${esc(lotNr)}" placeholder="—"></div>
         <div class="fg"><label class="fl">Menge (${unit})</label>
           <input class="fi" type="number" id="el-qty" value="${qty!=null?qty:''}" min="0" step="any"></div>
@@ -927,7 +929,7 @@ async function openRawMatAdjust(id, type) {
         <div class="fg"><label class="fl">Notiz</label><input class="fi" id="adj-notes" placeholder="z.B. neue Spule, Produktion XY"></div>
       </div>
       ${type==='in' ? `<div class="form-row cols2">
-        <div class="fg"><label class="fl">Lotnummer (optional)</label>
+        <div class="fg"><label class="fl">Lot-Nr. (optional)</label>
           <input class="fi" id="adj-lot" placeholder="z.B. LOT-2025-042"></div>
         <div class="fg"><label class="fl">Einkaufspreis / Einheit (optional)</label>
           <input class="fi" type="number" id="adj-price" min="0" step="0.01" placeholder="z.B. 24.90"></div>

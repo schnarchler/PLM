@@ -53,11 +53,13 @@ if (!fs.existsSync(PLM_CONFIG_PATH)) {
 const _config = loadConfig();
 // Die Datenpfade sind veränderbar: /api/data-path/move schaltet den laufenden
 // Server nach dem Verschieben ohne Neustart auf das neue Verzeichnis um.
-let DATA_DIR, DB_PATH, FILES_DIR;
+let DATA_DIR, DB_PATH, FILES_DIR, TRASH_DIR, BACKUP_DIR;
 function setDataDir(dir) {
-  DATA_DIR  = path.resolve(dir);
-  DB_PATH   = path.join(DATA_DIR, 'plm.db');
-  FILES_DIR = path.join(DATA_DIR, 'files');
+  DATA_DIR   = path.resolve(dir);
+  DB_PATH    = path.join(DATA_DIR, 'plm.db');
+  FILES_DIR  = path.join(DATA_DIR, 'files');
+  TRASH_DIR  = path.join(DATA_DIR, 'papierkorb');
+  BACKUP_DIR = path.join(DATA_DIR, 'backups');
   fs.mkdirSync(DATA_DIR,  { recursive: true });
   fs.mkdirSync(FILES_DIR, { recursive: true });
 }
@@ -154,37 +156,80 @@ function runGetId(sql, params = []) {
   return r ? r.id : null;
 }
 
+// -- PAPIERKORB -------------------------------------------------
+// Gelöschte Dateien wandern in den Papierkorb, statt sofort zu verschwinden.
+// Wird eine ältere Sicherung wiederhergestellt, holt PLM die Dateien, auf die
+// sie noch verweist, von dort zurück. Nach TRASH_KEEP_DAYS werden sie beim
+// Start endgültig entfernt.
+const TRASH_KEEP_DAYS = 30;
+function trashFile(filename) {
+  if (!filename) return;
+  const src = path.join(FILES_DIR, filename);
+  if (!fs.existsSync(src)) return;
+  try {
+    fs.mkdirSync(TRASH_DIR, { recursive: true });
+    const dest = path.join(TRASH_DIR, filename);
+    try { fs.renameSync(src, dest); }
+    catch { fs.copyFileSync(src, dest); fs.unlinkSync(src); }
+    const now = new Date();
+    fs.utimesSync(dest, now, now);   // Löschzeitpunkt, nicht Upload-Zeitpunkt
+  } catch (err) {
+    console.error('Papierkorb nicht verfügbar, Datei wird direkt gelöscht:', err.message);
+    try { fs.unlinkSync(src); } catch {}
+  }
+}
+function purgeTrash() {
+  if (!fs.existsSync(TRASH_DIR)) return;
+  const limit = Date.now() - TRASH_KEEP_DAYS * 86400000;
+  let removed = 0;
+  for (const f of fs.readdirSync(TRASH_DIR)) {
+    const p = path.join(TRASH_DIR, f);
+    try { if (fs.statSync(p).mtimeMs < limit) { fs.unlinkSync(p); removed++; } } catch {}
+  }
+  if (removed) console.log(`  Papierkorb: ${removed} Datei(en) älter als ${TRASH_KEEP_DAYS} Tage entfernt`);
+}
+
 // -- INIT DB ----------------------------------------------------
 // Automatisches Backup beim Start: eine Kopie pro Tag, die letzten 14 behalten.
+// Von Hand erstellte Sicherungen und die Sicherung vor einer Wiederherstellung
+// haben einen Zusatz im Namen und fallen nicht unter diese Rotation.
 const BACKUP_KEEP = 14;
 function autoBackupDb() {
   if (!fs.existsSync(DB_PATH)) return;
-  const backupDir = path.join(DATA_DIR, 'backups');
-  fs.mkdirSync(backupDir, { recursive: true });
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const today = new Date().toISOString().slice(0, 10);
-  const dest = path.join(backupDir, `plm-${today}.db`);
+  const dest = path.join(BACKUP_DIR, `plm-${today}.db`);
   if (!fs.existsSync(dest)) {
     fs.copyFileSync(DB_PATH, dest);
     console.log('  DB-Backup erstellt: ' + dest);
   }
-  const old = fs.readdirSync(backupDir)
+  const old = fs.readdirSync(BACKUP_DIR)
     .filter(f => /^plm-\d{4}-\d{2}-\d{2}\.db$/.test(f))
     .sort()
     .slice(0, -BACKUP_KEEP);
-  old.forEach(f => { try { fs.unlinkSync(path.join(backupDir, f)); } catch {} });
+  old.forEach(f => { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} });
 }
 
+let SQL;
 async function initDb() {
-  const SQL = await initSqlJs();
+  SQL = await initSqlJs();
   try { autoBackupDb(); }
   catch (err) { console.error('DB-Backup fehlgeschlagen:', err.message); }
+  try { purgeTrash(); }
+  catch (err) { console.error('Papierkorb aufräumen fehlgeschlagen:', err.message); }
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(fileBuffer);
   } else {
     db = new SQL.Database();
   }
+  applySchema();
+}
 
+// Tabellen, Spalten, Migrationen und Indizes — alles idempotent. Läuft beim
+// Start und nach dem Wiederherstellen einer Sicherung, damit auch ein älterer
+// Stand das aktuelle Schema bekommt.
+function applySchema() {
   db.run('PRAGMA foreign_keys = ON');
 
   db.run(`CREATE TABLE IF NOT EXISTS projects (
@@ -641,6 +686,31 @@ async function initDb() {
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN raw_material_id INTEGER REFERENCES raw_materials(id)'); } catch {}
   try { db.run('ALTER TABLE raw_material_movements ADD COLUMN article_number TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE delivery_items ADD COLUMN order_item_id INTEGER REFERENCES order_items(id)'); } catch {}
+  // Gelieferter Stand: welche Revision des Items in dieser Position steckt.
+  // NULL = folgt automatisch der aktiven Revision (bis zur Lieferung).
+  // rev_fixed: 'manual' = von Hand gewählt, 'delivery' = beim Status
+  // „Geliefert" fixiert, 'migration' = nachträglich aus dem Lieferdatum ermittelt.
+  try { db.run('ALTER TABLE delivery_items ADD COLUMN revision_id INTEGER DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE delivery_items ADD COLUMN rev_fixed TEXT DEFAULT NULL'); } catch {}
+  // Bei Baugruppen zusätzlich die komplette Struktur zum Lieferzeitpunkt:
+  // jedes Unterteil mit der Revision, die damals verbaut war. Nummer und Name
+  // sind kopiert, damit der Stand lesbar bleibt, auch wenn ein Item später
+  // umbenannt oder gelöscht wird. unit_qty = Menge pro gelieferter Einheit.
+  db.run(`CREATE TABLE IF NOT EXISTS delivery_structure (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    delivery_item_id INTEGER NOT NULL,
+    parent_item_id INTEGER,
+    item_id INTEGER NOT NULL,
+    revision_id INTEGER,
+    rev TEXT,
+    item_number TEXT,
+    name TEXT,
+    item_type TEXT,
+    quantity REAL DEFAULT 1,
+    unit_qty REAL DEFAULT 1,
+    depth INTEGER DEFAULT 1,
+    position INTEGER DEFAULT 0
+  )`);
   db.run(`INSERT OR IGNORE INTO counters VALUES ('rm_lot',0)`);
 
   // Angebote sind keine eigene Sache mehr, sondern die erste Phase eines
@@ -702,7 +772,60 @@ async function initDb() {
     'CREATE INDEX IF NOT EXISTS idx_std_part_files_part  ON standard_part_files(std_part_id)',
     'CREATE INDEX IF NOT EXISTS idx_time_entries_order   ON time_entries(order_id)',
     'CREATE INDEX IF NOT EXISTS idx_time_entries_item    ON time_entries(item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_delivery_items_rev   ON delivery_items(revision_id)',
+    'CREATE INDEX IF NOT EXISTS idx_delivery_items_item  ON delivery_items(item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_dstruct_di           ON delivery_structure(delivery_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_dstruct_item         ON delivery_structure(item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_dstruct_rev          ON delivery_structure(revision_id)',
+    'CREATE INDEX IF NOT EXISTS idx_items_class          ON items(classification)',
   ].forEach(sql => db.run(sql));
+
+  // Lieferungen von vor dieser Funktion bekommen ihren Stand nachträglich:
+  // die Revision, die am Lieferdatum aktiv war. Als 'migration' markiert,
+  // damit die Oberfläche sie als ermittelt statt erfasst kennzeichnen kann.
+  migrateOnce('delivered-revisions-v1', () => {
+    let fixed = 0;
+    for (const d of all("SELECT id, delivery_date, updated_at FROM deliveries WHERE status='DELIVERED'")) {
+      const date = d.delivery_date || (d.updated_at || '').slice(0, 10) || null;
+      for (const di of all('SELECT * FROM delivery_items WHERE delivery_id=? AND item_id IS NOT NULL AND revision_id IS NULL', [d.id])) {
+        if (freezeDeliveryItem(di, 'migration', itemId => revisionAt(itemId, date))) fixed++;
+      }
+    }
+    if (fixed) console.log(`Migration gelieferter Stand: ${fixed} Position(en) nachträglich fixiert`);
+  });
+
+  // Klassifizierungen vereinheitlichen: Leerzeichen und Gross-/Kleinschreibung
+  // auf den Namen in der Liste ziehen, sonst zerfällt die Suche nach Klasse.
+  migrateOnce('classification-normalize-v1', () => {
+    const n = normalizeAllClassifications();
+    if (n) console.log(`Migration Klassifizierung: ${n} Item(s) vereinheitlicht`);
+  });
+
+  // Gleiche Begriffe auch in der bestehenden Historie: frühere englische
+  // Einträge auf die heutigen deutschen Bezeichnungen ziehen.
+  migrateOnce('changelog-german-v1', () => {
+    const map = {
+      'Created': 'Erstellt', 'Updated': 'Geändert',
+      'Dataset Added': 'Datei hinzugefügt', 'Dataset Deleted': 'Datei gelöscht',
+      'BOM Add': 'BOM: Position hinzugefügt', 'BOM Entfernt': 'BOM: Position entfernt',
+      'BOM Import': 'BOM importiert', 'BOM Revision': 'BOM: Revision',
+      'REL': 'Status → REL', 'artikel_nr': 'Artikel-Nr. vergeben',
+    };
+    for (const [from, to] of Object.entries(map)) db.run('UPDATE changelog SET action=? WHERE action=?', [to, from]);
+    db.run("UPDATE changelog SET action=REPLACE(action,'Status -> ','Status → ') WHERE action LIKE 'Status -> %'");
+    db.run("UPDATE revisions SET description='Erste Revision' WHERE description='Initial revision'");
+  });
+  // Der Begriff BOM bleibt. Wo changelog-german-v1 schon mit „Stückliste: …"
+  // gelaufen ist, die Einträge auf die BOM-Bezeichnungen zurückziehen.
+  migrateOnce('changelog-bom-v1', () => {
+    const map = {
+      'Stückliste: Position hinzugefügt': 'BOM: Position hinzugefügt',
+      'Stückliste: Position entfernt': 'BOM: Position entfernt',
+      'Stückliste importiert': 'BOM importiert',
+      'Stückliste: Revision': 'BOM: Revision',
+    };
+    for (const [from, to] of Object.entries(map)) db.run('UPDATE changelog SET action=? WHERE action=?', [to, from]);
+  });
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -775,6 +898,37 @@ function nextCounter(key) {
 function padN(n, key, def) { return String(n).padStart(parseInt(getSetting(key, String(def)))||def, '0'); }
 function nextProjectNumber() { return padN(nextCounter('project'), 'pad_project', 3); }
 function getSetting(key, def='') { return get('SELECT value FROM settings WHERE key=?', [key])?.value ?? def; }
+
+// ── KLASSIFIZIERUNG ───────────────────────────────────────────
+// Die Liste liegt als JSON in settings.item_classifications (Name + Farbe), am
+// Item steht nur der Name als Text. Darum ziehen diese Helfer abweichende
+// Schreibweisen auf den Listeneintrag — sonst findet die Suche nach
+// „Kaufteil" kein Item mit „kaufteil ". Standardliste wie im Frontend.
+const DEFAULT_CLASS_NAMES = ['Eigenteil', 'Kaufteil', 'Normteil', 'Halbzeug', 'Rohmaterial'];
+function classificationList() {
+  try {
+    const raw = getSetting('item_classifications', '');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(c => typeof c === 'string' ? c : c?.name).filter(Boolean);
+    }
+  } catch {}
+  return DEFAULT_CLASS_NAMES.slice();
+}
+// Freitext → Name aus der Liste in deren Schreibweise, sonst getrimmt; leer → null.
+function canonicalClass(value) {
+  const v = String(value ?? '').trim();
+  if (!v) return null;
+  return classificationList().find(n => n.trim().toLowerCase() === v.toLowerCase()) || v;
+}
+function normalizeAllClassifications() {
+  let n = 0;
+  for (const r of all('SELECT id, classification FROM items WHERE classification IS NOT NULL')) {
+    const c = canonicalClass(r.classification);
+    if (c !== r.classification) { db.run('UPDATE items SET classification=? WHERE id=?', [c, r.id]); n++; }
+  }
+  return n;
+}
 function nextCustomerNumber() {
   const pre = getSetting('prefix_customer','KD');
   return pre + '-' + padN(nextCounter('customer'), 'pad_customer', 3);
@@ -967,6 +1121,156 @@ function getLatestRevision(itemId) {
 function getActiveRevision(itemId) {
   return get("SELECT * FROM revisions WHERE item_id=? AND status='REL' ORDER BY rowid DESC LIMIT 1", [itemId])
     || getLatestRevision(itemId);
+}
+// Welche Revision war an einem Datum aktiv? Nur für Lieferungen aus der Zeit
+// vor dem automatischen Fixieren — beste Näherung aus Freigabe- und Erstelldatum,
+// nach denselben Regeln wie getActiveRevision.
+function revisionAt(itemId, date) {
+  if (!date) return getActiveRevision(itemId);
+  const end = String(date).slice(0, 10) + ' 23:59:59';
+  return get(`SELECT * FROM revisions WHERE item_id=? AND released_at IS NOT NULL AND released_at<=?
+              ORDER BY released_at DESC, rowid DESC LIMIT 1`, [itemId, end])
+    || get('SELECT * FROM revisions WHERE item_id=? AND created_at<=? ORDER BY rowid DESC LIMIT 1', [itemId, end])
+    || get('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid ASC LIMIT 1', [itemId]);
+}
+
+// ── GELIEFERTER STAND ─────────────────────────────────────────
+// Eine Produktionsposition verweist bis zur Lieferung auf das Item und folgt
+// dessen aktiver Revision. Beim Status „Geliefert" wird die Revision fixiert
+// (delivery_items.revision_id); bei Baugruppen wird zusätzlich die komplette
+// Struktur mit den Revisionen aller Unterteile festgehalten. Gelieferte
+// Revisionen sind danach gesperrt — Änderungen gehen in eine neue Revision.
+
+// Struktur einer Baugruppenrevision festhalten. resolve bestimmt die Revision
+// automatisch folgender Positionen (Standard: aktive Revision).
+function snapshotStructure(deliveryItemId, rootItemId, rootRevId, resolve = getActiveRevision) {
+  run('DELETE FROM delivery_structure WHERE delivery_item_id=?', [deliveryItemId]);
+  let pos = 0;
+  (function walk(parentItemId, revId, depth, unitQty, trail) {
+    if (depth > 30) return;
+    const kids = all(`SELECT b.child_item_id, b.child_rev_id, b.quantity, i.item_number, i.name, i.item_type
+      FROM bom b JOIN items i ON i.id=b.child_item_id
+      WHERE b.parent_rev_id=? ORDER BY b.position, b.id`, [revId]);
+    for (const k of kids) {
+      if (trail.includes(k.child_item_id)) continue;   // Zyklus in der Stückliste
+      const rev = (k.child_rev_id && get('SELECT * FROM revisions WHERE id=?', [k.child_rev_id]))
+        || resolve(k.child_item_id);
+      const qty = parseFloat(k.quantity) || 1;
+      run(`INSERT INTO delivery_structure
+        (delivery_item_id,parent_item_id,item_id,revision_id,rev,item_number,name,item_type,quantity,unit_qty,depth,position)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [deliveryItemId, parentItemId, k.child_item_id, rev?.id || null, rev?.rev || null,
+         k.item_number, k.name, k.item_type, qty, unitQty * qty, depth, ++pos]);
+      if (rev) walk(k.child_item_id, rev.id, depth + 1, unitQty * qty, trail.concat(k.child_item_id));
+    }
+  })(rootItemId, rootRevId, 1, 1, [rootItemId]);
+  return pos;
+}
+
+// Revision einer Position fixieren. Eine von Hand gewählte Revision bleibt,
+// sonst gilt die aktive. Gibt die fixierte Revision zurück (oder null).
+function freezeDeliveryItem(di, how, resolve = getActiveRevision) {
+  if (!di?.item_id) return null;
+  const item = get('SELECT id, item_type FROM items WHERE id=?', [di.item_id]);
+  if (!item) return null;
+  const chosen = di.revision_id
+    ? get('SELECT * FROM revisions WHERE id=? AND item_id=?', [di.revision_id, di.item_id]) : null;
+  const rev = chosen || resolve(di.item_id);
+  if (!rev) return null;
+  if (!chosen) run('UPDATE delivery_items SET revision_id=?, rev_fixed=? WHERE id=?', [rev.id, how, di.id]);
+  if (item.item_type === 'asm') snapshotStructure(di.id, item.id, rev.id, resolve);
+  return rev;
+}
+
+function freezeDelivery(deliveryId) {
+  const fixed = [];
+  for (const di of all('SELECT * FROM delivery_items WHERE delivery_id=? AND item_id IS NOT NULL', [deliveryId])) {
+    const rev = freezeDeliveryItem(di, 'delivery');
+    if (rev) fixed.push(rev.rev);
+  }
+  if (fixed.length) log('delivery', deliveryId, 'Stand fixiert', `${fixed.length} Position(en) auf ihre Revision fixiert`);
+  return fixed.length;
+}
+
+// Zurück aus „Geliefert": automatisch fixierte Revisionen folgen wieder der
+// aktiven, von Hand gewählte bleiben. Die Strukturkopie entfällt.
+function unfreezeDelivery(deliveryId) {
+  run(`UPDATE delivery_items SET revision_id=NULL, rev_fixed=NULL
+       WHERE delivery_id=? AND rev_fixed IN ('delivery','migration')`, [deliveryId]);
+  run(`DELETE FROM delivery_structure
+       WHERE delivery_item_id IN (SELECT id FROM delivery_items WHERE delivery_id=?)`, [deliveryId]);
+  log('delivery', deliveryId, 'Stand gelöst', 'Status nicht mehr „Geliefert"');
+}
+
+// Statuswechsel eines Produktionsauftrags: fixieren beim Wechsel nach
+// „Geliefert", lösen beim Wechsel zurück.
+function onDeliveryStatusChange(deliveryId, prevStatus, newStatus) {
+  if (newStatus === 'DELIVERED' && prevStatus !== 'DELIVERED') freezeDelivery(deliveryId);
+  else if (prevStatus === 'DELIVERED' && newStatus !== 'DELIVERED') unfreezeDelivery(deliveryId);
+}
+
+// Gelieferte Produktionsaufträge, in denen diese Revision steckt — direkt
+// als Position oder als Unterteil einer gelieferten Baugruppe.
+function deliveriesOfRevision(revId) {
+  return all(`SELECT d.id, d.number, d.title, d.delivery_date,
+      COALESCE(c.name, d.customer_name_free) as customer_name
+    FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id
+    WHERE d.status='DELIVERED' AND d.id IN (
+      SELECT di.delivery_id FROM delivery_items di WHERE di.revision_id=?
+      UNION
+      SELECT di.delivery_id FROM delivery_structure ds
+        JOIN delivery_items di ON di.id=ds.delivery_item_id WHERE ds.revision_id=?)
+    ORDER BY d.number`, [revId, revId]);
+}
+
+function deliveredLockMessage(list) {
+  const nums = list.slice(0, 3).map(d => d.number).join(', ') + (list.length > 3 ? ` … (+${list.length - 3})` : '');
+  return `Diese Revision wurde geliefert (${nums}) und ist fixiert. Änderungen bitte in einer neuen Revision.`;
+}
+
+// Schreibzugriff auf eine gelieferte Revision abweisen. true = abgewiesen.
+function rejectIfDelivered(res, revId) {
+  if (!revId) return false;
+  const list = deliveriesOfRevision(revId);
+  if (!list.length) return false;
+  res.status(409).json({ error: deliveredLockMessage(list), delivered: list });
+  return true;
+}
+
+// Dateien, Druckparameter und Stückliste einer Revision in eine neue
+// übernehmen. „Neue Revision", ECO und Check-in nutzen denselben Weg, damit
+// eine neue Revision immer gleich aussieht.
+function copyRevisionContent(from, toRevId, toRevLabel) {
+  let files = 0;
+  for (const ds of all('SELECT * FROM datasets WHERE revision_id=?', [from.id])) {
+    try {
+      const ext = path.extname(ds.filename);
+      const newFile = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+      fs.copyFileSync(path.join(FILES_DIR, ds.filename), path.join(FILES_DIR, newFile));
+      const newName = (ds.original_name || '').replace(`_rev${from.rev}`, `_rev${toRevLabel}`);
+      runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
+        [toRevId, ds.ds_type, newFile, newName || ds.original_name, ds.file_size, ds.version, ds.notes]);
+      files++;
+    } catch (e) { console.error('Datei-Kopie fehlgeschlagen:', e.message); }
+  }
+  const ps = get('SELECT * FROM print_settings WHERE revision_id=?', [from.id]);
+  if (ps) {
+    run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [toRevId, ps.material, ps.color, ps.layer_height, ps.infill, ps.supports, ps.nozzle,
+       ps.print_temp, ps.bed_temp, ps.printer, ps.notes, ps.printer_cost_hr, ps.filament_price_kg,
+       ps.filament_weight_total, ps.part_weight, ps.print_duration, ps.raw_material_id]);
+  }
+  // Stückliste inklusive fixierter Revisionen
+  for (const b of all('SELECT * FROM bom WHERE parent_rev_id=?', [from.id])) {
+    run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position,notes,child_rev_id) VALUES (?,?,?,?,?,?,?)',
+      [toRevId, b.child_item_id, b.quantity, b.unit, b.position, b.notes, b.child_rev_id]);
+  }
+  for (const b of all('SELECT * FROM bom_std_parts WHERE parent_rev_id=?', [from.id])) {
+    run('INSERT INTO bom_std_parts (parent_rev_id,std_part_id,quantity,unit,position,notes) VALUES (?,?,?,?,?,?)',
+      [toRevId, b.std_part_id, b.quantity, b.unit, b.position, b.notes]);
+  }
+  return { files };
 }
 // Recursively sum dev hours (time_entries) for an item and all its BOM children via CTE.
 // UNION (nicht UNION ALL): dedupliziert die Baumzeilen und beendet die Rekursion
@@ -1169,17 +1473,17 @@ app.get('/api/projects', (req, res) => {
 
 app.post('/api/projects', (req, res) => {
   const { name, description, customer, color } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name required' });
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const number = nextProjectNumber();
   const id = runGetId('INSERT INTO projects (number,name,description,customer,color) VALUES (?,?,?,?,?)',
     [number, name, description||'', customer||'', color||null]);
-  log('project', id, 'Created', number + ' - ' + name);
+  log('project', id, 'Erstellt', number + ' – ' + name);
   res.json(get('SELECT * FROM projects WHERE id=?', [id]));
 });
 
 app.get('/api/projects/:id', (req, res) => {
   const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
-  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
   p.items = all('SELECT * FROM items WHERE project_id=? ORDER BY item_type, item_number DESC', [p.id]);
   p.items.forEach(item => {
     item.latest_revision = getLatestRevision(item.id);
@@ -1199,13 +1503,13 @@ app.put('/api/projects/:id', (req, res) => {
   const { name, description, customer, color } = req.body;
   run("UPDATE projects SET name=?,description=?,customer=?,color=?,updated_at=datetime('now') WHERE id=?",
     [name, description, customer, color||null, req.params.id]);
-  log('project', req.params.id, 'Updated', name);
+  log('project', req.params.id, 'Geändert', name);
   res.json(get('SELECT * FROM projects WHERE id=?', [req.params.id]));
 });
 
 app.post('/api/projects/:id/pin', (req, res) => {
   const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
-  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
   const pinned = p.pinned ? 0 : 1;
   run('UPDATE projects SET pinned=? WHERE id=?', [pinned, req.params.id]);
   res.json({ pinned });
@@ -1213,7 +1517,7 @@ app.post('/api/projects/:id/pin', (req, res) => {
 
 app.delete('/api/projects/:id', (req, res) => {
   const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
-  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
   const revIds = all('SELECT r.id FROM revisions r JOIN items i ON r.item_id=i.id WHERE i.project_id=?', [p.id]);
   // Dateien erst nach erfolgreichem Commit löschen (nicht zurückrollbar)
   const filesToDelete = [];
@@ -1233,7 +1537,7 @@ app.delete('/api/projects/:id', (req, res) => {
     run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['project', p.id]);
     run('DELETE FROM projects WHERE id=?', [p.id]);
   });
-  filesToDelete.forEach(fn => { try { fs.unlinkSync(path.join(FILES_DIR, fn)); } catch {} });
+  filesToDelete.forEach(fn => trashFile(fn));
   res.json({ success: true });
 });
 
@@ -1242,12 +1546,14 @@ app.delete('/api/projects/:id', (req, res) => {
 // ==============================================================
 app.get('/api/items/:id', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   item.project = get('SELECT * FROM projects WHERE id=?', [item.project_id]);
   item.revisions = all('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid DESC', [item.id]);
   item.revisions.forEach(rev => {
     rev.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [rev.id]);
     rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
+    // Gelieferte Revisionen sind fixiert (siehe GELIEFERTER STAND)
+    rev.delivered = deliveriesOfRevision(rev.id);
     if (item.item_type === 'asm') {
       rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
       rev.bom.forEach(b => {
@@ -1270,6 +1576,7 @@ app.get('/api/items/:id', (req, res) => {
   item.variants = item.variant_group_id
     ? all('SELECT id,item_number,name,item_type FROM items WHERE variant_group_id=? AND id!=? ORDER BY item_number', [item.variant_group_id, item.id])
     : [];
+  item.delivered = item.revisions.some(r => r.delivered.length);
   // Fuer das Datenblatt: Entwicklungszeit (BOM-Rollup) und verknuepfter Lagerbestand
   item.dev_hours = calcDevHours(item.id);
   item.inventory = all(`SELECT id, name, sku, unit, stock_qty, min_qty, price_per_unit, notes
@@ -1279,9 +1586,9 @@ app.get('/api/items/:id', (req, res) => {
 
 app.post('/api/projects/:projectId/items', (req, res) => {
   const { name, description, item_type, parent_id, source_url, default_price } = req.body;
-  if (!name || !item_type) return res.status(400).json({ error: 'name and item_type required' });
+  if (!name || !item_type) return res.status(400).json({ error: 'Name und Typ fehlen' });
   const project = get('SELECT * FROM projects WHERE id=?', [req.params.projectId]);
-  if (!project) return res.status(404).json({ error: 'Project not found' });
+  if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
 
   let item_number;
   if (item_type === 'asm') {
@@ -1303,13 +1610,13 @@ app.post('/api/projects/:projectId/items', (req, res) => {
 
   // Klassifizierung ableiten statt abfragen: mit Quelle/Link ist es in aller
   // Regel ein Kaufteil, ohne ein Eigenteil. Leere Einstellung = keine Zuordnung.
-  const derivedClass = req.body.classification
-    || getSetting(source_url ? 'default_class_bought' : 'default_class_own', '') || null;
+  const derivedClass = canonicalClass(req.body.classification
+    || getSetting(source_url ? 'default_class_bought' : 'default_class_own', ''));
 
   const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price,classification) VALUES (?,?,?,?,?,?,?,?,?)',
     [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null, derivedClass]);
-  run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Initial revision']);
-  log('item', itemId, 'Created', item_type + ' ' + item_number + ' rev1');
+  run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Erste Revision']);
+  log('item', itemId, 'Erstellt', item_type + ' ' + item_number + ' rev' + firstRevLabel());
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
 });
 
@@ -1320,9 +1627,9 @@ app.put('/api/items/:id', (req, res) => {
   const keepNotes = !Object.prototype.hasOwnProperty.call(req.body, 'notes');
   run(`UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=?,weight_g=?,
        notes=CASE WHEN ? THEN notes ELSE ? END WHERE id=?`,
-    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, classification||null, weight_g != null ? parseFloat(weight_g) : null,
+    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, canonicalClass(classification), weight_g != null ? parseFloat(weight_g) : null,
      keepNotes ? 1 : 0, notes || null, req.params.id]);
-  log('item', req.params.id, 'Updated', name);
+  log('item', req.params.id, 'Geändert', name);
   res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
 });
 
@@ -1330,7 +1637,7 @@ app.post('/api/items/:id/link-variant', (req, res) => {
   const { other_item_id } = req.body;
   const a = get('SELECT id,variant_group_id FROM items WHERE id=?', [req.params.id]);
   const b = get('SELECT id,variant_group_id FROM items WHERE id=?', [other_item_id]);
-  if (!a || !b || a.id === b.id) return res.status(400).json({ error: 'Invalid items' });
+  if (!a || !b || a.id === b.id) return res.status(400).json({ error: 'Ungültige Items' });
 
   let groupId;
   if (a.variant_group_id && b.variant_group_id) {
@@ -1354,7 +1661,7 @@ app.post('/api/items/:id/link-variant', (req, res) => {
 
 app.delete('/api/items/:id/variant-group', (req, res) => {
   const item = get('SELECT id,variant_group_id FROM items WHERE id=?', [req.params.id]);
-  if (!item || !item.variant_group_id) return res.status(400).json({ error: 'Not in a group' });
+  if (!item || !item.variant_group_id) return res.status(400).json({ error: 'Item ist in keiner Variantengruppe' });
   run('UPDATE items SET variant_group_id=NULL WHERE id=?', [item.id]);
   log('item', item.id, 'Variante entfernt', 'aus Gruppe ' + item.variant_group_id);
   res.json({ ok: true });
@@ -1389,7 +1696,7 @@ app.get('/api/items/:id/where-used', (req, res) => {
 app.get('/api/items/:id/graph', (req, res) => {
   const rootId = parseInt(req.params.id);
   const root = get('SELECT * FROM items WHERE id=?', [rootId]);
-  if (!root) return res.status(404).json({ error: 'Not found' });
+  if (!root) return res.status(404).json({ error: 'Nicht gefunden' });
 
   const MAX_DEPTH = 6;
   const MAX_NODES = 400;
@@ -1508,6 +1815,8 @@ app.get('/api/items/:id/graph', (req, res) => {
   });
 });
 
+// Angebote sind die Phase QUOTE eines Auftrags und stecken in orders. Die alte
+// Angebotstabelle ist nur noch Archiv — ihre Einträge haben alle einen Auftrag.
 app.get('/api/items/:id/erp-usage', (req, res) => {
   const id = req.params.id;
   const orders = all(`
@@ -1515,23 +1824,42 @@ app.get('/api/items/:id/erp-usage', (req, res) => {
       oi.quantity, oi.unit, oi.unit_price
     FROM order_items oi JOIN orders o ON oi.order_id = o.id
     WHERE oi.item_id = ? ORDER BY o.order_date DESC, o.id DESC`, [id]);
-  const quotes = all(`
-    SELECT q.id, q.number, q.title, q.status, q.quote_date,
-      qi.quantity, qi.unit, qi.unit_price
-    FROM quote_items qi JOIN quotes q ON qi.quote_id = q.id
-    WHERE qi.item_id = ? ORDER BY q.quote_date DESC, q.id DESC`, [id]);
+  const active = getActiveRevision(id);
+  // Welcher Stand steckt in welchem Produktionsauftrag? Vor der Lieferung die
+  // aktive (oder von Hand gewählte) Revision, danach die fixierte.
   const deliveries = all(`
     SELECT d.id, d.number, d.title, d.status, d.delivery_date,
-      di.quantity, di.unit
+      COALESCE(c.name, d.customer_name_free) as customer_name,
+      di.quantity, di.unit, di.revision_id, di.rev_fixed, r.rev, r.status as rev_status
     FROM delivery_items di JOIN deliveries d ON di.delivery_id = d.id
+    LEFT JOIN customers c ON d.customer_id = c.id
+    LEFT JOIN revisions r ON r.id = di.revision_id
     WHERE di.item_id = ? ORDER BY d.delivery_date DESC, d.id DESC`, [id]);
-  res.json({ orders, quotes, deliveries });
+  // Als Unterteil einer gelieferten Baugruppe
+  const viaAssembly = all(`
+    SELECT d.id, d.number, d.title, d.status, d.delivery_date,
+      COALESCE(c.name, d.customer_name_free) as customer_name,
+      di.quantity * ds.unit_qty as quantity, di.unit, ds.revision_id, ds.rev,
+      r.status as rev_status, i.item_number as via_item_number, i.name as via_name
+    FROM delivery_structure ds
+    JOIN delivery_items di ON di.id = ds.delivery_item_id
+    JOIN deliveries d ON d.id = di.delivery_id
+    LEFT JOIN customers c ON d.customer_id = c.id
+    LEFT JOIN revisions r ON r.id = ds.revision_id
+    LEFT JOIN items i ON i.id = di.item_id
+    WHERE ds.item_id = ? AND d.status = 'DELIVERED'
+    ORDER BY d.delivery_date DESC, d.id DESC`, [id]);
+  for (const d of [...deliveries, ...viaAssembly]) {
+    if (!d.revision_id && active) { d.rev = active.rev; d.rev_status = active.status; d.rev_auto = true; }
+    d.rev_outdated = !!(d.revision_id && active && d.revision_id !== active.id);
+  }
+  res.json({ orders, deliveries, via_assembly: viaAssembly, active_rev: active ? { id: active.id, rev: active.rev } : null });
 });
 
 app.put('/api/items/:id/move', (req, res) => {
   const { target_project_id } = req.body;
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   const targetProject = get('SELECT * FROM projects WHERE id=?', [target_project_id]);
   if (!targetProject) return res.status(400).json({ error: 'Zielprojekt nicht gefunden' });
   if (item.project_id === parseInt(target_project_id))
@@ -1572,9 +1900,18 @@ app.put('/api/items/:id/move', (req, res) => {
 
 app.delete('/api/items/:id', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
-  log('project', item.project_id, 'Item gelöscht', item.item_type + ' ' + item.item_number + ' – ' + item.name);
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   const revs = all('SELECT id FROM revisions WHERE item_id=?', [item.id]);
+  // Gelieferte Items nur über Einstellungen → Admin (force=1) — sonst
+  // verschwindet der Nachweis, welcher Stand beim Kunden ist.
+  if (req.query.force !== '1') {
+    const delivered = revs.flatMap(r => deliveriesOfRevision(r.id));
+    if (delivered.length) {
+      const nums = [...new Set(delivered.map(d => d.number))].slice(0, 3).join(', ');
+      return res.status(409).json({ error: `Item wurde geliefert (${nums}) — Löschen nur unter Einstellungen → Admin.` });
+    }
+  }
+  log('project', item.project_id, 'Item gelöscht', item.item_type + ' ' + item.item_number + ' – ' + item.name);
   // Dateien erst nach erfolgreichem Commit löschen (nicht zurückrollbar)
   const filesToDelete = [];
   tx(() => {
@@ -1589,7 +1926,7 @@ app.delete('/api/items/:id', (req, res) => {
     run('DELETE FROM changelog WHERE entity_type=? AND entity_id=?', ['item', item.id]);
     run('DELETE FROM items WHERE id=?', [item.id]);
   });
-  filesToDelete.forEach(fn => { try { fs.unlinkSync(path.join(FILES_DIR, fn)); } catch {} });
+  filesToDelete.forEach(fn => trashFile(fn));
   res.json({ success: true });
 });
 
@@ -1598,7 +1935,7 @@ app.delete('/api/items/:id', (req, res) => {
 // ==============================================================
 app.get('/api/revisions/:id', (req, res) => {
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
-  if (!rev) return res.status(404).json({ error: 'Not found' });
+  if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
   rev.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [rev.id]);
   rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
   rev.item = get('SELECT * FROM items WHERE id=?', [rev.item_id]);
@@ -1609,14 +1946,125 @@ app.get('/api/revisions/:id', (req, res) => {
   res.json(rev);
 });
 
+// ── REVISIONEN VERGLEICHEN ────────────────────────────────────
+// Zwei Revisionen desselben Items gegenüberstellen: Kopfdaten, Druckparameter,
+// Stückliste, Normteile und Dateien. Dateien werden über den Namen ohne _revN
+// zugeordnet; bei gleicher Grösse entscheidet eine Prüfsumme. Eine beim ECO
+// oder bei „Neue Revision" kopierte Datei gilt so als unverändert.
+// Liefert Rohwerte — Bezeichnungen und Einheiten setzt das Frontend, damit
+// Vergleich und Datenblatt dieselben Begriffe verwenden.
+const COMPARE_PS_FIELDS = ['material', 'color', 'layer_height', 'infill', 'supports', 'nozzle',
+  'print_temp', 'bed_temp', 'printer', 'print_duration', 'filament_weight_total', 'part_weight',
+  'filament_price_kg', 'printer_cost_hr', 'raw_material_id', 'notes'];
+const COMPARE_HASH_LIMIT = 256 * 1024 * 1024;
+
+function _blank(v) { return v === null || v === undefined || String(v).trim() === ''; }
+function _sameValue(a, b) {
+  if (_blank(a) && _blank(b)) return true;
+  if (_blank(a) || _blank(b)) return false;
+  const na = Number(a), nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb;
+  return String(a).trim() === String(b).trim();
+}
+function _fileHash(ds) {
+  try {
+    const p = path.join(FILES_DIR, ds.filename);
+    if (fs.statSync(p).size > COMPARE_HASH_LIMIT) return null;
+    return crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex');
+  } catch { return null; }
+}
+// Dateiname ohne Revisionskennung: 0028-prt-001_rev2.stl → 0028-prt-001.stl
+function _datasetKey(ds) {
+  return ds.ds_type + ':' + String(ds.original_name || '').replace(/_rev[A-Za-z0-9]+(?=[._]|$)/g, '').toLowerCase();
+}
+
+app.get('/api/items/:id/compare', (req, res) => {
+  const item = get('SELECT id, item_number, name, item_type FROM items WHERE id=?', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
+  const ra = get('SELECT * FROM revisions WHERE id=? AND item_id=?', [req.query.a, item.id]);
+  const rb = get('SELECT * FROM revisions WHERE id=? AND item_id=?', [req.query.b, item.id]);
+  if (!ra || !rb) return res.status(400).json({ error: 'Beide Revisionen müssen zu diesem Item gehören.' });
+
+  const head = r => ({ id: r.id, rev: r.rev, status: r.status, created_at: r.created_at,
+    released_at: r.released_at, released_by: r.released_by, description: r.description,
+    eco_reason: r.eco_reason, delivered: deliveriesOfRevision(r.id).map(d => d.number) });
+
+  const meta = ['status', 'description', 'eco_reason', 'released_at', 'released_by']
+    .map(f => ({ field: f, a: ra[f] ?? null, b: rb[f] ?? null, changed: !_sameValue(ra[f], rb[f]) }))
+    .filter(r => !_blank(r.a) || !_blank(r.b));
+
+  const psA = get('SELECT * FROM print_settings WHERE revision_id=?', [ra.id]) || {};
+  const psB = get('SELECT * FROM print_settings WHERE revision_id=?', [rb.id]) || {};
+  const rmName = id => _blank(id) ? null : (get('SELECT name FROM raw_materials WHERE id=?', [id])?.name || `#${id}`);
+  const print_settings = COMPARE_PS_FIELDS.map(f => {
+    let a = psA[f] ?? null, b = psB[f] ?? null;
+    if (f === 'raw_material_id') { a = rmName(a); b = rmName(b); }
+    return { field: f, a, b, changed: !_sameValue(a, b) };
+  }).filter(r => !_blank(r.a) || !_blank(r.b));
+
+  // Stückliste: Zuordnung über das Kind-Item, Reihenfolge wie in Revision A,
+  // neue Positionen aus B dahinter
+  const bomOf = revId => all(`SELECT b.*, i.item_number, i.name, i.item_type, r.rev as pinned_rev
+    FROM bom b JOIN items i ON i.id=b.child_item_id LEFT JOIN revisions r ON r.id=b.child_rev_id
+    WHERE b.parent_rev_id=? ORDER BY b.position, b.id`, [revId]);
+  const stdOf = revId => all(`SELECT bs.*, sp.designation, sp.name as sp_name
+    FROM bom_std_parts bs JOIN standard_parts sp ON sp.id=bs.std_part_id
+    WHERE bs.parent_rev_id=? ORDER BY bs.position, bs.id`, [revId]);
+  function diffRows(A, B, keyOf, describe, side, extraChange) {
+    const mapA = new Map(A.map(x => [keyOf(x), x])), mapB = new Map(B.map(x => [keyOf(x), x]));
+    const keys = [...mapA.keys(), ...[...mapB.keys()].filter(k => !mapA.has(k))];
+    return keys.map(k => {
+      const x = mapA.get(k), y = mapB.get(k);
+      const qtyChanged = !!(x && y && (!_sameValue(x.quantity, y.quantity) || (x.unit || '') !== (y.unit || '')));
+      const otherChanged = !!(x && y && extraChange && extraChange(x, y));
+      const change = !x ? 'added' : !y ? 'removed' : (qtyChanged || otherChanged) ? 'changed' : 'same';
+      return { ...describe(y || x), a: x ? side(x) : null, b: y ? side(y) : null, change,
+        qty_changed: qtyChanged, rev_changed: otherChanged };
+    });
+  }
+  const bom = diffRows(bomOf(ra.id), bomOf(rb.id), x => x.child_item_id,
+    x => ({ child_item_id: x.child_item_id, item_number: x.item_number, name: x.name, item_type: x.item_type }),
+    x => ({ quantity: x.quantity, unit: x.unit, pinned_rev: x.pinned_rev || null }),
+    (x, y) => (x.child_rev_id || null) !== (y.child_rev_id || null));
+  const bom_std = diffRows(stdOf(ra.id), stdOf(rb.id), x => x.std_part_id,
+    x => ({ std_part_id: x.std_part_id, designation: x.designation, name: x.sp_name }),
+    x => ({ quantity: x.quantity, unit: x.unit }));
+
+  // Dateien: gleicher Schlüssel mehrfach in einer Revision → durchnummerieren
+  const dsOf = revId => {
+    const seen = {};
+    return all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, original_name, id', [revId])
+      .map(d => { const k = _datasetKey(d); seen[k] = (seen[k] || 0) + 1; return { ...d, _key: k + '#' + seen[k] }; });
+  };
+  const datasets = diffRows(dsOf(ra.id), dsOf(rb.id), d => d._key,
+    d => ({ ds_type: d.ds_type, name: d.original_name }),
+    d => ({ id: d.id, original_name: d.original_name, file_size: d.file_size, version: d.version, uploaded_at: d.uploaded_at }))
+    .map(row => {
+      if (row.change !== 'same') return row;
+      // gleich benannt: Inhalt prüfen
+      if (row.a.file_size !== row.b.file_size) return { ...row, change: 'changed', content: 'different' };
+      const ha = _fileHash({ filename: get('SELECT filename FROM datasets WHERE id=?', [row.a.id])?.filename });
+      const hb = _fileHash({ filename: get('SELECT filename FROM datasets WHERE id=?', [row.b.id])?.filename });
+      if (ha && hb) return ha === hb ? { ...row, content: 'identical' } : { ...row, change: 'changed', content: 'different' };
+      return { ...row, content: 'unknown' };
+    });
+
+  const changed = list => list.filter(r => r.change ? r.change !== 'same' : r.changed).length;
+  res.json({
+    item, a: head(ra), b: head(rb), meta, print_settings, bom, bom_std, datasets,
+    summary: { meta: changed(meta), print_settings: changed(print_settings), bom: changed(bom),
+      bom_std: changed(bom_std), datasets: changed(datasets) },
+  });
+});
+
 app.put('/api/revisions/:id/status', (req, res) => {
   const { status, description, eco_reason, released_by } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
-  if (!rev) return res.status(404).json({ error: 'Not found' });
+  if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
 
   const validTransitions = { DFT:['REV'], REV:['DFT','REL'], REL:['ECO','OBS'], ECO:['OBS'], OBS:[] };
   if (!validTransitions[rev.status]?.includes(status))
-    return res.status(400).json({ error: 'Cannot transition from ' + rev.status + ' to ' + status });
+    return res.status(400).json({ error: `Statuswechsel von ${rev.status} nach ${status} ist nicht möglich` });
 
   if (status === 'REL') {
     // For assemblies: all BOM children must have at least one REL revision.
@@ -1647,28 +2095,21 @@ app.put('/api/revisions/:id/status', (req, res) => {
     const newRev = nextRev(lastRev ? lastRev.rev : '0');
     const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
       [rev.item_id, newRev, 'DFT', 'ECO: ' + (eco_reason || '')]);
-    const datasets = all('SELECT * FROM datasets WHERE revision_id=?', [rev.id]);
-    for (const ds of datasets) {
-      try {
-        const ext = path.extname(ds.filename);
-        const newFile = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
-        fs.copyFileSync(path.join(FILES_DIR, ds.filename), path.join(FILES_DIR, newFile));
-        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-          [newRevId, ds.ds_type, newFile, ds.original_name, ds.file_size, ds.version, 'Kopiert von ' + rev.rev]);
-      } catch {}
-    }
-    log('revision', rev.id, 'ECO', `Neue Revision ${newRev} erstellt, ${datasets.length} Datei(en) kopiert`);
+    // Wie „Neue Revision": Dateien, Druckparameter und Stückliste übernehmen
+    const copied = copyRevisionContent(rev, newRevId, newRev);
+    log('revision', rev.id, 'ECO', `Neue Revision rev${newRev} erstellt, ${copied.files} Datei(en), Druckparameter und BOM übernommen`);
   } else {
     run("UPDATE revisions SET status=?,updated_at=datetime('now') WHERE id=?", [status, rev.id]);
   }
 
-  log('revision', rev.id, 'Status -> ' + status, description || eco_reason || '');
+  log('revision', rev.id, 'Status → ' + status, description || eco_reason || '');
   res.json(get('SELECT * FROM revisions WHERE id=?', [rev.id]));
 });
 
 // Neue Revision direkt anlegen — der Weg im einfachen Workflow, in dem es
-// kein REL und damit auch kein ECO gibt. Dateien und Druckparameter der
-// bisherigen Revision werden uebernommen, genau wie beim ECO.
+// kein REL und damit auch kein ECO gibt, und nach einer Lieferung, die die
+// Revision fixiert hat. Dateien, Druckparameter und Stückliste der bisherigen
+// Revision werden übernommen, genau wie beim ECO.
 app.post('/api/items/:id/revisions', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
@@ -1683,37 +2124,7 @@ app.post('/api/items/:id/revisions', (req, res) => {
   const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
     [item.id, newRev, 'DFT', req.body?.description || '']);
 
-  if (last) {
-    // Dateien kopieren
-    for (const ds of all('SELECT * FROM datasets WHERE revision_id=?', [last.id])) {
-      try {
-        const ext = path.extname(ds.filename);
-        const newFile = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
-        fs.copyFileSync(path.join(FILES_DIR, ds.filename), path.join(FILES_DIR, newFile));
-        const newName = (ds.original_name || '').replace(`_rev${last.rev}`, `_rev${newRev}`);
-        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-          [newRevId, ds.ds_type, newFile, newName || ds.original_name, ds.file_size, ds.version, ds.notes]);
-      } catch (e) { console.error('Dataset-Kopie fehlgeschlagen:', e.message); }
-    }
-    // Druckparameter uebernehmen
-    const ps = get('SELECT * FROM print_settings WHERE revision_id=?', [last.id]);
-    if (ps) {
-      run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [newRevId, ps.material, ps.color, ps.layer_height, ps.infill, ps.supports, ps.nozzle,
-         ps.print_temp, ps.bed_temp, ps.printer, ps.notes, ps.printer_cost_hr, ps.filament_price_kg,
-         ps.filament_weight_total, ps.part_weight, ps.print_duration, ps.raw_material_id]);
-    }
-    // Stueckliste uebernehmen, inklusive fixierter Revisionen
-    for (const b of all('SELECT * FROM bom WHERE parent_rev_id=?', [last.id])) {
-      run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position,notes,child_rev_id) VALUES (?,?,?,?,?,?,?)',
-        [newRevId, b.child_item_id, b.quantity, b.unit, b.position, b.notes, b.child_rev_id]);
-    }
-    for (const b of all('SELECT * FROM bom_std_parts WHERE parent_rev_id=?', [last.id])) {
-      run('INSERT INTO bom_std_parts (parent_rev_id,std_part_id,quantity,unit,position,notes) VALUES (?,?,?,?,?,?)',
-        [newRevId, b.std_part_id, b.quantity, b.unit, b.position, b.notes]);
-    }
-  }
+  if (last) copyRevisionContent(last, newRevId, newRev);
 
   log('item', item.id, 'Neue Revision', `rev${newRev} angelegt`);
   saveDb();
@@ -1722,33 +2133,37 @@ app.post('/api/items/:id/revisions', (req, res) => {
 
 app.delete('/api/revisions/:id', (req, res) => {
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
-  if (!rev) return res.status(404).json({ error: 'Not found' });
+  if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
   if (rev.status !== 'DFT')
     return res.status(400).json({ error: 'Nur DFT-Revisionen können gelöscht werden.' });
+  if (rejectIfDelivered(res, rev.id)) return;
   const others = all('SELECT id FROM revisions WHERE item_id=? AND id!=?', [rev.item_id, rev.id]);
   if (!others.length)
     return res.status(400).json({ error: 'Letzte Revision kann nicht gelöscht werden — lösche das Item.' });
   const datasets = all('SELECT filename FROM datasets WHERE revision_id=?', [rev.id]);
   for (const ds of datasets) {
-    try { fs.unlinkSync(path.join(FILES_DIR, ds.filename)); } catch {}
+    trashFile(ds.filename);
   }
   run('DELETE FROM datasets WHERE revision_id=?', [rev.id]);
   run('DELETE FROM print_settings WHERE revision_id=?', [rev.id]);
   run('DELETE FROM bom WHERE parent_rev_id=?', [rev.id]);
+  run('DELETE FROM bom_std_parts WHERE parent_rev_id=?', [rev.id]);
   // Positionen, die auf genau diese Revision fixiert waren, fallen auf
-  // automatisch zurueck — sonst zeigte die Fixierung ins Leere.
+  // automatisch zurueck — sonst zeigte die Fixierung ins Leere. Gilt auch für
+  // Produktionspositionen, die vor der Lieferung von Hand fixiert wurden.
   const pinned = all('SELECT id FROM bom WHERE child_rev_id=?', [rev.id]);
   if (pinned.length) {
     run('UPDATE bom SET child_rev_id=NULL WHERE child_rev_id=?', [rev.id]);
-    log('revision', rev.id, 'BOM Revision', `${pinned.length} fixierte Position(en) auf automatisch zurückgesetzt`);
+    log('revision', rev.id, 'BOM: Revision', `${pinned.length} fixierte Position(en) auf automatisch zurückgesetzt`);
   }
+  run('UPDATE delivery_items SET revision_id=NULL, rev_fixed=NULL WHERE revision_id=?', [rev.id]);
   run('DELETE FROM revisions WHERE id=?', [rev.id]);
-  log('revision', rev.id, 'Gelöscht', `DFT Rev ${rev.rev} von Item ${rev.item_id}`);
+  log('revision', rev.id, 'Gelöscht', `DFT rev${rev.rev} von Item ${rev.item_id}`);
   // If the previous revision is ECO, revert it back to REL
   const ecoRev = get("SELECT id FROM revisions WHERE item_id=? AND status='ECO' ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1", [rev.item_id]);
   if (ecoRev) {
     run("UPDATE revisions SET status='REL', updated_at=datetime('now') WHERE id=?", [ecoRev.id]);
-    log('revision', ecoRev.id, 'REL', 'ECO zurückgesetzt nach Löschen der DFT-Revision');
+    log('revision', ecoRev.id, 'Status → REL', 'ECO zurückgesetzt nach Löschen der DFT-Revision');
   }
   res.json({ ok: true });
 });
@@ -1757,7 +2172,8 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
   const { material, color, layer_height, infill, supports, nozzle, print_temp, bed_temp, printer, notes,
     printer_cost_hr, filament_price_kg, filament_weight_total, part_weight, print_duration, raw_material_id } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
-  if (!rev) return res.status(404).json({ error: 'Not found' });
+  if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (rejectIfDelivered(res, rev.id)) return;
   run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(revision_id) DO UPDATE SET
@@ -1782,6 +2198,7 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
 // ==============================================================
 app.post('/api/revisions/:revId/bom', (req, res) => {
   const { child_item_id, quantity, unit, position, notes, child_rev_id } = req.body;
+  if (rejectIfDelivered(res, req.params.revId)) return;
   // Revision nur uebernehmen, wenn sie wirklich zu diesem Kind gehoert
   const pin = child_rev_id
     ? get('SELECT id FROM revisions WHERE id=? AND item_id=?', [child_rev_id, child_item_id])?.id || null
@@ -1789,13 +2206,15 @@ app.post('/api/revisions/:revId/bom', (req, res) => {
   try {
     run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position,notes,child_rev_id) VALUES (?,?,?,?,?,?,?)',
       [req.params.revId, child_item_id, quantity || 1, unit || 'pcs', position || 999, notes || '', pin]);
-    log('revision', req.params.revId, 'BOM Add', 'Item ' + child_item_id + ' x' + (quantity || 1));
+    const childNo = get('SELECT item_number FROM items WHERE id=?', [child_item_id])?.item_number || ('Item ' + child_item_id);
+    log('revision', req.params.revId, 'BOM: Position hinzugefügt', childNo + ' x' + (quantity || 1));
     res.json({ success: true });
-  } catch (e) { res.status(400).json({ error: 'Already in BOM or invalid' }); }
+  } catch (e) { res.status(400).json({ error: 'Bereits in der BOM oder ungültig' }); }
 });
 
 app.put('/api/bom/:id/quantity', (req, res) => {
   const { quantity, unit } = req.body;
+  if (rejectIfDelivered(res, get('SELECT parent_rev_id FROM bom WHERE id=?', [req.params.id])?.parent_rev_id)) return;
   run('UPDATE bom SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
   saveDb();
   res.json({ success: true });
@@ -1807,10 +2226,11 @@ app.put('/api/bom/:id/revision', (req, res) => {
   const { rev_id } = req.body;
   const bom = get('SELECT b.*, i.item_number FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.id=?', [req.params.id]);
   if (!bom) return res.status(404).json({ error: 'Position nicht gefunden' });
+  if (rejectIfDelivered(res, bom.parent_rev_id)) return;
 
   if (rev_id == null || rev_id === '') {
     run('UPDATE bom SET child_rev_id=NULL WHERE id=?', [bom.id]);
-    log('revision', bom.parent_rev_id, 'BOM Revision', `${bom.item_number}: folgt wieder automatisch`);
+    log('revision', bom.parent_rev_id, 'BOM: Revision', `${bom.item_number}: folgt wieder automatisch`);
     saveDb();
     return res.json({ success: true, child_rev_id: null });
   }
@@ -1818,13 +2238,14 @@ app.put('/api/bom/:id/revision', (req, res) => {
   const target = get('SELECT * FROM revisions WHERE id=? AND item_id=?', [rev_id, bom.child_item_id]);
   if (!target) return res.status(400).json({ error: 'Revision gehört nicht zu diesem Teil' });
   run('UPDATE bom SET child_rev_id=? WHERE id=?', [target.id, bom.id]);
-  log('revision', bom.parent_rev_id, 'BOM Revision', `${bom.item_number}: fixiert auf rev${target.rev}`);
+  log('revision', bom.parent_rev_id, 'BOM: Revision', `${bom.item_number}: fixiert auf rev${target.rev}`);
   saveDb();
   res.json({ success: true, child_rev_id: target.id, rev: target.rev, status: target.status });
 });
 
 app.put('/api/revisions/:revId/bom-reorder', (req, res) => {
   const { order } = req.body; // array of bom ids in new order
+  if (rejectIfDelivered(res, req.params.revId)) return;
   order.forEach((id, idx) => run('UPDATE bom SET position=? WHERE id=? AND parent_rev_id=?', [idx+1, id, req.params.revId]));
   saveDb();
   res.json({ success: true });
@@ -1832,7 +2253,8 @@ app.put('/api/revisions/:revId/bom-reorder', (req, res) => {
 
 app.delete('/api/bom/:id', (req, res) => {
   const bom = get('SELECT b.*, i.item_number FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.id=?', [req.params.id]);
-  if (bom) log('revision', bom.parent_rev_id, 'BOM Entfernt', bom.item_number + ' x' + bom.quantity);
+  if (bom && rejectIfDelivered(res, bom.parent_rev_id)) return;
+  if (bom) log('revision', bom.parent_rev_id, 'BOM: Position entfernt', bom.item_number + ' x' + bom.quantity);
   run('DELETE FROM bom WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
@@ -1842,8 +2264,13 @@ app.delete('/api/bom/:id', (req, res) => {
 // ==============================================================
 app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => {
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.revId]);
-  if (!rev) return res.status(404).json({ error: 'Revision not found' });
-  if (!req.file) return res.status(400).json({ error: 'No file' });
+  if (!rev) return res.status(404).json({ error: 'Revision nicht gefunden' });
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
+  const lockedBy = deliveriesOfRevision(rev.id);
+  if (lockedBy.length) {
+    try { fs.unlinkSync(req.file.path); } catch {}
+    return res.status(409).json({ error: deliveredLockMessage(lockedBy) });
+  }
   const { notes, version } = req.body;
   const dsType = guessType(req.file.originalname);
   const item = get('SELECT item_number FROM items WHERE id=?', [rev.item_id]);
@@ -1865,7 +2292,7 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
     : (notes || '');
   const id = runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
     [rev.id, dsType, req.file.filename, displayName, req.file.size, version || '1', finalNotes]);
-  log('revision', rev.id, 'Dataset Added', displayName + ' (' + dsType + ')');
+  log('revision', rev.id, 'Datei hinzugefügt', displayName + ' (' + dsType + ')');
 
   // 3MF enthaelt die Slicer-Konfiguration — Druckparameter automatisch
   // uebernehmen, statt sie noch einmal von Hand einzutippen. Bereits
@@ -1972,7 +2399,7 @@ app.post('/api/items/:id/checkout', (req, res) => {
   try {
     const { types, mode } = req.body;
     const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
-    if (!item) return res.status(404).json({ error: 'Not found' });
+    if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
 
     const checkoutDir = getCheckoutDir();
     fs.mkdirSync(checkoutDir, { recursive: true });
@@ -2120,7 +2547,7 @@ app.post('/api/checkout/import', (req, res) => {
         } catch {}
         imported.push(f.name);
       }
-      log('item', item_id, 'Importiert', `${imported.length} Dateien aus Checkout → Rev ${rev.rev}`);
+      log('item', item_id, 'Importiert', `${imported.length} Dateien aus Checkout → rev${rev.rev}`);
       res.json({ success: true, count: imported.length, rev: rev.rev });
 
     } else if (mode === 'new') {
@@ -2195,6 +2622,16 @@ app.post('/api/checkout/checkin', (req, res) => {
     if (meta?.item_id && !wasRel) {
       // Find or create active revision
       let rev = get("SELECT * FROM revisions WHERE item_id=? AND status NOT IN ('REL','OBS') ORDER BY id DESC LIMIT 1", [meta.item_id]);
+      // Eine gelieferte Revision ist fixiert — die eingecheckten Dateien
+      // landen in einer neuen Revision, die den bisherigen Inhalt übernimmt.
+      if (rev && deliveriesOfRevision(rev.id).length) {
+        const label = nextRev(rev.rev);
+        const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
+          [meta.item_id, label, 'DFT', `Neue Revision durch Check-in (rev${rev.rev} ist geliefert)`]);
+        copyRevisionContent(rev, newRevId, label);
+        log('item', meta.item_id, 'Neue Revision', `rev${label} angelegt, weil rev${rev.rev} geliefert und fixiert ist`);
+        rev = get('SELECT * FROM revisions WHERE id=?', [newRevId]);
+      }
       if (!rev) {
         const lastRev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY id DESC LIMIT 1', [meta.item_id]);
         const nextRevStr = lastRev ? String(parseInt(lastRev.rev || '1') + 1) : '2';
@@ -2222,7 +2659,7 @@ app.post('/api/checkout/checkin', (req, res) => {
         // Replace existing dataset with same name if present
         const existingDs = get('SELECT * FROM datasets WHERE revision_id=? AND original_name=?', [rev.id, displayName]);
         if (existingDs) {
-          try { fs.unlinkSync(path.join(FILES_DIR, existingDs.filename)); } catch {}
+          trashFile(existingDs.filename);
           run('DELETE FROM datasets WHERE id=?', [existingDs.id]);
         }
         runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
@@ -2258,17 +2695,17 @@ app.post('/api/checkout/open', (req, res) => {
 
 app.get('/api/datasets/:id/download', (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
-  if (!ds) return res.status(404).json({ error: 'Not found' });
+  if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
   const fp = path.join(FILES_DIR, ds.filename);
-  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Datei fehlt' });
   res.download(fp, ds.original_name);
 });
 
 app.get('/api/datasets/:id/view', (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
-  if (!ds) return res.status(404).json({ error: 'Not found' });
+  if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
   const fp = path.join(FILES_DIR, ds.filename);
-  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Datei fehlt' });
   res.setHeader('Content-Type', mimeType(ds.original_name));
   res.setHeader('Content-Disposition', 'inline; filename="' + ds.original_name.replace(/"/g, '') + '"');
   res.sendFile(fp);
@@ -2277,17 +2714,19 @@ app.get('/api/datasets/:id/view', (req, res) => {
 app.put('/api/datasets/:id', (req, res) => {
   const { notes, original_name } = req.body;
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
-  if (!ds) return res.status(404).json({ error: 'Not found' });
+  if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (rejectIfDelivered(res, ds.revision_id)) return;
   run('UPDATE datasets SET notes=?,original_name=? WHERE id=?', [notes||'', original_name||ds.original_name, req.params.id]);
   res.json(get('SELECT * FROM datasets WHERE id=?', [req.params.id]));
 });
 
 app.delete('/api/datasets/:id', (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
-  if (!ds) return res.status(404).json({ error: 'Not found' });
-  try { fs.unlinkSync(path.join(FILES_DIR, ds.filename)); } catch {}
+  if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (rejectIfDelivered(res, ds.revision_id)) return;
+  trashFile(ds.filename);
   run('DELETE FROM datasets WHERE id=?', [ds.id]);
-  log('revision', ds.revision_id, 'Dataset Deleted', ds.original_name);
+  log('revision', ds.revision_id, 'Datei gelöscht', ds.original_name);
   res.json({ success: true });
 });
 
@@ -2306,7 +2745,7 @@ app.get('/api/customers', (req, res) => {
 
 app.post('/api/customers', (req, res) => {
   const { name, email, phone, street, postal_code, city, country, notes } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name required' });
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const number = nextCustomerNumber();
   const id = runGetId('INSERT INTO customers (number,name,email,phone,street,postal_code,city,country,notes) VALUES (?,?,?,?,?,?,?,?,?)',
     [number, name, email||'', phone||'', street||'', postal_code||'', city||'', country||'Deutschland', notes||'']);
@@ -2315,7 +2754,7 @@ app.post('/api/customers', (req, res) => {
 
 app.get('/api/customers/:id', (req, res) => {
   const c = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
-  if (!c) return res.status(404).json({ error: 'Not found' });
+  if (!c) return res.status(404).json({ error: 'Nicht gefunden' });
 
   c.orders = all(`
     SELECT o.*, SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total,
@@ -2389,7 +2828,7 @@ app.get('/api/orders', (req, res) => {
 
 app.post('/api/orders', (req, res) => {
   const { customer_id, customer_name_free, title, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, status, valid_until } = req.body;
-  if (!title) return res.status(400).json({ error: 'Title required' });
+  if (!title) return res.status(400).json({ error: 'Bezeichnung fehlt' });
   const number = nextOrderNumber();
   const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
@@ -2401,7 +2840,7 @@ app.get('/api/orders/:id', (req, res) => {
     c.street as customer_street,c.postal_code as customer_postal_code,
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
-  if (!o) return res.status(404).json({ error: 'Not found' });
+  if (!o) return res.status(404).json({ error: 'Nicht gefunden' });
   o.items = all('SELECT oi.*,i.item_number,i.item_type,i.default_price,i.weight_g FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
   o.items.forEach(li => { li.manufacturing_cost = calcLineItemCost(li) || null; });
   // Fertigungslose zum Auftrag — damit der Fertigung-Tab ohne zweiten Request
@@ -2489,7 +2928,7 @@ app.delete('/api/order-items/:id', (req, res) => {
 app.put('/api/order-items/:id/move', (req, res) => {
   const { direction } = req.body;
   const item = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   const siblings = all('SELECT id FROM order_items WHERE order_id=? ORDER BY COALESCE(position,id),id', [item.order_id]);
   siblings.forEach((s, i) => run('UPDATE order_items SET position=? WHERE id=?', [i+1, s.id]));
   const idx = siblings.findIndex(s => s.id === item.id);
@@ -2506,7 +2945,7 @@ app.put('/api/order-items/:id/move', (req, res) => {
 app.put('/api/delivery-items/:id/move', (req, res) => {
   const { direction } = req.body;
   const item = get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   const siblings = all('SELECT id FROM delivery_items WHERE delivery_id=? ORDER BY COALESCE(position,id),id', [item.delivery_id]);
   siblings.forEach((s, i) => run('UPDATE delivery_items SET position=? WHERE id=?', [i+1, s.id]));
   const idx = siblings.findIndex(s => s.id === item.id);
@@ -2533,7 +2972,7 @@ app.get('/api/quotes', (req, res) => {
 
 app.post('/api/quotes', (req, res) => {
   const { customer_id, customer_name_free, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, status } = req.body;
-  if (!title) return res.status(400).json({ error: 'Title required' });
+  if (!title) return res.status(400).json({ error: 'Bezeichnung fehlt' });
   const number = nextQuoteNumber();
   const id = runGetId('INSERT INTO quotes (number,customer_id,customer_name_free,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [number, customer_id||null, customer_name_free||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
@@ -2545,7 +2984,7 @@ app.get('/api/quotes/:id', (req, res) => {
     c.street as customer_street,c.postal_code as customer_postal_code,
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
-  if (!q) return res.status(404).json({ error: 'Not found' });
+  if (!q) return res.status(404).json({ error: 'Nicht gefunden' });
   q.items = all('SELECT qi.*,i.item_number,i.item_type,i.default_price,i.weight_g FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
   q.items.forEach(li => { li.manufacturing_cost = calcLineItemCost(li) || null; });
   res.json(q);
@@ -2595,7 +3034,7 @@ app.delete('/api/quote-items/:id', (req, res) => {
 
 app.post('/api/quotes/:id/convert', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id=?', [req.params.id]);
-  if (!q) return res.status(404).json({ error: 'Not found' });
+  if (!q) return res.status(404).json({ error: 'Nicht gefunden' });
   const orderId = tx(() => {
     const number = nextOrderNumber();
     const id = runGetId(`INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax)
@@ -2639,17 +3078,6 @@ app.get('/api/dashboard', (req, res) => {
     LEFT JOIN order_items oi ON oi.order_id = o.id
     WHERE o.status IN ('DRAFT','CONFIRMED')
     GROUP BY o.id ORDER BY o.id DESC`);
-
-  // Open quotes (DRAFT + SENT)
-  const openQuotes = all(`
-    SELECT q.*, COALESCE(c.name, q.customer_name_free) as customer_name,
-      COUNT(qi.id) as item_count,
-      SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount_pct,0)/100.0)) as total
-    FROM quotes q
-    LEFT JOIN customers c ON q.customer_id = c.id
-    LEFT JOIN quote_items qi ON qi.quote_id = q.id
-    WHERE q.status IN ('DRAFT','SENT') AND q.migrated_to_order_id IS NULL
-    GROUP BY q.id ORDER BY q.id DESC`);
 
   // PLM items currently in REV (awaiting approval)
   const inReview = all(`
@@ -2717,16 +3145,16 @@ app.get('/api/dashboard', (req, res) => {
       AND d.delivery_date <= ? AND d.delivery_date >= date(?,'-3 days')
     GROUP BY d.id ORDER BY d.delivery_date ASC`, [in14, today]);
 
-  // Quotes expiring within 14 days
+  // Angebote (Auftragsphase QUOTE), die innerhalb von 14 Tagen ablaufen
   const quotesExpiring = all(`
-    SELECT q.id, q.number, q.title, q.status, q.valid_until,
-      COALESCE(c.name, q.customer_name_free) as customer_name,
-      SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount_pct,0)/100.0)) as total
-    FROM quotes q
-    LEFT JOIN customers c ON q.customer_id=c.id
-    LEFT JOIN quote_items qi ON qi.quote_id=q.id
-    WHERE q.status IN ('DRAFT','SENT') AND q.valid_until IS NOT NULL AND q.valid_until <= ?
-    GROUP BY q.id ORDER BY q.valid_until ASC`, [in14]);
+    SELECT o.id, o.number, o.title, o.status, o.valid_until,
+      COALESCE(c.name, o.customer_name_free) as customer_name,
+      SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total
+    FROM orders o
+    LEFT JOIN customers c ON o.customer_id=c.id
+    LEFT JOIN order_items oi ON oi.order_id=o.id
+    WHERE o.status='QUOTE' AND o.valid_until IS NOT NULL AND o.valid_until <= ?
+    GROUP BY o.id ORDER BY o.valid_until ASC`, [in14]);
 
   // Raw material stats
   const rawMats = all('SELECT * FROM raw_materials');
@@ -2746,7 +3174,7 @@ app.get('/api/dashboard', (req, res) => {
     }
   }
 
-  res.json({ openOrders, openQuotes: openQuotePhase.length ? openQuotePhase : openQuotes,
+  res.json({ openOrders, openQuotes: openQuotePhase,
     inReview, recentDeliveries, inProduction,
     revenueMonth: revMonth?.total || 0, revenueTotal: revTotal?.total || 0,
     dueSoon, quotesExpiring,
@@ -2794,56 +3222,164 @@ app.get('/api/storage', (req, res) => {
     return total;
   }
   filesSize = dirSize(FILES_DIR);
-  res.json({ db_bytes: dbSize, files_bytes: filesSize, total_bytes: dbSize + filesSize });
+  const trashSize = dirSize(TRASH_DIR);
+  res.json({ db_bytes: dbSize, files_bytes: filesSize, trash_bytes: trashSize, total_bytes: dbSize + filesSize + trashSize });
 });
 
+// ── SUCHE ─────────────────────────────────────────────────────
+// Mehrere Wörter müssen alle vorkommen, egal in welchem Feld: „Halter PETG"
+// findet ein Item mit „Halter" im Namen und „PETG" in der Beschreibung.
+// class= filtert Items exakt nach Klassifizierung (__none__ = ohne) und lässt
+// die übrigen Bereiche weg, weil nur Items eine Klassifizierung haben.
+// class_counts zählt die Item-Treffer je Klassifizierung für die Wortsuche
+// ohne Klassenfilter — daraus zeigen die Chips ihre Zahlen.
+// Angebote sind Aufträge in der Phase QUOTE und erscheinen unter orders.
+function searchTokens(q) {
+  return String(q || '').trim().split(/\s+/).filter(Boolean).slice(0, 8);
+}
+// SQLite-LIKE ignoriert Gross-/Kleinschreibung nur bei ASCII: „öse" fände
+// „Öse M5" nicht. Wörter mit Umlaut werden darum zusätzlich in Klein- und
+// Grossschreibung der Umlaute gesucht.
+function tokenVariants(t) {
+  if (!/[äöüÄÖÜ]/.test(t)) return [t];
+  const lower = t.replace(/[ÄÖÜ]/g, c => c.toLowerCase());
+  const upper = t.replace(/[äöü]/g, c => c.toUpperCase());
+  return [...new Set([t, lower, upper])];
+}
+function likeAll(tokens, columns) {
+  if (!tokens.length) return { sql: '1=1', params: [] };
+  const params = [];
+  const sql = tokens.map(t => {
+    const parts = [];
+    for (const c of columns) {
+      for (const v of tokenVariants(t)) { parts.push(`COALESCE(${c},'') LIKE ?`); params.push('%' + v + '%'); }
+    }
+    return '(' + parts.join(' OR ') + ')';
+  }).join(' AND ');
+  return { sql, params };
+}
+// Relevanz: exakte oder beginnende Nummer zuerst, dann Name, dann der Rest
+function itemScore(i, tokens, raw) {
+  const q = String(raw || '').trim().toLowerCase();
+  const num = (i.item_number || '').toLowerCase(), name = (i.name || '').toLowerCase();
+  let score = 0;
+  if (q) {
+    if (num === q) score += 100; else if (num.startsWith(q)) score += 60;
+    if (name === q) score += 50; else if (name.startsWith(q)) score += 30;
+  }
+  for (const t of tokens.map(x => x.toLowerCase())) {
+    if (num.includes(t)) score += 12;
+    if (name.includes(t)) score += 10;
+    if ((i.classification || '').toLowerCase() === t) score += 8;
+    if ((i.description || '').toLowerCase().includes(t)) score += 3;
+    if ((i.notes || '').toLowerCase().includes(t)) score += 2;
+  }
+  return score;
+}
+
 app.get('/api/search', (req, res) => {
-  const q = '%' + (req.query.q || '') + '%';
+  const tokens = searchTokens(req.query.q);
+  const cls = String(req.query.class || '').trim();
+  const empty = { items: [], items_total: 0, projects: [], datasets: [], orders: [], customers: [], deliveries: [], rawMaterials: [] };
 
-  const items = all('SELECT i.*,p.name as project_name,p.number as project_number FROM items i JOIN projects p ON i.project_id=p.id WHERE i.item_number LIKE ? OR i.name LIKE ? OR i.description LIKE ? OR i.classification LIKE ? ORDER BY i.id DESC LIMIT 30', [q,q,q,q]);
-  items.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
+  const wi = likeAll(tokens, ['i.item_number', 'i.name', 'i.description', 'i.classification', 'i.notes']);
+  const class_counts = all(`SELECT TRIM(COALESCE(i.classification,'')) as name, COUNT(*) as count
+    FROM items i WHERE ${wi.sql} GROUP BY LOWER(TRIM(COALESCE(i.classification,'')))`, wi.params);
+  if (!tokens.length && !cls) return res.json({ ...empty, class_counts, class: '' });
 
-  const projects = all('SELECT * FROM projects WHERE number LIKE ? OR name LIKE ? OR description LIKE ? OR customer LIKE ? LIMIT 10', [q,q,q,q]);
+  let clsSql = '', clsParams = [];
+  if (cls === '__none__') clsSql = " AND (i.classification IS NULL OR TRIM(i.classification)='')";
+  else if (cls) { clsSql = ' AND LOWER(TRIM(i.classification))=LOWER(?)'; clsParams = [cls]; }
 
+  const keep = cls ? 300 : 40;
+  const items = all(`SELECT i.*, p.name as project_name, p.number as project_number, p.color as project_color
+    FROM items i JOIN projects p ON i.project_id=p.id
+    WHERE ${wi.sql}${clsSql} ORDER BY i.id DESC LIMIT 500`, [...wi.params, ...clsParams]);
+  items.forEach(i => { i.score = itemScore(i, tokens, req.query.q); });
+  items.sort((a, b) => b.score - a.score || a.item_number.localeCompare(b.item_number));
+  const items_total = count(`SELECT COUNT(*) as c FROM items i WHERE ${wi.sql}${clsSql}`, [...wi.params, ...clsParams]);
+  const shown = items.slice(0, keep);
+  shown.forEach(i => { i.latest_revision = getLatestRevision(i.id); });
+
+  if (cls) return res.json({ ...empty, items: shown, items_total, class_counts, class: cls });
+
+  const wp = likeAll(tokens, ['number', 'name', 'description', 'customer']);
+  const projects = all(`SELECT * FROM projects WHERE ${wp.sql} LIMIT 10`, wp.params);
+
+  const wd = likeAll(tokens, ['d.original_name', 'd.notes']);
   const datasets = all(`SELECT d.id, d.original_name, d.ds_type, d.file_size,
     r.rev, i.item_number, i.id as item_id, i.project_id,
     p.number as project_number, p.name as project_name
     FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id JOIN projects p ON i.project_id=p.id
-    WHERE d.original_name LIKE ? OR d.notes LIKE ? ORDER BY d.id DESC LIMIT 20`, [q, q]);
+    WHERE ${wd.sql} ORDER BY d.id DESC LIMIT 20`, wd.params);
 
-  const orders = all(`SELECT o.id, o.number, o.title, o.status, o.order_date, o.delivery_date,
+  const wo = likeAll(tokens, ['o.number', 'o.title', 'c.name', 'o.customer_name_free']);
+  const orders = all(`SELECT o.id, o.number, o.title, o.status, o.order_date, o.delivery_date, o.valid_until,
     COALESCE(c.name, o.customer_name_free) as customer_name
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id
-    WHERE o.number LIKE ? OR o.title LIKE ? OR COALESCE(c.name,o.customer_name_free,'') LIKE ?
-    ORDER BY o.id DESC LIMIT 15`, [q,q,q]);
+    WHERE ${wo.sql} ORDER BY o.id DESC LIMIT 15`, wo.params);
 
-  const quotes = all(`SELECT q.id, q.number, q.title, q.status, q.quote_date, q.valid_until,
-    COALESCE(c.name, q.customer_name_free) as customer_name
-    FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id
-    WHERE q.number LIKE ? OR q.title LIKE ? OR COALESCE(c.name,q.customer_name_free,'') LIKE ?
-    ORDER BY q.id DESC LIMIT 15`, [q,q,q]);
-
+  const wc = likeAll(tokens, ['number', 'name', 'email', 'city']);
   const customers = all(`SELECT id, number, name, email, city, phone FROM customers
-    WHERE number LIKE ? OR name LIKE ? OR email LIKE ? OR city LIKE ?
-    ORDER BY id DESC LIMIT 10`, [q,q,q,q]);
+    WHERE ${wc.sql} ORDER BY id DESC LIMIT 10`, wc.params);
 
-  const deliveries = all(`SELECT d.id, d.number, d.title, d.status, d.delivery_date,
+  const wl = likeAll(tokens, ['d.number', 'd.title', 'c.name', 'd.customer_name_free']);
+  const deliveries = all(`SELECT d.id, d.number, d.title, d.status, d.delivery_date, d.order_id,
     COALESCE(c.name, d.customer_name_free) as customer_name
     FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id
-    WHERE d.number LIKE ? OR d.title LIKE ? OR COALESCE(c.name,d.customer_name_free,'') LIKE ?
-    ORDER BY d.id DESC LIMIT 10`, [q,q,q]);
+    WHERE ${wl.sql} ORDER BY d.id DESC LIMIT 10`, wl.params);
 
-  // Rohmaterial: suche auch in Lot-Artikel-Nummern
+  // Rohmaterial: sucht auch in Lot- und Artikelnummern
+  const wr = likeAll(tokens, ['rm.name', 'rm.material_type', 'rm.color', 'rm.brand', 'rmm.article_number', 'rmm.lot_number']);
   const rawMaterials = all(`
     SELECT DISTINCT rm.id, rm.name, rm.material_type, rm.color, rm.brand, rm.stock_qty, rm.unit,
       rmm.article_number, rmm.lot_number
     FROM raw_materials rm
     LEFT JOIN raw_material_movements rmm ON rmm.raw_material_id=rm.id AND rmm.article_number IS NOT NULL
-    WHERE rm.name LIKE ? OR rm.material_type LIKE ? OR rm.color LIKE ? OR rm.brand LIKE ?
-       OR rmm.article_number LIKE ? OR rmm.lot_number LIKE ?
-    ORDER BY rm.name LIMIT 15`, [q,q,q,q,q,q]);
+    WHERE ${wr.sql}
+    ORDER BY rm.name LIMIT 15`, wr.params);
 
-  res.json({ items, projects, datasets, orders, quotes, customers, deliveries, rawMaterials });
+  res.json({ items: shown, items_total, projects, datasets, orders, customers, deliveries, rawMaterials, class_counts, class: '' });
+});
+
+// ── KLASSIFIZIERUNG: VERWENDUNG UND UMBENENNEN ────────────────
+// Verwendung je Wert, auch für Werte, die nicht (mehr) in der Liste stehen
+app.get('/api/classifications/usage', (req, res) => {
+  const list = classificationList().map(n => n.toLowerCase());
+  const usage = all(`SELECT TRIM(classification) as name, COUNT(*) as count FROM items
+    WHERE classification IS NOT NULL AND TRIM(classification)!=''
+    GROUP BY LOWER(TRIM(classification)) ORDER BY name`);
+  usage.forEach(u => { u.in_list = list.includes(u.name.toLowerCase()); });
+  res.json({ usage, without: count("SELECT COUNT(*) as c FROM items WHERE classification IS NULL OR TRIM(classification)=''") });
+});
+
+// Neuen Namen auf alle Items übertragen; to = '' entfernt die Klassifizierung.
+// Mehrere Umbenennungen (auch A↔B) laufen über Platzhalter, damit keine die
+// andere überschreibt.
+app.post('/api/classifications/rename', (req, res) => {
+  const renames = (Array.isArray(req.body?.renames) ? req.body.renames : [])
+    .map(r => ({ from: String(r?.from ?? '').trim(), to: String(r?.to ?? '').trim() }))
+    .filter(r => r.from && r.from !== r.to);
+  const result = [];
+  // Voreinstellungen vorher lesen, damit auch ein Tausch A↔B richtig ankommt
+  const defaults = ['default_class_own', 'default_class_bought']
+    .map(key => [key, getSetting(key, '').trim().toLowerCase()]);
+  tx(() => {
+    const tag = '__umbenennen_' + Date.now() + '_';
+    renames.forEach((r, i) => db.run('UPDATE items SET classification=? WHERE LOWER(TRIM(classification))=LOWER(?)', [tag + i, r.from]));
+    renames.forEach((r, i) => {
+      const n = count('SELECT COUNT(*) as c FROM items WHERE classification=?', [tag + i]);
+      db.run('UPDATE items SET classification=? WHERE classification=?', [r.to || null, tag + i]);
+      result.push({ ...r, items: n });
+      // Voreinstellungen für neue Teile ziehen mit
+      for (const [key, value] of defaults) {
+        if (value === r.from.toLowerCase()) db.run('UPDATE settings SET value=? WHERE key=?', [r.to, key]);
+      }
+      if (n) log('settings', 0, r.to ? 'Klassifizierung umbenannt' : 'Klassifizierung entfernt',
+        r.to ? `${r.from} → ${r.to} (${n} Item${n === 1 ? '' : 's'})` : `${r.from} (${n} Item${n === 1 ? '' : 's'})`);
+    });
+  });
+  res.json({ renamed: result.reduce((s, r) => s + r.items, 0), renames: result });
 });
 
 app.get('/api/changelog', (req, res) => {
@@ -2862,6 +3398,12 @@ app.get('/api/changelog', (req, res) => {
     } else if (r.entity_type === 'project') {
       const proj = get('SELECT number, name FROM projects WHERE id=?', [r.entity_id]);
       if (proj) { r.ref = proj.number; r.label = proj.name; r.project_id = r.entity_id; }
+    } else if (r.entity_type === 'order' || r.entity_type === 'delivery') {
+      const row = get(`SELECT number, title FROM ${r.entity_type === 'order' ? 'orders' : 'deliveries'} WHERE id=?`, [r.entity_id]);
+      if (row) { r.ref = row.number; r.label = row.title; }
+    } else if (r.entity_type === 'customer') {
+      const c = get('SELECT number, name FROM customers WHERE id=?', [r.entity_id]);
+      if (c) { r.ref = c.number; r.label = c.name; }
     }
   });
   res.json(rows);
@@ -2869,12 +3411,19 @@ app.get('/api/changelog', (req, res) => {
 
 app.get('/api/items-released', (req, res) => {
   try {
+    // Normal nicht löschbar: freigegeben (auch im ECO) oder geliefert —
+    // diese Liste bietet sie unter Einstellungen → Admin an
+    const delivered = `SELECT di.item_id FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id
+        WHERE d.status='DELIVERED' AND di.item_id IS NOT NULL
+      UNION SELECT ds.item_id FROM delivery_structure ds JOIN delivery_items di ON di.id=ds.delivery_item_id
+        JOIN deliveries d ON d.id=di.delivery_id WHERE d.status='DELIVERED'`;
     const items = all(`
-      SELECT DISTINCT i.id, i.item_number, i.name, i.item_type, p.number as project_number
+      SELECT i.id, i.item_number, i.name, i.item_type, p.number as project_number,
+        CASE WHEN i.id IN (${delivered}) THEN 1 ELSE 0 END as delivered
       FROM items i
       JOIN projects p ON i.project_id = p.id
-      JOIN revisions r ON r.item_id = i.id
-      WHERE r.status IN ('REL','OBS')
+      WHERE i.id IN (SELECT item_id FROM revisions WHERE status IN ('REL','OBS','ECO'))
+         OR i.id IN (${delivered})
       ORDER BY p.number, i.item_number`);
     res.json(items);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -3003,8 +3552,8 @@ app.get('/api/profit-overview', (req, res) => {
 // ==============================================================
 app.post('/api/projects/:id/documents', upload.single('file'), (req, res) => {
   const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
-  if (!p) return res.status(404).json({ error: 'Not found' });
-  if (!req.file) return res.status(400).json({ error: 'No file' });
+  if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
   const { name, notes } = req.body;
   const docType = guessType(req.file.originalname);
   const displayName = name || req.file.originalname;
@@ -3016,17 +3565,17 @@ app.post('/api/projects/:id/documents', upload.single('file'), (req, res) => {
 
 app.get('/api/documents/:id/download', (req, res) => {
   const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
-  if (!doc) return res.status(404).json({ error: 'Not found' });
+  if (!doc) return res.status(404).json({ error: 'Nicht gefunden' });
   const fp = path.join(FILES_DIR, doc.filename);
-  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Datei fehlt' });
   res.download(fp, doc.original_name);
 });
 
 app.get('/api/documents/:id/view', (req, res) => {
   const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
-  if (!doc) return res.status(404).json({ error: 'Not found' });
+  if (!doc) return res.status(404).json({ error: 'Nicht gefunden' });
   const fp = path.join(FILES_DIR, doc.filename);
-  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Datei fehlt' });
   res.setHeader('Content-Type', mimeType(doc.original_name));
   res.setHeader('Content-Disposition', 'inline; filename="' + doc.original_name.replace(/"/g, '') + '"');
   res.sendFile(fp);
@@ -3035,15 +3584,15 @@ app.get('/api/documents/:id/view', (req, res) => {
 app.put('/api/documents/:id', (req, res) => {
   const { name, notes } = req.body;
   const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
-  if (!doc) return res.status(404).json({ error: 'Not found' });
+  if (!doc) return res.status(404).json({ error: 'Nicht gefunden' });
   run('UPDATE documents SET name=?,notes=? WHERE id=?', [name||doc.name, notes??doc.notes, req.params.id]);
   res.json(get('SELECT * FROM documents WHERE id=?', [req.params.id]));
 });
 
 app.delete('/api/documents/:id', (req, res) => {
   const doc = get('SELECT * FROM documents WHERE id=?', [req.params.id]);
-  if (!doc) return res.status(404).json({ error: 'Not found' });
-  try { fs.unlinkSync(path.join(FILES_DIR, doc.filename)); } catch {}
+  if (!doc) return res.status(404).json({ error: 'Nicht gefunden' });
+  trashFile(doc.filename);
   run('DELETE FROM documents WHERE id=?', [req.params.id]);
   log('project', doc.project_id, 'Dokument gelöscht', doc.name);
   res.json({ success: true });
@@ -3101,7 +3650,7 @@ app.get('/api/data-path', (req, res) => {
 
 app.put('/api/data-path', (req, res) => {
   const { data_dir } = req.body;
-  if (!data_dir || typeof data_dir !== 'string') return res.status(400).json({ error: 'data_dir required' });
+  if (!data_dir || typeof data_dir !== 'string') return res.status(400).json({ error: 'Datenverzeichnis fehlt' });
   const cfg = loadConfig();
   cfg.data_dir = data_dir.trim();
   saveConfig(cfg);
@@ -3259,7 +3808,7 @@ app.get('/api/data-path/move-status', (req, res) => {
 app.get('/api/printers', (req, res) => res.json(all('SELECT * FROM printers ORDER BY name')));
 app.post('/api/printers', (req, res) => {
   const { name, cost_per_hour } = req.body;
-  if (!name) return res.status(400).json({ error: 'name required' });
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const id = runGetId('INSERT INTO printers (name,cost_per_hour) VALUES (?,?)', [name, cost_per_hour||0]);
   res.json(get('SELECT * FROM printers WHERE id=?', [id]));
 });
@@ -3277,7 +3826,7 @@ app.delete('/api/printers/:id', (req, res) => {
 app.get('/api/nozzles', (req, res) => res.json(all('SELECT * FROM nozzles ORDER BY CAST(size AS REAL)')));
 app.post('/api/nozzles', (req, res) => {
   const { size } = req.body;
-  if (!size) return res.status(400).json({ error: 'size required' });
+  if (!size) return res.status(400).json({ error: 'Grösse fehlt' });
   const id = runGetId('INSERT INTO nozzles (size) VALUES (?)', [size]);
   res.json(get('SELECT * FROM nozzles WHERE id=?', [id]));
 });
@@ -3290,7 +3839,7 @@ app.delete('/api/nozzles/:id', (req, res) => {
 app.get('/api/material-presets', (req, res) => res.json(all('SELECT * FROM material_presets ORDER BY name')));
 app.post('/api/material-presets', (req, res) => {
   const { name, print_temp, bed_temp, nozzle, filament_price_kg, notes } = req.body;
-  if (!name) return res.status(400).json({ error: 'name required' });
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const id = runGetId('INSERT INTO material_presets (name,print_temp,bed_temp,nozzle,filament_price_kg,notes) VALUES (?,?,?,?,?,?)',
     [name, print_temp||'', bed_temp||'', nozzle||'', filament_price_kg||null, notes||'']);
   res.json(get('SELECT * FROM material_presets WHERE id=?', [id]));
@@ -3375,7 +3924,7 @@ app.get('/launcher', (req, res) => {
 const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 }, defParamCharset: 'utf8' });
 
 app.post('/api/parse-3mf', uploadMem.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file' });
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
   const result = parse3mfSettings(req.file.buffer);
   if (!result.settings) {
     const msg = result.entries
@@ -3478,6 +4027,7 @@ app.post('/api/revisions/:revId/bom-bulk', (req, res) => {
   if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: 'Keine Einträge' });
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.revId]);
   if (!rev) return res.status(404).json({ error: 'Revision nicht gefunden' });
+  if (rejectIfDelivered(res, rev.id)) return;
   try {
     let pos = (get('SELECT MAX(position) as m FROM bom WHERE parent_rev_id=?', [req.params.revId])?.m || 0) + 1;
     let count = 0;
@@ -3488,7 +4038,7 @@ app.post('/api/revisions/:revId/bom-bulk', (req, res) => {
         count++;
       } catch {} // skip duplicates
     }
-    log('revision', req.params.revId, 'BOM Import', `${count} Einträge aus STEP importiert`);
+    log('revision', req.params.revId, 'BOM importiert', `${count} Positionen aus STEP importiert`);
     res.json({ success: true, count });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -3510,7 +4060,7 @@ app.get('/api/deliveries', (req, res) => {
 
 app.post('/api/deliveries', (req, res) => {
   const { title, order_id, customer_id, customer_name_free, status, delivery_date, manufacture_date, notes } = req.body;
-  if (!title) return res.status(400).json({ error: 'Title required' });
+  if (!title) return res.status(400).json({ error: 'Bezeichnung fehlt' });
   const number = nextDeliveryNumber();
   const id = runGetId(`INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,manufacture_date,notes)
     VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -3527,7 +4077,7 @@ app.get('/api/deliveries/:id', (req, res) => {
     LEFT JOIN customers c ON d.customer_id=c.id
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
-  if (!d) return res.status(404).json({ error: 'Not found' });
+  if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
   d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,
     rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
@@ -3537,14 +4087,42 @@ app.get('/api/deliveries/:id', (req, res) => {
     if (item.print_settings_json) {
       try { item.print_settings = JSON.parse(item.print_settings_json); } catch(e) {}
     }
+    attachDeliveredRevision(item, d.status === 'DELIVERED');
   });
   res.json(d);
 });
 
+// Revision einer Produktionsposition für die Anzeige: fixierte oder (vor der
+// Lieferung) die aktive, dazu ob es inzwischen eine neuere gibt. Bei
+// gelieferten Baugruppen die festgehaltene Struktur.
+function attachDeliveredRevision(di, delivered) {
+  if (!di.item_id) return;
+  const active = getActiveRevision(di.item_id);
+  const fixed = di.revision_id ? get('SELECT id, rev, status FROM revisions WHERE id=?', [di.revision_id]) : null;
+  di.active_rev = active ? { id: active.id, rev: active.rev, status: active.status } : null;
+  di.effective_rev = fixed || di.active_rev;
+  di.rev_outdated = !!(fixed && active && fixed.id !== active.id);
+  if (delivered && di.item_type === 'asm') {
+    di.structure = all(`SELECT ds.*, r.status as rev_status FROM delivery_structure ds
+      LEFT JOIN revisions r ON r.id=ds.revision_id
+      WHERE ds.delivery_item_id=? ORDER BY ds.position`, [di.id]);
+    for (const row of di.structure) {
+      const a = getActiveRevision(row.item_id);
+      row.active_rev = a ? a.rev : null;
+      row.rev_outdated = !!(a && row.revision_id && a.id !== row.revision_id);
+    }
+  }
+}
+
 app.put('/api/deliveries/:id', (req, res) => {
   const { title, order_id, customer_id, customer_name_free, status, delivery_date, manufacture_date, notes } = req.body;
-  run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,manufacture_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
-    [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, manufacture_date||null, notes||'', req.params.id]);
+  const prev = get('SELECT status FROM deliveries WHERE id=?', [req.params.id]);
+  if (!prev) return res.status(404).json({ error: 'Nicht gefunden' });
+  tx(() => {
+    run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,manufacture_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+      [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, manufacture_date||null, notes||'', req.params.id]);
+    onDeliveryStatusChange(req.params.id, prev.status, status || 'DRAFT');
+  });
   if (status === 'DELIVERED') autoDeliverOrder(req.params.id);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [req.params.id]));
 });
@@ -3665,22 +4243,26 @@ app.post('/api/deliveries/:id/consume-material', (req, res) => {
 
 app.put('/api/deliveries/:id/status', (req, res) => {
   const { status } = req.body;
-  if (status === 'DELIVERED') {
-    const existing = get('SELECT delivery_date FROM deliveries WHERE id=?', [req.params.id]);
-    if (!existing?.delivery_date) {
-      const today = new Date().toISOString().slice(0, 10);
-      run(`UPDATE deliveries SET status=?,delivery_date=?,updated_at=datetime('now') WHERE id=?`, [status, today, req.params.id]);
-      autoDeliverOrder(req.params.id);
-      return res.json({ success: true, delivery_date: today });
+  const existing = get('SELECT status, delivery_date FROM deliveries WHERE id=?', [req.params.id]);
+  if (!existing) return res.status(404).json({ error: 'Nicht gefunden' });
+  let deliveryDate = null;
+  tx(() => {
+    if (status === 'DELIVERED' && !existing.delivery_date) {
+      deliveryDate = new Date().toISOString().slice(0, 10);
+      run(`UPDATE deliveries SET status=?,delivery_date=?,updated_at=datetime('now') WHERE id=?`, [status, deliveryDate, req.params.id]);
+    } else {
+      run(`UPDATE deliveries SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
     }
-  }
-  run(`UPDATE deliveries SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
+    // Beim Liefern die Revisionen fixieren, beim Zurücksetzen wieder lösen
+    onDeliveryStatusChange(req.params.id, existing.status, status);
+  });
   if (status === 'DELIVERED') autoDeliverOrder(req.params.id);
-  res.json({ success: true });
+  res.json(deliveryDate ? { success: true, delivery_date: deliveryDate } : { success: true });
 });
 
 app.delete('/api/deliveries/:id', (req, res) => {
   tx(() => {
+    run('DELETE FROM delivery_structure WHERE delivery_item_id IN (SELECT id FROM delivery_items WHERE delivery_id=?)', [req.params.id]);
     run('DELETE FROM delivery_items WHERE delivery_id=?', [req.params.id]);
     run('DELETE FROM deliveries WHERE id=?', [req.params.id]);
   });
@@ -3689,21 +4271,36 @@ app.delete('/api/deliveries/:id', (req, res) => {
 
 app.post('/api/deliveries/:id/items', (req, res) => {
   const { item_id, description, quantity, unit, unit_price, print_settings_json, notes, position, raw_material_id } = req.body;
-  if (!description) return res.status(400).json({ error: 'Description required' });
+  if (!description) return res.status(400).json({ error: 'Beschreibung fehlt' });
   const id = runGetId(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,print_settings_json,notes,position,raw_material_id)
     VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [req.params.id, item_id||null, description, quantity||1, unit||'Stk',
      unit_price!=null ? parseFloat(unit_price) : null,
      print_settings_json||null, notes||'', position||999, raw_material_id||null]);
+  // Nachträglich in einen gelieferten Auftrag aufgenommen: gleich fixieren
+  if (get("SELECT 1 as y FROM deliveries WHERE id=? AND status='DELIVERED'", [req.params.id])) {
+    freezeDeliveryItem(get('SELECT * FROM delivery_items WHERE id=?', [id]), 'delivery');
+  }
   res.json(get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [id]));
 });
 
 app.put('/api/delivery-items/:id', (req, res) => {
   const { item_id, description, quantity, unit, unit_price, print_settings_json, notes, position, raw_material_id } = req.body;
+  const before = get(`SELECT di.item_id, d.status as delivery_status FROM delivery_items di
+    JOIN deliveries d ON d.id=di.delivery_id WHERE di.id=?`, [req.params.id]);
+  if (!before) return res.status(404).json({ error: 'Position nicht gefunden' });
   run(`UPDATE delivery_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=?,raw_material_id=? WHERE id=?`,
     [item_id||null, description, quantity||1, unit||'Stk',
      unit_price!=null ? parseFloat(unit_price) : null,
      print_settings_json??null, notes||'', position||999, raw_material_id||null, req.params.id]);
+  // Anderes Item verknüpft: die Revision des alten gilt nicht mehr
+  if ((before.item_id || null) !== (item_id || null)) {
+    run('UPDATE delivery_items SET revision_id=NULL, rev_fixed=NULL WHERE id=?', [req.params.id]);
+    run('DELETE FROM delivery_structure WHERE delivery_item_id=?', [req.params.id]);
+    if (before.delivery_status === 'DELIVERED') {
+      freezeDeliveryItem(get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]), 'delivery');
+    }
+  }
   // Preis zurück in den verknüpften Auftrag (und weitere Produktionsaufträge) übernehmen
   let priceSynced = 0;
   const di = get('SELECT di.*, d.order_id as _order_id FROM delivery_items di JOIN deliveries d ON di.delivery_id=d.id WHERE di.id=?', [req.params.id]);
@@ -3726,8 +4323,43 @@ app.put('/api/delivery-items/:id', (req, res) => {
 });
 
 app.delete('/api/delivery-items/:id', (req, res) => {
+  run('DELETE FROM delivery_structure WHERE delivery_item_id=?', [req.params.id]);
   run('DELETE FROM delivery_items WHERE id=?', [req.params.id]);
   res.json({ success: true });
+});
+
+// Revision einer Produktionsposition wählen. Vor der Lieferung: rev_id = null
+// heisst „folgt automatisch", sonst wird von Hand fixiert. Nach der Lieferung
+// lässt sich der Stand nur noch korrigieren (falsche Revision erfasst), nicht
+// mehr lösen — dafür den Status zurücksetzen.
+app.put('/api/delivery-items/:id/revision', (req, res) => {
+  const { rev_id } = req.body || {};
+  const di = get(`SELECT di.*, d.status as delivery_status, d.id as d_id, i.item_number
+    FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id
+    LEFT JOIN items i ON i.id=di.item_id WHERE di.id=?`, [req.params.id]);
+  if (!di) return res.status(404).json({ error: 'Position nicht gefunden' });
+  if (!di.item_id) return res.status(400).json({ error: 'Die Position ist mit keinem Item verknüpft.' });
+  const delivered = di.delivery_status === 'DELIVERED';
+
+  if (rev_id == null || rev_id === '') {
+    if (delivered) return res.status(400).json({ error: 'Der gelieferte Stand bleibt fixiert. Zum Lösen den Status zurücksetzen.' });
+    run('UPDATE delivery_items SET revision_id=NULL, rev_fixed=NULL WHERE id=?', [di.id]);
+    log('delivery', di.d_id, 'Revision', `${di.item_number}: folgt wieder automatisch`);
+    return res.json({ success: true, revision_id: null });
+  }
+
+  const target = get('SELECT * FROM revisions WHERE id=? AND item_id=?', [rev_id, di.item_id]);
+  if (!target) return res.status(400).json({ error: 'Revision gehört nicht zu diesem Item' });
+  tx(() => {
+    run("UPDATE delivery_items SET revision_id=?, rev_fixed='manual' WHERE id=?", [target.id, di.id]);
+    if (delivered) {
+      const item = get('SELECT item_type FROM items WHERE id=?', [di.item_id]);
+      if (item?.item_type === 'asm') snapshotStructure(di.id, di.item_id, target.id);
+    }
+  });
+  log('delivery', di.d_id, delivered ? 'Stand korrigiert' : 'Revision',
+    `${di.item_number}: fest auf rev${target.rev}`);
+  res.json({ success: true, revision_id: target.id, rev: target.rev, status: target.status });
 });
 
 app.get('/api/deliveries/:id/delivery-data', (req, res) => {
@@ -3739,7 +4371,7 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
     LEFT JOIN customers c ON d.customer_id=c.id
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
-  if (!d) return res.status(404).json({ error: 'Not found' });
+  if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
   d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,
     rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
@@ -3749,6 +4381,7 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
     if (item.print_settings_json) {
       try { item.print_settings = JSON.parse(item.print_settings_json); } catch(e) {}
     }
+    attachDeliveredRevision(item, d.status === 'DELIVERED');
   });
   res.json(d);
 });
@@ -3781,7 +4414,7 @@ function runPrintScript(args, data, timeout, cb) {
 
 app.post('/api/print-receipt', (req, res) => {
   const { delivery_item_id, mode } = req.body;
-  if (!delivery_item_id) return res.status(400).json({ error: 'delivery_item_id required' });
+  if (!delivery_item_id) return res.status(400).json({ error: 'Position fehlt' });
   const short = mode === 'short';
 
   const item = get(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price,
@@ -3791,7 +4424,7 @@ app.post('/api/print-receipt', (req, res) => {
     LEFT JOIN deliveries d ON di.delivery_id=d.id
     LEFT JOIN customers c ON d.customer_id=c.id
     WHERE di.id=?`, [delivery_item_id]);
-  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
   const rcptSettings = Object.fromEntries(
     all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_footer','receipt_line_width','receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes')")
     .map(r => [r.key, r.value])
@@ -3915,12 +4548,12 @@ app.post('/api/print-label', (req, res) => {
 
 app.post('/api/print-receipt-delivery', (req, res) => {
   const { delivery_id, mode } = req.body;
-  if (!delivery_id) return res.status(400).json({ error: 'delivery_id required' });
+  if (!delivery_id) return res.status(400).json({ error: 'Produktionsauftrag fehlt' });
   const short = mode === 'short';
 
   const delivery = get(`SELECT d.*, COALESCE(c.name, d.customer_name_free) as customer_name
     FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id WHERE d.id=?`, [delivery_id]);
-  if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+  if (!delivery) return res.status(404).json({ error: 'Produktionsauftrag nicht gefunden' });
 
   const rows = all(`SELECT di.*, i.item_number, i.name as item_name, i.default_price
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
@@ -3993,7 +4626,7 @@ function computeTotals(doc) {
 // -- ORDER → DELIVERY ------------------------------------------
 app.post('/api/orders/:id/to-delivery', (req, res) => {
   const o = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
-  if (!o) return res.status(404).json({ error: 'Not found' });
+  if (!o) return res.status(404).json({ error: 'Nicht gefunden' });
   const delivId = tx(() => {
     const number = nextDeliveryNumber();
     const id = runGetId(
@@ -4039,7 +4672,7 @@ app.get('/api/orders/:id/invoice-data', (req, res) => {
     c.street as customer_street,c.postal_code as customer_postal_code,
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
-  if (!o) return res.status(404).json({ error: 'Not found' });
+  if (!o) return res.status(404).json({ error: 'Nicht gefunden' });
   o.positions = all('SELECT oi.*,i.item_number,i.item_type FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=?', [o.id]);
   attachSubItems(o.positions);
   computeTotals(o);
@@ -4055,7 +4688,7 @@ app.get('/api/quotes/:id/quote-data', (req, res) => {
     c.street as customer_street,c.postal_code as customer_postal_code,
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
-  if (!q) return res.status(404).json({ error: 'Not found' });
+  if (!q) return res.status(404).json({ error: 'Nicht gefunden' });
   q.positions = all('SELECT qi.*,i.item_number,i.item_type FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
   attachSubItems(q.positions);
   computeTotals(q);
@@ -4071,7 +4704,7 @@ app.get('/api/orders/:id/order-quote-data', (req, res) => {
     c.street as customer_street,c.postal_code as customer_postal_code,
     c.city as customer_city,c.country as customer_country,c.number as customer_number
     FROM orders o LEFT JOIN customers c ON o.customer_id=c.id WHERE o.id=?`, [req.params.id]);
-  if (!o) return res.status(404).json({ error: 'Not found' });
+  if (!o) return res.status(404).json({ error: 'Nicht gefunden' });
   o.quote_date = o.order_date;
   o.positions = all('SELECT oi.*,i.item_number,i.item_type FROM order_items oi LEFT JOIN items i ON oi.item_id=i.id WHERE oi.order_id=? ORDER BY COALESCE(oi.position,oi.id),oi.id', [o.id]);
   attachSubItems(o.positions);
@@ -4223,6 +4856,174 @@ app.get('/api/export', (req, res) => {
   res.send(zip);
 });
 
+// ==============================================================
+// SICHERUNGEN WIEDERHERSTELLEN
+// ==============================================================
+// Jede Sicherung in backups/ ist eine vollständige plm.db. Wiederherstellen
+// geht aus dieser Liste, aus einer hochgeladenen .db oder aus einem
+// Gesamtexport (.zip, dann kommen fehlende Dateien gleich mit).
+const BACKUP_NAME_RE = /^plm-[\w.-]+\.db$/;
+function backupKind(name) {
+  if (/^plm-\d{4}-\d{2}-\d{2}\.db$/.test(name)) return 'auto';
+  if (name.includes('-vor-wiederherstellung')) return 'vor-wiederherstellung';
+  if (name.includes('-manuell')) return 'manuell';
+  return 'sonstige';
+}
+function timestampName(suffix) {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `plm-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${suffix}.db`;
+}
+const STAT_TABLES = ['projects', 'items', 'revisions', 'datasets', 'orders', 'deliveries', 'customers'];
+// Kennzahlen einer Datenbankdatei, ohne sie zu laden
+function databaseStats(buf) {
+  const tmp = new SQL.Database(buf);
+  try {
+    const one = sql => { try { return tmp.exec(sql)[0]?.values?.[0]?.[0] ?? null; } catch { return null; } };
+    const stats = { ok: one('PRAGMA integrity_check') === 'ok', last_change: one('SELECT MAX(created_at) FROM changelog') };
+    STAT_TABLES.forEach(t => { stats[t] = one(`SELECT COUNT(*) FROM ${t}`); });
+    return stats;
+  } finally { tmp.close(); }
+}
+function currentStats() {
+  const stats = { last_change: get('SELECT MAX(created_at) as m FROM changelog')?.m || null };
+  STAT_TABLES.forEach(t => { stats[t] = count(`SELECT COUNT(*) as c FROM ${t}`); });
+  return stats;
+}
+
+// Dateien, auf die die Datenbank verweist, die aber im Dateiordner fehlen:
+// aus dem Papierkorb zurückholen, den Rest melden.
+function recoverFilesFromTrash() {
+  const refs = [
+    ...all('SELECT filename, original_name FROM datasets'),
+    ...all('SELECT filename, original_name FROM documents'),
+    ...all('SELECT filename, original_name FROM standard_part_files'),
+  ].filter(f => f.filename);
+  let restored = 0;
+  const missing = [];
+  for (const f of refs) {
+    const dest = path.join(FILES_DIR, f.filename);
+    if (fs.existsSync(dest)) continue;
+    const src = path.join(TRASH_DIR, f.filename);
+    if (fs.existsSync(src)) {
+      try { fs.renameSync(src, dest); } catch { try { fs.copyFileSync(src, dest); fs.unlinkSync(src); } catch {} }
+      if (fs.existsSync(dest)) { restored++; continue; }
+    }
+    missing.push(f.original_name || f.filename);
+  }
+  return { restored_from_trash: restored, missing: missing.length, missing_names: missing.slice(0, 20) };
+}
+
+// Ablauf: prüfen → aktuellen Stand sichern → Dateien aus dem ZIP ergänzen →
+// Datenbank tauschen und aufs aktuelle Schema bringen → fehlende Dateien aus
+// dem Papierkorb holen. Scheitert der Tausch, bleibt der bisherige Stand aktiv.
+function restoreDatabase(buf, source, zipFiles) {
+  let stats = null;
+  try { stats = databaseStats(buf); } catch {}
+  if (!stats?.ok) throw new Error('Die Datei ist keine gültige PLM-Datenbank.');
+  if (stats.projects == null || stats.items == null) throw new Error('Die Datenbank enthält keine PLM-Tabellen.');
+
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const safetyName = timestampName('vor-wiederherstellung');
+  fs.writeFileSync(path.join(BACKUP_DIR, safetyName), Buffer.from(db.export()));
+
+  // Gespeicherte Dateien tragen eindeutige Namen — vorhandene bleiben unberührt
+  let extracted = 0;
+  for (const e of zipFiles || []) {
+    const name = path.basename(e.entryName);
+    if (!name || name.startsWith('.')) continue;
+    const dest = path.join(FILES_DIR, name);
+    if (fs.existsSync(dest)) continue;
+    fs.writeFileSync(dest, e.getData());
+    extracted++;
+  }
+
+  const previous = db;
+  try {
+    db = new SQL.Database(buf);
+    applySchema();
+    log('settings', 0, 'Sicherung wiederhergestellt', `${source} · vorheriger Stand gesichert als ${safetyName}`);
+    dbDirty = true;
+    flushDb();
+  } catch (err) {
+    try { db.close(); } catch {}
+    db = previous;
+    throw new Error('Wiederherstellen fehlgeschlagen: ' + err.message + ' — der bisherige Stand ist weiter aktiv.');
+  }
+  try { previous.close(); } catch {}
+
+  const files = recoverFilesFromTrash();
+  console.log(`Sicherung wiederhergestellt: ${source} (vorher gesichert als ${safetyName})`);
+  return { ok: true, source, safety_backup: safetyName, stats: currentStats(), files: { ...files, extracted } };
+}
+
+const _backupStatsCache = new Map();
+app.get('/api/backups', (req, res) => {
+  let names = [];
+  try { names = fs.readdirSync(BACKUP_DIR).filter(f => BACKUP_NAME_RE.test(f)); } catch {}
+  const backups = names.map(name => {
+    const st = fs.statSync(path.join(BACKUP_DIR, name));
+    const key = `${name}:${st.size}:${st.mtimeMs}`;
+    let stats = _backupStatsCache.get(key);
+    if (!stats) {
+      try { stats = databaseStats(fs.readFileSync(path.join(BACKUP_DIR, name))); }
+      catch (e) { stats = { ok: false }; }
+      _backupStatsCache.set(key, stats);
+    }
+    return { name, kind: backupKind(name), size: st.size, modified_at: st.mtime.toISOString(), stats };
+  }).sort((a, b) => b.modified_at.localeCompare(a.modified_at));
+  res.json({ backups, current: currentStats(), dir: BACKUP_DIR, keep_auto: BACKUP_KEEP, trash_days: TRASH_KEEP_DAYS });
+});
+
+app.post('/api/backups', (req, res) => {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const name = timestampName('manuell');
+  fs.writeFileSync(path.join(BACKUP_DIR, name), Buffer.from(db.export()));
+  log('settings', 0, 'Sicherung erstellt', name);
+  res.json({ name });
+});
+
+app.delete('/api/backups/:name', (req, res) => {
+  const name = path.basename(req.params.name);
+  if (!BACKUP_NAME_RE.test(name)) return res.status(400).json({ error: 'Ungültiger Name' });
+  try { fs.unlinkSync(path.join(BACKUP_DIR, name)); }
+  catch { return res.status(404).json({ error: 'Sicherung nicht gefunden' }); }
+  res.json({ success: true });
+});
+
+app.post('/api/backups/:name/restore', (req, res) => {
+  const name = path.basename(req.params.name);
+  if (!BACKUP_NAME_RE.test(name)) return res.status(400).json({ error: 'Ungültiger Name' });
+  const file = path.join(BACKUP_DIR, name);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Sicherung nicht gefunden' });
+  try { res.json(restoreDatabase(fs.readFileSync(file), name)); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+const uploadRestore = multer({ dest: os.tmpdir(), limits: { fileSize: 8 * 1024 * 1024 * 1024 }, defParamCharset: 'utf8' });
+app.post('/api/backups/restore-upload', uploadRestore.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
+  try {
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let buf, zipFiles = null;
+    if (ext === '.zip') {
+      const zip = new AdmZip(req.file.path);
+      const entry = zip.getEntry('plm.db');
+      if (!entry) throw new Error('Im ZIP fehlt die Datenbank (plm.db). Bitte den Gesamtexport verwenden.');
+      buf = entry.getData();
+      zipFiles = zip.getEntries().filter(e => !e.isDirectory && e.entryName.startsWith('files/'));
+    } else if (ext === '.db') {
+      buf = fs.readFileSync(req.file.path);
+    } else {
+      throw new Error('Bitte eine Sicherung (.db) oder einen Gesamtexport (.zip) wählen.');
+    }
+    res.json(restoreDatabase(buf, req.file.originalname, zipFiles));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  } finally {
+    try { fs.unlinkSync(req.file.path); } catch {}
+  }
+});
+
 
 // ==============================================================
 // SUPPLIERS
@@ -4231,7 +5032,7 @@ app.get('/api/suppliers', (req, res) => res.json(all('SELECT * FROM suppliers OR
 
 app.post('/api/suppliers', (req, res) => {
   const { name, contact_person, email, phone, address, notes } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name required' });
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const number = nextSupplierNumber();
   const id = runGetId('INSERT INTO suppliers (number,name,contact_person,email,phone,address,notes) VALUES (?,?,?,?,?,?,?)',
     [number, name, contact_person||'', email||'', phone||'', address||'', notes||'']);
@@ -4240,7 +5041,7 @@ app.post('/api/suppliers', (req, res) => {
 
 app.get('/api/suppliers/:id', (req, res) => {
   const s = get('SELECT * FROM suppliers WHERE id=?', [req.params.id]);
-  if (!s) return res.status(404).json({ error: 'Not found' });
+  if (!s) return res.status(404).json({ error: 'Nicht gefunden' });
   s.inventory_items = all('SELECT * FROM inventory_items WHERE supplier_id=? ORDER BY name', [s.id]);
   res.json(s);
 });
@@ -4294,7 +5095,7 @@ app.post('/api/purchase-orders', (req, res) => {
 app.get('/api/purchase-orders/:id', (req, res) => {
   const po = get(`SELECT po.*, COALESCE(s.name, po.supplier_name_free) as supplier_name, s.email as supplier_email, s.phone as supplier_phone, s.address as supplier_address
     FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=?`, [req.params.id]);
-  if (!po) return res.status(404).json({ error: 'Not found' });
+  if (!po) return res.status(404).json({ error: 'Nicht gefunden' });
   res.json(poWithItems(po));
 });
 
@@ -4309,7 +5110,7 @@ app.put('/api/purchase-orders/:id', (req, res) => {
 app.put('/api/purchase-orders/:id/status', (req, res) => {
   const { status, lot_numbers } = req.body;
   const valid = ['DRAFT','ORDERED','RECEIVED','CANCELLED'];
-  if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  if (!valid.includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
   run(`UPDATE purchase_orders SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
   if (status === 'RECEIVED') {
     const items = all('SELECT * FROM purchase_order_items WHERE po_id=?', [req.params.id]);
@@ -4376,7 +5177,7 @@ app.delete('/api/purchase-orders/:id', (req, res) => {
 
 app.post('/api/purchase-orders/:id/items', (req, res) => {
   const { description, quantity, unit, unit_price, inventory_item_id, raw_material_id, std_part_id, notes } = req.body;
-  if (!description) return res.status(400).json({ error: 'description required' });
+  if (!description) return res.status(400).json({ error: 'Beschreibung fehlt' });
   const pos = (get('SELECT MAX(position) as m FROM purchase_order_items WHERE po_id=?', [req.params.id])?.m || 0) + 1;
   const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,raw_material_id,std_part_id,notes,position) VALUES (?,?,?,?,?,?,?,?,?,?)',
     [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, raw_material_id||null, std_part_id||null, notes||'', pos]);
@@ -4385,7 +5186,7 @@ app.post('/api/purchase-orders/:id/items', (req, res) => {
 
 app.put('/api/purchase-orders/:id/items/:itemId', (req, res) => {
   const { description, quantity, unit, unit_price, notes } = req.body;
-  if (!description) return res.status(400).json({ error: 'description required' });
+  if (!description) return res.status(400).json({ error: 'Beschreibung fehlt' });
   run(`UPDATE purchase_order_items SET description=?,quantity=?,unit=?,unit_price=?,notes=? WHERE id=? AND po_id=?`,
     [description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, notes||'', req.params.itemId, req.params.id]);
   res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [req.params.itemId]));
@@ -4434,7 +5235,7 @@ app.get('/api/inventory', (req, res) => {
 
 app.post('/api/inventory', (req, res) => {
   const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes, item_id, color, material } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name required' });
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const id = runGetId('INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,supplier_id,notes,item_id,color,material) VALUES (?,?,?,?,0,?,?,?,?,?,?,?)',
     [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(min_qty)||0,
      price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'',
@@ -4448,7 +5249,7 @@ app.get('/api/inventory/:id', (req, res) => {
     LEFT JOIN suppliers s ON ii.supplier_id=s.id
     LEFT JOIN items it ON ii.item_id=it.id
     WHERE ii.id=?`, [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   item.movements = all('SELECT * FROM inventory_movements WHERE item_id=? ORDER BY created_at DESC LIMIT 50', [item.id]);
   res.json(item);
 });
@@ -4472,9 +5273,9 @@ app.delete('/api/inventory/:id', (req, res) => {
 
 app.post('/api/inventory/:id/movement', (req, res) => {
   const { type, qty, reference, notes } = req.body;
-  if (!type || qty == null) return res.status(400).json({ error: 'type and qty required' });
+  if (!type || qty == null) return res.status(400).json({ error: 'Art und Menge fehlen' });
   const item = get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   const delta = type === 'out' ? -Math.abs(parseFloat(qty)) : Math.abs(parseFloat(qty));
   tx(() => {
     run('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
@@ -4520,7 +5321,7 @@ app.post('/api/standard-parts/import', (req, res) => {
 
 app.post('/api/standard-parts', (req, res) => {
   const { designation, standard, std_number, name, size, material, unit_price, notes } = req.body;
-  if (!designation) return res.status(400).json({ error: 'Bezeichnung erforderlich' });
+  if (!designation) return res.status(400).json({ error: 'Bezeichnung fehlt' });
   const id = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
     [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, notes||'']);
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [id]));
@@ -4528,7 +5329,7 @@ app.post('/api/standard-parts', (req, res) => {
 
 app.post('/api/standard-parts/:id/clone', (req, res) => {
   const p = get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]);
-  if (!p) return res.status(404).json({ error: 'Not found' });
+  if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
   const newId = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
     [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.notes||'']);
   saveDb();
@@ -4537,7 +5338,7 @@ app.post('/api/standard-parts/:id/clone', (req, res) => {
 
 app.put('/api/standard-parts/:id', (req, res) => {
   const { designation, standard, std_number, name, size, material, unit_price, notes } = req.body;
-  if (!designation) return res.status(400).json({ error: 'Bezeichnung erforderlich' });
+  if (!designation) return res.status(400).json({ error: 'Bezeichnung fehlt' });
   run('UPDATE standard_parts SET designation=?,standard=?,std_number=?,name=?,size=?,material=?,unit_price=?,notes=? WHERE id=?',
     [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, notes||'', req.params.id]);
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]));
@@ -4546,7 +5347,7 @@ app.put('/api/standard-parts/:id', (req, res) => {
 app.delete('/api/standard-parts/:id', (req, res) => {
   // delete associated files from disk
   const files = all('SELECT * FROM standard_part_files WHERE std_part_id=?', [req.params.id]);
-  files.forEach(f => { try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {} });
+  files.forEach(f => trashFile(f.filename));
   run('DELETE FROM standard_parts WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
@@ -4556,7 +5357,7 @@ app.get('/api/standard-parts/:id/files', (req, res) => {
 });
 
 app.post('/api/standard-parts/:id/files', upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file' });
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
   const dsType = guessType(req.file.originalname);
   const id = runGetId('INSERT INTO standard_part_files (std_part_id,filename,original_name,file_size,ds_type,notes) VALUES (?,?,?,?,?,?)',
     [req.params.id, req.file.filename, req.file.originalname, req.file.size, dsType, req.body.notes || req.file.originalname]);
@@ -4565,35 +5366,37 @@ app.post('/api/standard-parts/:id/files', upload.single('file'), (req, res) => {
 
 app.get('/api/standard-part-files/:id/download', (req, res) => {
   const f = get('SELECT * FROM standard_part_files WHERE id=?', [req.params.id]);
-  if (!f) return res.status(404).json({ error: 'Not found' });
+  if (!f) return res.status(404).json({ error: 'Nicht gefunden' });
   const fp = path.join(FILES_DIR, f.filename);
-  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File missing' });
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Datei fehlt' });
   res.download(fp, f.original_name);
 });
 
 app.delete('/api/standard-part-files/:id', (req, res) => {
   const f = get('SELECT * FROM standard_part_files WHERE id=?', [req.params.id]);
-  if (!f) return res.status(404).json({ error: 'Not found' });
-  try { fs.unlinkSync(path.join(FILES_DIR, f.filename)); } catch {}
+  if (!f) return res.status(404).json({ error: 'Nicht gefunden' });
+  trashFile(f.filename);
   run('DELETE FROM standard_part_files WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
 
 app.post('/api/revisions/:revId/bom-std', (req, res) => {
   const { std_part_id, quantity, unit, notes } = req.body;
+  if (rejectIfDelivered(res, req.params.revId)) return;
   const sp = get('SELECT * FROM standard_parts WHERE id=?', [std_part_id]);
   if (!sp) return res.status(404).json({ error: 'Normteil nicht gefunden' });
   try {
     const pos = (get('SELECT MAX(position) as m FROM bom_std_parts WHERE parent_rev_id=?', [req.params.revId])?.m || 0) + 1;
     const id = runGetId('INSERT INTO bom_std_parts (parent_rev_id,std_part_id,quantity,unit,position,notes) VALUES (?,?,?,?,?,?)',
       [req.params.revId, std_part_id, quantity||1, unit||'pcs', pos, notes||'']);
-    log('revision', req.params.revId, 'BOM Add', sp.designation + ' x' + (quantity||1));
+    log('revision', req.params.revId, 'BOM: Position hinzugefügt', sp.designation + ' x' + (quantity||1));
     res.json({ success: true, id });
-  } catch { res.status(400).json({ error: 'Bereits in BOM vorhanden' }); }
+  } catch { res.status(400).json({ error: 'Bereits in der BOM vorhanden' }); }
 });
 
 app.put('/api/bom-std/:id/quantity', (req, res) => {
   const { quantity, unit } = req.body;
+  if (rejectIfDelivered(res, get('SELECT parent_rev_id FROM bom_std_parts WHERE id=?', [req.params.id])?.parent_rev_id)) return;
   run('UPDATE bom_std_parts SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
   saveDb();
   res.json({ success: true });
@@ -4601,6 +5404,7 @@ app.put('/api/bom-std/:id/quantity', (req, res) => {
 
 app.put('/api/revisions/:revId/bom-std-reorder', (req, res) => {
   const { order } = req.body; // array of bom_std_parts ids in new order
+  if (rejectIfDelivered(res, req.params.revId)) return;
   order.forEach((id, idx) => run('UPDATE bom_std_parts SET position=? WHERE id=? AND parent_rev_id=?', [idx+1, id, req.params.revId]));
   saveDb();
   res.json({ success: true });
@@ -4608,7 +5412,8 @@ app.put('/api/revisions/:revId/bom-std-reorder', (req, res) => {
 
 app.delete('/api/bom-std/:id', (req, res) => {
   const row = get('SELECT bs.*, sp.designation FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.id=?', [req.params.id]);
-  if (row) log('revision', row.parent_rev_id, 'BOM Entfernt', row.designation);
+  if (row && rejectIfDelivered(res, row.parent_rev_id)) return;
+  if (row) log('revision', row.parent_rev_id, 'BOM: Position entfernt', row.designation);
   run('DELETE FROM bom_std_parts WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
@@ -4621,7 +5426,7 @@ app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
   const rmId = parseInt(req.params.id);
   const { lot_number } = req.body;
   const rm = get('SELECT * FROM raw_materials WHERE id=?', [rmId]);
-  if (!rm) return res.status(404).json({ error: 'not found' });
+  if (!rm) return res.status(404).json({ error: 'Nicht gefunden' });
 
   const lot = lot_number || '';
 
@@ -4647,14 +5452,14 @@ app.post('/api/raw-materials/:id/lots/assign-number', (req, res) => {
     [articleNumber, rmId, lot]
   );
   saveDb();
-  log('raw_material', rmId, 'artikel_nr', `${articleNumber} für LOT ${lot || '(kein)'}`);
+  log('raw_material', rmId, 'Artikel-Nr. vergeben', `${articleNumber} für Lot ${lot || '(ohne)'}`);
   res.json({ article_number: articleNumber });
 });
 
 // Label-Daten für Etikettendruck
 app.get('/api/raw-materials/:id/label', (req, res) => {
   const rm  = get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]);
-  if (!rm) return res.status(404).json({ error: 'not found' });
+  if (!rm) return res.status(404).json({ error: 'Nicht gefunden' });
   const lot = req.query.lot_number || '';
   const mov = get(
     `SELECT article_number FROM raw_material_movements WHERE raw_material_id=? AND lot_number=? AND article_number IS NOT NULL LIMIT 1`,
@@ -4703,7 +5508,7 @@ app.get('/api/raw-materials', (req, res) => {
 
 app.post('/api/raw-materials', (req, res) => {
   const { name, material_type, color, brand, stock_qty, min_qty, unit, notes, lot_number, dimensions, weight_g, print_temp, bed_temp, nozzle } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name erforderlich' });
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const id = runGetId('INSERT INTO raw_materials (name,material_type,color,brand,stock_qty,min_qty,unit,notes,lot_number,dimensions,weight_g,print_temp,bed_temp,nozzle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, print_temp||null, bed_temp||null, nozzle||'']);
   res.json(get('SELECT * FROM raw_materials WHERE id=?', [id]));
@@ -4784,7 +5589,7 @@ app.post('/api/checkout/normteile', (req, res) => {
 // BOM children with full calc data for quote import
 app.get('/api/items/:id/bom-for-quote', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   const rev = getActiveRevision(item.id);
   if (!rev) return res.json([]);
   const bom = all(`SELECT b.quantity, b.unit, i.id, i.item_number, i.name, i.item_type, i.weight_g, i.default_price
@@ -4807,14 +5612,14 @@ app.get('/api/raw-materials/:id/prices', (req, res) => {
 app.get('/api/time-entries', (req, res) => {
   const { order_id, item_id } = req.query;
   if (item_id) return res.json(all('SELECT * FROM time_entries WHERE item_id=? ORDER BY date DESC, id DESC', [item_id]));
-  if (!order_id) return res.status(400).json({ error: 'order_id or item_id required' });
+  if (!order_id) return res.status(400).json({ error: 'Auftrag oder Item fehlt' });
   res.json(all('SELECT * FROM time_entries WHERE order_id=? ORDER BY date DESC, id DESC', [order_id]));
 });
 
 app.post('/api/time-entries', (req, res) => {
   const { order_id, item_id, date, hours, description, billable } = req.body;
-  if (!order_id && !item_id) return res.status(400).json({ error: 'order_id or item_id required' });
-  if (hours == null) return res.status(400).json({ error: 'hours required' });
+  if (!order_id && !item_id) return res.status(400).json({ error: 'Auftrag oder Item fehlt' });
+  if (hours == null) return res.status(400).json({ error: 'Stunden fehlen' });
   const id = runGetId(
     'INSERT INTO time_entries (order_id,item_id,date,hours,description,billable) VALUES (?,?,?,?,?,?)',
     [order_id||null, item_id||null, date||new Date().toISOString().slice(0,10), parseFloat(hours), description||'', billable?1:0]
@@ -4839,7 +5644,7 @@ app.delete('/api/time-entries/:id', (req, res) => {
 // ==============================================================
 app.post('/api/orders/:id/clone', (req, res) => {
   const o = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
-  if (!o) return res.status(404).json({ error: 'Not found' });
+  if (!o) return res.status(404).json({ error: 'Nicht gefunden' });
   const number = nextOrderNumber();
   const newId = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax) VALUES (?,?,?,?,?,?,?,?,?,?)',
     [number, o.customer_id||null, o.customer_name_free||null, o.title, o.notes||'',

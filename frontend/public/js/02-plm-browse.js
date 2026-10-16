@@ -1,4 +1,4 @@
-// 02-plm-browse.js — Projektliste, Projekt-Detail (Baum), Projektdokumente, Artikel-Detail
+// 02-plm-browse.js — Projektliste, Projekt-Detail (Baum), Projektdokumente, Item-Detail
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── PROJECTS LIST ─────────────────────────────────────────────
@@ -31,7 +31,7 @@ async function renderProjectsList() {
         ${statChip(p.prt_count, 'prt', 'var(--teal)')}
         ${statChip(p.doc_count, 'doc', 'var(--purple)')}
         ${p.file_count ? `<span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}
-        <span style="font-size:13px;color:var(--t4);white-space:nowrap">${new Date(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'})}</span>
+        <span style="font-size:13px;color:var(--t4);white-space:nowrap">${parseDbDate(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'})}</span>
         <button onclick="event.stopPropagation();pinProject(${p.id})" title="${p.pinned?'Angeheftet – klicken zum Lösen':'Anpinnen'}"
           style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:${p.pinned?'1':'0.3'};transition:opacity .15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='${p.pinned?'1':'0.3'}'">
           📌
@@ -61,7 +61,7 @@ async function openProject(id) {
     }<strong>${esc(p.name)}</strong><span class="chip" style="margin-left:6px${p.color ? ';border-color:'+esc(p.color)+'66;color:'+esc(p.color) : ''}">${p.number}</span></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'asm')">+ Baugruppe</button>
      <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'prt')">+ Part</button>
-     <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'doc')">+ Dok</button>`
+     <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'doc')">+ Dokument</button>`
   );
 
   renderProjectTree(p);
@@ -406,18 +406,18 @@ function renderItemDetail(item, activeRevId) {
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(item.name)}</strong>`
     + (item.classification ? ' ' + _classChip(item.classification) : '')
-    + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})">✏</button>` : '')
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})">↪</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument generieren">&#128196;</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Vergleichen">⇄</button>`
+    + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})" title="In anderes Projekt verschieben">↪</button>`
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument erstellen">&#128196;</button>`
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Mit anderem Item vergleichen">⇄</button>`
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemMindmap(${item.id})" title="Abhängigkeiten als Mindmap">⌗</button>`;
 
   const tabs = `
     <button class="tab active" onclick="switchTab(this,'it-revs')">Revisionen</button>
     <button class="tab" onclick="switchTab(this,'it-sheet')">Datenblatt</button>
-    <button class="tab" onclick="switchTab(this,'it-log')">Changelog</button>
+    <button class="tab" onclick="switchTab(this,'it-log')">Historie</button>
     ${!isDOC ? `<button class="tab" onclick="switchTab(this,'it-time');loadItemTimeEntries(${item.id})">Zeiten</button>` : ''}
-    <button class="tab" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Where-Used</button>
+    <button class="tab" onclick="switchTab(this,'it-whereused');loadWhereUsed(${item.id})">Verwendung</button>
     <button class="tab" onclick="switchTab(this,'it-erp');loadErpUsage(${item.id})">Aufträge</button>`;
   document.getElementById('dp-tabs').innerHTML = tabs;
   if (!isDOC) {
@@ -472,12 +472,15 @@ function renderItemDetail(item, activeRevId) {
       <div class="sep-label" style="margin-top:4px">Revisionen</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;align-items:center">
         ${(item.revisions||[]).map(r => `
-          <div class="rev-pill ${r.id === activeRevId ? 'active-rev' : ''}" onclick="switchRev(${item.id}, ${r.id})">
+          <div class="rev-pill ${r.id === activeRevId ? 'active-rev' : ''}" onclick="switchRev(${item.id}, ${r.id})"
+            title="${esc(PLM_ST_LABEL[r.status] || r.status)}${r.delivered?.length ? ' · geliefert: ' + esc(r.delivered.map(d => d.number).join(', ')) : ''}">
             <span class="status st-${r.status}" style="font-size:11px">rev${r.rev}</span>
             <span style="color:var(--t3);font-size:13px">${r.status}</span>
+            ${r.delivered?.length ? '<span style="font-size:12px" aria-label="geliefert">🚚</span>' : ''}
           </div>`).join('')}
         <div style="margin-left:auto;display:flex;gap:4px">
-          ${isASM ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Sub-ASM</button>` : ''}
+          ${(item.revisions||[]).length > 1 ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px" onclick="openRevisionCompare(${item.id})" title="Zwei Revisionen dieses Items gegenüberstellen">⇄ Revisionen vergleichen</button>` : ''}
+          ${isASM ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px" onclick="openItemModal(${item.project_id},${item.id},'asm')">+ Unterbaugruppe</button>` : ''}
         </div>
       </div>
       ${rev ? renderRevDetail(rev, item) : '<div style="color:var(--t3)">Keine Revision</div>'}
@@ -613,20 +616,10 @@ function renderItemSheet(item, activeRevId) {
   let psBlock = '';
   const ps = rev?.print_settings;
   if (ps) {
-    const cells = [
-      ['Düse', ps.nozzle ? ps.nozzle + ' mm' : null],
-      ['Schicht', ps.layer_height ? fmtN(ps.layer_height, 2) + ' mm' : null],
-      ['Material', ps.material],
-      ['Farbe', ps.color],
-      ['Füllung', ps.infill != null && ps.infill !== '' ? ps.infill + ' %' : null],
-      ['Stützen', ps.supports == null || ps.supports === '' ? null : (Number(ps.supports) ? 'ja' : 'nein')],
-      ['Düsentemp.', ps.print_temp ? ps.print_temp + ' °C' : null],
-      ['Bett', ps.bed_temp ? ps.bed_temp + ' °C' : null],
-      ['Drucker', ps.printer],
-      ['Teilgewicht', ps.part_weight ? fmtN(ps.part_weight, 1) + ' g' : null],
-      ['Filament', ps.filament_weight_total ? fmtN(ps.filament_weight_total, 1) + ' g' : null],
-      ['Druckdauer', _fmtHours(ps.print_duration)],
-    ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+    // Bezeichnungen und Einheiten aus PRINT_PARAMS (01-core.js)
+    const cells = PRINT_PARAMS.slice(0, 12)
+      .map(([key, label]) => [label, fmtPrintParam(key, ps[key])])
+      .filter(([, v]) => v !== null && v !== undefined && v !== '');
     if (cells.length) {
       psBlock = `<div class="sep-label">Druckparameter <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
         <div class="ps-grid">${cells.map(([k, v]) => _sheetCell(k, v, { mono: true })).join('')}</div>
@@ -812,21 +805,9 @@ async function saveItemNotes(itemId, el) {
 // Standard ist "automatisch": die Position folgt immer der aktiven Revision.
 // Fixieren braucht man vor allem dort, wo ein realer Stand dokumentiert wird
 // (z.B. ein Fahrzeug, in dem noch die alte Revision verbaut ist).
-async function openBomRevPicker(bomId, childItemId, parentItemId, parentRevId) {
-  let child;
-  try { child = await api(`/api/items/${childItemId}`); }
-  catch { return toast('Teil konnte nicht geladen werden', 'err'); }
-
-  const revs = child.revisions || [];
-  if (!revs.length) return toast('Keine Revisionen vorhanden', 'err');
-
-  // aktuell fixierte Revision aus der Elternstückliste lesen
-  const parent = state.item && state.item.id === parentItemId ? state.item : null;
-  const prow = parent?.revisions?.find(r => r.id === parentRevId)?.bom?.find(x => x.id === bomId);
-  const pinnedId = prow?.child_rev_id || null;
-  const activeId = (prow?.child_active_rev || revs[0])?.id;
-
-  const row = (sel, label, sub, onclick, extra = '') => `
+// Eine Zeile in den Revisions-Auswahldialogen (Stückliste, Produktion)
+function _revPickRow(sel, label, sub, onclick, extra = '') {
+  return `
     <div onclick="${onclick}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;
       border:1px solid ${sel ? 'var(--blue)' : 'var(--line)'};border-radius:var(--r-sm);
       background:${sel ? 'var(--blue-glow)' : 'var(--bg2)'};margin-bottom:6px"
@@ -839,6 +820,30 @@ async function openBomRevPicker(bomId, childItemId, parentItemId, parentRevId) {
       </div>
       ${extra}
     </div>`;
+}
+// Revisionen eines Items als Auswahlzeilen; markiert die gewählte und die aktive
+function _revPickList(revs, selectedId, activeId, onclickFor) {
+  return revs.map(r => _revPickRow(selectedId === r.id, `rev${esc(r.rev)}`,
+    esc(r.description || '—') + (r.released_at ? ' · freigegeben ' + fmtDate(r.released_at) : ''),
+    onclickFor(r),
+    `<span class="status st-${r.status}" style="flex-shrink:0;font-size:11px" title="${esc(PLM_ST_LABEL[r.status] || '')}">${r.status}</span>`
+    + (r.id === activeId ? '<span class="chip" style="flex-shrink:0;margin-left:5px">aktuell</span>' : ''))).join('');
+}
+
+async function openBomRevPicker(bomId, childItemId, parentItemId, parentRevId) {
+  let child;
+  try { child = await api(`/api/items/${childItemId}`); }
+  catch { return toast('Item konnte nicht geladen werden', 'err'); }
+
+  const revs = child.revisions || [];
+  if (!revs.length) return toast('Keine Revisionen vorhanden', 'err');
+
+  // aktuell fixierte Revision aus der Elternstückliste lesen
+  const parent = state.item && state.item.id === parentItemId ? state.item : null;
+  const prow = parent?.revisions?.find(r => r.id === parentRevId)?.bom?.find(x => x.id === bomId);
+  const pinnedId = prow?.child_rev_id || null;
+  const activeId = (prow?.child_active_rev || revs[0])?.id;
+  const row = _revPickRow;
 
   const autoSub = activeId
     ? `Aktuell: rev${revs.find(r => r.id === activeId)?.rev ?? '—'} — neue Revisionen werden automatisch übernommen`
@@ -858,11 +863,7 @@ async function openBomRevPicker(bomId, childItemId, parentItemId, parentRevId) {
       ${row(!pinnedId, 'Automatisch', autoSub, `_setBomRev(${bomId},null,${parentItemId})`,
         '<span class="chip" style="flex-shrink:0">Standard</span>')}
       <div class="sep-label">Fest auf Revision</div>
-      ${revs.map(r => row(pinnedId === r.id, `rev${esc(r.rev)}`,
-          esc(r.description || '—') + (r.released_at ? ' · freigegeben ' + fmtDate(r.released_at) : ''),
-          `_setBomRev(${bomId},${r.id},${parentItemId})`,
-          `<span class="status st-${r.status}" style="flex-shrink:0;font-size:11px">${r.status}</span>`
-          + (r.id === activeId ? '<span class="chip" style="flex-shrink:0;margin-left:5px">aktuell</span>' : ''))).join('')}
+      ${_revPickList(revs, pinnedId, activeId, r => `_setBomRev(${bomId},${r.id},${parentItemId})`)}
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -1235,32 +1236,55 @@ async function _bomDrop(e, revId) {
 function renderRevDetail(rev, item) {
   const isASM = item.item_type === 'asm';
   const isDOC = item.item_type === 'doc';
-  const locked = rev.status === 'REL' || rev.status === 'OBS' || rev.status === 'ECO';
+  // Geliefert heisst fixiert: wie eine Freigabe gesperrt, auch im Entwurf
+  const delivered = rev.delivered || [];
+  const released = rev.status === 'REL' || rev.status === 'OBS' || rev.status === 'ECO';
+  const locked = released || delivered.length > 0;
+  const lockLabel = released ? `Gesperrt (${rev.status})` : 'Gesperrt (geliefert)';
+  const deliveredBox = delivered.length ? `
+    <div style="display:flex;gap:10px;align-items:flex-start;padding:9px 11px;margin-bottom:10px;background:var(--teal-soft);border:1px solid var(--teal-line);border-radius:var(--r-sm);font-size:13px">
+      <span style="font-size:15px;line-height:1.2">🚚</span>
+      <div style="min-width:0">
+        <div style="color:var(--t1);font-weight:600">Geliefert — rev${esc(rev.rev)} ist fixiert</div>
+        <div style="color:var(--t2);margin-top:2px;line-height:1.55">
+          ${delivered.map(d => `<span style="font-family:var(--mono);color:var(--blue);cursor:pointer" onclick="gotoView('deliveries');openDeliveryDetail(${d.id})">${esc(d.number)}</span>${d.customer_name ? ' · ' + esc(d.customer_name) : ''}${d.delivery_date ? ' · ' + fmtD(d.delivery_date) : ''}`).join('<br>')}
+        </div>
+        <div style="color:var(--t3);margin-top:4px">Dateien, Stückliste und Druckparameter bleiben so, wie sie geliefert wurden. Änderungen gehen in eine neue Revision.</div>
+      </div>
+    </div>` : '';
   // Im einfachen Workflow (Einstellungen → PLM) gibt es keine Freigabe:
   // statt REV/REL legt man direkt die naechste Revision an.
   const simple = typeof simpleWorkflow === 'function' && simpleWorkflow();
   const wfMap = simple ? {
-    DFT: [{s:'_NEWREV',label:'＋ Neue Revision',cls:'btn-green'},{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
+    DFT: [{s:'_NEWREV',label:'＋ Neue Revision',cls:'btn-green'},{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
     REV: [{s:'DFT',label:'← Zurück zu Entwurf',cls:'btn-ghost'}],
-    REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
-    ECO: [{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
+    REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
+    ECO: [{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
     OBS: []
   } : {
     DFT: [{s:'REV',label:'→ In Review',cls:'btn-amber'}],
     REV: [{s:'DFT',label:'← Zurück zu Entwurf',cls:'btn-ghost'},{s:'REL',label:'✓ Freigeben',cls:'btn-green'}],
-    REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
-    ECO: [{s:'OBS',label:'Veralten (OBS)',cls:'btn-ghost'}],
+    REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
+    ECO: [{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
     OBS: []
   };
-  const wfBtns = (wfMap[rev.status]||[]).map(b => b.s === '_NEWREV'
+  // Eine gelieferte Entwurfs-Revision lässt sich nicht mehr ändern — der Weg
+  // weiter ist eine neue Revision, auch im Workflow mit Freigabe.
+  const actions = (wfMap[rev.status] || []).slice();
+  if ((rev.delivered || []).length && (item.revisions || [])[0]?.id === rev.id
+      && (rev.status === 'DFT' || rev.status === 'REV') && !actions.some(a => a.s === '_NEWREV')) {
+    actions.unshift({ s: '_NEWREV', label: '＋ Neue Revision', cls: 'btn-green' });
+  }
+  const wfBtns = actions.map(b => b.s === '_NEWREV'
     ? `<button class="btn btn-sm ${b.cls}" onclick="createNextRevision(${item.id})">${b.label}</button>`
     : `<button class="btn btn-sm ${b.cls}" onclick="openStatusModal(${rev.id},'${b.s}')">${b.label}</button>`).join('');
 
   return `
     <!-- Rev info -->
+    ${deliveredBox}
     <div class="sep-label">rev${rev.rev} – Details</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:13px">
-      <div><div class="ps-label">Status</div><span class="status st-${rev.status}">${rev.status}</span></div>
+      <div><div class="ps-label">Status</div><span class="status st-${rev.status}" title="${esc(PLM_ST_LABEL[rev.status] || '')}">${rev.status}</span> <span style="color:var(--t3)">${esc(PLM_ST_LABEL[rev.status] || '')}</span></div>
       <div><div class="ps-label">Erstellt</div>${fmtDate(rev.created_at)}</div>
       ${rev.released_at ? `<div><div class="ps-label">Freigegeben</div>${fmtDate(rev.released_at)}</div>` : ''}
       ${rev.released_by ? `<div><div class="ps-label">Von</div>${rev.released_by}</div>` : ''}
@@ -1291,16 +1315,16 @@ function renderRevDetail(rev, item) {
         ? '<select style="margin-left:auto;font-size:13px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('+rev.id+', this.value)">'
           + stls.map(d => '<option value="'+API+'/api/datasets/'+d.id+'/download">'+esc(d.original_name)+'</option>').join('')+'</select>'
         : '';
-      return '<div class="sep-label" style="margin-top:12px">3D Vorschau'+sel+'</div>'
+      return '<div class="sep-label" style="margin-top:12px">3D-Vorschau'+sel+'</div>'
         +'<div style="position:relative;width:100%;height:220px;border-radius:var(--r);overflow:hidden;margin-bottom:10px">'
         +'<canvas id="stl-c-'+rev.id+'" data-stl-url="'+fUrl+'" style="width:100%;height:100%;display:block;cursor:grab"></canvas>'
         +'<div id="stl-load-'+rev.id+'" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--t3);font-size:13px;pointer-events:none">Lade…</div>'
         +'</div>';
     })()}
 
-    <!-- Datasets -->
-    <div class="sep-label" style="margin-top:12px">Dateien (Datasets)
-      ${locked ? '<span style="font-size:13px;color:var(--t3);margin-left:auto;font-family:var(--mono)">&#128274; Gesperrt ('+rev.status+')</span>'
+    <!-- Dateien -->
+    <div class="sep-label" style="margin-top:12px">Dateien
+      ${locked ? '<span style="font-size:13px;color:var(--t3);margin-left:auto;font-family:var(--mono)">&#128274; '+lockLabel+'</span>'
                : '<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="openUploadModal('+rev.id+',\''+item.item_number+'\',\''+rev.rev+'\')">+ Datei</button>'}
     </div>
     <div id="ds-list-${rev.id}">
@@ -1317,10 +1341,10 @@ function renderRevDetail(rev, item) {
     </div>
 
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      ${itemIsEditable(item)
+      ${itemIsEditable(item) && !item.delivered
         ? `<button class="btn btn-red btn-sm" onclick="deleteItem(${item.id})">🗑 Item löschen</button>`
-        : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Item-Löschen nur unter Einstellungen → Admin</span>`}
-      ${rev.status === 'DFT'
+        : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Item löschen nur unter Einstellungen → Admin${item.delivered ? ' (geliefert)' : ''}</span>`}
+      ${rev.status === 'DFT' && !delivered.length
         ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red)" onclick="deleteRevision(${rev.id},${item.id})">Revision löschen</button>`
         : ''}
     </div>`;
@@ -1361,7 +1385,7 @@ function renderDatasets(datasets, revId, locked) {
           </div>
           <a href="${API}/api/datasets/${f.id}/download" class="btn btn-icon btn-ghost btn-sm" title="Download" download>&#x2B07;</a>
           ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="openEditDatasetModal(${f.id},'${esc(f.original_name)}','${esc(f.notes||'')}')" title="Info bearbeiten">✏️</button>`}
-          ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delDataset(${f.id},${revId})" title="Loeschen">&#x2715;</button>`}
+          ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="delDataset(${f.id},${revId})" title="Löschen">&#x2715;</button>`}
         </div>`).join('')}
     </div>`
   ).join('');

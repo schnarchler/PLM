@@ -2,15 +2,14 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── DELIVERIES ────────────────────────────────────────────────
-const DELIVERY_ST_MAP   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
-const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+// Status-Tabellen (DELIVERY_ST_MAP / _LABEL) stehen zentral in 01-core.js.
 
 let _deliveryFilter = { text:'', status:'', dateFrom:'', dateTo:'' };
 function _clearDeliveryFilter(){_deliveryFilter={text:'',status:'',dateFrom:'',dateTo:''};renderDeliveries();}
 let _deliveryShowLinked = false;
 function _setDeliveryScope(v) { _deliveryShowLinked = v; renderDeliveries(); }
 
-// Aus der Produktionsliste direkt in den Fertigung-Tab des Auftrags springen.
+// Aus der Produktionsliste direkt in den Tab „Produktion" des Auftrags springen.
 async function openOrderFromProduction(orderId) {
   await gotoView('orders');
   await openOrderDetail(orderId);
@@ -23,8 +22,8 @@ async function renderDeliveries() {
   const rows = await api('/api/deliveries');
   state.deliveries = rows;
   if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Noch keine Produktionsaufträge</div></div>`); return; }
-  // Fertigung zu einem Auftrag wird im Auftrag selbst bearbeitet (Tab
-  // "Fertigung"). Diese Liste zeigt darum standardmaessig nur eigenstaendige
+  // Produktion zu einem Auftrag wird im Auftrag selbst bearbeitet (Tab
+  // "Produktion"). Diese Liste zeigt darum standardmaessig nur eigenstaendige
   // Produktionsauftraege — sonst pflegt man dasselbe an zwei Stellen.
   const linked = rows.filter(d => d.order_id).length;
   setLeftBody(_filterBar(_deliveryFilter,[['DRAFT','Entwurf'],['READY','Bereit'],['DELIVERED','Geliefert']],'_clearDeliveryFilter','_delivery')+
@@ -34,7 +33,7 @@ async function renderDeliveries() {
       <button class="btn btn-sm ${_deliveryShowLinked ? 'btn-primary' : 'btn-ghost'}"
         onclick="_setDeliveryScope(true)">Alle${linked ? ` (${linked} zu Aufträgen)` : ''}</button>
       <span style="color:var(--t4);font-size:12.5px">
-        Fertigung zu einem Auftrag bearbeitest du im Auftrag unter „Fertigung“.
+        Produktionsaufträge zu einem Auftrag bearbeitest du im Auftrag unter „Produktion“.
       </span>
     </div>
     <div class="tbl-wrap"><table>
@@ -69,11 +68,11 @@ function _render_deliveryRows() {
     <td>${_stSel('delivery',d.id,d.status)}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
     <td style="display:flex;gap:4px">
-      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Druckansicht">&#128196;</button>
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Lieferschein">&#128196;</button>
       ${d.status === 'DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>` : ''}
     </td>
   </tr>`).join('') || `<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">${
-    _deliveryShowLinked ? 'Keine Treffer' : 'Keine eigenständige Fertigung — alles hängt an Aufträgen.'}</td></tr>`;
+    _deliveryShowLinked ? 'Keine Treffer' : 'Keine eigenständigen Produktionsaufträge — alle hängen an Aufträgen.'}</td></tr>`;
 }
 
 async function openDeliveryDetail(id) {
@@ -86,11 +85,11 @@ async function openDeliveryDetail(id) {
     <button class="tab" onclick="switchTab(this,'dd-info')">Details</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="dd-pos">
-      ${renderDeliveryItems(d.items||[], id)}
+      ${renderDeliveryItems(d.items||[], id, d.status === 'DELIVERED')}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${id})">+ Position</button>
     </div>
     <div id="dd-info" style="display:none">
-      <div class="sep-label">Lieferscheindaten</div>
+      <div class="sep-label">Kopfdaten</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('delivery',id,d.status)}</div>
         <div><div class="ps-label">Kunde</div>${d.customer_name||'—'}</div>
@@ -101,7 +100,7 @@ async function openDeliveryDetail(id) {
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openDeliveryModal(${id})">✏️ Bearbeiten</button>
-        <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${id})">&#128196; Druckansicht</button>
+        <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${id})">&#128196; Lieferschein</button>
         ${d.status === 'DRAFT'
           ? `<button class="btn btn-red btn-sm" onclick="delDelivery(${id})">🗑 Löschen</button>`
           : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Löschen nur unter Einstellungen → Admin</span>`}
@@ -111,7 +110,99 @@ async function openDeliveryDetail(id) {
   showDetail();
 }
 
-function renderDeliveryItems(items, deliveryId) {
+// ── GELIEFERTER STAND ─────────────────────────────────────────
+// Eine Position folgt bis zur Lieferung der aktiven Revision (oder einer von
+// Hand gewählten) und wird beim Status „Geliefert" fixiert. Darstellung wie in
+// der Stückliste: Schloss = fest, ↑revN = inzwischen gibt es eine neuere.
+const REV_FIXED_LABEL = { manual: 'von Hand gewählt', delivery: 'beim Liefern fixiert', migration: 'nachträglich aus dem Lieferdatum ermittelt' };
+
+function _deliveryRevBadge(item, deliveryId, delivered) {
+  const eff = item.effective_rev;
+  if (!item.item_id || !eff) return '';
+  const fixed = !!item.revision_id;
+  const newest = item.active_rev ? 'rev' + item.active_rev.rev : '—';
+  const how = REV_FIXED_LABEL[item.rev_fixed] || '';
+  const title = delivered
+    ? `Geliefert als rev${eff.rev}${how ? ' (' + how + ')' : ''}${item.rev_outdated ? ' — aktuell ist ' + newest : ''}. Klicken für den gelieferten Stand.`
+    : fixed
+      ? `Fest auf rev${eff.rev}${item.rev_outdated ? ' — aktuell wäre ' + newest : ''}. Klicken zum Ändern.`
+      : `Folgt automatisch der aktiven Revision (${newest}) und wird beim Liefern fixiert. Klicken zum Fixieren.`;
+  return `<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;cursor:pointer" title="${esc(title)}"
+      onclick="event.stopPropagation();openDeliveryRevPicker(${item.id},${deliveryId})">
+      <span class="status st-${eff.status}" style="font-size:11px${fixed ? '' : ';opacity:.7'}">${fixed ? '🔒 ' : ''}rev${esc(eff.rev)}</span>
+      ${item.rev_outdated ? `<span style="font-size:10px;font-family:var(--mono);color:var(--amber)">↑${newest}</span>` : ''}
+      ${item.rev_fixed === 'migration' ? '<span style="font-size:10px;color:var(--t4)">ermittelt</span>' : ''}
+      ${item.structure?.length ? `<span class="chip" style="font-size:10px">${item.structure.length} Teile</span>` : ''}
+    </span>`;
+}
+
+// Gelieferte Struktur einer Baugruppe: jedes Unterteil mit seiner Revision
+function _deliveredStructureHtml(rows) {
+  if (!rows?.length) return '';
+  return `<div class="sep-label">Gelieferte Struktur</div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      ${rows.map(r => `<div onclick="_hideDynModal();gotoPlmItem(${r.item_id})" title="Item öffnen"
+          style="display:flex;align-items:center;gap:8px;padding:5px 9px 5px ${9 + (r.depth - 1) * 18}px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-xs);cursor:pointer">
+          ${_itemChip(r.item_type, 14)}
+          <span style="font-family:var(--mono);font-size:12px;color:var(--blue);flex-shrink:0">${esc(r.item_number || '—')}</span>
+          <span style="flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name || '')}</span>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--t3);flex-shrink:0">${fmtN(r.quantity, 0)}×</span>
+          <span class="status st-${r.rev_status || 'DFT'}" style="font-size:11px;flex-shrink:0">🔒 rev${esc(r.rev || '—')}</span>
+          ${r.rev_outdated ? `<span style="font-size:10px;font-family:var(--mono);color:var(--amber);flex-shrink:0" title="Inzwischen gibt es rev${esc(r.active_rev)}">↑rev${esc(r.active_rev)}</span>` : ''}
+        </div>`).join('')}
+    </div>`;
+}
+
+async function openDeliveryRevPicker(deliveryItemId, deliveryId) {
+  let d, item;
+  try { d = await api(`/api/deliveries/${deliveryId}`); } catch { return; }
+  const pos = (d.items || []).find(x => x.id === deliveryItemId);
+  if (!pos?.item_id) return;
+  try { item = await api(`/api/items/${pos.item_id}`); }
+  catch { return toast('Item konnte nicht geladen werden', 'err'); }
+  const delivered = d.status === 'DELIVERED';
+  const revs = item.revisions || [];
+  const chosen = pos.revision_id || null;
+  const activeId = pos.active_rev?.id;
+  const how = REV_FIXED_LABEL[pos.rev_fixed];
+
+  _showDynModal(`<div class="modal" style="max-width:580px">
+    <div class="modal-head">
+      <div class="modal-title" style="display:flex;align-items:center;gap:8px;min-width:0">
+        <span>${delivered ? 'Gelieferter Stand' : 'Revision in der Produktion'}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.item_number)}</span>
+      </div>
+    </div>
+    <div class="modal-body" style="max-height:66vh;overflow-y:auto">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:12px">${esc(item.name)} · ${esc(d.number)}</div>
+      ${delivered ? `<div style="font-size:13px;color:var(--t2);padding:9px 11px;background:var(--teal-soft);border:1px solid var(--teal-line);border-radius:var(--r-sm);margin-bottom:12px;line-height:1.55">
+          🚚 Geliefert als <strong>rev${esc(pos.effective_rev?.rev || '—')}</strong>${how ? ' (' + how + ')' : ''}.
+          Wurde die falsche Revision erfasst, hier korrigieren. Zum Lösen den Status
+          des Produktionsauftrags zurücksetzen.
+        </div>` : ''}
+      ${delivered ? '' : _revPickRow(!chosen, 'Automatisch',
+          `Folgt der aktiven Revision (rev${esc(pos.active_rev?.rev || '—')}) und wird beim Liefern fixiert`,
+          `_setDeliveryRev(${pos.id},null,${deliveryId})`, '<span class="chip" style="flex-shrink:0">Standard</span>')}
+      <div class="sep-label">${delivered ? 'Korrigieren auf' : 'Fest auf Revision'}</div>
+      ${_revPickList(revs, chosen, activeId, r => `_setDeliveryRev(${pos.id},${r.id},${deliveryId})`)}
+      ${delivered ? _deliveredStructureHtml(pos.structure) : ''}
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
+    </div>
+  </div>`);
+}
+
+async function _setDeliveryRev(deliveryItemId, revId, deliveryId) {
+  _hideDynModal();
+  try {
+    const r = await api(`/api/delivery-items/${deliveryItemId}/revision`, 'PUT', { rev_id: revId });
+    toast(revId ? `Fest auf rev${r.rev}` : 'Folgt wieder automatisch', 'ok');
+  } catch { return; }
+  if (!refreshOrderProductionIfOpen()) openDeliveryDetail(deliveryId);
+}
+
+function renderDeliveryItems(items, deliveryId, delivered = false) {
   if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">Noch keine Positionen</div>`;
   const allBtn = items.length > 1 ? `<div style="display:flex;gap:6px;margin-bottom:8px">
     <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">🖶 Alle kurz</button>
@@ -127,6 +218,7 @@ function renderDeliveryItems(items, deliveryId) {
           <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:11px;opacity:${isLast?0.2:1}" ${isLast?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'down')">▼</button>
         </div>
         ${item.item_number?`<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${item.item_number}</span>`:''}
+        ${_deliveryRevBadge(item, deliveryId, delivered)}
         <span style="font-size:13px;font-weight:500;flex:1">${esc(item.description)}</span>
         ${item.rm_name?`<span style="font-size:11px;background:rgba(157,180,255,.12);color:var(--blue);border-radius:3px;padding:1px 6px;font-family:var(--mono);flex-shrink:0">${esc(item.rm_name)}</span>`:''}
         <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${item.unit}</span>
@@ -151,22 +243,22 @@ const SETTINGS_GROUPS = [
     ['perimeters','Perimeter'], ['top_solid_layers','Oben (Lagen)'], ['bottom_solid_layers','Unten (Lagen)'],
     ['spiral_vase','Vase-Modus']
   ]},
-  { label: 'Infill', color: 'var(--amber)', keys: [
-    ['fill_density','Infill (%)'], ['fill_pattern','Muster'],
+  { label: 'Füllung', color: 'var(--amber)', keys: [
+    ['fill_density','Füllung (%)'], ['fill_pattern','Muster'],
     ['top_fill_pattern','Oben-Muster'], ['bottom_fill_pattern','Unten-Muster']
   ]},
-  { label: 'Support', color: 'var(--purple)', keys: [
+  { label: 'Stützen', color: 'var(--purple)', keys: [
     ['support_material','Aktiv'], ['support_material_auto','Auto-Support'],
     ['support_material_threshold','Überhangwinkel (°)'], ['support_material_pattern','Muster'],
     ['support_material_style','Stil'], ['raft_layers','Raft-Lagen']
   ]},
   { label: 'Temperatur', color: 'var(--red)', keys: [
-    ['temperature','Düse (°C)'], ['first_layer_temperature','Düse 1. Schicht (°C)'],
-    ['bed_temperature','Bett (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht (°C)'],
-    ['nozzle_temperature','Düse (°C)'], ['hot_plate_temp','Bett (°C)']
+    ['temperature','Düsentemperatur (°C)'], ['first_layer_temperature','Düse 1. Schicht (°C)'],
+    ['bed_temperature','Betttemperatur (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht (°C)'],
+    ['nozzle_temperature','Düsentemperatur (°C)'], ['hot_plate_temp','Betttemperatur (°C)']
   ]},
   { label: 'Geschwindigkeit', color: 'var(--green)', keys: [
-    ['perimeter_speed','Perimeter (mm/s)'], ['infill_speed','Infill (mm/s)'],
+    ['perimeter_speed','Perimeter (mm/s)'], ['infill_speed','Füllung (mm/s)'],
     ['travel_speed','Travel (mm/s)'], ['first_layer_speed','1. Schicht (mm/s)'],
     ['bridge_speed','Brücken (mm/s)']
   ]},
@@ -532,7 +624,7 @@ async function delDeliveryItem(itemId, deliveryId) {
 async function moveDeliveryItem(itemId, deliveryId, direction) {
   await api(`/api/delivery-items/${itemId}/move`,'PUT',{direction});
   const d = await api(`/api/deliveries/${deliveryId}`);
-  document.getElementById('dd-pos').innerHTML = renderDeliveryItems(d.items||[], deliveryId) +
+  document.getElementById('dd-pos').innerHTML = renderDeliveryItems(d.items||[], deliveryId, d.status === 'DELIVERED') +
     `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${deliveryId})">+ Position</button>`;
 }
 

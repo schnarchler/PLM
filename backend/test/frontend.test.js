@@ -247,19 +247,93 @@ test('Workflow: einfacher Modus bietet "Neue Revision" statt Review', () => {
   const src = read('js/02-plm-browse.js');
   const seg = src.slice(src.indexOf('  const simple = typeof simpleWorkflow'),
                         src.indexOf('  return `\n    <!-- Rev info -->'));
-  const buttonsFor = (mode, status) => {
+  const buttonsFor = (mode, status, delivered = []) => {
     global.simpleWorkflow = () => mode === 'simple';
-    return (0, eval)('(function(rev, item){' + seg + 'return wfBtns;})')({ status, id: 7 }, { id: 3 });
+    const rev = { status, id: 7, delivered };
+    return (0, eval)('(function(rev, item){' + seg + 'return wfBtns;})')(rev, { id: 3, revisions: [rev] });
   };
   assert.match(buttonsFor('full', 'DFT'), /In Review/);
   assert.match(buttonsFor('full', 'REV'), /Freigeben/);
   assert.match(buttonsFor('simple', 'DFT'), /Neue Revision/);
   assert.match(buttonsFor('simple', 'DFT'), /createNextRevision\(3\)/);
   assert.ok(!buttonsFor('simple', 'DFT').includes('In Review'));
+  assert.ok(!buttonsFor('full', 'DFT').includes('Neue Revision'), 'ohne Lieferung führt der Weg über In Review');
+  assert.match(buttonsFor('full', 'DFT', [{ id: 1, number: 'LS-2026-0001' }]), /Neue Revision/,
+    'gelieferter Entwurf ist fixiert — weiter geht es mit einer neuen Revision');
+  assert.strictEqual((buttonsFor('simple', 'DFT', [{ id: 1 }]).match(/Neue Revision/g) || []).length, 1, 'nicht doppelt');
   assert.match(buttonsFor('simple', 'REL'), /ECO starten/, 'freigegebene Stände behalten den ECO-Weg');
   for (const mode of ['full', 'simple']) {
     for (const st of ['DFT', 'REV', 'REL', 'ECO', 'OBS']) {
       assert.ok(!buttonsFor(mode, st).includes('undefined'), `${mode}/${st}`);
     }
   }
+});
+
+// ── Gelieferter Stand und Revisionsvergleich ──────────────────
+evalPart('js/01-core.js', 'const PLM_ST_LABEL', '// Statusbadge', 'globalThis.PLM_ST_LABEL = PLM_ST_LABEL');
+evalPart('js/01-core.js', '// Druckparameter einer Revision', '// ── ITEM TYPE ICONS', 'globalThis.PRINT_PARAMS = PRINT_PARAMS');
+evalPart('js/01-core.js', '// ── ITEM TYPE ICONS', 'function _classColor', '0');
+evalPart('js/02-plm-browse.js', 'function _cleanDsName', 'function renderDatasets', '0');
+const _deliveryRevBadge = evalPart('js/09-production.js', 'const REV_FIXED_LABEL',
+  '// Gelieferte Struktur einer Baugruppe', '_deliveryRevBadge');
+const _renderRevisionCompare = evalPart('js/10-documents.js', 'const COMPARE_META_LABEL',
+  '// -- DOKUMENTVORLAGEN', '_renderRevisionCompare');
+
+test('Produktion: Position zeigt automatische, feste und gelieferte Revision', () => {
+  const auto = _deliveryRevBadge({ id: 1, item_id: 5, revision_id: null,
+    effective_rev: { rev: '2', status: 'DFT' }, active_rev: { id: 9, rev: '2' } }, 4, false);
+  assert.match(auto, /rev2/);
+  assert.ok(!auto.includes('🔒'), 'automatisch ohne Schloss');
+  assert.match(auto, /Folgt automatisch/);
+  assert.match(auto, /openDeliveryRevPicker\(1,4\)/);
+
+  const shipped = _deliveryRevBadge({ id: 2, item_id: 5, revision_id: 8, rev_fixed: 'delivery',
+    effective_rev: { rev: '1', status: 'REL' }, active_rev: { id: 9, rev: '2' }, rev_outdated: true,
+    structure: [{ item_id: 6 }, { item_id: 7 }] }, 4, true);
+  assert.match(shipped, /🔒 rev1/);
+  assert.match(shipped, /↑rev2/, 'neuere Revision wird angezeigt');
+  assert.match(shipped, /Geliefert als rev1 \(beim Liefern fixiert\)/);
+  assert.match(shipped, /2 Teile/, 'gelieferte Struktur der Baugruppe');
+
+  assert.strictEqual(_deliveryRevBadge({ id: 3, item_id: null }, 4, false), '', 'ohne Item kein Kennzeichen');
+  assert.match(_deliveryRevBadge({ id: 4, item_id: 5, revision_id: 8, rev_fixed: 'migration',
+    effective_rev: { rev: '1', status: 'DFT' } }, 4, true), /ermittelt/);
+});
+
+test('Revisionsvergleich: Änderungen werden markiert, Gleiches lässt sich ausblenden', () => {
+  const c = {
+    item: { item_type: 'asm' },
+    a: { rev: '1', status: 'REL', created_at: '2026-10-01', delivered: ['LS-2026-0001'] },
+    b: { rev: '2', status: 'DFT', created_at: '2026-10-10', delivered: [] },
+    meta: [{ field: 'status', a: 'REL', b: 'DFT', changed: true }],
+    print_settings: [
+      { field: 'layer_height', a: 0.2, b: '0.2', changed: false },
+      { field: 'material', a: 'PLA', b: 'PETG', changed: true },
+    ],
+    bom: [
+      { child_item_id: 3, item_number: 'X-prt-001', name: 'Halter', item_type: 'prt',
+        a: { quantity: 2, unit: 'Stk' }, b: { quantity: 3, unit: 'Stk' }, change: 'changed', qty_changed: true },
+      { child_item_id: 4, item_number: 'X-prt-002', name: 'Clip', item_type: 'prt',
+        a: null, b: { quantity: 1, unit: 'Stk', pinned_rev: '3' }, change: 'added' },
+    ],
+    bom_std: [],
+    datasets: [{ ds_type: 'CAD', name: 'x_rev2.stl', change: 'same', content: 'identical',
+      a: { original_name: 'x_rev1.stl', file_size: 10, version: '1' }, b: { original_name: 'x_rev2.stl', file_size: 10, version: '1' } }],
+    summary: { meta: 1, print_settings: 1, bom: 2, bom_std: 0, datasets: 0 },
+  };
+  const only = _renderRevisionCompare(c, true);
+  assert.match(only, /4 Unterschiede von rev1 nach rev2/);
+  assert.match(only, /Material/);
+  assert.match(only, /PETG/);
+  assert.ok(!only.includes('Schichthöhe'), 'unveränderte Parameter ausgeblendet');
+  assert.match(only, />neu</);
+  assert.match(only, />geändert</);
+  assert.match(only, /Menge/, 'Art der Änderung steht dabei');
+  assert.match(only, /🔒rev3/, 'fixierte Revision in der Stückliste');
+  assert.match(only, /🚚/, 'gelieferte Revision gekennzeichnet');
+
+  const full = _renderRevisionCompare(c, false);
+  assert.match(full, /Schichthöhe/, 'Bezeichnung wie im Datenblatt');
+  assert.match(full, /Inhalt gleich/);
+  for (const h of [only, full]) assert.ok(!h.includes('undefined') && !h.includes('NaN'));
 });

@@ -1,4 +1,4 @@
-// 11-time-checkout.js — Zeiterfassung (Auftrag + Artikel) und Checkout
+// 11-time-checkout.js — Zeiterfassung (Auftrag + Item) und Checkout
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── ZEITERFASSUNG ─────────────────────────────────────────────
@@ -107,7 +107,7 @@ async function loadWhereUsed(itemId) {
   if (!el) return;
   const rows = await api(`/api/items/${itemId}/where-used`).catch(() => []);
   if (!rows.length) {
-    el.innerHTML = '<div style="color:var(--t3);font-size:13px;padding:8px 0">Dieses Teil wird in keiner Baugruppe verwendet.</div>';
+    el.innerHTML = '<div style="color:var(--t3);font-size:13px;padding:8px 0">Dieses Item wird in keiner Baugruppe verwendet.</div>';
     return;
   }
 
@@ -158,30 +158,34 @@ async function loadWhereUsed(itemId) {
 async function loadErpUsage(itemId) {
   const el = document.getElementById('it-erp-list');
   if (!el) return;
-  const { orders, quotes, deliveries } = await api(`/api/items/${itemId}/erp-usage`).catch(() => ({ orders:[], quotes:[], deliveries:[] }));
+  const { orders, deliveries, via_assembly } = await api(`/api/items/${itemId}/erp-usage`)
+    .catch(() => ({ orders: [], deliveries: [], via_assembly: [] }));
 
-  const oSt = { DRAFT:'st-DFT', CONFIRMED:'st-REV', DELIVERED:'st-REL', INVOICED:'st-ECO', CANCELLED:'st-OBS' };
-  const qSt = { DRAFT:'st-DFT', SENT:'st-REV', ACCEPTED:'st-REL', DECLINED:'st-OBS' };
-  const dSt = { DRAFT:'st-DFT', READY:'st-REV', DELIVERED:'st-REL' };
-  const oLbl = { DRAFT:'Entwurf', CONFIRMED:'Bestätigt', DELIVERED:'Geliefert', INVOICED:'Fakturiert', CANCELLED:'Storniert' };
-  const qLbl = { DRAFT:'Entwurf', SENT:'Versendet', ACCEPTED:'Akzeptiert', DECLINED:'Abgelehnt' };
-  const dLbl = { DRAFT:'Entwurf', READY:'Bereit', DELIVERED:'Geliefert' };
-
-  const row = (label, id, num, title, status, stMap, lblMap, date, qty, unit, price, cb) =>
+  // Angebote sind Aufträge in der Phase „Angebot" — Status und Wörter kommen
+  // aus den zentralen Tabellen in 01-core.js
+  const row = (label, num, title, badge, date, qty, unit, price, cb, extra = '') =>
     `<div onclick="${cb}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
       <span style="font-size:10px;color:var(--t4);min-width:44px">${label}</span>
       <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(num)}</span>
       <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title||'—')}</span>
+      ${extra}
       <span style="font-family:var(--mono);font-size:12px;color:var(--t3);flex-shrink:0">${fmtN(qty,0)} ${esc(unit||'Stk')}</span>
       ${price != null ? `<span style="font-family:var(--mono);font-size:12px;color:var(--t2);flex-shrink:0">${fmtCHF(price)}</span>` : ''}
-      <span class="status ${stMap[status]||'st-DFT'}" style="font-size:11px;flex-shrink:0">${lblMap[status]||status}</span>
+      ${badge}
       ${date ? `<span style="font-size:11px;color:var(--t4);flex-shrink:0">${fmtD(date)}</span>` : ''}
     </div>`;
 
-  const none = '<div style="color:var(--t4);font-size:13px;padding:4px 0">—</div>';
+  // Welcher Stand steckt in diesem Produktionsauftrag? Fixiert = Schloss,
+  // vor der Lieferung automatisch (blass), ↑ = es gibt inzwischen eine neuere
+  const revTag = d => !d.rev ? '' : `<span style="display:inline-flex;align-items:center;gap:3px;flex-shrink:0"
+      title="${d.rev_auto ? 'folgt automatisch der aktiven Revision' : d.status === 'DELIVERED' ? 'gelieferter Stand' : 'fest gewählt'}">
+      <span class="status st-${d.rev_status || 'DFT'}" style="font-size:11px${d.rev_auto ? ';opacity:.7' : ''}">${d.rev_auto ? '' : '🔒 '}rev${esc(d.rev)}</span>
+      ${d.rev_outdated ? '<span style="font-size:10px;font-family:var(--mono);color:var(--amber)">↑</span>' : ''}
+    </span>`;
 
-  const section = (title, items, renderFn) => items.length ? `
+  const section = (title, items, renderFn, hint = '') => items.length ? `
     <div style="font-size:11px;text-transform:uppercase;color:var(--t3);letter-spacing:.06em;margin:12px 0 5px">${title}</div>
+    ${hint ? `<div style="font-size:12px;color:var(--t4);margin:-2px 0 6px">${hint}</div>` : ''}
     <div style="display:flex;flex-direction:column;gap:4px">${items.map(renderFn).join('')}</div>` : '';
 
   const activeOrders = orders.filter(o => ['CONFIRMED','DELIVERED','INVOICED'].includes(o.status));
@@ -193,16 +197,25 @@ async function loadErpUsage(itemId) {
       <span style="font-size:11px;text-transform:uppercase;color:var(--t4);letter-spacing:.06em">Total Aufträge</span>
       <span style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">${fmtCHF(totalRev)}</span>
       <span style="font-size:12px;color:var(--t3)">${fmtN(totalQty,0)} Stk · ${activeOrders.length} Auftrag${activeOrders.length!==1?'e':''}</span>
-      ${orders.length !== activeOrders.length ? `<span style="font-size:11px;color:var(--t4)">(nur bestätigte/gelieferte/fakturierte)</span>` : ''}
+      ${orders.length !== activeOrders.length ? `<span style="font-size:11px;color:var(--t4)">(nur bestätigte, gelieferte und fakturierte)</span>` : ''}
     </div>` : '';
 
+  // Ein Produktionsauftrag kann direkt und als Teil einer Baugruppe auftauchen — einmal zählen
+  const outdated = new Set([...deliveries, ...via_assembly].filter(d => d.status === 'DELIVERED' && d.rev_outdated).map(d => d.id)).size;
   const html = summaryHtml + [
-    section('Aufträge', orders, o => row('AUFTRAG', o.id, o.number, o.title, o.status, oSt, oLbl, o.order_date, o.quantity, o.unit, o.unit_price, `gotoView('orders');openOrderDetail(${o.id})`)),
-    section('Angebote', quotes, q => row('ANGEBOT', q.id, q.number, q.title, q.status, qSt, qLbl, q.quote_date, q.quantity, q.unit, q.unit_price, `gotoView('quotes');openQuoteDetail(${q.id})`)),
-    section('Produktion', deliveries, d => row('PROD', d.id, d.number, d.title, d.status, dSt, dLbl, d.delivery_date, d.quantity, d.unit, null, `gotoView('deliveries');openDeliveryDetail(${d.id})`)),
+    section('Aufträge und Angebote', orders, o => row(o.status === 'QUOTE' ? 'ANGEBOT' : 'AUFTRAG', o.number, o.title,
+      stBadge('order', o.status, 'font-size:11px;flex-shrink:0'), o.order_date, o.quantity, o.unit, o.unit_price,
+      `gotoView('orders');openOrderDetail(${o.id})`)),
+    section('Produktionsaufträge', deliveries, d => row('PROD.', d.number, d.customer_name || d.title,
+      stBadge('delivery', d.status, 'font-size:11px;flex-shrink:0'), d.delivery_date, d.quantity, d.unit, null,
+      `gotoView('deliveries');openDeliveryDetail(${d.id})`, revTag(d)),
+      outdated ? `<span style="color:var(--amber)">↑</span> ${outdated} gelieferte${outdated === 1 ? 'r Produktionsauftrag hat' : ' Produktionsaufträge haben'} einen älteren Stand als die aktuelle Revision` : ''),
+    section('Geliefert als Teil einer Baugruppe', via_assembly, d => row('IN BG', d.number, `${d.via_item_number || ''} · ${d.customer_name || d.title}`,
+      stBadge('delivery', d.status, 'font-size:11px;flex-shrink:0'), d.delivery_date, d.quantity, d.unit, null,
+      `gotoView('deliveries');openDeliveryDetail(${d.id})`, revTag(d))),
   ].join('');
 
-  el.innerHTML = html || '<div style="color:var(--t3);font-size:13px;padding:8px 0">Dieses Teil wurde noch in keinem Auftrag, Angebot oder Produktionsauftrag verwendet.</div>';
+  el.innerHTML = html || '<div style="color:var(--t3);font-size:13px;padding:8px 0">Dieses Item wurde noch in keinem Auftrag, Angebot oder Produktionsauftrag verwendet.</div>';
 }
 
 async function loadItemTimeEntries(itemId) {
@@ -465,7 +478,7 @@ async function showCheckoutList() {
               </div>
               <div style="font-family:var(--mono);font-size:13px;color:var(--t3);margin-bottom:6px">${g.new_files.map(f=>`${esc(f.name)} <span style="color:var(--t4)">[${f.ds_type}]</span>`).join(' · ')}</div>
               <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
-                onclick="importCheckoutFiles(_scanResult.item_files[${gi}])">⬇ Zu Bauteil hinzufügen</button>
+                onclick="importCheckoutFiles(_scanResult.item_files[${gi}])">⬇ Zum Item hinzufügen</button>
             </div>`).join('')}
           ${_scanResult.root_files.map((f, fi) => `
             <div style="background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);padding:10px 12px">
@@ -475,9 +488,9 @@ async function showCheckoutList() {
               </div>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn btn-sm" style="background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)"
-                  onclick="importNewItem(_scanResult.root_files[${fi}])">+ Als neues Bauteil erfassen (mit Datei)</button>
+                  onclick="importNewItem(_scanResult.root_files[${fi}])">+ Als neues Item anlegen (mit Datei)</button>
                 <button class="btn btn-sm btn-ghost"
-                  onclick="attachCheckoutFileToItem(_scanResult.root_files[${fi}])">+ An Bauteil anhängen</button>
+                  onclick="attachCheckoutFileToItem(_scanResult.root_files[${fi}])">+ An Item anhängen</button>
               </div>
             </div>`).join('')}
         </div>
@@ -487,7 +500,7 @@ async function showCheckoutList() {
         <div style="font-size:13px;font-weight:600;color:var(--t3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Aktive Checkouts</div>
         <div style="display:flex;flex-direction:column;gap:6px">
           ${list.map((c, i) => {
-            const dt = new Date(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+            const dt = parseDbDate(c.checked_out).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
             return `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
                 ${_itemChip(c.item_type,18)}
@@ -521,7 +534,7 @@ async function importCheckoutFiles(g) {
     const r = await api('/api/checkout/import', 'POST', { mode: 'item', item_id: g.item_id, folder: g.folder, files });
     await loadCheckouts();
     _showDynModal(null);
-    toast(`${r.count} Datei(en) zu Rev ${r.rev} hinzugefügt`, 'ok');
+    toast(`${r.count} Datei(en) zu rev${r.rev} hinzugefügt`, 'ok');
     if (state.item?.id === g.item_id) renderItemDetail(state.item, state.activeRevId);
     showCheckoutList();
   } catch(e) { toast('Import fehlgeschlagen: ' + (e.message||''), 'err'); }
@@ -538,7 +551,7 @@ async function importNewItem(f) {
 
   _showDynModal(`<div class="modal" style="max-width:420px">
     <div class="modal-head">
-      <div class="modal-title">Neues Bauteil erfassen</div>
+      <div class="modal-title">Neues Item anlegen</div>
       <button class="btn btn-icon btn-ghost" onclick="showCheckoutList()">✕</button>
     </div>
     <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:12px">
@@ -559,12 +572,12 @@ async function importNewItem(f) {
       </div>
       <div>
         <label style="font-size:13px;color:var(--t3);margin-bottom:4px;display:block">Name</label>
-        <input id="imp-name" class="input" style="width:100%" value="${esc(suggestedName)}" placeholder="Bauteilname">
+        <input id="imp-name" class="input" style="width:100%" value="${esc(suggestedName)}" placeholder="Name">
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="showCheckoutList()">Zurück</button>
-      <button class="btn btn-primary" onclick="_doImportNewItem()">Bauteil erstellen</button>
+      <button class="btn btn-primary" onclick="_doImportNewItem()">Item anlegen</button>
     </div>
   </div>`);
 }
@@ -582,7 +595,7 @@ async function _doImportNewItem() {
       new_item: { project_id, item_type, name, file_path: f.path, file_name: f.name, ds_type: f.ds_type }
     });
     await loadCheckouts();
-    toast(`Bauteil ${r.item_number} erstellt`, 'ok');
+    toast(`Item ${r.item_number} angelegt`, 'ok');
     showCheckoutList();
     if (state.project) { const p = await api(`/api/projects/${state.project.id}`); openProjectDetail(p); }
   } catch(e) { toast('Fehler: ' + (e.message||''), 'err'); }
@@ -592,16 +605,16 @@ async function attachCheckoutFileToItem(f) {
   window._atfFile = f;
   _showDynModal(`<div class="modal" style="max-width:480px">
     <div class="modal-head">
-      <div class="modal-title">An Bauteil anhängen</div>
+      <div class="modal-title">An Item anhängen</div>
       <button class="btn btn-icon btn-ghost" onclick="showCheckoutList()">✕</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
       <div style="font-size:13px;color:var(--t3)">
         Datei: <span style="font-family:var(--mono);color:var(--t2)">${esc(f.name)}</span>
       </div>
-      <div class="fg"><label class="fl">Bauteil suchen *</label>
+      <div class="fg"><label class="fl">Item suchen *</label>
         <div style="position:relative">
-          <input class="fi" id="atf-search" placeholder="Teilenummer oder Name…"
+          <input class="fi" id="atf-search" placeholder="Item-Nummer oder Name…"
             oninput="_atfSearch(this.value)" autocomplete="off">
           <div id="atf-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto"></div>
         </div>
@@ -654,7 +667,7 @@ async function _doAttachCheckoutFile() {
   const f = window._atfFile;
   if (!f) { toast('Datei nicht mehr verfügbar', 'err'); return; }
   const itemId = document.getElementById('atf-item-id')?.value;
-  if (!itemId) { toast('Bauteil auswählen', 'err'); return; }
+  if (!itemId) { toast('Item auswählen', 'err'); return; }
   const sep = f.path?.includes('\\') ? '\\' : '/';
   const lastSep = Math.max(f.path?.lastIndexOf('/') ?? -1, f.path?.lastIndexOf('\\') ?? -1);
   const folder = (f.path && lastSep >= 0) ? f.path.substring(0, lastSep) : '.';
@@ -669,7 +682,7 @@ async function _doAttachCheckoutFile() {
       toast('Datei nicht gefunden – Pfad prüfen', 'err');
       return;
     }
-    toast(`${esc(f.name)} angehängt (Rev ${r.rev})`, 'ok');
+    toast(`${esc(f.name)} angehängt (rev${r.rev})`, 'ok');
     await loadCheckouts();
     showCheckoutList();
   } catch(e) {
@@ -681,7 +694,7 @@ async function createNewItemFromCheckout() {
   const projects = await api('/api/projects').catch(() => []);
   _showDynModal(`<div class="modal" style="max-width:420px">
     <div class="modal-head">
-      <div class="modal-title">Neues Bauteil anlegen</div>
+      <div class="modal-title">Neues Item anlegen</div>
       <button class="btn btn-icon btn-ghost" onclick="showCheckoutList()">✕</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
@@ -703,7 +716,7 @@ async function createNewItemFromCheckout() {
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="showCheckoutList()">Zurück</button>
-      <button class="btn btn-primary" onclick="_doCreateNewItemFromCheckout()">Bauteil anlegen</button>
+      <button class="btn btn-primary" onclick="_doCreateNewItemFromCheckout()">Item anlegen</button>
     </div>
   </div>`);
 }

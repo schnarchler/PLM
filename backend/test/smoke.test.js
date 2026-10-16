@@ -151,13 +151,14 @@ test('Automatisches Backup wurde beim Start angelegt', async () => {
   for (let i = 0; i < 30 && !fs.existsSync(path.join(dataDir, 'plm.db')); i++) {
     await new Promise(r => setTimeout(r, 100));
   }
+  // Eigener Port: 3997 gehört workflow.test.js, das parallel laufen kann
   const proc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: '3997' },
+    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: '3994' },
     stdio: 'ignore',
   });
   try {
     for (let i = 0; i < 50; i++) {
-      try { await fetch('http://127.0.0.1:3997/api/stats'); break; }
+      try { await fetch('http://127.0.0.1:3994/api/stats'); break; }
       catch { await new Promise(r => setTimeout(r, 200)); }
     }
     const backupDir = path.join(dataDir, 'backups');

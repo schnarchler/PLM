@@ -8,6 +8,16 @@ const ORDER_ST_MAP   = {QUOTE:'st-DFT',DRAFT:'st-DFT',CONFIRMED:'st-REV',DELIVER
 const ORDER_ST_LABEL = {QUOTE:'Angebot',DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',DECLINED:'Abgelehnt',CANCELLED:'Storniert'};
 const QUOTE_ST_MAP   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
 const QUOTE_ST_LABEL = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
+const DELIVERY_ST_MAP   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
+const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
+// PLM-Status: das Kürzel steht im Badge, die Bezeichnung im Tooltip und im Detail
+const PLM_ST_LABEL = {DFT:'Entwurf',REV:'In Review',REL:'Freigegeben',ECO:'Änderung (ECO)',OBS:'Veraltet'};
+// Statusbadge aus den zentralen Tabellen oben — damit überall dieselben Wörter stehen
+function stBadge(type, status, style = '') {
+  const m = type === 'order' ? ORDER_ST_MAP : type === 'quote' ? QUOTE_ST_MAP : DELIVERY_ST_MAP;
+  const l = type === 'order' ? ORDER_ST_LABEL : type === 'quote' ? QUOTE_ST_LABEL : DELIVERY_ST_LABEL;
+  return `<span class="status ${m[status] || 'st-DFT'}"${style ? ` style="${style}"` : ''}>${l[status] || status}</span>`;
+}
 
 function _stSel(type, id, current) {
   const maps   = {order:ORDER_ST_MAP,   quote:QUOTE_ST_MAP,   delivery:DELIVERY_ST_MAP  };
@@ -38,8 +48,9 @@ async function setDocStatus(type, id, status, el) {
     }
     if (type === 'delivery') {
       if (r.delivery_date && rec) rec.delivery_date = r.delivery_date;
-      // Refresh detail so delivery_date and linked order status update
-      openDeliveryDetail(id);
+      // Detail neu laden (Lieferdatum, fixierte Revisionen) — im Auftrag
+      // bleibt man im Tab „Produktion", statt in die Produktionsliste zu springen
+      if (!refreshOrderProductionIfOpen()) openDeliveryDetail(id);
       // If all deliveries for an order are now delivered, reload orders list
       if (status === 'DELIVERED') { await renderOrders(); }
     }
@@ -109,6 +120,34 @@ function fmtN(v, dec = 2) {
 }
 function rnd5(v) { return Math.floor((parseFloat(v) || 0) * 20) / 20; }
 function fmtCHF(v) { return 'CHF ' + fmtN(rnd5(v)); }
+
+// Druckparameter einer Revision: eine Tabelle für Datenblatt und
+// Revisionsvergleich, damit beide dieselben Wörter und Einheiten zeigen.
+// Die ersten zwölf erscheinen im Datenblatt.
+const PRINT_PARAMS = [
+  ['nozzle',                'Düse',            v => v + ' mm'],
+  ['layer_height',          'Schichthöhe',     v => fmtN(v, 2) + ' mm'],
+  ['material',              'Material'],
+  ['color',                 'Farbe'],
+  ['infill',                'Füllung',         v => v + ' %'],
+  ['supports',              'Stützen',         v => Number(v) ? 'ja' : 'nein'],
+  ['print_temp',            'Düsentemperatur', v => v + ' °C'],
+  ['bed_temp',              'Betttemperatur',  v => v + ' °C'],
+  ['printer',               'Drucker'],
+  ['part_weight',           'Teilgewicht',     v => fmtN(v, 1) + ' g'],
+  ['filament_weight_total', 'Filamentgewicht', v => fmtN(v, 1) + ' g'],
+  ['print_duration',        'Druckdauer',      v => _fmtHours(v)],
+  ['filament_price_kg',     'Filamentpreis',   v => fmtN(v, 2) + ' CHF/kg'],
+  ['printer_cost_hr',       'Druckerkosten',   v => fmtN(v, 2) + ' CHF/h'],
+  ['raw_material_id',       'Rohmaterial'],
+  ['notes',                 'Notizen'],
+];
+function printParamLabel(key) { return PRINT_PARAMS.find(p => p[0] === key)?.[1] || key; }
+function fmtPrintParam(key, v) {
+  if (v === null || v === undefined || v === '') return null;
+  const f = PRINT_PARAMS.find(p => p[0] === key)?.[2];
+  return f ? f(v) : String(v);
+}
 
 // ── ITEM TYPE ICONS ───────────────────────────────────────────
 const _SVG_ASM = '📦';

@@ -33,7 +33,7 @@ Dokument:             0028-doc-001
 
 Aufträge:             AUF-2026-0001
 Angebote:             ANG-2026-0001
-Produktion:           LS-2026-0001
+Produktionsauftrag:   LS-2026-0001
 Einkauf:              EK-2026-0001
 Kunden:               KD-0001
 Lieferanten:          LF-0001
@@ -56,10 +56,11 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 | DFT | Entwurf – in Bearbeitung |
 | REV | In Prüfung |
 | REL | Freigegeben – produktiv |
-| ECO | Engineering Change – ECO-Revision gesperrt, neue DFT wird erstellt |
-| OBS | Obsolete – abgelöst, archiviert |
+| ECO | Änderung (Engineering Change) – Revision gesperrt, neue DFT wird angelegt |
+| OBS | Veraltet – abgelöst, archiviert |
 
-Bei ECO: Dateien der freigegebenen Revision werden in die neue DFT-Revision kopiert.  
+Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in
+die neue DFT-Revision übernommen — genau wie bei „＋ Neue Revision“.  
 Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
 
 **Ohne Freigabe arbeiten:** Unter **Einstellungen → PLM → Freigabe-Workflow** lässt sich
@@ -80,35 +81,39 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - **Projektfarben** – jedem Projekt eine Farbe geben; sie erscheint als Streifen in der
   Liste, färbt die Nummernkachel und markiert das offene Projekt im Brotkrumenpfad
 - Revisionsverwaltung rev1, rev2, … (alle alten Revisionen bleiben erhalten)
-- Freigabe-Workflow: DFT → REV → REL → ECO → neue Rev
+- Freigabe-Workflow: DFT → REV → REL → ECO → neue Revision
 - Stückliste (BOM) pro Revision – mehrere Positionen gleichzeitig hinzufügen (Warenkorb)
 - Normteile in BOM einsetzbar
-- Dateien (Datasets) pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
+- Dateien pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
 - Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar
 - **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
 - **Datenblatt-Tab** – Beschreibung, Quelle, Kennzahlen, Druckparameter, Stücklisten-Kurzfassung,
-  Lagerbestand, freie Notizen, QR-Code der Teilenummer und letzte Änderung auf einen Blick
-- **Mindmap** – Abhängigkeiten als Graph: links die Baugruppen die das Teil verwenden,
-  rechts die Teile aus denen es besteht (siehe unten)
-- **Revisionsstand in der Stückliste** – folgt standardmäßig automatisch der aktuellen
+  Lagerbestand, freie Notizen, QR-Code der Item-Nummer und letzte Änderung auf einen Blick
+- **Mindmap** – Abhängigkeiten als Graph: links die Baugruppen, die das Item verwenden,
+  rechts die Teile, aus denen es besteht (siehe unten)
+- **Revisionsstand in der Stückliste** – folgt standardmässig automatisch der aktuellen
   Revision, pro Position optional fest fixierbar (siehe unten)
+- **Gelieferter Stand** – beim Liefern wird die Revision jeder Position fixiert, bei
+  Baugruppen die ganze Struktur; gelieferte Revisionen sind gesperrt (siehe unten)
+- **Revisionen vergleichen** – zwei Revisionen eines Items gegenüberstellen: Kopfdaten,
+  Druckparameter, Stückliste, Normteile und Dateien (siehe unten)
 - **Freigabe-Workflow abschaltbar** – unter Einstellungen → PLM wählbar zwischen
   Freigabelauf (DFT → REV → REL → ECO) und einfachem Betrieb ohne Freigabe
 - **Druckparameter aus 3MF** – beim Hochladen einer `.3mf` an eine Revision werden
   Schichthöhe, Füllung, Temperaturen, Material und Drucker automatisch übernommen
-- **Klassifizierung automatisch** – neue Teile werden anhand der Quelle als Eigen-
+- **Klassifizierung automatisch** – neue Items werden anhand der Quelle als Eigen-
   oder Kaufteil eingestuft (Vorgaben unter Einstellungen → PLM)
 - **Freie Notizen** pro Item – für alles was nicht in die Beschreibung gehört
-- **Where-Used** – zeigt alle Revisionen der Baugruppen in denen ein Teil verbaut ist,
-  inklusive des Standes auf den die jeweilige Verwendung fixiert ist
+- **Verwendung** – zeigt alle Revisionen der Baugruppen, in denen ein Item verbaut ist,
+  inklusive des Standes, auf den die jeweilige Verwendung fixiert ist
 - **Variantenverwaltung** – Items als Varianten verknüpfen; Navigation zwischen Varianten direkt im Detail
 - **Dokumentvorlagen** – PDF-Vorlagen aus dem Item-Detail: Datenblatt, Stückliste, Prüfprotokoll
-- **Itemvergleich** – zwei Items nebeneinander vergleichen (Metadaten, BOM-Diff, Dateien)
+- **Itemvergleich** – zwei Items nebeneinander vergleichen (Kopfdaten, BOM-Diff, Dateien)
 - **BOM-Import aus STEP** – Stückliste automatisch aus Solid Edge STEP-Export einlesen
 - **Normteilverwaltung** – eigene Datenbank für Normteile (DIN/ISO/EN) mit Dateien
 - Checkout/Check-in Funktion für CAD-Dateien
-- Vollständige Änderungshistorie / Audit-Trail
+- Vollständige **Historie** aller Änderungen (Navigation → Historie, als CSV exportierbar)
 
 ### ERP
 - Kundenverwaltung (KD-0001)
@@ -120,7 +125,7 @@ ECO-Weg steht dort weiterhin zur Verfügung.
   bleiben vollständig nachdruckbar
 - PLM-Items in Positionen verknüpfen
 - Lagerbestandsprüfung beim Abbuchen
-- **Fertigung im Auftrag**: Tab „Fertigung" im Auftragsdetail — Positionen, Rohmaterial,
+- **Produktion im Auftrag**: Tab „Produktion" im Auftragsdetail — Positionen, Rohmaterial,
   Druckparameter, Lieferschein und Status ohne Wechsel in die Produktionsliste
 - **Status läuft mit**: Produktionsauftrag erzeugen bestätigt den Auftrag, der letzte
   gelieferte Produktionsauftrag setzt ihn auf „Geliefert", nach dem Rechnungsdruck
@@ -144,17 +149,17 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - **Material** – Bauteilgewicht × Rohmaterialpreis/Gewicht (Lot-spezifisch)
 - **Arbeitszeit** – geschätzte Stunden × Stundenansatz
 - **Druckzeit** – Druckstunden × Drucker CHF/h
-- **Aus BOM** – Button „📦 Aus BOM kalkullieren" expandiert eine Baugruppe in Einzelpositionen
+- **Aus BOM** – Button „📦 Aus BOM kalkulieren" expandiert eine Baugruppe in Einzelpositionen
 
 ### Rohmaterial
 - Eigene Verwaltung mit Materialtyp, Farbe, Abmessungen, Gewicht, Druckparametern
-- Lot-Tracking: jede Einbuchung mit Lotnummer und Einkaufspreis
+- Lot-Tracking: jede Einbuchung mit Lot-Nr. und Einkaufspreis
 - Remaining-Qty pro Lot, aufgebrauchte Lots durchgestrichen/ausgeblendet
 - Bei Auswahl in Produktion: Drucktemperatur und Betttemperatur automatisch übernommen
 
 ### Normteile
 - Katalog für genormte Bauteile (DIN, ISO, EN, …)
-- Auto-Bezeichnung aus Norm + Nummer + Größe + Material
+- Auto-Bezeichnung aus Norm + Nummer + Grösse + Material
 - Dateien (STEP, PDF, …) pro Normteil hinterlegbar
 - Als BOM-Positionen in Baugruppen einsetzbar
 - **⬇ Auschecken** – alle Normteil-Dateien in festen `normteile/`-Ordner kopieren
@@ -163,27 +168,30 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - Eigenständig oder mit Auftrag verknüpft
 - Rohmaterial pro Position zuweisbar (übernimmt Druckparameter)
 - Druckparameter direkt aus 3MF-Datei auslesen (PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio)
-- **Lieferschein-PDF** mit Positionen, Druckparametern, Unterschriftsfeldern
+- **Lieferschein-PDF** mit Positionen, Revision, Druckparametern, Unterschriftsfeldern
+- **Gelieferter Stand** – jede Position zeigt ihre Revision; beim Liefern wird sie fixiert
 - Belegdruck auf **Pipsta Classic Thermodrucker**
 
 ### Dashboard & Suche
 - Dashboard mit offenen Aufträgen, Angeboten, fälligen Produktionsaufträgen, ablaufenden Angeboten
-- Globale Suche (`Ctrl+K`) über Projekte, PLM-Items, Aufträge, Angebote, Produktion, Kunden
-- Suche nach Klassifizierung über Schnellfilter-Chips
-- PLM-Items (PRT/ASM) erscheinen in der Suche zuerst
+- Globale Suche (`Ctrl+K`) über Projekte, PLM-Items, Aufträge und Angebote, Produktionsaufträge,
+  Kunden, Rohmaterial und Dateien — mehrere Wörter müssen alle vorkommen
+- **Filter nach Klassifizierung**: Chips mit Trefferzahl, auch ohne Suchwort (siehe unten)
+- PLM-Items (PRT/ASM) erscheinen in der Suche zuerst, sortiert nach Relevanz
 
 ### Navigation
 - **Ctrl+K** – Suche öffnen
 - **Escape** – Modal / Detail schliessen
 - **Browser-Zurück-Button** – navigiert innerhalb der App
-- **Zuletzt geöffnet** – letzte Bauteile in der Seitenleiste
+- **Zuletzt geöffnet** – zuletzt geöffnete Items und Belege in der Seitenleiste
 
 ### Einstellungen / Admin
 - **Firma** – Name, Adresse, Bankverbindung, Logo
 - **Kalkulation** – Stundenansatz, Maschinenkosten, Standardwerte
 - **3D-Druck** – Drucker, Düsen, Materialprofile
-- **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop)
-- **Daten** – Schriftgrösse, **Design zurücksetzen**, Checkout-Ordner, CAD-Programm, Backup
+- **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items)
+- **Daten** – Schriftgrösse, **Design zurücksetzen**, Checkout-Ordner, CAD-Programm,
+  **Sicherungen anlegen und wiederherstellen**, Export
 - **Admin** – Nummerierungsstruktur, Datensätze löschen
 
 ---
@@ -191,7 +199,7 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 ## Revisionsstand in der Stückliste
 
 Eine Stücklistenposition verweist auf das **Teil**, nicht auf eine feste Revision.
-Standardmäßig zeigt sie deshalb immer den aktuellen Stand: wird das Teil auf rev2
+Standardmässig zeigt sie deshalb immer den aktuellen Stand: wird das Teil auf rev2
 gehoben, ziehen alle Baugruppen automatisch mit. Das ist für die meisten
 Baugruppen richtig und bleibt unverändert.
 
@@ -210,11 +218,69 @@ ist dann bewusst alt, nicht vergessen.
 
 **Typischer Anwendungsfall:** Fahrzeuge oder ausgelieferte Geräte, die als
 Baugruppe (ASM) angelegt sind. Wird ein Bauteil überarbeitet, bleiben die
-Einheiten, die noch nicht umgerüstet sind, auf ihrem Stand. Der Where-Used-Tab
+Einheiten, die noch nicht umgerüstet sind, auf ihrem Stand. Der Tab „Verwendung“
 des Bauteils zeigt dann direkt, welche Einheit auf welchem Stand ist.
+
+Für Lieferungen an Kunden muss man das nicht mehr von Hand machen — siehe
+**Gelieferter Stand**.
 
 Wird eine fixierte Revision gelöscht, fällt die Position automatisch auf
 „Automatisch" zurück — es entstehen keine toten Verweise.
+
+---
+
+## Gelieferter Stand
+
+Eine Produktionsposition, die mit einem Item verknüpft ist, folgt bis zur Lieferung
+der aktiven Revision (blasses Kennzeichen `rev2`). Sobald der Produktionsauftrag auf
+**„Geliefert“** gesetzt wird, hält PLM fest, was tatsächlich beim Kunden ist:
+
+| Was | Wie |
+|---|---|
+| Part | die Revision der Position wird fixiert (`🔒 rev2`) |
+| Baugruppe | zusätzlich die **komplette Struktur** — jedes Unterteil mit seiner damaligen Revision |
+| Gelieferte Revision | gesperrt: keine Datei-, Stücklisten- oder Druckparameter-Änderung, kein Löschen |
+| Item mit gelieferter Revision | nur noch unter **Einstellungen → Admin** löschbar |
+
+Weiterarbeiten geht in einer **neuen Revision** — im Revisionen-Tab erscheint dafür
+„＋ Neue Revision“, auch im Workflow mit Freigabe. Ein Check-in in eine gelieferte
+Revision legt automatisch eine neue an.
+
+- **Vor der Lieferung** lässt sich eine Position über das Kennzeichen von Hand auf eine
+  Revision setzen (z. B. wenn bewusst noch rev1 gedruckt wird).
+- **Nach der Lieferung** zeigt ein Klick auf das Kennzeichen den gelieferten Stand mit
+  der Struktur. Wurde die falsche Revision erfasst, lässt sie sich dort korrigieren.
+- **Status zurück** (z. B. auf „Bereit“): automatisch fixierte Revisionen folgen wieder
+  der aktiven, von Hand gewählte bleiben.
+- Gibt es inzwischen eine neuere Revision, steht `↑rev3` daneben.
+- Item → Tab **Aufträge** zeigt pro Produktionsauftrag den gelieferten Stand, auch für
+  Teile, die als Teil einer Baugruppe geliefert wurden (Abschnitt „Geliefert als Teil
+  einer Baugruppe“). So beantwortet PLM die Frage, welcher Kunde welchen Stand hat.
+- Der Lieferschein druckt die Revision zu jeder Position.
+
+**Bestehende Lieferungen:** Beim ersten Start wird für bereits gelieferte
+Produktionsaufträge die Revision ermittelt, die am Lieferdatum aktiv war. Diese
+Positionen tragen den Hinweis „ermittelt“.
+
+---
+
+## Revisionen vergleichen
+
+Im Revisionen-Tab eines Items mit mehreren Revisionen öffnet
+**„⇄ Revisionen vergleichen“** die Gegenüberstellung. Standard ist die gewählte Revision
+gegen die nächstältere; beide Seiten sind wählbar und tauschbar.
+
+| Bereich | Verglichen wird |
+|---|---|
+| Kopfdaten | Status, Beschreibung, ECO-Grund, Freigabe |
+| Druckparameter | jeder Wert, mit denselben Bezeichnungen wie im Datenblatt |
+| Stückliste | neu, entfernt, Menge geändert, Revisionsfixierung geändert |
+| Normteile | neu, entfernt, Menge geändert |
+| Dateien | über den Namen ohne `_revN` zugeordnet; bei gleicher Grösse entscheidet eine Prüfsumme |
+
+Eine bei ECO oder „Neue Revision“ kopierte Datei gilt so als unverändert.
+„Nur Änderungen“ blendet Gleiches aus. Der Knopf ⇄ in der Titelzeile vergleicht
+weiterhin zwei **verschiedene** Items.
 
 ---
 
@@ -224,17 +290,45 @@ Der ⌗-Knopf in der Titelzeile eines Items (oder im Datenblatt-Tab) öffnet den
 Abhängigkeitsgraphen:
 
 ```
-Baugruppen die es verwenden  ──►  [ Teil ]  ──►  Teile aus denen es besteht
-          (Where-Used)                              (Stückliste)
+Baugruppen, die es verwenden  ──►  [ Item ]  ──►  Teile, aus denen es besteht
+          (Verwendung)                                (Stückliste)
 ```
 
-- **Ziehen** verschiebt, **Mausrad** zoomt, **Klick** öffnet das Teil
+- **Ziehen** verschiebt, **Mausrad** zoomt, **Klick** öffnet das Item
 - Tiefe für beide Richtungen getrennt einstellbar (0–6 Ebenen)
 - Normteile erscheinen als Blätter, Mengen stehen an den Kanten
 - Fest fixierte Positionen zeigen die Revision in Amber; der Graph klappt dann
   die Unterstückliste **dieser** Revision auf, nicht die der aktuellsten
 - Verwendungen, die nur in älteren Revisionen stehen, werden gezählt und
-  in der Fußzeile gemeldet
+  in der Fusszeile gemeldet
+
+---
+
+## Suche und Klassifizierung
+
+Die Suche (`Ctrl+K` oder Navigation → Suche) findet Items, deren Nummer, Name,
+Beschreibung, Notizen oder Klassifizierung **alle** eingegebenen Wörter enthalten:
+„Halter PETG“ findet einen Halter, der in der Beschreibung „PETG“ stehen hat.
+Gross-/Kleinschreibung spielt keine Rolle, auch nicht bei Umlauten.
+Eine exakt eingegebene Item-Nummer steht immer oben.
+
+Die **Chips** über den Ergebnissen sind ein echter Filter:
+
+- Klick auf eine Klassifizierung zeigt nur Items dieser Klassifizierung — auch ganz
+  ohne Suchwort als Liste der Klasse. Zweiter Klick hebt den Filter auf.
+- Die Zahl am Chip gilt für das aktuelle Suchwort; Chips ohne Treffer sind blass.
+- **ohne** zeigt Items, denen noch keine Klassifizierung zugeordnet ist.
+- Gestrichelte Chips sind Werte, die an Items stehen, aber nicht (mehr) in der Liste.
+
+Unter **Einstellungen → PLM** steht bei jeder Klassifizierung, wie viele Items sie
+tragen. Umbenennen überträgt den neuen Namen beim Speichern auf alle Items und auf
+die Standard-Klassifizierung. Beim Entfernen eines benutzten Eintrags fragt PLM, ob
+die Items ihn behalten oder verlieren. Werte, die an Items stehen, aber in der Liste
+fehlen, lassen sich mit „＋ übernehmen“ zurückholen. Schreibweisen wie „ kaufteil “
+werden beim Speichern auf den Listeneintrag „Kaufteil“ gezogen.
+
+Wie sich die Klassifizierung weiter ausbauen liesse, beschreibt
+[KONZEPT-KLASSIFIZIERUNG.md](KONZEPT-KLASSIFIZIERUNG.md).
 
 ---
 
@@ -263,20 +357,20 @@ ja schon. Die alte Angebotstabelle bleibt als Archiv unverändert liegen.
 
 ---
 
-## Fertigung im Auftrag
+## Produktion im Auftrag
 
 Ein Produktionsauftrag bleibt ein eigener Datensatz mit eigener Nummer — Lieferscheine
 und Historie laufen unverändert weiter. Bearbeitet wird er aber im Auftrag:
 
 | Wo | Was |
 |---|---|
-| Auftrag → Tab **Fertigung** | Positionen, Rohmaterial, Druckparameter, Lieferschein, Status |
-| Mehrere Lose | als Unterreiter im selben Tab (Teillieferungen bleiben möglich) |
-| Navigation **Produktion** | zeigt standardmäßig nur **eigenständige** Fertigung ohne Auftrag |
+| Auftrag → Tab **Produktion** | Positionen, Rohmaterial, Druckparameter, Lieferschein, Status |
+| Mehrere Produktionsaufträge | als Unterreiter im selben Tab (Teillieferungen bleiben möglich) |
+| Navigation **Produktion** | zeigt standardmässig nur **eigenständige** Produktionsaufträge ohne Auftrag |
 
-Der Auftrag gilt erst als geliefert, wenn alle seine Lose geliefert sind. Produktions-
-aufträge mit Auftragsbezug tragen in der Produktionsliste die Auftragsnummer und
-springen per Klick direkt in den Fertigung-Tab.
+Der Auftrag gilt erst als geliefert, wenn alle seine Produktionsaufträge geliefert sind.
+Produktionsaufträge mit Auftragsbezug tragen in der Produktionsliste die Auftragsnummer
+und springen per Klick direkt in den Tab „Produktion“ des Auftrags.
 
 ---
 
@@ -291,8 +385,8 @@ Positionen mit zugewiesenem Rohmaterial. Das Gewicht pro Stück kommt in dieser
 Reihenfolge:
 
 1. Filamentgewicht, das an der Produktionsposition erfasst wurde
-2. `filament_weight_total` aus den Druckparametern des verknüpften Teils
-3. hinterlegtes Teilegewicht
+2. `filament_weight_total` aus den Druckparametern des verknüpften Items
+3. hinterlegtes Teilgewicht
 
 Mengen und Lot sind im Dialog korrigierbar; Lots werden nach FIFO vorgeschlagen.
 Erst nach Bestätigung wird gebucht — „Nicht abbuchen" lässt alles unverändert.
@@ -318,12 +412,13 @@ Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis**
 ### Workflow
 
 ```
-1. Bauteil → "⬇ Auschecken"
+1. Item → "⬇ Auschecken"
    → Dateien in <checkout-pfad>/<item-nummer>/ (kein Zeitstempel → Pfad bleibt konstant)
 
 2. In Solid Edge bearbeiten
 
-3. → "⬆ Einchecken" → Ordner wird gelöscht, Changelog-Eintrag
+3. → "⬆ Einchecken" → Ordner wird gelöscht, Eintrag in der Historie
+   (ist die Revision schon geliefert, landen die Dateien in einer neuen Revision)
 
 4. Neue Dateien → PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht
 ```
@@ -364,6 +459,40 @@ Beim Hinzufügen einer Produktionsposition kann eine `.3mf`-Datei hochgeladen we
 
 ---
 
+## Begriffe
+
+Damit Oberfläche, Belege und diese Anleitung dieselbe Sprache sprechen. Schreibweise
+Schweizer Hochdeutsch (ss statt ß).
+
+| Begriff | Bedeutung | Nicht verwenden |
+|---|---|---|
+| **Item** | Oberbegriff für Baugruppe, Bauteil und Dokument im PLM | Artikel, Teil (als Oberbegriff) |
+| **Baugruppe** (ASM) | Item mit BOM | Assembly |
+| **Part** (PRT) | einzelnes Teil; im Fliesstext auch „Bauteil“ | — |
+| **Dokument** (DOC) | Item, das nicht gefertigt wird, z. B. Zeichnung | Dok |
+| **Item-Nummer** | `0028-asm-001-prt-001` | Teilenummer, Artikelnummer |
+| **Revision** | Stand eines Items, geschrieben `rev1`, `rev2` | Rev 1, Version |
+| **BOM** / Stückliste | Positionen einer Baugruppenrevision — „BOM“ in Knöpfen und kurzen Beschriftungen, „Stückliste“ als Abschnitts- und Dokumentname | — |
+| **Datei** | Datei an einer Revision (CAD, PDF, …) | Dataset |
+| **Klassifizierung** | Einordnung eines Items, z. B. Eigenteil, Kaufteil | Klasse, Klassifikation |
+| **Verwendung** | in welchen Baugruppen ein Item steckt | Where-Used |
+| **Historie** | Protokoll aller Änderungen | Changelog |
+| **Status** DFT / REV / REL / ECO / OBS | Entwurf / In Review / Freigegeben / Änderung / Veraltet | Obsolete |
+| **fixiert** | fest auf eine Revision gesetzt (Stückliste, gelieferter Stand) | gepinnt |
+| **Gelieferter Stand** | die beim Liefern fixierten Revisionen eines Produktionsauftrags | — |
+| **Auftrag** | Vorgang mit Phasen Angebot → Bestätigt → Geliefert → Fakturiert | — |
+| **Angebot** | erste Phase eines Auftrags (Status „Angebot“) | eigener Angebotsdatensatz |
+| **Produktionsauftrag** | Fertigung mit Nummer `LS-…`, eigenständig oder im Auftrag (Tab „Produktion“) | Los, Fertigungslos, Lieferung |
+| **Lieferschein** | Ausdruck eines Produktionsauftrags | Druckansicht, Produktionsblatt |
+| **Lagerartikel** | Artikel im Lager | Artikel (allein), Item |
+| **Lot-Nr.** | Charge eines Rohmaterials | LOT, Lotnummer |
+| **Verkaufspreis** (VP) | Preis eines Items | Listenpreis |
+| **Sicherung** | Kopie der Datenbank in `data/backups/` | Backup (in der Oberfläche) |
+| **anlegen** | einen Datensatz neu erfassen | erstellen (für Datensätze) |
+| **erstellen** | ein Dokument oder eine Sicherung erzeugen | generieren |
+
+---
+
 ## Dateistruktur
 
 ```
@@ -374,7 +503,9 @@ PLM/
 │   ├── print_receipt.py   ← Pipsta-Druckskript (Python, ESC/POS)
 │   └── data/              ← automatisch angelegt (nicht ins Git)
 │       ├── plm.db         ← SQLite-Datenbank
-│       └── files/         ← hochgeladene Dateien (UUID-Namen)
+│       ├── files/         ← hochgeladene Dateien (UUID-Namen)
+│       ├── backups/       ← Sicherungen der Datenbank (siehe Datensicherung)
+│       └── papierkorb/    ← gelöschte Dateien, 30 Tage aufbewahrt
 ├── frontend/
 │   └── public/
 │       ├── index.html     ← HTML-Grundstruktur
@@ -400,13 +531,14 @@ cd backend && npm install     # nur nötig wenn Pakete dazugekommen sind
 node server.js
 ```
 
-Datenbank und `plm.config` liegen außerhalb des Repositories und stehen in der
+Datenbank und `plm.config` liegen ausserhalb des Repositories und stehen in der
 `.gitignore` — ein Pull fasst sie nicht an.
 
 Schemaänderungen laufen beim Serverstart automatisch: `initDb()` legt **zuerst**
-eine Tageskopie unter `data/backups/` an, ergänzt dann fehlende Tabellen und
-Spalten und schreibt die Datei zurück. Der Vorgang ist idempotent, ein zweiter
-Start ändert nichts mehr.
+eine Tageskopie unter `data/backups/` an, `applySchema()` ergänzt dann fehlende Tabellen
+und Spalten und schreibt die Datei zurück. Der Vorgang ist idempotent, ein zweiter
+Start ändert nichts mehr. Dasselbe läuft nach dem Wiederherstellen einer Sicherung,
+damit auch ein älterer Stand das aktuelle Schema bekommt.
 
 Neue Einstellungen (Freigabe-Workflow, Standard-Klassifizierung) starten auf den
 bisherigen Werten — es ändert sich nichts, bis du sie umstellst.
@@ -420,14 +552,35 @@ Reihenfolge bleiben dabei erhalten.
 
 ## Datensicherung
 
-**Einstellungen → Daten → Gesamtexport herunterladen** – ZIP mit `plm.db` + `files/`.
+Alles unter **Einstellungen → Daten → Datensicherung**, im laufenden Betrieb — ein
+Neustart ist nicht nötig.
 
-Wiederherstellen: ZIP entpacken → Inhalt in `data/`-Ordner → Server neu starten.
+| Art | Name in `data/backups/` | Aufbewahrung |
+|---|---|---|
+| täglich, beim Serverstart | `plm-JJJJ-MM-TT.db` | die letzten 14 |
+| „💾 Jetzt sichern“ | `plm-JJJJ-MM-TT_HHMMSS-manuell.db` | bis du sie löschst |
+| vor jedem Wiederherstellen | `plm-JJJJ-MM-TT_HHMMSS-vor-wiederherstellung.db` | bis du sie löschst |
 
-**Automatisch:** Bei jedem Serverstart wird eine Tageskopie der Datenbank in
-`data/backups/plm-JJJJ-MM-TT.db` abgelegt (die letzten 14 werden behalten).
-Wiederherstellen: gewünschte Backup-Datei als `plm.db` in den `data/`-Ordner
-kopieren → Server neu starten.
+**Wiederherstellen:**
+
+1. In der Liste bei der gewünschten Sicherung „Wiederherstellen“ klicken. Der Dialog
+   zeigt die Kennzahlen jetzt gegen die Sicherung (Projekte, Items, Aufträge, …).
+2. PLM sichert zuerst den jetzigen Stand („vor Wiederherstellung“) — du kannst also zurück.
+3. Die Datenbank wird getauscht und auf das aktuelle Schema gebracht.
+4. Gelöschte Dateien, auf die die Sicherung noch verweist, holt PLM aus dem
+   **Papierkorb** zurück. Fehlt eine Datei trotzdem, nennt der Abschlussdialog sie.
+
+Über **„⬆ Aus Datei wiederherstellen…“** geht dasselbe mit einer `.db`-Sicherung oder
+einem **Gesamtexport** (`.zip` mit `plm.db` und `files/`). Beim ZIP werden fehlende
+Dateien gleich mit eingespielt; vorhandene Dateien bleiben unberührt.
+
+**Papierkorb:** Gelöschte Dateien (Datei an einer Revision, Projektdokument,
+Normteil-Datei, gelöschtes Item) landen in `data/papierkorb/` und werden nach 30 Tagen
+beim Serverstart endgültig entfernt.
+
+**Export:** **Einstellungen → Daten → Gesamtexport** lädt `plm.db` + `files/` als ZIP;
+„Export mit Klarnamen“ legt die Dateien nach Projekt/Item/Revision ab (zum Lesen,
+nicht zum Wiederherstellen der Dateien).
 
 ---
 
@@ -438,13 +591,16 @@ cd backend
 npm test
 ```
 
-36 Tests in drei Dateien:
+49 Tests in fünf Dateien:
 
 | Datei | Inhalt |
 |---|---|
 | `test/smoke.test.js` | Aufträge, Preis-Sync Auftrag ↔ Produktion, Lagerbuchungen, Backups |
 | `test/workflow.test.js` | Projektfarben, Klassifizierungs-Ableitung, 3MF-Druckparameter, Revisionsfixierung, einfacher Workflow, Normteil-Einkauf, Materialabzug, Angebotsphase, Kundenlöschung |
-| `test/frontend.test.js` | QR-Encoder (gegen die ISO-Referenzwerte), URL-Absicherung, Datenblatt, Stücklisten-Revisionsanzeige, Mindmap-Layout, Workflow-Umschaltung |
+| `test/revisionen.test.js` | gelieferter Stand (Fixieren, Sperre, Lösen, Korrektur, Check-in), Revisionsvergleich, ECO-Übernahme, Suche mit Klassifizierung, Umbenennen von Klassifizierungen |
+| `test/backup.test.js` | Sicherung anlegen, wiederherstellen (Liste, `.db`, ZIP), Papierkorb, Schema-Update älterer Sicherungen |
+| `test/frontend.test.js` | QR-Encoder (gegen die ISO-Referenzwerte), URL-Absicherung, Datenblatt, Stücklisten-Revisionsanzeige, Mindmap-Layout, Workflow-Umschaltung, Revisionskennzeichen in der Produktion, Revisionsvergleich |
 
-Die ersten beiden starten den Server mit einer leeren Wegwerf-Datenbank, der dritte
-prüft reine Funktionen des Frontends ohne Server und ohne Browser.
+Die Server-Tests starten jeweils einen eigenen Server (eigener Port) mit einer leeren
+Wegwerf-Datenbank; `frontend.test.js` prüft reine Funktionen des Frontends ohne Server
+und ohne Browser.

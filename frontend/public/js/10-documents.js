@@ -1,4 +1,4 @@
-// 10-documents.js — Artikelvergleich, Dokumentvorlagen, PDF (Rechnung/Angebot/Lieferschein), Drucken
+// 10-documents.js — Itemvergleich, Revisionsvergleich, Dokumentvorlagen, PDF (Rechnung/Angebot/Lieferschein), Drucken
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // -- ITEMVERGLEICH ---------------------------------------------
@@ -61,7 +61,7 @@ function _renderCompare(a, b) {
       ${metaRow('Name', escHtml(a.name), escHtml(b.name))}
       ${metaRow('Typ', a.item_type.toUpperCase(), b.item_type.toUpperCase())}
       ${metaRow('Projekt', a.project?.number, b.project?.number)}
-      ${metaRow('Klasse', a.classification, b.classification)}
+      ${metaRow('Klassifizierung', a.classification, b.classification)}
       ${metaRow('Gewicht (g)', a.effective_weight_g != null ? fmtN(a.effective_weight_g,1) : null, b.effective_weight_g != null ? fmtN(b.effective_weight_g,1) : null)}
       ${metaRow('Preis (CHF)', a.default_price != null ? fmtN(a.default_price,2) : null, b.default_price != null ? fmtN(b.default_price,2) : null)}
       ${metaRow('Akt. Revision', revA ? 'rev'+revA.rev+' ('+revA.status+')' : null, revB ? 'rev'+revB.rev+' ('+revB.status+')' : null)}
@@ -93,7 +93,7 @@ function _renderCompare(a, b) {
     bomHtml = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:16px 0 6px">Stückliste</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
       <thead><tr>
-        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Teilenummer</th>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Item-Nummer</th>
         <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Name</th>
         <th style="padding:5px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:11px;color:#1d4ed8">Menge A</th>
         <th style="padding:5px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:11px;color:#16a34a">Menge B</th>
@@ -145,6 +145,148 @@ function _renderCompare(a, b) {
   const w = window.open('', '_blank', 'width=1000,height=750');
   w.document.write(html);
   w.document.close();
+}
+
+// -- REVISIONSVERGLEICH ----------------------------------------
+// Zwei Revisionen desselben Items gegenüberstellen: Kopfdaten,
+// Druckparameter, Stückliste, Normteile und Dateien. Die Unterschiede rechnet
+// der Server aus (/api/items/:id/compare), hier stehen sie mit denselben
+// Bezeichnungen wie im Datenblatt (PRINT_PARAMS, PLM_ST_LABEL).
+const COMPARE_META_LABEL = {
+  status: 'Status', description: 'Beschreibung', eco_reason: 'ECO-Grund',
+  released_at: 'Freigegeben am', released_by: 'Freigegeben von',
+};
+const COMPARE_CHANGE = {
+  added:   { label: 'neu',      color: 'var(--green)', bg: 'var(--green-soft)' },
+  removed: { label: 'entfernt', color: 'var(--red)',   bg: 'var(--red-soft)' },
+  changed: { label: 'geändert', color: 'var(--amber)', bg: 'var(--amber-soft)' },
+  same:    { label: 'gleich',   color: 'var(--t4)',    bg: 'transparent' },
+};
+let _cmpState = { itemId: null, onlyChanges: true, cache: {} };
+
+async function openRevisionCompare(itemId, revA, revB) {
+  const item = state.item?.id === itemId ? state.item : await api(`/api/items/${itemId}`).catch(() => null);
+  if (!item) return;
+  const revs = item.revisions || [];   // neueste zuerst
+  if (revs.length < 2) return toast('Dieses Item hat nur eine Revision', 'err');
+  // Standard: gewählte Revision gegen die nächstältere
+  const bId = revB || (revs.some(r => r.id === state.activeRevId) ? state.activeRevId : revs[0].id);
+  const bIdx = revs.findIndex(r => r.id === bId);
+  const aId = revA || (revs[bIdx + 1] || revs[bIdx - 1]).id;
+  _cmpState = { itemId, onlyChanges: _cmpState.onlyChanges, cache: {} };
+  const opts = sel => revs.map(r => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>rev${esc(r.rev)} · ${r.status}${r.delivered?.length ? ' · geliefert' : ''}</option>`).join('');
+
+  _showDynModal(`<div class="modal" style="max-width:920px;width:96vw">
+    <div class="modal-head">
+      <div class="modal-title" style="display:flex;align-items:center;gap:8px;min-width:0">
+        <span>Revisionen vergleichen</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.item_number)} · ${esc(item.name)}</span>
+      </div>
+    </div>
+    <div class="modal-body" style="max-height:72vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <select class="fs" id="cmp-rev-a" style="max-width:230px" onchange="_loadRevisionCompare()" aria-label="Revision A">${opts(aId)}</select>
+        <button class="btn btn-ghost btn-sm" onclick="_swapRevisionCompare()" title="Seiten tauschen">⇄</button>
+        <select class="fs" id="cmp-rev-b" style="max-width:230px" onchange="_loadRevisionCompare()" aria-label="Revision B">${opts(bId)}</select>
+        <label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t2);cursor:pointer">
+          <input type="checkbox" ${_cmpState.onlyChanges ? 'checked' : ''} style="accent-color:var(--blue)"
+            onchange="_cmpState.onlyChanges=this.checked;_loadRevisionCompare()"> Nur Änderungen
+        </label>
+      </div>
+      <div id="cmp-body"><div style="color:var(--t3);font-size:13px">Wird verglichen…</div></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
+    </div>
+  </div>`);
+  _loadRevisionCompare();
+}
+
+function _swapRevisionCompare() {
+  const a = document.getElementById('cmp-rev-a'), b = document.getElementById('cmp-rev-b');
+  if (!a || !b) return;
+  [a.value, b.value] = [b.value, a.value];
+  _loadRevisionCompare();
+}
+
+async function _loadRevisionCompare() {
+  const a = document.getElementById('cmp-rev-a')?.value, b = document.getElementById('cmp-rev-b')?.value;
+  const host = document.getElementById('cmp-body');
+  if (!a || !b || !host) return;
+  if (a === b) { host.innerHTML = '<div style="color:var(--t3);font-size:13px">Zweimal dieselbe Revision gewählt — bitte zwei verschiedene wählen.</div>'; return; }
+  const key = a + ':' + b;
+  try {
+    _cmpState.cache[key] = _cmpState.cache[key] || await api(`/api/items/${_cmpState.itemId}/compare?a=${a}&b=${b}`);
+  } catch { host.innerHTML = '<div style="color:var(--red);font-size:13px">Vergleich fehlgeschlagen.</div>'; return; }
+  host.innerHTML = _renderRevisionCompare(_cmpState.cache[key], _cmpState.onlyChanges);
+}
+
+function _renderRevisionCompare(c, only) {
+  const A = 'rev' + esc(c.a.rev), B = 'rev' + esc(c.b.rev);
+  const none = '<span style="color:var(--t4)">—</span>';
+  const val = v => (v === null || v === undefined || v === '') ? none : esc(v);
+  const chip = ch => {
+    const k = COMPARE_CHANGE[ch] || COMPARE_CHANGE.same;
+    return `<span class="chip" style="color:${k.color};border-color:${k.color}">${k.label}</span>`;
+  };
+  const tr = (change, cells) => `<tr style="background:${(COMPARE_CHANGE[change] || COMPARE_CHANGE.same).bg}">${cells.map(x => `<td style="vertical-align:top">${x}</td>`).join('')}</tr>`;
+  const table = (head, rows) => rows.length
+    ? `<div class="tbl-wrap"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : '';
+  const section = (title, changes, total, body) => `
+    <div class="sep-label" style="margin-top:16px">${title}
+      <span style="margin-left:8px;font-family:var(--mono);font-size:11px;text-transform:none;letter-spacing:0;color:${changes ? 'var(--amber)' : 'var(--t4)'}">${changes ? changes + ' Änderung' + (changes === 1 ? '' : 'en') : 'keine Änderung'}</span>
+    </div>
+    ${body || `<div style="font-size:13px;color:var(--t4);padding:2px 0 6px">${total ? 'Keine Unterschiede.' : 'In beiden Revisionen leer.'}</div>`}`;
+
+  const head = r => `<div style="flex:1;min-width:210px;padding:9px 11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="status st-${r.status}">rev${esc(r.rev)}</span>
+        <span style="font-size:13px;color:var(--t3)">${esc(PLM_ST_LABEL[r.status] || r.status)}</span>
+        ${r.delivered?.length ? `<span title="Geliefert: ${esc(r.delivered.join(', '))}">🚚</span>` : ''}
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-top:4px">angelegt ${fmtDate(r.created_at)}${r.released_at ? ' · freigegeben ' + fmtDate(r.released_at) : ''}</div>
+      ${r.description ? `<div style="font-size:12.5px;color:var(--t2);margin-top:3px">${esc(r.description)}</div>` : ''}
+    </div>`;
+
+  const metaRows = c.meta.filter(m => !only || m.changed).map(m => {
+    const show = v => m.field.endsWith('_at') ? val(v && fmtDate(v)) : m.field === 'status' && v ? `${esc(v)} <span style="color:var(--t3)">${esc(PLM_ST_LABEL[v] || '')}</span>` : val(v);
+    return tr(m.changed ? 'changed' : 'same', [esc(COMPARE_META_LABEL[m.field] || m.field), show(m.a), show(m.b), chip(m.changed ? 'changed' : 'same')]);
+  });
+  const psRows = c.print_settings.filter(p => !only || p.changed).map(p =>
+    tr(p.changed ? 'changed' : 'same', [esc(printParamLabel(p.field)), val(fmtPrintParam(p.field, p.a)), val(fmtPrintParam(p.field, p.b)), chip(p.changed ? 'changed' : 'same')]));
+
+  const qty = s => !s ? none : `${fmtN(s.quantity, 0)} ${esc(s.unit || 'Stk')}`
+    + (s.pinned_rev ? ` <span style="font-size:11px;color:var(--t3)" title="fest auf diese Revision">🔒rev${esc(s.pinned_rev)}</span>` : '');
+  const note = r => r.change !== 'changed' ? '' : ' <span style="font-size:11px;color:var(--t3)">'
+    + [r.qty_changed ? 'Menge' : '', r.rev_changed ? 'Revision' : ''].filter(Boolean).join(', ') + '</span>';
+  const bomRows = c.bom.filter(r => !only || r.change !== 'same').map(r => tr(r.change, [
+    `${_itemChip(r.item_type, 14)} <span style="font-family:var(--mono);color:var(--blue);cursor:pointer" onclick="_hideDynModal();gotoPlmItem(${r.child_item_id})">${esc(r.item_number)}</span>`,
+    esc(r.name), qty(r.a), qty(r.b), chip(r.change) + note(r)]));
+  const stdRows = c.bom_std.filter(r => !only || r.change !== 'same').map(r => tr(r.change, [
+    `<span style="font-family:var(--mono)">${esc(r.designation)}</span>`, esc(r.name || ''), qty(r.a), qty(r.b), chip(r.change)]));
+
+  const file = s => !s ? none : `${esc(_cleanDsName(s.original_name))} <span style="color:var(--t4);font-size:11px;white-space:nowrap">${fmtSize(s.file_size)} · v${esc(s.version || '1')}</span>`;
+  const content = r => r.content === 'identical' ? ' <span style="font-size:11px;color:var(--t4)">Inhalt gleich</span>'
+    : r.content === 'different' ? ' <span style="font-size:11px;color:var(--t3)">Inhalt geändert</span>'
+    : r.content === 'unknown' ? ' <span style="font-size:11px;color:var(--t4)">Inhalt nicht geprüft</span>' : '';
+  const dsRows = c.datasets.filter(r => !only || r.change !== 'same').map(r => tr(r.change, [
+    `<span class="ds-type ${dtClass(r.name, r.ds_type)}">${fileLabel(r.name, r.ds_type)}</span>`, file(r.a), file(r.b), chip(r.change) + content(r)]));
+
+  const total = Object.values(c.summary).reduce((s, n) => s + n, 0);
+  const isAsm = c.item.item_type === 'asm';
+  return `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch">${head(c.a)}<div style="align-self:center;color:var(--t4)">→</div>${head(c.b)}</div>
+    <div style="font-size:13px;margin-top:10px;color:${total ? 'var(--t2)' : 'var(--green)'}">
+      ${total ? `${total} Unterschied${total === 1 ? '' : 'e'} von ${A} nach ${B}` : `${A} und ${B} unterscheiden sich nicht.`}
+    </div>
+    ${section('Kopfdaten', c.summary.meta, c.meta.length, table(['Feld', A, B, ''], metaRows))}
+    ${section('Druckparameter', c.summary.print_settings, c.print_settings.length, table(['Parameter', A, B, ''], psRows))}
+    ${isAsm || c.bom.length ? section('Stückliste', c.summary.bom, c.bom.length, table(['Item', 'Name', A, B, ''], bomRows)) : ''}
+    ${isAsm || c.bom_std.length ? section('Normteile', c.summary.bom_std, c.bom_std.length, table(['Normteil', 'Name', A, B, ''], stdRows)) : ''}
+    ${section('Dateien', c.summary.datasets, c.datasets.length, table(['Typ', A, B, ''], dsRows))}
+    <div style="font-size:12px;color:var(--t4);margin-top:12px">
+      Dateien werden über den Namen ohne „_revN" zugeordnet; bei gleicher Grösse vergleicht PLM den Inhalt.
+    </div>`;
 }
 
 // -- DOKUMENTVORLAGEN ------------------------------------------
@@ -203,7 +345,7 @@ function generateItemTemplate(type) {
     const infoRows = [
       ['Typ', item.item_type.toUpperCase()],
       ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : '—'],
-      ['Klassifikation', item.classification || '—'],
+      ['Klassifizierung', item.classification || '—'],
       ['Gewicht', item.effective_weight_g != null ? fmtN(item.effective_weight_g, 1) + ' g' : '—'],
       ['Verkaufspreis', item.default_price != null ? 'CHF ' + fmtN(item.default_price, 2) : '—'],
       ['Quelle', item.source_url || '—'],
@@ -213,7 +355,7 @@ function generateItemTemplate(type) {
 
     if ((item.revisions||[]).length) {
       body += `<div class="sec">Revisionen</div><table>
-        <thead><tr><th>Rev</th><th>Status</th><th>Beschreibung</th><th>Erstellt</th></tr></thead>
+        <thead><tr><th>Revision</th><th>Status</th><th>Beschreibung</th><th>Angelegt</th></tr></thead>
         <tbody>${item.revisions.map(r=>`<tr>
           <td style="font-family:monospace;font-weight:700">rev${r.rev}</td>
           <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">${r.status}</span></td>
@@ -225,7 +367,7 @@ function generateItemTemplate(type) {
     const allDatasets = (item.revisions||[]).flatMap(r=>(r.datasets||[]).map(d=>({...d, rev:r.rev, revStatus:r.status})));
     if (allDatasets.length) {
       body += `<div class="sec">Dateien</div><table>
-        <thead><tr><th>Rev</th><th>Typ</th><th>Dateiname</th><th>Grösse</th><th>Datum</th></tr></thead>
+        <thead><tr><th>Revision</th><th>Typ</th><th>Dateiname</th><th>Grösse</th><th>Datum</th></tr></thead>
         <tbody>${allDatasets.map(d=>`<tr>
           <td style="font-family:monospace">rev${d.rev}</td>
           <td style="color:#6b7280">${escHtml(d.ds_type||'')}</td>
@@ -237,7 +379,7 @@ function generateItemTemplate(type) {
 
     if ((item.variants||[]).length) {
       body += `<div class="sec">Varianten</div><table>
-        <thead><tr><th>Teilenummer</th><th>Name</th><th>Typ</th></tr></thead>
+        <thead><tr><th>Item-Nummer</th><th>Name</th><th>Typ</th></tr></thead>
         <tbody>${item.variants.map(v=>`<tr>
           <td style="font-family:monospace;color:#1d4ed8">${escHtml(v.item_number)}</td>
           <td>${escHtml(v.name)}</td>
@@ -258,7 +400,7 @@ function generateItemTemplate(type) {
 
     if (bom.length) {
       body += `<div class="sec">Stückliste – Parts</div><table>
-        <thead><tr><th style="width:30px">Pos</th><th>Teilenummer</th><th>Name</th><th>Rev</th><th style="text-align:right">Menge</th><th>Einh.</th><th style="text-align:right">VP (CHF)</th><th style="text-align:right">⏱ Entw.h</th></tr></thead>
+        <thead><tr><th style="width:30px">Pos</th><th>Item-Nummer</th><th>Name</th><th>Revision</th><th style="text-align:right">Menge</th><th>Einh.</th><th style="text-align:right">VP (CHF)</th><th style="text-align:right">⏱ Entw.h</th></tr></thead>
         <tbody>${bom.map((b,i)=>`<tr>
           <td style="color:#9ca3af">${b.position||i+1}</td>
           <td style="font-family:monospace;color:#1d4ed8">${escHtml(b.item_number)}</td>
@@ -304,7 +446,7 @@ function generateItemTemplate(type) {
       <span>Revision: <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
       <span class="badge" style="background:#dbeafe;color:#1d4ed8">${rev?.status||''}</span>
       ${item.effective_weight_g != null ? `<span>Gewicht: <strong>${fmtN(item.effective_weight_g,1)} g</strong></span>` : ''}
-      ${item.classification ? `<span>Klasse: <strong>${escHtml(item.classification)}</strong></span>` : ''}
+      ${item.classification ? `<span>Klassifizierung: <strong>${escHtml(item.classification)}</strong></span>` : ''}
     </div>
     <div class="sec">Prüfpunkte</div>
     <table>
@@ -635,7 +777,7 @@ async function printReceipt(deliveryItemId, mode) {
   }
 }
 
-// ── DELIVERY DOC (Lieferschein / Produktionsblatt) ─────────────
+// ── DELIVERY DOC (Lieferschein eines Produktionsauftrags) ──────
 const SETTINGS_GROUPS_PDF = [
   { label: 'Profil', keys: [
     ['print_settings_id','Druckprofil'], ['printer_settings_id','Drucker'], ['filament_settings_id','Filamentprofil']
@@ -645,21 +787,21 @@ const SETTINGS_GROUPS_PDF = [
     ['perimeters','Perimeter'], ['top_solid_layers','Oben'], ['bottom_solid_layers','Unten'],
     ['spiral_vase','Vase-Modus']
   ]},
-  { label: 'Infill', keys: [
-    ['fill_density','Infill (%)'], ['fill_pattern','Muster'],
+  { label: 'Füllung', keys: [
+    ['fill_density','Füllung (%)'], ['fill_pattern','Muster'],
     ['top_fill_pattern','Oben'], ['bottom_fill_pattern','Unten']
   ]},
-  { label: 'Support', keys: [
+  { label: 'Stützen', keys: [
     ['support_material','Aktiv'], ['support_material_auto','Auto'],
     ['support_material_threshold','Überhang (°)'], ['support_material_pattern','Muster'],
     ['support_material_style','Stil'], ['raft_layers','Raft']
   ]},
   { label: 'Temperatur', keys: [
-    ['temperature','Düse (°C)'], ['first_layer_temperature','Düse 1. Schicht'],
-    ['bed_temperature','Bett (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht']
+    ['temperature','Düsentemperatur (°C)'], ['first_layer_temperature','Düse 1. Schicht'],
+    ['bed_temperature','Betttemperatur (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht']
   ]},
   { label: 'Geschwindigkeit (mm/s)', keys: [
-    ['perimeter_speed','Perimeter'], ['infill_speed','Infill'],
+    ['perimeter_speed','Perimeter'], ['infill_speed','Füllung'],
     ['travel_speed','Travel'], ['first_layer_speed','1. Schicht'], ['bridge_speed','Brücken']
   ]},
   { label: 'Kühlung', keys: [
@@ -719,7 +861,7 @@ async function generateDeliveryDoc(id) {
     return `<div style="page-break-inside:avoid;margin-bottom:24px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
       <div style="background:#1e40af;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px">
         <span style="background:rgba(255,255,255,.2);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${idx+1}</span>
-        ${item.item_number?`<span style="font-family:monospace;font-size:13px;opacity:.8">${escHtml(item.item_number)}</span>`:''}
+        ${item.item_number?`<span style="font-family:monospace;font-size:13px;opacity:.8">${escHtml(item.item_number)}${item.effective_rev ? ' · rev' + escHtml(item.effective_rev.rev) : ''}</span>`:''}
         <span style="font-weight:600;font-size:13px;flex:1">${escHtml(item.description)}</span>
         <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${item.unit}</span>
       </div>

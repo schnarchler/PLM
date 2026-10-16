@@ -276,7 +276,7 @@ async function openQuoteDetail(id) {
       ${hoursSection}
       <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openLineItemModal('quote',${id})">+ Position</button>
-        <button class="btn btn-ghost btn-sm" onclick="openBomQuoteImport(${id})">📦 Aus BOM kalkullieren</button>
+        <button class="btn btn-ghost btn-sm" onclick="openBomQuoteImport(${id})">📦 Aus BOM kalkulieren</button>
       </div>
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px">
         <button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'quote')">📄 Angebot PDF</button>
@@ -516,7 +516,7 @@ async function openBomQuoteImport(quoteId) {
   }
   _showDynModal(`<div class="modal" style="max-width:780px;width:96vw">
     <div class="modal-head">
-      <div class="modal-title">📦 Aus BOM kalkullieren</div>
+      <div class="modal-title">📦 Aus BOM kalkulieren</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -723,7 +723,7 @@ async function _doCalcLiCost() {
         if (matCost > 0) { rows.push({ label: 'Material', val: matCost, detail }); total += matCost; }
       } else {
         const missing = [];
-        if (itemWeight == null) missing.push(`Bauteilgewicht fehlt (direkt am Teil oder über BOM-Teile)`);
+        if (itemWeight == null) missing.push(`Bauteilgewicht fehlt (direkt am Item oder über BOM-Teile)`);
         if (rmWeight <= 0)      missing.push(`Rohmaterialgewicht fehlt (Spool-Gewicht im Rohmaterial eintragen)`);
         rows.push({ label: 'Material', val: null, warn: `⚠ ${missing.join(' · ')}` });
       }
