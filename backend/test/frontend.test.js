@@ -43,6 +43,8 @@ function installGlobals() {
 installGlobals();
 global.API = '';
 evalPart('js/08-ui-api.js', 'function helpTip(', 'function setLeftHeader(', 'globalThis.helpTip = helpTip');
+// Rechte und Kacheln — die Freigabe-Knöpfe fragen canRelease()
+const WHO = evalPart('js/16-benutzer.js', 'const ROLE_LABEL', '// kind:', '({ _whoTiles, currentRole, canRelease, isAdmin })');
 
 // ── QR-Encoder ────────────────────────────────────────────────
 const QR = (0, eval)(read('js/14-qr.js')
@@ -469,4 +471,46 @@ test('Lieferanten: gleiche Karten wie Kunden, mit Kontaktperson, offenen Bestell
   assert.match(card, /4051 Basel/);
   assert.match(card, /openPoModal\(null,\{supplierId:5\}\)/);
   assert.match(PARTNER._partnerCard('supplier', global.state.suppliers[1]), /Noch keine Bestellungen/);
+});
+
+// ── Benutzer ──────────────────────────────────────────────────
+
+test('Benutzer: Kacheln escapen Namen, beim Nachfragen steht die bisherige Person vorne', () => {
+  const users = [{ id: 1, name: 'Anna', role: 'admin', has_pin: true }, { id: 2, name: '<b>Ben</b>', role: 'user' },
+    { id: 3, name: 'Cleo', role: 'superuser' }];
+  const h = WHO._whoTiles(users, 3);
+  assert.ok(!h.includes('<b>Ben'), 'Name escaped');
+  assert.ok(h.indexOf('data-id="3"') < h.indexOf('data-id="1"'), 'bisherige Person zuerst');
+  assert.match(h, /who-tile current" data-id="3"/);
+  assert.match(h, /Admin · PIN/);
+  assert.match(h, /Superuser/);
+  assert.ok(WHO._whoTiles(users, null).indexOf('data-id="1"') < WHO._whoTiles(users, null).indexOf('data-id="3"'),
+    'ohne bisherige Person: Reihenfolge vom Server');
+});
+
+test('Benutzer: allein darf man alles, im Team gilt die Rolle', () => {
+  const was = global.state.session;
+  const as = (mode, role) => { global.state.session = { mode, user: role ? { name: 'X', role } : null }; };
+  try {
+    global.state.session = null;
+    assert.deepStrictEqual([WHO.canRelease(), WHO.isAdmin()], [true, true], 'ohne Personen wie bisher');
+    as('single', 'admin');
+    assert.deepStrictEqual([WHO.canRelease(), WHO.isAdmin()], [true, true]);
+    as('team', 'user');
+    assert.deepStrictEqual([WHO.canRelease(), WHO.isAdmin()], [false, false]);
+    as('team', 'superuser');
+    assert.deepStrictEqual([WHO.canRelease(), WHO.isAdmin()], [true, false]);
+    as('team', 'admin');
+    assert.deepStrictEqual([WHO.canRelease(), WHO.isAdmin()], [true, true]);
+    as('team', null);
+    assert.deepStrictEqual([WHO.canRelease(), WHO.isAdmin()], [false, false], 'niemand gewählt');
+  } finally { global.state.session = was; }
+});
+
+test('Historie: Name der Person steht dabei, escaped', () => {
+  assert.strictEqual(_clUser({}), '', 'ältere Einträge ohne Namen');
+  assert.match(_clUser({ user_name: '<i>x</i>' }), /&lt;i&gt;x&lt;\/i&gt;/);
+  const item = demoItem({ changelog: [{ action: 'Erstellt', details: '', user_name: 'Anna', created_at: '2026-10-16 10:00:00' }] });
+  global.state.item = item;
+  assert.match(renderItemSheet(item, 31), /Erstellt <span class="cl-user">Anna<\/span>/, 'auch unter „Letzte Änderung“');
 });

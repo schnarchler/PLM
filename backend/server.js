@@ -319,6 +319,20 @@ function applySchema() {
     details TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
+  // Wer hat's getan — der Name als Kopie, damit die Historie lesbar bleibt
+  try { db.run('ALTER TABLE changelog ADD COLUMN user_id INTEGER'); } catch {}
+  try { db.run('ALTER TABLE changelog ADD COLUMN user_name TEXT'); } catch {}
+
+  // Personen für die Nachvollziehbarkeit (siehe BENUTZER). Nie gelöscht, nur deaktiviert.
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','superuser','admin')),
+    pin_hash TEXT,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    last_seen_at TEXT
+  )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1363,7 +1377,9 @@ function calcItemCost(itemId, _visited) {
 }
 
 function log(type, id, action, details) {
-  db.run('INSERT INTO changelog (entity_type,entity_id,action,details) VALUES (?,?,?,?)', [type, id, action, details || '']);
+  const u = userContext.getStore();
+  db.run('INSERT INTO changelog (entity_type,entity_id,action,details,user_id,user_name) VALUES (?,?,?,?,?,?)',
+    [type, id, action, details || '', u?.id ?? null, u?.name ?? null]);
   saveDb();
 }
 
@@ -1522,7 +1538,7 @@ const storage = multer.diskStorage({
   }
 });
 // defParamCharset utf8: sonst kommen Umlaute in hochgeladenen Dateinamen als Zeichensalat an
-const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 }, defParamCharset: 'utf8' });
+const upload = _keepUser(multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 }, defParamCharset: 'utf8' }));
 
 // Fremde Webseiten abweisen. Ohne Anmeldung könnte sonst jede Seite, die im
 // Browser auf diesem PC offen ist, per JavaScript Daten lesen, ändern oder
@@ -1541,6 +1557,213 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+
+// ── BENUTZER ──────────────────────────────────────────────────
+// Nachvollziehbarkeit, keine Sicherheit: Wer am PC sitzt, wählt sich aus —
+// ohne Passwort, Admins auf Wunsch mit PIN. Allein (0–1 Personen) gibt es
+// keine Auswahl; die eine Person darf alles und steht in jedem Eintrag. Ab
+// zwei Personen fragt PLM beim Öffnen „Wer ist dran?" und nach einer Pause
+// bei der nächsten Änderung noch einmal kurz nach. Die Sitzungen liegen nur
+// im Speicher: Die Auswahl gilt, bis der Browser schliesst oder PLM endet.
+// Rollen: user ändert, superuser gibt zusätzlich frei, admin darf alles.
+const { AsyncLocalStorage } = require('node:async_hooks');
+const userContext = new AsyncLocalStorage();   // Person der laufenden Anfrage, für log()
+const ROLES = ['user', 'superuser', 'admin'];
+const ROLE_RANK = { user: 1, superuser: 2, admin: 3 };
+const ROLE_LABEL = { user: 'User', superuser: 'Superuser', admin: 'Admin' };
+const sessions = new Map();                    // Token → { userId, lastActivity }
+const sessionCookie = () => 'plm_user_' + PORT; // Cookies kennen keinen Port
+
+function activeUsers() {
+  return all(`SELECT id, name, role, pin_hash, last_seen_at FROM users WHERE active=1
+    ORDER BY COALESCE(last_seen_at,'') DESC, name COLLATE NOCASE`);
+}
+const publicUser = u => u && ({ id: u.id, name: u.name, role: u.role, has_pin: !!u.pin_hash });
+const userMode = users => users.length === 0 ? 'none' : users.length === 1 ? 'single' : 'team';
+function idleMinutes() {
+  const v = parseFloat(getSetting('user_idle_minutes', '30'));
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+function cookieOf(req, name) {
+  for (const part of String(req.headers.cookie || '').split(/;\s*/)) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i) === name) return part.slice(i + 1);
+  }
+  return null;
+}
+
+// Wer ist bei dieser Anfrage dran? Allein ist die eine Person Admin.
+function resolveUser(req, users = activeUsers()) {
+  const mode = userMode(users);
+  if (mode === 'none') return { mode, user: null, session: null };
+  if (mode === 'single') return { mode, user: { ...publicUser(users[0]), role: 'admin' }, session: null };
+  const token = cookieOf(req, sessionCookie());
+  const session = token ? sessions.get(token) : null;
+  const u = session && users.find(x => x.id === session.userId);
+  return { mode, user: u ? publicUser(u) : null, session: u ? session : null };
+}
+
+function startSession(req, res, userId) {
+  const old = cookieOf(req, sessionCookie());
+  if (old) sessions.delete(old);
+  const token = crypto.randomBytes(24).toString('hex');
+  sessions.set(token, { userId, lastActivity: Date.now() });
+  res.setHeader('Set-Cookie', `${sessionCookie()}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+}
+function endSessionsOf(userId) {
+  for (const [token, s] of sessions) if (s.userId === userId) sessions.delete(token);
+}
+
+function hashPin(pin) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return salt + '$' + crypto.scryptSync(pin, salt, 32).toString('hex');
+}
+function checkPin(pin, stored) {
+  const [salt, hash] = String(stored).split('$');
+  const got = crypto.scryptSync(pin, salt, 32);
+  const want = Buffer.from(hash || '', 'hex');
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+const validPin = pin => /^.{4,12}$/.test(String(pin));
+
+// Was braucht eine Anfrage? null = niemand muss gewählt sein
+// Diese Anfragen ändern nichts an den Daten
+const NO_CHANGE = [/^(POST|DELETE) \/api\/session$/, /^POST \/api\/shutdown$/, /^POST \/api\/parse-(3mf|step-bom)$/,
+  /^POST \/api\/print-(receipt|receipt-delivery|label)$/, /^POST \/api\/launch-cad$/, /^POST \/api\/checkout\/open$/,
+  /^POST \/api\/datasets\/\d+\/open-in-slicer$/];
+// Einstellungen, die jede Person für sich ändern darf
+const PERSONAL_SETTINGS = ['font_scale'];
+const ADMIN_ONLY = [
+  /^PUT \/api\/settings$/,
+  /^(POST|PUT) \/api\/users(\/\d+)?$/,
+  /^(PUT|POST) \/api\/data-path(\/move)?$/,
+  /^POST \/api\/backups\/(restore-upload|[^/]+\/restore)$/, /^DELETE \/api\/backups\/[^/]+$/,
+  /^PUT \/api\/counters$/, /^POST \/api\/classifications\/rename$/,
+  /^(POST|PUT|DELETE) \/api\/(printers|nozzles|material-presets)(\/\d+)?$/,
+  /^DELETE \/api\/(projects|items|customers|suppliers)\/\d+$/,
+];
+function requiredRole(req) {
+  const key = req.method + ' ' + req.path;
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || NO_CHANGE.some(r => r.test(key))) return null;
+  if (key === 'PUT /api/settings' && Object.keys(req.body || {}).every(k => PERSONAL_SETTINGS.includes(k))) return 'user';
+  if (ADMIN_ONLY.some(r => r.test(key))) return 'admin';
+  if (/^PUT \/api\/revisions\/\d+\/status$/.test(key) && ['REL', 'OBS'].includes(req.body?.status)) return 'superuser';
+  return 'user';
+}
+const ROLE_ERROR = { superuser: 'Freigeben dürfen nur Superuser und Admins.', admin: 'Das dürfen nur Admins.' };
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  const { mode, user, session } = resolveUser(req);
+  req.plmUser = user;
+  const need = requiredRole(req);
+  if (need && mode === 'team') {
+    if (!user) return res.status(401).json({ error: 'Bitte zuerst wählen, wer dran ist', need_user: true });
+    const idle = idleMinutes();
+    if (idle && Date.now() - session.lastActivity > idle * 60000) {
+      return res.status(428).json({ error: `Weiter als ${user.name}?`, confirm_user: true, user });
+    }
+    if (ROLE_RANK[user.role] < ROLE_RANK[need]) return res.status(403).json({ error: ROLE_ERROR[need] });
+  }
+  if (session) session.lastActivity = Date.now();
+  userContext.run(user, next);
+});
+
+function sessionInfo(user, users = activeUsers()) {
+  return { mode: userMode(users), user, users: users.map(publicUser), idle_minutes: idleMinutes(), roles: ROLE_LABEL };
+}
+app.get('/api/session', (req, res) => {
+  const users = activeUsers();
+  res.json(sessionInfo(resolveUser(req, users).user, users));
+});
+app.post('/api/session', (req, res) => {
+  const users = activeUsers();
+  if (userMode(users) !== 'team') return res.json(sessionInfo(resolveUser(req, users).user, users));
+  const u = users.find(x => x.id === Number(req.body?.user_id));
+  if (!u) return res.status(400).json({ error: 'Diese Person gibt es nicht mehr' });
+  // Die PIN schützt den Wechsel zu einem Admin — wer nach einer Pause nur weitermacht, braucht sie nicht
+  const continues = resolveUser(req, users).user?.id === u.id;
+  if (u.pin_hash && !continues && !checkPin(String(req.body?.pin ?? ''), u.pin_hash)) {
+    return res.status(403).json({ error: 'PIN stimmt nicht', pin_required: true });
+  }
+  startSession(req, res, u.id);
+  run("UPDATE users SET last_seen_at=datetime('now') WHERE id=?", [u.id]);
+  saveDb();
+  res.json(sessionInfo(publicUser(u)));
+});
+app.delete('/api/session', (req, res) => {
+  const token = cookieOf(req, sessionCookie());
+  if (token) sessions.delete(token);
+  res.setHeader('Set-Cookie', `${sessionCookie()}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
+  res.json({ ok: true });
+});
+
+app.get('/api/users', (req, res) => {
+  res.json(all(`SELECT id, name, role, active, created_at, last_seen_at, pin_hash IS NOT NULL AS has_pin
+    FROM users ORDER BY active DESC, name COLLATE NOCASE`));
+});
+const cleanName = n => String(n ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+const nameTaken = (name, exceptId) => all('SELECT id, name FROM users WHERE active=1')
+  .some(u => u.id !== exceptId && u.name.toLowerCase() === name.toLowerCase());
+
+app.post('/api/users', (req, res) => {
+  const name = cleanName(req.body?.name);
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
+  if (nameTaken(name)) return res.status(400).json({ error: `„${name}" gibt es schon` });
+  const before = activeUsers();
+  // Die erste Person ist allein und darf alles
+  const role = before.length === 0 ? 'admin' : (ROLES.includes(req.body?.role) ? req.body.role : 'user');
+  const pin = req.body?.pin ? String(req.body.pin) : '';
+  if (pin && !validPin(pin)) return res.status(400).json({ error: 'Die PIN braucht 4 bis 12 Zeichen' });
+  const id = runGetId('INSERT INTO users (name, role, pin_hash) VALUES (?,?,?)',
+    [name, role, role === 'admin' && pin ? hashPin(pin) : null]);
+  log('user', id, 'Person angelegt', `${name} (${ROLE_LABEL[role]})`);
+  // Aus „allein" wird „Team": Die bisherige Person bleibt an diesem Gerät gewählt
+  if (before.length === 1 && !resolveUser(req).session) startSession(req, res, before[0].id);
+  res.json(publicUser(get('SELECT * FROM users WHERE id=?', [id])));
+});
+
+app.put('/api/users/:id', (req, res) => {
+  const u = get('SELECT * FROM users WHERE id=?', [req.params.id]);
+  if (!u) return res.status(404).json({ error: 'Nicht gefunden' });
+  const b = req.body || {};
+  const name = b.name !== undefined ? cleanName(b.name) : u.name;
+  const role = b.role !== undefined ? b.role : u.role;
+  const active = b.active !== undefined ? (b.active ? 1 : 0) : u.active;
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
+  if (!ROLES.includes(role)) return res.status(400).json({ error: 'Unbekannte Rolle' });
+  if (active && nameTaken(name, u.id)) return res.status(400).json({ error: `„${name}" gibt es schon` });
+  const otherAdmins = all("SELECT id FROM users WHERE active=1 AND role='admin' AND id!=?", [u.id]);
+  if (!otherAdmins.length && (role !== 'admin' || !active)) {
+    return res.status(400).json({ error: 'Es braucht mindestens einen aktiven Admin' });
+  }
+  let pinHash = u.pin_hash;
+  if ('pin' in b) {
+    if (b.pin && !validPin(b.pin)) return res.status(400).json({ error: 'Die PIN braucht 4 bis 12 Zeichen' });
+    pinHash = b.pin ? hashPin(String(b.pin)) : null;
+  }
+  if (role !== 'admin') pinHash = null;   // PIN nur für Admins
+  run('UPDATE users SET name=?, role=?, active=?, pin_hash=? WHERE id=?', [name, role, active, pinHash, u.id]);
+  if (!active) endSessionsOf(u.id);
+  const changes = [name !== u.name && `Name ${u.name} → ${name}`, role !== u.role && `Rolle ${ROLE_LABEL[role]}`,
+    active !== u.active && (active ? 'aktiviert' : 'deaktiviert'), pinHash !== u.pin_hash && (pinHash ? 'PIN gesetzt' : 'PIN entfernt')]
+    .filter(Boolean);
+  if (changes.length) log('user', u.id, 'Person geändert', `${name}: ${changes.join(', ')}`);
+  res.json(publicUser(get('SELECT * FROM users WHERE id=?', [u.id])));
+});
+
+// multer ruft next() aus dem Datenstrom des Uploads auf, dort ist die Person
+// der Anfrage nicht mehr bekannt — für die Route wieder herstellen
+function _keepUser(m) {
+  for (const k of ['single', 'array', 'fields', 'none', 'any']) {
+    const orig = m[k].bind(m);
+    m[k] = (...args) => {
+      const mw = orig(...args);
+      return (req, res, next) => mw(req, res, err => userContext.run(req.plmUser ?? null, () => next(err)));
+    };
+  }
+  return m;
+}
 
 // Während einer laufenden Datenverschiebung keine Schreibzugriffe zulassen,
 // sonst landen Änderungen im alten Verzeichnis und gehen verloren.
@@ -2170,7 +2393,7 @@ app.get('/api/items/:id/compare', (req, res) => {
 });
 
 app.put('/api/revisions/:id/status', (req, res) => {
-  const { status, description, eco_reason, released_by } = req.body;
+  const { status, description, eco_reason } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
   if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
 
@@ -2198,7 +2421,7 @@ app.put('/api/revisions/:id/status', (req, res) => {
       }
     }
     run("UPDATE revisions SET status=?,released_at=datetime('now'),released_by=?,description=COALESCE(?,description),updated_at=datetime('now') WHERE id=?",
-      [status, released_by || 'User', description || null, rev.id]);
+      [status, userContext.getStore()?.name || null, description || null, rev.id]);
     run("UPDATE revisions SET status='OBS',updated_at=datetime('now') WHERE item_id=? AND status='REL' AND id!=?",
       [rev.item_id, rev.id]);
   } else if (status === 'ECO') {
@@ -4237,7 +4460,7 @@ app.get('/launcher', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'launche
 // ==============================================================
 // 3MF PARSE
 // ==============================================================
-const uploadMem = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 }, defParamCharset: 'utf8' });
+const uploadMem = _keepUser(multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 }, defParamCharset: 'utf8' }));
 
 app.post('/api/parse-3mf', uploadMem.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
@@ -5321,7 +5544,7 @@ app.post('/api/backups/:name/restore', (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 
-const uploadRestore = multer({ dest: os.tmpdir(), limits: { fileSize: 8 * 1024 * 1024 * 1024 }, defParamCharset: 'utf8' });
+const uploadRestore = _keepUser(multer({ dest: os.tmpdir(), limits: { fileSize: 8 * 1024 * 1024 * 1024 }, defParamCharset: 'utf8' }));
 app.post('/api/backups/restore-upload', uploadRestore.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
   try {

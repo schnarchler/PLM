@@ -251,15 +251,16 @@ async function renderDashboard() {
 // ── HISTORIE ──────────────────────────────────────────────────
 let _changelogRows = [];
 const HISTORY_TYPE_LABEL = { item: 'Item', revision: 'Revision', project: 'Projekt', order: 'Auftrag',
-  delivery: 'Produktionsauftrag', customer: 'Kunde', inventory: 'Lagerartikel', raw_material: 'Rohmaterial', settings: 'Einstellungen' };
+  delivery: 'Produktionsauftrag', customer: 'Kunde', inventory: 'Lagerartikel', raw_material: 'Rohmaterial', settings: 'Einstellungen',
+  user: 'Person' };
 function exportChangelog() {
   if (!_changelogRows.length) { toast('Keine Daten zum Exportieren','warn'); return; }
-  const header = ['Datum','Zeit','Typ','Referenz','Bezeichnung','Aktion','Details'];
+  const header = ['Datum','Zeit','Person','Typ','Referenz','Bezeichnung','Aktion','Details'];
   const csvRows = _changelogRows.map(r => {
     const local = r.created_at ? parseDbDate(r.created_at) : null;
     const date = local ? local.toLocaleDateString('de-CH', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
     const time = local ? local.toLocaleTimeString('de-CH', { hour:'2-digit', minute:'2-digit' }) : '';
-    return [date, time, HISTORY_TYPE_LABEL[r.entity_type] || r.entity_type || '', r.ref||'', r.label||'', r.action||'', r.details||''];
+    return [date, time, r.user_name || '', HISTORY_TYPE_LABEL[r.entity_type] || r.entity_type || '', r.ref||'', r.label||'', r.action||'', r.details||''];
   });
   const csv = [header, ...csvRows].map(row => row.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const a = document.createElement('a');
@@ -317,7 +318,7 @@ async function renderChangelog() {
           <div style="width:18px;text-align:center;flex-shrink:0;font-size:13px;margin-top:1px">${actionIcon(r.action)}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>
+              <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>${_clUser(r)}
               ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${_historyOpen(r)}">${r.item_type ? itemTypeIcon(r.item_type) : ({ project: '📁', order: '📋', delivery: '🚚', customer: '👤' }[r.entity_type] || '')} ${esc(r.ref)}</span>` : ''}
             </div>
             ${r.details ? `<div style="font-size:13px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${esc(r.details)}</div>` : ''}

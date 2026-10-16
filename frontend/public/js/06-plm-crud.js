@@ -864,7 +864,8 @@ function _showReleaseWarning(warnings) {
 
 async function doStatusChange() {
   const revId = V('sm-rev-id'); const status = V('sm-target-status');
-  const body = { status, description: V('sm-desc'), eco_reason: V('sm-eco'), released_by: 'User' };
+  // Wer freigibt, setzt der Server aus der gewählten Person
+  const body = { status, description: V('sm-desc'), eco_reason: V('sm-eco') };
   await api(`/api/revisions/${revId}/status`,'PUT',body);
   toast(`Status → ${status}`,'ok'); closeModal('statusModal');
   if (state.item) {
@@ -933,16 +934,21 @@ async function doUpload() {
   const itemNumber = state.uploadItemNumber || '';
   const rev = state.uploadRev || '';
   document.getElementById('upBtn').textContent = 'Hochladen...';
-  for (let i = 0; i < upFiles.length; i++) {
-    const f = upFiles[i];
-    const newName = itemNumber ? buildUploadName(f.name, itemNumber, rev, i) : f.name;
-    // Rename file by creating a new File object with the new name
-    const renamedFile = itemNumber ? new File([f], newName, { type: f.type }) : f;
-    const fd = new FormData();
-    fd.append('file', renamedFile);
-    fd.append('version', V('up-ver'));
-    fd.append('notes', V('up-notes'));
-    await fetch(API+'/api/revisions/'+revId+'/datasets', { method:'POST', body:fd });
+  try {
+    for (let i = 0; i < upFiles.length; i++) {
+      const f = upFiles[i];
+      const newName = itemNumber ? buildUploadName(f.name, itemNumber, rev, i) : f.name;
+      // Rename file by creating a new File object with the new name
+      const renamedFile = itemNumber ? new File([f], newName, { type: f.type }) : f;
+      const fd = new FormData();
+      fd.append('file', renamedFile);
+      fd.append('version', V('up-ver'));
+      fd.append('notes', V('up-notes'));
+      await apiForm('/api/revisions/'+revId+'/datasets', fd);
+    }
+  } catch {   // apiForm meldet den Fehler
+    document.getElementById('upBtn').textContent = 'Hochladen';
+    return;
   }
   document.getElementById('upBtn').textContent = 'Hochladen';
   toast(upFiles.length+' Datei(en) hochgeladen','ok');
