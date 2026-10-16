@@ -831,7 +831,7 @@ function renderItemSheet(item, activeRevId) {
       </div>
       ${qr ? `<div style="flex-shrink:0;text-align:center">
         <div style="background:#f4f6f8;padding:5px;border-radius:var(--r-sm);line-height:0">${qr}</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--t4);margin-top:4px;letter-spacing:.3px">${esc(item.item_number)}</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--t3);margin-top:5px;letter-spacing:.3px">${esc(item.item_number)}</div>
       </div>` : ''}
     </div>
 
