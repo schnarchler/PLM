@@ -25,14 +25,19 @@ async function saveCustomer() {
   const body={name,email:V('cm-email'),phone:V('cm-phone'),
     street:V('cm-street'),postal_code:V('cm-plz'),city:V('cm-city'),country:V('cm-country')||'Schweiz',
     notes:V('cm-notes')};
-  if (editingCustomerId) await api(`/api/customers/${editingCustomerId}`,'PUT',body);
-  else await api('/api/customers','POST',body);
-  toast('Gespeichert','ok'); closeModal('customerModal'); renderCustomers(); loadStats();
+  const c = editingCustomerId
+    ? await api(`/api/customers/${editingCustomerId}`,'PUT',body)
+    : await api('/api/customers','POST',body);
+  toast('Gespeichert','ok'); closeModal('customerModal');
+  await renderCustomers(); openCustomerDetail(c.id); loadStats();
 }
 
 async function delCustomer(id) {
-  if(!confirm('Kunden löschen?')) return;
-  await api(`/api/customers/${id}`,'DELETE'); toast('Gelöscht','ok'); renderCustomers(); loadStats();
+  const c = (state.customers||[]).find(x => x.id === id);
+  if(!confirm(`Kunde ${c ? c.number+' '+c.name : ''} löschen?\nBestehende Aufträge behalten den Kundennamen.`)) return;
+  await api(`/api/customers/${id}`,'DELETE'); toast('Gelöscht','ok');
+  if (state.customerDetailId === id) { closeDetail(); state.customerDetailId = null; }
+  renderCustomers(); loadStats();
 }
 
 // ── ORDERS CRUD ───────────────────────────────────────────────
@@ -125,7 +130,8 @@ function getCustBody(pfx) {
   return { customer_id: sel.value || null, customer_name_free: null };
 }
 
-async function openOrderModal(id) {
+// preset: { customerId, status } — z.B. "+ Angebot" direkt aus dem Kunden
+async function openOrderModal(id, preset = {}) {
   editingOrderId=id||null;
   const customers=await api('/api/customers'); state.customers=customers;
   clearOrderCustomer();
@@ -147,7 +153,9 @@ async function openOrderModal(id) {
     document.getElementById('om-title').textContent='Auftrag bearbeiten';
   } else {
     ['om-title-f','om-date','om-delivery','om-notes','om-terms'].forEach(f=>set(f,''));
-    document.getElementById('om-status').value='DRAFT';
+    document.getElementById('om-status').value=preset.status||'DRAFT';
+    const pc = preset.customerId && customers.find(x => x.id === preset.customerId);
+    if (pc) selectOrderCustomer(pc.id, pc.number + ' ' + pc.name);
     set('om-tax', state.settings.default_tax_rate ?? '');
     set('om-disc',0);
     set('om-terms', state.settings.default_payment_terms || '');

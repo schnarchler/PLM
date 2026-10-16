@@ -254,6 +254,38 @@ test('Angebot ist eine Phase des Auftrags', async () => {
   assert.strictEqual(after.items.length, 1, 'Positionen bleiben');
 });
 
+test('Kundenliste zeigt Umsatz, offene Vorgänge und letzte Aktivität', async () => {
+  const k = await api('/api/customers', 'POST', { name: 'Kennzahl GmbH', city: 'Bern' });
+  const mk = async (status, order_date, price, extra = {}) => {
+    const o = await api('/api/orders', 'POST', { title: status, customer_id: k.id, status, order_date, ...extra });
+    await api(`/api/orders/${o.id}/items`, 'POST', { description: 'Teil', quantity: 2, unit: 'Stk', unit_price: price });
+    return o;
+  };
+  await mk('QUOTE', '2026-09-01', 500);
+  await mk('CONFIRMED', '2026-09-10', 100, { discount_pct: 10 });          // 200 − 10 % = 180
+  await mk('INVOICED', '2026-08-01', 50, { include_tax: 1, tax_rate: 8 }); // 100 + 8 % = 108
+  await mk('CANCELLED', '2026-10-01', 1000);
+
+  const row = (await api('/api/customers')).find(c => c.id === k.id);
+  assert.strictEqual(row.order_count, 4);
+  assert.strictEqual(row.open_order_count, 1, 'nur der bestätigte Auftrag ist offen');
+  assert.strictEqual(row.open_quote_count, 1);
+  assert.ok(Math.abs(row.revenue - 288) < 0.001, `Umsatz ohne Angebot und Storno: ${row.revenue}`);
+  assert.strictEqual(row.last_activity, '2026-10-01');
+
+  const detail = await api(`/api/customers/${k.id}`);
+  assert.strictEqual(detail.quotes, undefined, 'Angebote stecken in den Aufträgen');
+  assert.deepStrictEqual(detail.orders.map(o => o.status), ['CANCELLED', 'CONFIRMED', 'QUOTE', 'INVOICED'], 'neueste zuerst');
+  assert.ok(Math.abs(detail.orders.find(o => o.status === 'CONFIRMED').total - 180) < 0.001, 'Total mit Rabatt');
+  assert.ok(Math.abs(detail.revenue - 288) < 0.001);
+
+  const neu = await api('/api/customers', 'POST', { name: 'Neu AG' });
+  const leer = (await api('/api/customers')).find(c => c.id === neu.id);
+  assert.strictEqual(leer.order_count, 0);
+  assert.strictEqual(leer.revenue, 0);
+  assert.strictEqual(leer.last_activity, null);
+});
+
 test('Kunde löschen lässt die Belege druckbar', async () => {
   const k = await api('/api/customers', 'POST', { name: 'Muster AG' });
   const a = await api('/api/orders', 'POST', { title: 'Auftrag A', customer_id: k.id });

@@ -337,3 +337,54 @@ test('Revisionsvergleich: Änderungen werden markiert, Gleiches lässt sich ausb
   assert.match(full, /Inhalt gleich/);
   for (const h of [only, full]) assert.ok(!h.includes('undefined') && !h.includes('NaN'));
 });
+
+const CUST = evalPart('js/05-erp-views.js', '// ── CUSTOMERS', '// Auftragsphasen',
+  '({ _visibleCustomers, _customerCard, _customerTable, filter: _customerFilter, prefs: _customerPrefs })');
+
+test('Kunden: Suche mit mehreren Wörtern, Filter und Sortierung', () => {
+  global.state.customers = [
+    { id: 1, number: 'KD001', name: 'Muster AG', city: 'Zürich', email: 'info@muster.ch', order_count: 3,
+      open_order_count: 1, open_quote_count: 0, revenue: 500, last_activity: '2026-09-01' },
+    { id: 2, number: 'KD002', name: 'Muster GmbH', city: 'Bern', order_count: 0,
+      open_order_count: 0, open_quote_count: 0, revenue: 0, last_activity: null, created_at: '2026-10-01 08:00:00' },
+    { id: 3, number: 'KD010', name: 'Alpha SA', city: 'Genf', order_count: 1,
+      open_order_count: 0, open_quote_count: 1, revenue: 900, last_activity: '2026-07-15' },
+  ];
+  const ids = () => CUST._visibleCustomers().map(c => c.id);
+  Object.assign(CUST.filter, { text: 'muster zürich', show: '' });
+  assert.deepStrictEqual(ids(), [1], 'alle Wörter müssen passen');
+  Object.assign(CUST.filter, { text: '', show: 'open' });
+  assert.deepStrictEqual(ids().sort(), [1, 3], 'offene Aufträge oder Angebote');
+  Object.assign(CUST.filter, { text: '', show: 'none' });
+  assert.deepStrictEqual(ids(), [2]);
+  Object.assign(CUST.filter, { text: '', show: '' });
+  CUST.prefs.sort = 'recent';
+  assert.deepStrictEqual(ids(), [2, 1, 3], 'neuer Kunde ohne Auftrag zählt mit Anlagedatum');
+  CUST.prefs.sort = 'name';
+  assert.deepStrictEqual(ids(), [3, 1, 2]);
+  CUST.prefs.sort = 'revenue';
+  assert.deepStrictEqual(ids(), [3, 1, 2]);
+  CUST.prefs.sort = 'number';
+  assert.deepStrictEqual(ids(), [3, 2, 1], 'KD010 vor KD002');
+});
+
+test('Kunden: Karte zeigt Kontakt, offene Vorgänge und Umsatz, Namen werden escaped', () => {
+  const card = CUST._customerCard({ id: 7, number: 'KD007', name: 'Böse <b>AG</b>', postal_code: '8000', city: 'Zürich',
+    email: 'a@b.ch', phone: '044 123 45 67', order_count: 2, open_order_count: 2, open_quote_count: 1,
+    revenue: 1200, last_activity: '2026-10-01' });
+  assert.ok(!card.includes('<b>AG</b>'), 'kein HTML aus dem Namen');
+  assert.match(card, /title="Böse &lt;b&gt;AG&lt;\/b&gt;"/);
+  assert.match(card, /href="mailto:a@b\.ch"/);
+  assert.match(card, /href="tel:0441234567"/);
+  assert.match(card, /2 offene Aufträge/);
+  assert.match(card, /1 Angebot offen/);
+  assert.match(card, /CHF 1200\.00/);
+  assert.match(card, /8000 Zürich/);
+  assert.match(card, /openOrderModal\(null,\{customerId:7\}\)/, 'Schnellaktion legt Auftrag für den Kunden an');
+
+  const leer = CUST._customerCard({ id: 8, number: 'KD008', name: 'Neu', order_count: 0, open_order_count: 0, open_quote_count: 0, revenue: 0 });
+  assert.match(leer, /Keine Kontaktdaten/);
+  assert.match(leer, /Noch keine Aufträge/);
+  assert.ok(!leer.includes('cust-rev'), 'kein Umsatz ohne Aufträge');
+  assert.match(CUST._customerTable([{ id: 9, number: 'KD009', name: 'X', order_count: 0, revenue: 0 }]), /data-id="9"/);
+});

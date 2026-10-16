@@ -2733,13 +2733,34 @@ app.delete('/api/datasets/:id', (req, res) => {
 // ==============================================================
 // CUSTOMERS
 // ==============================================================
+// Auftragstotal wie auf dem Beleg: Positionen, Gesamtrabatt, MwSt. falls ausgewiesen
+function orderTotal(o, subtotal) {
+  const net = subtotal - subtotal * (o.discount_pct||0) / 100;
+  return net + (o.include_tax ? net*(o.tax_rate||0)/100 : 0);
+}
+// Umsatz zaehlt erst ab Bestaetigung; Angebote, Entwuerfe und Abgelehntes nicht
+const REVENUE_STATUSES = ['CONFIRMED', 'DELIVERED', 'INVOICED'];
+const OPEN_ORDER_STATUSES = ['DRAFT', 'CONFIRMED', 'DELIVERED'];
+
 app.get('/api/customers', (req, res) => {
-  const customers = all(`
-    SELECT c.*, COUNT(o.id) as order_count
-    FROM customers c
-    LEFT JOIN orders o ON o.customer_id = c.id
-    GROUP BY c.id
-    ORDER BY c.number DESC`);
+  const customers = all('SELECT * FROM customers ORDER BY number DESC');
+  const orders = all(`
+    SELECT o.customer_id, o.status, o.discount_pct, o.include_tax, o.tax_rate,
+      COALESCE(o.order_date, substr(o.created_at,1,10)) as activity_date,
+      COALESCE(SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)), 0) as subtotal
+    FROM orders o LEFT JOIN order_items oi ON oi.order_id = o.id
+    WHERE o.customer_id IS NOT NULL GROUP BY o.id`);
+  const byCustomer = {};
+  orders.forEach(o => (byCustomer[o.customer_id] ??= []).push(o));
+  customers.forEach(c => {
+    const list = byCustomer[c.id] || [];
+    c.order_count = list.length;
+    c.open_order_count = list.filter(o => OPEN_ORDER_STATUSES.includes(o.status)).length;
+    c.open_quote_count = list.filter(o => o.status === 'QUOTE').length;
+    c.revenue = list.filter(o => REVENUE_STATUSES.includes(o.status))
+      .reduce((s, o) => s + orderTotal(o, o.subtotal), 0);
+    c.last_activity = list.reduce((m, o) => (o.activity_date > m ? o.activity_date : m), '') || null;
+  });
   res.json(customers);
 });
 
@@ -2756,17 +2777,14 @@ app.get('/api/customers/:id', (req, res) => {
   const c = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'Nicht gefunden' });
 
+  // Angebote sind Auftraege in der Phase QUOTE, darum keine eigene Liste mehr
   c.orders = all(`
-    SELECT o.*, SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total,
+    SELECT o.*, COALESCE(SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)), 0) as subtotal,
       COUNT(oi.id) as item_count
     FROM orders o LEFT JOIN order_items oi ON oi.order_id = o.id
-    WHERE o.customer_id=? GROUP BY o.id ORDER BY o.id DESC`, [c.id]);
-
-  c.quotes = all(`
-    SELECT q.*, SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount_pct,0)/100.0)) as total,
-      COUNT(qi.id) as item_count
-    FROM quotes q LEFT JOIN quote_items qi ON qi.quote_id = q.id
-    WHERE q.customer_id=? GROUP BY q.id ORDER BY q.id DESC`, [c.id]);
+    WHERE o.customer_id=? GROUP BY o.id ORDER BY COALESCE(o.order_date, o.created_at) DESC, o.id DESC`, [c.id]);
+  c.orders.forEach(o => { o.total = orderTotal(o, o.subtotal); });
+  c.revenue = c.orders.filter(o => REVENUE_STATUSES.includes(o.status)).reduce((s, o) => s + o.total, 0);
 
   c.deliveries = all(`
     SELECT d.*, COUNT(di.id) as item_count,
@@ -2819,9 +2837,7 @@ app.get('/api/orders', (req, res) => {
   orders.forEach(o => {
     o.items = itemsByOrder[o.id] || [];
     const sub = o.items.reduce((s,i) => s + i.quantity*i.unit_price*(1-(i.discount_pct||0)/100), 0);
-    const disc = sub * (o.discount_pct||0) / 100;
-    const net = sub - disc;
-    o.computed_total = net + (o.include_tax ? net*(o.tax_rate||0)/100 : 0);
+    o.computed_total = orderTotal(o, sub);
   });
   res.json(orders);
 });

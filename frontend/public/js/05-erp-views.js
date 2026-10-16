@@ -216,137 +216,292 @@ function _renderProfitRows() {
 }
 
 // ── CUSTOMERS ─────────────────────────────────────────────────
-let _customerFilter = { text:'' };
-function _clearCustomerFilter(){_customerFilter={text:''};renderCustomers();}
-async function renderCustomers() {
-  setLeftHeader('Kunden', `<button class="btn btn-primary btn-sm" onclick="openCustomerModal()">+ Kunde</button>`);
-  const customers = await api('/api/customers');
-  state.customers = customers;
-  if (!customers.length) { setLeftBody(`<div class="empty"><div class="empty-icon">👤</div><div class="empty-text">Noch keine Kunden</div></div>`); return; }
-  const hasFilter = !!_customerFilter.text;
-  setLeftBody(`
-    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">
-      <input class="fi" style="flex:1" placeholder="Suchen nach Name, Nummer, E-Mail…" value="${esc(_customerFilter.text||'')}"
-        oninput="_customerFilter.text=this.value;_render_customerRows()">
-      ${hasFilter?`<button class="btn btn-ghost btn-sm" onclick="_clearCustomerFilter()" title="Filter zurücksetzen">✕</button>`:''}
-    </div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Nummer</th><th>Name</th><th>Aufträge</th><th>E-Mail</th><th>Telefon</th><th>Adresse</th><th></th></tr></thead>
-      <tbody id="_customer-tbody"></tbody>
-    </table></div>`);
-  _render_customerRows();
+// Kunden als Karten: Kontakt, offene Vorgaenge und Umsatz auf einen Blick.
+// Die kompakte Liste bleibt als zweite Ansicht; beides merkt sich der Browser.
+const _CUST_PREFS_KEY = 'plm_customer_view';
+let _customerFilter = { text: '', show: '' };
+let _customerPrefs = { view: 'cards', sort: 'recent' };
+try { Object.assign(_customerPrefs, JSON.parse(localStorage.getItem(_CUST_PREFS_KEY) || '{}')); } catch {}
+function _saveCustomerPrefs() {
+  try { localStorage.setItem(_CUST_PREFS_KEY, JSON.stringify(_customerPrefs)); } catch {}
 }
-function _render_customerRows() {
-  const t = _customerFilter.text.toLowerCase();
-  const rows = (state.customers||[]).filter(c =>
-    !t || c.name.toLowerCase().includes(t) || c.number.toLowerCase().includes(t) ||
-    (c.email||'').toLowerCase().includes(t) || (c.phone||'').toLowerCase().includes(t) ||
-    (c.city||'').toLowerCase().includes(t)
-  );
-  const el = document.getElementById('_customer-tbody');
+function _clearCustomerFilter() { _customerFilter = { text: '', show: '' }; renderCustomers(); }
+function _setCustomerView(v) {
+  _customerPrefs.view = v; _saveCustomerPrefs();
+  setLeftHeader('Kunden', _customerHeaderActions());
+  _renderCustomerRows();
+}
+
+// Initialen mit fester Farbe je Name, damit man Kunden schneller wiedererkennt
+const _CUST_HUES = ['blue', 'green', 'amber', 'purple', 'teal'];
+function _custAvatar(name, size = 38) {
+  const words = String(name || '').trim().split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w));
+  const first = w => [...(w || '')][0] || '';
+  const ini = (words.length > 1 ? first(words[0]) + first(words[1]) : [...(words[0] || '?')].slice(0, 2).join('')).toUpperCase();
+  let h = 0;
+  for (const ch of String(name || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  const hue = _CUST_HUES[h % _CUST_HUES.length];
+  const bg = hue === 'blue' ? 'var(--blue-glow)' : `var(--${hue}-soft)`;
+  return `<span class="cust-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.37)}px;background:${bg};color:var(--${hue})">${esc(ini)}</span>`;
+}
+const _custCityLine = c => [c.postal_code, c.city].filter(Boolean).join(' ');
+const _custTel = phone => String(phone || '').replace(/[^\d+]/g, '');
+const _custMailLink = c => `<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" title="E-Mail schreiben">✉ ${esc(c.email)}</a>`;
+const _custTelLink = c => `<a href="tel:${esc(_custTel(c.phone))}" onclick="event.stopPropagation()" title="Anrufen">☎ ${esc(c.phone)}</a>`;
+
+function _customerHeaderActions() {
+  const v = _customerPrefs.view;
+  const seg = (key, label, title) =>
+    `<button class="${v === key ? 'active' : ''}" onclick="_setCustomerView('${key}')" title="${title}">${label}</button>`;
+  return `<div style="display:flex;gap:8px;align-items:center">
+    <div class="cust-seg">${seg('cards', '▦ Karten', 'Kartenansicht')}${seg('list', '☰ Liste', 'Listenansicht')}</div>
+    <button class="btn btn-primary btn-sm" onclick="openCustomerModal()">+ Kunde</button>
+  </div>`;
+}
+
+async function renderCustomers() {
+  setLeftHeader('Kunden', _customerHeaderActions());
+  state.customers = await api('/api/customers');
+  if (!state.customers.length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">👤</div><div class="empty-text">Noch keine Kunden</div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="openCustomerModal()">+ Ersten Kunden anlegen</button></div>`);
+    return;
+  }
+  const f = _customerFilter;
+  setLeftBody(`
+    <div class="cust-toolbar">
+      <input class="fi" style="flex:1;min-width:200px" placeholder="Suchen nach Name, Ort, E-Mail, Telefon…" value="${esc(f.text)}"
+        oninput="_customerFilter.text=this.value;_renderCustomerRows()">
+      <select class="fs" style="width:auto" title="Filter" onchange="_customerFilter.show=this.value;_renderCustomerRows()">
+        ${_selOpts([['', 'Alle Kunden'], ['open', 'Mit offenen Vorgängen'], ['none', 'Ohne Aufträge']], f.show)}
+      </select>
+      <select class="fs" style="width:auto" title="Sortierung" onchange="_customerPrefs.sort=this.value;_saveCustomerPrefs();_renderCustomerRows()">
+        ${_selOpts([['recent', 'Zuletzt aktiv'], ['name', 'Name A–Z'], ['revenue', 'Umsatz'], ['number', 'Nummer']], _customerPrefs.sort)}
+      </select>
+    </div>
+    <div class="cust-count" id="_customer-count"></div>
+    <div id="_customer-rows"></div>`);
+  _renderCustomerRows();
+}
+
+// Jeder Suchbegriff muss irgendwo vorkommen: "muster zürich" findet die Muster AG in Zürich
+function _visibleCustomers() {
+  const terms = _customerFilter.text.toLowerCase().split(/\s+/).filter(Boolean);
+  const show = _customerFilter.show;
+  const byName = (a, b) => a.name.localeCompare(b.name, 'de-CH', { sensitivity: 'base' });
+  const recent = c => c.last_activity || (c.created_at || '').slice(0, 10);
+  const cmp = {
+    recent:  (a, b) => recent(b).localeCompare(recent(a)),
+    name:    byName,
+    revenue: (a, b) => (b.revenue || 0) - (a.revenue || 0),
+    number:  (a, b) => b.number.localeCompare(a.number, undefined, { numeric: true }),
+  }[_customerPrefs.sort] || byName;
+  return (state.customers || []).filter(c => {
+    const hay = [c.name, c.number, c.email, c.phone, c.street, c.postal_code, c.city, c.country, c.notes]
+      .filter(Boolean).join(' ').toLowerCase();
+    if (!terms.every(t => hay.includes(t))) return false;
+    if (show === 'open' && !(c.open_order_count + c.open_quote_count)) return false;
+    if (show === 'none' && c.order_count) return false;
+    return true;
+  }).sort((a, b) => cmp(a, b) || byName(a, b));
+}
+
+function _renderCustomerRows() {
+  const el = document.getElementById('_customer-rows');
   if (!el) return;
-  el.innerHTML = rows.map(c=>`<tr data-id="${c.id}" onclick="openCustomerDetail(${c.id})">
-    <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${c.number}</td>
-    <td style="font-weight:500">${esc(c.name)}</td>
-    <td style="text-align:center">${c.order_count > 0 ? `<span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:12px;padding:1px 8px;font-family:var(--mono)">${c.order_count}</span>` : '<span style="color:var(--t4)">—</span>'}</td>
-    <td style="color:var(--t2)">${c.email||'—'}</td>
-    <td style="color:var(--t2)">${c.phone||'—'}</td>
-    <td style="color:var(--t3);font-size:13px">${[c.street,c.postal_code&&c.city?c.postal_code+' '+c.city:'',c.country].filter(Boolean).join(', ')||'—'}</td>
-    <td><button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delCustomer(${c.id})">✕</button></td>
-  </tr>`).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--t3)">Keine Treffer</td></tr>';
+  const rows = _visibleCustomers();
+  const total = (state.customers || []).length;
+  document.getElementById('_customer-count').innerHTML = (_customerFilter.text || _customerFilter.show)
+    ? `${rows.length} von ${total} Kunden · <a href="#" onclick="event.preventDefault();_clearCustomerFilter()">Filter zurücksetzen</a>`
+    : `${total} Kunde${total === 1 ? '' : 'n'}`;
+  el.innerHTML = !rows.length
+    ? `<div class="empty" style="padding:40px 20px"><div class="empty-text">Keine Treffer</div></div>`
+    : _customerPrefs.view === 'list'
+      ? _customerTable(rows)
+      : `<div class="cust-grid">${rows.map(_customerCard).join('')}</div>`;
+  if (!document.getElementById('detail-panel')?.classList.contains('hidden')) _markActiveRow(state.customerDetailId);
+}
+
+function _custOpenPills(c, short) {
+  const open = c.open_order_count || 0, quotes = c.open_quote_count || 0;
+  return [
+    open ? `<span class="cust-pill open" title="Offene Aufträge (Entwurf, bestätigt, geliefert)">${open}${short ? '' : open === 1 ? ' offener Auftrag' : ' offene Aufträge'}</span>` : '',
+    quotes ? `<span class="cust-pill quote" title="Offene Angebote">${quotes} ${short ? 'Ang.' : quotes === 1 ? 'Angebot offen' : 'Angebote offen'}</span>` : '',
+  ].join('');
+}
+
+function _customerCard(c) {
+  const contact = [c.email ? _custMailLink(c) : '', c.phone ? _custTelLink(c) : ''].join('');
+  const pills = _custOpenPills(c, false);
+  const meta = c.order_count
+    ? `${c.order_count} Auftr${c.order_count === 1 ? 'ag' : 'äge'}${c.last_activity ? ' · zuletzt ' + fmtD(c.last_activity) : ''}`
+    : 'Noch keine Aufträge';
+  return `<div class="card cust-card" data-id="${c.id}" tabindex="0" onclick="openCustomerDetail(${c.id})"
+      onkeydown="if(event.key==='Enter'&&event.target===this)openCustomerDetail(${c.id})">
+    <button class="btn btn-ghost btn-sm cust-quick" title="Neuen Auftrag für diesen Kunden anlegen"
+      onclick="event.stopPropagation();openOrderModal(null,{customerId:${c.id}})">+ Auftrag</button>
+    <div class="cust-head">
+      ${_custAvatar(c.name)}
+      <div style="min-width:0">
+        <div class="cust-name" title="${esc(c.name)}">${esc(c.name)}</div>
+        <div class="cust-sub"><span class="cust-num">${esc(c.number)}</span>${_custCityLine(c) ? ' · ' + esc(_custCityLine(c)) : ''}</div>
+      </div>
+    </div>
+    ${contact ? `<div class="cust-contact">${contact}</div>` : `<div class="cust-contact cust-muted">Keine Kontaktdaten</div>`}
+    ${pills ? `<div class="cust-pills">${pills}</div>` : ''}
+    <div class="cust-foot">
+      <span class="cust-muted">${meta}</span>
+      ${c.revenue > 0 ? `<span class="cust-rev" title="Umsatz aus bestätigten, gelieferten und fakturierten Aufträgen">${fmtCHF(c.revenue)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function _customerTable(rows) {
+  return `<div class="tbl-wrap"><table class="cust-table">
+    <thead><tr><th>Kunde</th><th>Kontakt</th><th>Offen</th><th style="text-align:right">Umsatz</th></tr></thead>
+    <tbody>${rows.map(c => `<tr data-id="${c.id}" onclick="openCustomerDetail(${c.id})">
+      <td><div class="cust-head" style="max-width:240px">${_custAvatar(c.name, 28)}
+        <div style="min-width:0"><div class="cust-name" style="font-size:13px;font-weight:500" title="${esc(c.name)}">${esc(c.name)}</div>
+        <div class="cust-sub"><span class="cust-num">${esc(c.number)}</span>${_custCityLine(c) ? ' · ' + esc(_custCityLine(c)) : ''}</div></div></div></td>
+      <td><div class="cust-contact" style="max-width:180px">${c.email ? _custMailLink(c) : ''}${c.phone ? _custTelLink(c) : ''}${!c.email && !c.phone ? '<span class="cust-muted">—</span>' : ''}</div></td>
+      <td><div class="cust-pills" style="flex-wrap:nowrap">${_custOpenPills(c, true) || '<span class="cust-muted">—</span>'}</div></td>
+      <td style="text-align:right;white-space:nowrap;font-family:var(--mono)">
+        <div style="color:${c.revenue > 0 ? 'var(--green)' : 'var(--t4)'}">${c.revenue > 0 ? fmtCHF(c.revenue) : '—'}</div>
+        ${c.last_activity ? `<div style="font-size:12px;color:var(--t3);margin-top:2px">${fmtD(c.last_activity)}</div>` : ''}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+// Auftragsphasen in der Reihenfolge des Ablaufs; Angebote sind die erste Phase
+const _CUST_ORDER_GROUPS = [
+  ['Angebote', ['QUOTE']],
+  ['In Arbeit', ['DRAFT', 'CONFIRMED']],
+  ['Geliefert, noch nicht fakturiert', ['DELIVERED']],
+  ['Fakturiert', ['INVOICED']],
+  ['Abgelehnt / Storniert', ['DECLINED', 'CANCELLED']],
+];
+const _CUST_OPEN_STATUSES = ['QUOTE', 'DRAFT', 'CONFIRMED', 'DELIVERED'];
+
+// Aus dem Kunden direkt in den Beleg springen, nicht nur in die Liste
+async function _openFromCustomer(view, id) {
+  await gotoView(view);
+  if (view === 'orders') openOrderDetail(id); else openDeliveryDetail(id);
+}
+
+function _custDocRow(onclick, badge, title, meta, total, count) {
+  return `<div class="cust-row" onclick="${onclick}">
+    ${badge}
+    <div style="min-width:0">
+      <div class="cust-row-title">${esc(title)}</div>
+      <div class="cust-row-meta">${meta}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:var(--mono);font-size:13px">${total}</div>
+      <div class="cust-row-meta">${count} Pos.</div>
+    </div>
+  </div>`;
+}
+function _custOrderRow(o) {
+  const today = new Date().toISOString().slice(0, 10);
+  const validity = o.status === 'QUOTE' && o.valid_until
+    ? (o.valid_until < today ? `<span style="color:var(--red)">abgelaufen ${fmtD(o.valid_until)}</span>` : 'gültig bis ' + fmtD(o.valid_until))
+    : '';
+  const meta = [esc(o.number), o.order_date ? fmtD(o.order_date) : '', validity,
+    o.status !== 'QUOTE' && o.delivery_date ? '📅 ' + fmtD(o.delivery_date) : ''].filter(Boolean).join(' · ');
+  return _custDocRow(`_openFromCustomer('orders',${o.id})`, stBadge('order', o.status), o.title, meta, fmtCHF(o.total || 0), o.item_count);
+}
+function _custDeliveryRow(d) {
+  const meta = [esc(d.number), d.order_number ? 'Auftrag ' + esc(d.order_number) : '',
+    d.delivery_date ? fmtD(d.delivery_date) : ''].filter(Boolean).join(' · ');
+  return _custDocRow(`_openFromCustomer('deliveries',${d.id})`, stBadge('delivery', d.status), d.title, meta,
+    d.total != null ? fmtCHF(d.total) : '—', d.item_count);
+}
+
+async function _copyCustomerAddress(id) {
+  const c = (state.customers || []).find(x => x.id === id) || await api(`/api/customers/${id}`);
+  const text = [c.name, c.street, _custCityLine(c), c.country].filter(Boolean).join('\n');
+  try { await navigator.clipboard.writeText(text); toast('Adresse kopiert', 'ok'); }
+  catch { toast('Kopieren nicht möglich', 'err'); }
 }
 
 async function openCustomerDetail(id) {
   const c = await api(`/api/customers/${id}`);
+  state.customerDetailId = c.id;
   _trackRecent('customer', c.id, c.name, c.number);
   _pushHistory({ view: 'customers', detailType: 'customer', detailId: c.id });
-  const ostLabel = {DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',CANCELLED:'Storniert'};
-  const ostCls   = {DRAFT:'st-DFT',CONFIRMED:'st-REV',DELIVERED:'st-REL',INVOICED:'st-ECO',CANCELLED:'st-OBS'};
-  const qstLabel = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
-  const qstCls   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
-  const dstLabel = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
-  const dstCls   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
-  const fmtChfD  = v => v != null ? fmtCHF(parseFloat(v)) : '—';
-  const empty    = msg => `<div style="color:var(--t3);font-size:13px;padding:6px 0">${msg}</div>`;
 
-  const orderRevTotal  = c.orders.reduce((s,o)  => s + (o.total||0), 0);
-  const delivRevTotal  = c.deliveries.reduce((s,d) => s + (d.total||0), 0);
+  const empty = msg => `<div class="cust-muted" style="font-size:13px;padding:10px 2px">${msg}</div>`;
+  const list = rows => `<div class="cust-list">${rows.join('')}</div>`;
+  const openOrders = c.orders.filter(o => _CUST_OPEN_STATUSES.includes(o.status));
+  const nQuotes = openOrders.filter(o => o.status === 'QUOTE').length;
+  const nOpen = openOrders.length - nQuotes;
+  const lastDate = c.orders.map(o => o.order_date || (o.created_at || '').slice(0, 10)).sort().pop();
+  const addrLines = [c.street, _custCityLine(c), c.country].filter(Boolean);
+  const kpi = (label, val, sub, color) => `<div class="cust-kpi">
+    <div class="ps-label">${label}</div>
+    <div class="cust-kpi-val"${color ? ` style="color:${color}"` : ''}>${val}</div>
+    ${sub ? `<div class="cust-kpi-sub">${sub}</div>` : ''}
+  </div>`;
 
-  document.getElementById('dp-title').innerHTML =
-    `👤 <strong>${esc(c.name)}</strong> <span style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-left:6px">${c.number}</span>`;
+  const others = c.orders.filter(o => !_CUST_ORDER_GROUPS.some(([, s]) => s.includes(o.status)));
+  const groups = [..._CUST_ORDER_GROUPS.map(([label, sts]) => [label, c.orders.filter(o => sts.includes(o.status))]),
+    ['Sonstige', others]]
+    .filter(([, rows]) => rows.length)
+    .map(([label, rows]) => `<div class="sep-label">${label} · ${rows.length}</div>${list(rows.map(_custOrderRow))}`)
+    .join('');
 
+  document.getElementById('dp-title').innerHTML = `${_custAvatar(c.name, 26)} <strong>${esc(c.name)}</strong>
+    <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(c.number)}</span>`;
+
+  const count = n => ` <span class="chip" style="margin-left:5px">${n}</span>`;
   document.getElementById('dp-tabs').innerHTML = `
-    <button class="tab active" onclick="switchTab(this,'cd-orders')">Aufträge <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.orders.length}</span></button>
-    <button class="tab" onclick="switchTab(this,'cd-quotes')">Angebote <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.quotes.length}</span></button>
-    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Produktionsaufträge <span style="background:var(--bg3);border:1px solid var(--line2);border-radius:10px;font-size:13px;padding:1px 6px;margin-left:3px">${c.deliveries.length}</span></button>
-    <button class="tab" onclick="switchTab(this,'cd-info')">Stammdaten</button>`;
-
-  const orderRows = c.orders.length ? c.orders.map(o => `
-    <div onclick="gotoView('orders')" style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <span class="status ${ostCls[o.status]||'st-DFT'}">${ostLabel[o.status]||o.status}</span>
-      <div>
-        <div style="font-weight:500">${esc(o.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:2px">${o.number}${o.order_date?' · '+fmtD(o.order_date):''}${o.delivery_date?' · 📅 '+fmtD(o.delivery_date):''}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-family:var(--mono);font-size:13px">${fmtChfD(o.total)}</div>
-        <div style="font-size:13px;color:var(--t3)">${o.item_count} Pos.</div>
-      </div>
-    </div>`).join('') : empty('Keine Aufträge');
-
-  const quoteRows = c.quotes.length ? c.quotes.map(q => `
-    <div onclick="gotoView('quotes')" style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <span class="status ${qstCls[q.status]||'st-DFT'}">${qstLabel[q.status]||q.status}</span>
-      <div>
-        <div style="font-weight:500">${esc(q.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:2px">${q.number}${q.quote_date?' · '+fmtD(q.quote_date):''}${q.valid_until?' · gültig bis '+fmtD(q.valid_until):''}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-family:var(--mono);font-size:13px">${fmtChfD(q.total)}</div>
-        <div style="font-size:13px;color:var(--t3)">${q.item_count} Pos.</div>
-      </div>
-    </div>`).join('') : empty('Keine Angebote');
-
-  const delivRows = c.deliveries.length ? c.deliveries.map(d => `
-    <div onclick="gotoView('deliveries')" style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <span class="status ${dstCls[d.status]||'st-DFT'}">${dstLabel[d.status]||d.status}</span>
-      <div>
-        <div style="font-weight:500">${esc(d.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:2px">${d.number}${d.order_number?' · Auftrag '+d.order_number:''}${d.delivery_date?' · '+fmtD(d.delivery_date):''}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-family:var(--mono);font-size:13px">${fmtChfD(d.total)}</div>
-        <div style="font-size:13px;color:var(--t3)">${d.item_count} Pos.</div>
-      </div>
-    </div>`).join('') : empty('Keine Produktionsaufträge');
+    <button class="tab active" onclick="switchTab(this,'cd-overview')">Übersicht</button>
+    <button class="tab" onclick="switchTab(this,'cd-orders')">Aufträge${count(c.orders.length)}</button>
+    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Produktion${count(c.deliveries.length)}</button>`;
 
   document.getElementById('dp-body').innerHTML = `
-    <div id="cd-orders">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:13px;color:var(--t3)">
-        <span>${c.orders.length} Aufträge</span>
-        <span style="font-family:var(--mono);color:var(--t1)">Total ${fmtChfD(orderRevTotal)}</span>
+    <div id="cd-overview">
+      <div class="cust-actions">
+        <button class="btn btn-primary btn-sm" onclick="openOrderModal(null,{customerId:${c.id}})">+ Auftrag</button>
+        <button class="btn btn-ghost btn-sm" onclick="openOrderModal(null,{customerId:${c.id},status:'QUOTE'})">+ Angebot</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-ghost btn-sm" onclick="openCustomerModal(${c.id})">✏️ Bearbeiten</button>
+        <button class="btn btn-red btn-sm" onclick="delCustomer(${c.id})">🗑 Löschen</button>
       </div>
-      ${orderRows}
+      <div class="cust-kpis">
+        ${kpi('Umsatz', c.revenue > 0 ? fmtCHF(c.revenue) : '—', 'bestätigt bis fakturiert', c.revenue > 0 ? 'var(--green)' : '')}
+        ${kpi('Offene Aufträge', nOpen, '', nOpen ? 'var(--amber)' : '')}
+        ${kpi('Offene Angebote', nQuotes, '', nQuotes ? 'var(--blue)' : '')}
+        ${kpi('Letzter Auftrag', lastDate ? fmtD(lastDate) : '—', c.created_at ? 'Kunde seit ' + fmtD(c.created_at) : '')}
+      </div>
+      <div class="cust-info">
+        <div>
+          <div class="ps-label">Adresse</div>
+          ${addrLines.length
+            ? `<div class="ps-val" style="line-height:1.5">${addrLines.map(esc).join('<br>')}</div>
+               <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="_copyCustomerAddress(${c.id})">⧉ Adresse kopieren</button>`
+            : `<div class="cust-muted">—</div>`}
+        </div>
+        <div>
+          <div class="ps-label">E-Mail</div>
+          <div class="ps-val">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a>` : '<span class="cust-muted">—</span>'}</div>
+          <div class="ps-label" style="margin-top:10px">Telefon</div>
+          <div class="ps-val">${c.phone ? `<a href="tel:${esc(_custTel(c.phone))}" style="color:var(--blue)">${esc(c.phone)}</a>` : '<span class="cust-muted">—</span>'}</div>
+        </div>
+        ${c.notes ? `<div style="grid-column:span 2"><div class="ps-label">Notizen</div>
+          <div class="ps-val" style="white-space:pre-wrap;color:var(--t2);font-weight:400">${esc(c.notes)}</div></div>` : ''}
+      </div>
+      <div class="sep-label">Offene Vorgänge</div>
+      ${openOrders.length ? list(openOrders.map(_custOrderRow))
+        : empty(c.orders.length ? 'Nichts offen — alle Aufträge sind abgeschlossen.' : 'Noch keine Aufträge für diesen Kunden.')}
     </div>
-    <div id="cd-quotes" style="display:none">
-      ${quoteRows}
+    <div id="cd-orders" style="display:none">
+      ${c.orders.length ? `<div class="cust-sum"><span>${c.orders.length} Aufträge und Angebote</span>
+        <span>Umsatz <b style="font-family:var(--mono);color:var(--t1)">${fmtCHF(c.revenue || 0)}</b></span></div>${groups}`
+        : empty('Noch keine Aufträge für diesen Kunden.')}
     </div>
     <div id="cd-deliveries" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--line);font-size:13px;color:var(--t3)">
-        <span>${c.deliveries.length} Produktionsauftr${c.deliveries.length === 1 ? 'ag' : 'äge'}</span>
-        <span style="font-family:var(--mono);color:var(--t1)">Total ${fmtChfD(delivRevTotal)}</span>
-      </div>
-      ${delivRows}
-    </div>
-    <div id="cd-info" style="display:none;padding:14px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;margin-bottom:14px">
-        ${c.email?`<div><div class="ps-label">E-Mail</div><div class="ps-val"><a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a></div></div>`:''}
-        ${c.phone?`<div><div class="ps-label">Telefon</div><div class="ps-val">${esc(c.phone)}</div></div>`:''}
-        ${c.street?`<div style="grid-column:span 2"><div class="ps-label">Adresse</div><div class="ps-val">${esc(c.street)}, ${c.postal_code||''} ${c.city||''}, ${c.country||''}</div></div>`:''}
-        ${c.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><div class="ps-val" style="white-space:pre-wrap;color:var(--t2)">${esc(c.notes)}</div></div>`:''}
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="openCustomerModal(${c.id})">✏️ Bearbeiten</button>
-      <button class="btn btn-red btn-sm" style="margin-left:6px" onclick="delCustomer(${c.id})">🗑 Löschen</button>
+      ${c.deliveries.length ? list(c.deliveries.map(_custDeliveryRow)) : empty('Keine Produktionsaufträge')}
     </div>`;
 
   _markActiveRow(c.id);
