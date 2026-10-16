@@ -375,10 +375,32 @@ async function generatePoDoc(id) {
 const PO_ST = { DRAFT:'Entwurf', ORDERED:'Bestellt', RECEIVED:'Erhalten', CANCELLED:'Storniert' };
 const PO_ST_CLS = { DRAFT:'st-DFT', ORDERED:'st-REV', RECEIVED:'st-REL', CANCELLED:'st-OBS' };
 
+// Einkauf hat zwei Reiter: Bestellungen und Lieferanten. Der Browser merkt sich den letzten.
+let _purchasingTab = 'orders';
+try { if (localStorage.getItem('plm_purchasing_tab') === 'suppliers') _purchasingTab = 'suppliers'; } catch {}
+function _setPurchasingTab(tab, render = true) {
+  _purchasingTab = tab;
+  try { localStorage.setItem('plm_purchasing_tab', tab); } catch {}
+  if (render) { closeDetail(); renderPurchasing(); }
+}
+function _purchasingTitle() {
+  const seg = (key, label) =>
+    `<button class="${_purchasingTab === key ? 'active' : ''}" onclick="_setPurchasingTab('${key}')">${label}</button>`;
+  return `<strong>Einkauf</strong><div class="partner-seg" style="margin-left:6px">${seg('orders', 'Bestellungen')}${seg('suppliers', 'Lieferanten')}</div>`;
+}
+function _purchasingActions() {
+  return _purchasingTab === 'suppliers'
+    ? `<div style="display:flex;gap:8px;align-items:center">${_partnerViewToggle('supplier')}
+        <button class="btn btn-primary btn-sm" onclick="openSupplierModal()">+ Lieferant</button></div>`
+    : `<button class="btn btn-primary btn-sm" onclick="openPoModal()">+ Bestellung</button>`;
+}
+
 async function renderPurchasing() {
-  setLeftHeader('Einkauf', `<button class="btn btn-primary btn-sm" onclick="openPoModal()">+ Bestellung</button><button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="openSupplierModal()">+ Lieferant</button>`);
+  setLeftHeader(_purchasingTitle(), _purchasingActions());
   const [pos, suppliers] = await Promise.all([api('/api/purchase-orders'), api('/api/suppliers')]);
   state._poSuppliers = suppliers;
+  state.suppliers = suppliers;
+  if (_purchasingTab === 'suppliers') return _renderSupplierTab();
 
   const poRows = pos.map(po => {
     const total = po.total > 0 ? `<span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${fmtCHF(po.total)}</span>` : '';
@@ -395,23 +417,9 @@ async function renderPurchasing() {
     </div>`;
   }).join('');
 
-  const supRows = suppliers.map(s => `
-    <div onclick="openSupplierDetail(${s.id})" style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
-      <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(s.number)}</span>
-      <span style="flex:1;font-size:13px">${esc(s.name)}</span>
-      ${s.email ? `<span style="font-size:12px;color:var(--t4)">${esc(s.email)}</span>` : ''}
-    </div>`).join('');
-
   setLeftBody(`
-    <div style="display:flex;flex-direction:column;gap:12px;max-width:860px">
-      <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4);margin-bottom:6px">Bestellungen</div>
-        <div style="display:flex;flex-direction:column;gap:4px">${poRows || '<div style="color:var(--t3);font-size:13px">Noch keine Bestellungen</div>'}</div>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4);margin-bottom:6px">Lieferanten</div>
-        <div style="display:flex;flex-direction:column;gap:4px">${supRows || '<div style="color:var(--t3);font-size:13px">Noch keine Lieferanten</div>'}</div>
-      </div>
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:860px">
+      ${poRows || '<div style="color:var(--t3);font-size:13px">Noch keine Bestellungen</div>'}
     </div>`);
 }
 
@@ -480,7 +488,8 @@ async function openPoDetail(id) {
   showDetail();
 }
 
-async function openPoModal(id) {
+// preset: { supplierId } — "+ Bestellung" direkt beim Lieferanten
+async function openPoModal(id, preset = {}) {
   const suppliers = state._poSuppliers || await api('/api/suppliers');
   document.getElementById('po-supplier-id').innerHTML = '<option value="">— Freie Eingabe —</option>' +
     suppliers.map(s => `<option value="${s.id}">${esc(s.number)} ${esc(s.name)}</option>`).join('');
@@ -498,12 +507,12 @@ async function openPoModal(id) {
   } else {
     document.getElementById('po-modal-title').textContent = 'Bestellung erstellen';
     document.getElementById('po-edit-id').value = '';
-    document.getElementById('po-supplier-id').value = '';
+    document.getElementById('po-supplier-id').value = preset.supplierId || '';
     document.getElementById('po-supplier-name').value = '';
     document.getElementById('po-order-date').value = new Date().toISOString().slice(0,10);
     document.getElementById('po-expected-date').value = '';
     document.getElementById('po-notes').value = '';
-    document.getElementById('po-supplier-free').style.display = 'block';
+    document.getElementById('po-supplier-free').style.display = preset.supplierId ? 'none' : 'block';
   }
   openModal('poModal');
 }
@@ -520,6 +529,7 @@ async function savePo() {
   const po = id ? await api(`/api/purchase-orders/${id}`, 'PUT', body) : await api('/api/purchase-orders', 'POST', body);
   toast(id ? 'Gespeichert' : 'Bestellung angelegt', 'ok');
   closeModal('poModal');
+  _setPurchasingTab('orders', false);
   await renderPurchasing();
   openPoDetail(po.id);
   loadStats();
@@ -709,57 +719,163 @@ async function deletePo(id) {
   loadStats();
 }
 
+// ── LIEFERANTEN ───────────────────────────────────────────────
+// Gleiche Darstellung wie Kunden (siehe GESCHÄFTSPARTNER in 05-erp-views.js)
+const _PO_GROUPS = [
+  ['Entwurf', ['DRAFT']],
+  ['Bestellt', ['ORDERED']],
+  ['Erhalten', ['RECEIVED']],
+  ['Storniert', ['CANCELLED']],
+];
+const _PO_OPEN_STATUSES = ['DRAFT', 'ORDERED'];
+
+_registerPartnerKind('supplier', {
+  prefsKey: 'plm_supplier_view',
+  noun: ['Lieferant', 'Lieferanten'],
+  rows: () => state.suppliers || [],
+  detailId: () => state.supplierDetailId,
+  openFn: 'openSupplierDetail',
+  render: () => renderPurchasing(),
+  header: () => setLeftHeader(_purchasingTitle(), _purchasingActions()),
+  searchHint: 'Suchen nach Name, Kontaktperson, Ort, E-Mail…',
+  searchFields: s => [s.name, s.number, s.contact_person, s.email, s.phone, s.street, s.postal_code, s.city, s.country, s.address, s.notes],
+  filters: [['', 'Alle Lieferanten'], ['open', 'Mit offenen Bestellungen'], ['none', 'Ohne Bestellungen']],
+  show: { open: s => s.open_po_count > 0, none: s => !s.po_count },
+  sorts: [['name', 'Name A–Z'], ['recent', 'Zuletzt aktiv'], ['value', 'Bestellvolumen'], ['number', 'Nummer']],
+  value: s => s.volume,
+  valueLabel: 'Volumen',
+  valueTitle: 'Bestellvolumen aus bestellten und erhaltenen Bestellungen',
+  card: (s, short) => {
+    const open = s.open_po_count || 0, inv = s.inventory_count || 0;
+    return {
+      contact: [s.contact_person && `<span title="Kontaktperson">👤 ${esc(s.contact_person)}</span>`,
+        s.email && _mailLink(s.email), s.phone && _telLink(s.phone)].filter(Boolean),
+      pills: (open ? _pill('amber', short ? open : `${open} ${open === 1 ? 'offene Bestellung' : 'offene Bestellungen'}`,
+                'Entwurf oder bestellt, noch nicht erhalten') : '')
+           + (inv && !short ? _pill('', `${inv} Lagerartikel`, 'Lagerartikel mit diesem Lieferanten') : ''),
+      meta: s.po_count
+        ? `${s.po_count} Bestellung${s.po_count === 1 ? '' : 'en'}${s.last_activity ? ' · zuletzt ' + fmtD(s.last_activity) : ''}`
+        : 'Noch keine Bestellungen',
+      value: s.volume,
+      quick: { label: '+ Bestellung', title: 'Neue Bestellung bei diesem Lieferanten', onclick: `openPoModal(null,{supplierId:${s.id}})` },
+    };
+  },
+});
+
+function _renderSupplierTab() {
+  if (!(state.suppliers || []).length) {
+    setLeftBody(`<div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Noch keine Lieferanten</div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="openSupplierModal()">+ Ersten Lieferanten anlegen</button></div>`);
+    return;
+  }
+  setLeftBody(_partnerBody('supplier'));
+  _renderPartnerRows('supplier');
+}
+
+// Aus dem Lieferanten direkt in die Bestellung springen
+async function _openPoFromSupplier(id) {
+  _setPurchasingTab('orders', false);
+  await renderPurchasing();
+  openPoDetail(id);
+}
+
+function _poRowForSupplier(po) {
+  const meta = [po.order_date ? fmtD(po.order_date) : '', po.expected_date ? 'erwartet ' + fmtD(po.expected_date) : '',
+    po.notes ? esc(po.notes.split('\n')[0]) : ''].filter(Boolean).join(' · ');
+  return _partnerDocRow(`_openPoFromSupplier(${po.id})`,
+    `<span class="status ${PO_ST_CLS[po.status] || 'st-DFT'}">${PO_ST[po.status] || po.status}</span>`,
+    po.number, meta || '—', po.total > 0 ? fmtCHF(po.total) : '—', po.item_count);
+}
+
+function _invRowForSupplier(i) {
+  const low = i.min_qty != null && i.stock_qty <= i.min_qty;
+  return `<div class="partner-row" onclick="gotoView('inventory').then(()=>openInventoryDetail(${i.id}))">
+    <span class="status ${low ? 'st-OBS' : 'st-REL'}">${low ? 'KNAPP' : 'LAGER'}</span>
+    <div style="min-width:0">
+      <div class="partner-row-title">${esc(i.name)}</div>
+      <div class="partner-row-meta">${[i.sku ? esc(i.sku) : '', i.category ? esc(i.category) : ''].filter(Boolean).join(' · ') || '—'}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:var(--mono);font-size:13px">${fmtN(i.stock_qty || 0, 1)} ${esc(i.unit || 'Stk')}</div>
+      <div class="partner-row-meta">${i.price_per_unit != null ? fmtCHF(i.price_per_unit) + '/' + esc(i.unit || 'Stk') : ''}</div>
+    </div>
+  </div>`;
+}
+
+async function _copySupplierAddress(id) {
+  const s = (state.suppliers || []).find(x => x.id === id) || await api('/api/suppliers/' + id);
+  copyText(_partnerAddressText(s), 'Adresse kopiert');
+}
+
 async function openSupplierDetail(id) {
   const s = await api('/api/suppliers/' + id);
-  document.getElementById('dp-title').innerHTML =
-    `<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(s.number)}</span><strong>${esc(s.name)}</strong>`;
-  document.getElementById('dp-tabs').innerHTML = '';
+  state.supplierDetailId = s.id;
+  const pos = s.purchase_orders || [], inv = s.inventory_items || [];
+  const open = pos.filter(p => _PO_OPEN_STATUSES.includes(p.status));
+  const lastDate = pos.map(p => p.order_date || (p.created_at || '').slice(0, 10)).sort().pop();
+
+  document.getElementById('dp-title').innerHTML = _partnerTitle(s);
+  document.getElementById('dp-tabs').innerHTML = `
+    <button class="tab active" onclick="switchTab(this,'sd-overview')">Übersicht</button>
+    <button class="tab" onclick="switchTab(this,'sd-orders')">Bestellungen${_partnerTabCount(pos.length)}</button>
+    <button class="tab" onclick="switchTab(this,'sd-inventory')">Lagerartikel${_partnerTabCount(inv.length)}</button>`;
+
   document.getElementById('dp-body').innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button class="btn btn-ghost btn-sm" onclick="openSupplierModal(${id})">✏ Bearbeiten</button>
-      <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto" onclick="deleteSupplier(${id})">Löschen</button>
+    <div id="sd-overview">
+      <div class="partner-actions">
+        <button class="btn btn-primary btn-sm" onclick="openPoModal(null,{supplierId:${s.id}})">+ Bestellung</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-ghost btn-sm" onclick="openSupplierModal(${s.id})">✏️ Bearbeiten</button>
+        <button class="btn btn-red btn-sm" onclick="deleteSupplier(${s.id})">🗑 Löschen</button>
+      </div>
+      ${_partnerKpis([
+        ['Bestellvolumen', s.volume > 0 ? fmtCHF(s.volume) : '—', 'bestellt und erhalten', s.volume > 0 ? 'var(--green)' : ''],
+        ['Offene Bestellungen', open.length, '', open.length ? 'var(--amber)' : ''],
+        ['Lagerartikel', inv.length, '', ''],
+        ['Letzte Bestellung', lastDate ? fmtD(lastDate) : '—', s.created_at ? 'Lieferant seit ' + fmtD(s.created_at) : ''],
+      ])}
+      ${_partnerInfo(s, `_copySupplierAddress(${s.id})`,
+        [['Kontaktperson', s.contact_person ? esc(s.contact_person) : '<span class="partner-muted">—</span>']])}
+      <div class="sep-label">Offene Bestellungen</div>
+      ${open.length ? _partnerList(open.map(_poRowForSupplier))
+        : _partnerEmpty(pos.length ? 'Nichts offen — alle Bestellungen sind erhalten oder storniert.' : 'Noch keine Bestellungen bei diesem Lieferanten.')}
     </div>
-    <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;margin-bottom:14px">
-      ${s.contact_person ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Kontakt</span>${esc(s.contact_person)}</div>` : ''}
-      ${s.email ? `<div><span style="color:var(--t3);width:100px;display:inline-block">E-Mail</span>${esc(s.email)}</div>` : ''}
-      ${s.phone ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Telefon</span>${esc(s.phone)}</div>` : ''}
-      ${s.address ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Adresse</span>${esc(s.address)}</div>` : ''}
-      ${s.notes ? `<div><span style="color:var(--t3);width:100px;display:inline-block">Notizen</span>${esc(s.notes)}</div>` : ''}
+    <div id="sd-orders" style="display:none">
+      ${pos.length ? `<div class="partner-sum"><span>${pos.length} Bestellung${pos.length === 1 ? '' : 'en'}</span>
+        <span>Volumen <b style="font-family:var(--mono);color:var(--t1)">${fmtCHF(s.volume || 0)}</b></span></div>
+        ${_partnerGroups(_PO_GROUPS, pos, _poRowForSupplier)}`
+        : _partnerEmpty('Noch keine Bestellungen bei diesem Lieferanten.')}
     </div>
-    ${(s.inventory_items||[]).length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4);margin-bottom:6px">Lagerartikel</div>
-      <div style="display:flex;flex-direction:column;gap:3px">
-        ${s.inventory_items.map(i=>`<div style="font-size:13px;padding:5px 8px;background:var(--bg2);border-radius:var(--r-sm)">${esc(i.name)}${i.sku?` <span style="color:var(--t4);font-family:var(--mono)">${esc(i.sku)}</span>`:''}</div>`).join('')}
-      </div>` : ''}`;
+    <div id="sd-inventory" style="display:none">
+      ${inv.length ? _partnerList(inv.map(_invRowForSupplier)) : _partnerEmpty('Keine Lagerartikel mit diesem Lieferanten.')}
+    </div>`;
+
+  _markActiveRow(s.id);
   showDetail();
 }
 
 async function openSupplierModal(id) {
-  document.getElementById('sup-edit-id').value = id || '';
-  if (id) {
-    const s = await api('/api/suppliers/' + id);
-    document.getElementById('sup-modal-title').textContent = 'Lieferant bearbeiten';
-    document.getElementById('sup-name').value = s.name;
-    document.getElementById('sup-contact').value = s.contact_person || '';
-    document.getElementById('sup-phone').value = s.phone || '';
-    document.getElementById('sup-email').value = s.email || '';
-    document.getElementById('sup-address').value = s.address || '';
-    document.getElementById('sup-notes').value = s.notes || '';
-  } else {
-    document.getElementById('sup-modal-title').textContent = 'Lieferant erstellen';
-    ['sup-name','sup-contact','sup-phone','sup-email','sup-address','sup-notes'].forEach(i => { document.getElementById(i).value = ''; });
-  }
+  const f = k => document.getElementById('sup-' + k);
+  f('edit-id').value = id || '';
+  const s = id ? await api('/api/suppliers/' + id) : {};
+  f('modal-title').textContent = id ? 'Lieferant bearbeiten' : 'Neuer Lieferant';
+  for (const [k, v] of [['name', s.name], ['contact', s.contact_person], ['phone', s.phone], ['email', s.email],
+    ['street', s.street], ['plz', s.postal_code], ['city', s.city], ['notes', s.notes]]) f(k).value = v || '';
+  // Land nur bei neuen Lieferanten vorbelegen — bei bestehenden gilt, was gespeichert ist
+  f('country').value = id ? (s.country || '') : 'Schweiz';
+  // Frühere Freitext-Adresse anzeigen, solange sie nicht übernommen ist
+  const legacy = id && s.address && !(s.street || s.postal_code || s.city);
+  f('legacy').style.display = legacy ? '' : 'none';
+  f('legacy-text').textContent = legacy ? s.address : '';
   openModal('supplierModal');
 }
 
 async function saveSupplier() {
-  const id = document.getElementById('sup-edit-id').value;
+  const v = k => document.getElementById('sup-' + k).value.trim();
+  const id = v('edit-id');
   const body = {
-    name: document.getElementById('sup-name').value.trim(),
-    contact_person: document.getElementById('sup-contact').value,
-    phone: document.getElementById('sup-phone').value,
-    email: document.getElementById('sup-email').value,
-    address: document.getElementById('sup-address').value,
-    notes: document.getElementById('sup-notes').value,
+    name: v('name'), contact_person: v('contact'), phone: v('phone'), email: v('email'),
+    street: v('street'), postal_code: v('plz'), city: v('city'), country: v('country'), notes: v('notes'),
   };
   if (!body.name) return toast('Name eingeben', 'err');
   const s = id
@@ -767,15 +883,17 @@ async function saveSupplier() {
     : await api('/api/suppliers', 'POST', body);
   toast(id ? 'Gespeichert' : 'Lieferant angelegt', 'ok');
   closeModal('supplierModal');
-  state._poSuppliers = null;
+  _setPurchasingTab('suppliers', false);
   await renderPurchasing();
   openSupplierDetail(s.id);
 }
 
 async function deleteSupplier(id) {
-  if (!confirm('Lieferant löschen?')) return;
+  const s = (state.suppliers || []).find(x => x.id === id);
+  if (!confirm(`Lieferant ${s ? s.number + ' ' + s.name : ''} löschen?\nBestehende Bestellungen behalten den Namen.`)) return;
   await api('/api/suppliers/' + id, 'DELETE');
   toast('Gelöscht', 'ok');
   closeDetail();
+  state.supplierDetailId = null;
   renderPurchasing();
 }

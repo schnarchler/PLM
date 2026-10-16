@@ -96,6 +96,11 @@ const fmtDT = (d, empty='—') => {
 const fmtSize = b => { if(!b) return '—'; if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; };
 const fmtChf = v => fmtCHF(parseFloat(v)||0);
 
+async function copyText(text, okMsg = 'Kopiert') {
+  try { await navigator.clipboard.writeText(text); toast(okMsg, 'ok'); }
+  catch { toast('Kopieren nicht möglich', 'err'); }
+}
+
 function toast(msg, type='ok') {
   const c=document.getElementById('toasts');
   const t=document.createElement('div');

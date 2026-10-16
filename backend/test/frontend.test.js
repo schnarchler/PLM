@@ -338,38 +338,44 @@ test('Revisionsvergleich: Änderungen werden markiert, Gleiches lässt sich ausb
   for (const h of [only, full]) assert.ok(!h.includes('undefined') && !h.includes('NaN'));
 });
 
-const CUST = evalPart('js/05-erp-views.js', '// ── CUSTOMERS', '// Auftragsphasen',
-  '({ _visibleCustomers, _customerCard, _customerTable, filter: _customerFilter, prefs: _customerPrefs })');
+// Kunden und Lieferanten teilen sich die Darstellung (GESCHÄFTSPARTNER).
+// Die Helfer sind im Browser globale Konstanten; hier aus dem Ausschnitt holen.
+const PARTNER = evalPart('js/05-erp-views.js', '// ── GESCHÄFTSPARTNER', '// Auftragsphasen',
+  '({ _visiblePartners, _partnerCard, _partnerTable, _partner, _mailLink, _telLink, _pill })');
+Object.assign(global, { _mailLink: PARTNER._mailLink, _telLink: PARTNER._telLink, _pill: PARTNER._pill });
+evalPart('js/13-normteile-einkauf.js', '// ── LIEFERANTEN', 'function _renderSupplierTab', '0');
+const ids = kind => PARTNER._visiblePartners(kind).map(p => p.id);
 
-test('Kunden: Suche mit mehreren Wörtern, Filter und Sortierung', () => {
+test('Kunden: alphabetisch als Standard, Suche mit mehreren Wörtern, Filter und Sortierung', () => {
   global.state.customers = [
     { id: 1, number: 'KD001', name: 'Muster AG', city: 'Zürich', email: 'info@muster.ch', order_count: 3,
       open_order_count: 1, open_quote_count: 0, revenue: 500, last_activity: '2026-09-01' },
-    { id: 2, number: 'KD002', name: 'Muster GmbH', city: 'Bern', order_count: 0,
+    { id: 2, number: 'KD002', name: 'muster GmbH', city: 'Bern', order_count: 0,
       open_order_count: 0, open_quote_count: 0, revenue: 0, last_activity: null, created_at: '2026-10-01 08:00:00' },
     { id: 3, number: 'KD010', name: 'Alpha SA', city: 'Genf', order_count: 1,
       open_order_count: 0, open_quote_count: 1, revenue: 900, last_activity: '2026-07-15' },
   ];
-  const ids = () => CUST._visibleCustomers().map(c => c.id);
-  Object.assign(CUST.filter, { text: 'muster zürich', show: '' });
-  assert.deepStrictEqual(ids(), [1], 'alle Wörter müssen passen');
-  Object.assign(CUST.filter, { text: '', show: 'open' });
-  assert.deepStrictEqual(ids().sort(), [1, 3], 'offene Aufträge oder Angebote');
-  Object.assign(CUST.filter, { text: '', show: 'none' });
-  assert.deepStrictEqual(ids(), [2]);
-  Object.assign(CUST.filter, { text: '', show: '' });
-  CUST.prefs.sort = 'recent';
-  assert.deepStrictEqual(ids(), [2, 1, 3], 'neuer Kunde ohne Auftrag zählt mit Anlagedatum');
-  CUST.prefs.sort = 'name';
-  assert.deepStrictEqual(ids(), [3, 1, 2]);
-  CUST.prefs.sort = 'revenue';
-  assert.deepStrictEqual(ids(), [3, 1, 2]);
-  CUST.prefs.sort = 'number';
-  assert.deepStrictEqual(ids(), [3, 2, 1], 'KD010 vor KD002');
+  const { filter, prefs } = PARTNER._partner.customer;
+  assert.strictEqual(prefs.sort, 'name', 'ohne eigene Wahl nach Name');
+  assert.deepStrictEqual(ids('customer'), [3, 1, 2], 'Gross-/Kleinschreibung spielt keine Rolle');
+  Object.assign(filter, { text: 'muster zürich', show: '' });
+  assert.deepStrictEqual(ids('customer'), [1], 'alle Wörter müssen passen');
+  Object.assign(filter, { text: '', show: 'open' });
+  assert.deepStrictEqual(ids('customer'), [3, 1], 'offene Aufträge oder Angebote');
+  Object.assign(filter, { text: '', show: 'none' });
+  assert.deepStrictEqual(ids('customer'), [2]);
+  Object.assign(filter, { text: '', show: '' });
+  prefs.sort = 'recent';
+  assert.deepStrictEqual(ids('customer'), [2, 1, 3], 'neuer Kunde ohne Auftrag zählt mit Anlagedatum');
+  prefs.sort = 'value';
+  assert.deepStrictEqual(ids('customer'), [3, 1, 2]);
+  prefs.sort = 'number';
+  assert.deepStrictEqual(ids('customer'), [3, 2, 1], 'KD010 vor KD002');
+  prefs.sort = 'name';
 });
 
 test('Kunden: Karte zeigt Kontakt, offene Vorgänge und Umsatz, Namen werden escaped', () => {
-  const card = CUST._customerCard({ id: 7, number: 'KD007', name: 'Böse <b>AG</b>', postal_code: '8000', city: 'Zürich',
+  const card = PARTNER._partnerCard('customer', { id: 7, number: 'KD007', name: 'Böse <b>AG</b>', postal_code: '8000', city: 'Zürich',
     email: 'a@b.ch', phone: '044 123 45 67', order_count: 2, open_order_count: 2, open_quote_count: 1,
     revenue: 1200, last_activity: '2026-10-01' });
   assert.ok(!card.includes('<b>AG</b>'), 'kein HTML aus dem Namen');
@@ -382,9 +388,34 @@ test('Kunden: Karte zeigt Kontakt, offene Vorgänge und Umsatz, Namen werden esc
   assert.match(card, /8000 Zürich/);
   assert.match(card, /openOrderModal\(null,\{customerId:7\}\)/, 'Schnellaktion legt Auftrag für den Kunden an');
 
-  const leer = CUST._customerCard({ id: 8, number: 'KD008', name: 'Neu', order_count: 0, open_order_count: 0, open_quote_count: 0, revenue: 0 });
+  const leer = PARTNER._partnerCard('customer', { id: 8, number: 'KD008', name: 'Neu', order_count: 0, open_order_count: 0, open_quote_count: 0, revenue: 0 });
   assert.match(leer, /Keine Kontaktdaten/);
   assert.match(leer, /Noch keine Aufträge/);
-  assert.ok(!leer.includes('cust-rev'), 'kein Umsatz ohne Aufträge');
-  assert.match(CUST._customerTable([{ id: 9, number: 'KD009', name: 'X', order_count: 0, revenue: 0 }]), /data-id="9"/);
+  assert.ok(!leer.includes('partner-value'), 'kein Umsatz ohne Aufträge');
+  assert.match(PARTNER._partnerTable('customer', [{ id: 9, number: 'KD009', name: 'X', order_count: 0, revenue: 0 }]), /data-id="9"/);
+});
+
+test('Lieferanten: gleiche Karten wie Kunden, mit Kontaktperson, offenen Bestellungen und Volumen', () => {
+  global.state.suppliers = [
+    { id: 5, number: 'LF-0002', name: 'Zeta Filament', contact_person: 'Anna Keller', email: 'a@zeta.ch', city: 'Basel', postal_code: '4051',
+      po_count: 4, open_po_count: 1, volume: 820, inventory_count: 3, last_activity: '2026-10-02' },
+    { id: 6, number: 'LF-0001', name: 'Alu Profil AG', address: 'Werkstr. 9\nirgendwo', po_count: 0, open_po_count: 0, volume: 0 },
+  ];
+  assert.deepStrictEqual(ids('supplier'), [6, 5], 'alphabetisch');
+  PARTNER._partner.supplier.filter.show = 'open';
+  assert.deepStrictEqual(ids('supplier'), [5]);
+  PARTNER._partner.supplier.filter.show = '';
+  PARTNER._partner.supplier.filter.text = 'anna';
+  assert.deepStrictEqual(ids('supplier'), [5], 'Suche über die Kontaktperson');
+  PARTNER._partner.supplier.filter.text = '';
+
+  const card = PARTNER._partnerCard('supplier', global.state.suppliers[0]);
+  assert.match(card, /partner-card/, 'dieselbe Karte wie bei Kunden');
+  assert.match(card, /👤 Anna Keller/);
+  assert.match(card, /1 offene Bestellung</);
+  assert.match(card, /3 Lagerartikel/);
+  assert.match(card, /CHF 820\.00/);
+  assert.match(card, /4051 Basel/);
+  assert.match(card, /openPoModal\(null,\{supplierId:5\}\)/);
+  assert.match(PARTNER._partnerCard('supplier', global.state.suppliers[1]), /Noch keine Bestellungen/);
 });

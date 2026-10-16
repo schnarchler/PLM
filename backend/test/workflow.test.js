@@ -286,6 +286,51 @@ test('Kundenliste zeigt Umsatz, offene Vorgänge und letzte Aktivität', async (
   assert.strictEqual(leer.last_activity, null);
 });
 
+test('Lieferanten: Kennzahlen, Adresse für den Beleg, Löschen behält den Namen', async () => {
+  const z = await api('/api/suppliers', 'POST', { name: 'Zeta Filament', street: 'Werkstr. 9', postal_code: '4051', city: 'Basel', country: 'Schweiz' });
+  const a = await api('/api/suppliers', 'POST', { name: 'Alu Profil AG' });
+  assert.strictEqual(z.address, 'Werkstr. 9\n4051 Basel\nSchweiz', 'Freitext für das Bestell-PDF');
+  const mk = async (status, order_date, price) => {
+    const po = await api('/api/purchase-orders', 'POST', { supplier_id: z.id, order_date });
+    await api(`/api/purchase-orders/${po.id}/items`, 'POST', { description: 'PETG', quantity: 2, unit_price: price });
+    if (status !== 'DRAFT') await api(`/api/purchase-orders/${po.id}/status`, 'PUT', { status });
+    return po;
+  };
+  const draft = await mk('DRAFT', '2026-10-05', 30);
+  await mk('ORDERED', '2026-09-01', 25);
+  await mk('CANCELLED', '2026-10-09', 999);
+  const inv = await api('/api/inventory', 'POST', { name: 'PETG schwarz', supplier_id: z.id });
+
+  const list = await api('/api/suppliers');
+  const names = list.map(s => s.name);
+  assert.ok(names.indexOf('Alu Profil AG') < names.indexOf('Zeta Filament'), 'alphabetisch');
+  const row = list.find(s => s.id === z.id);
+  assert.strictEqual(row.po_count, 3);
+  assert.strictEqual(row.open_po_count, 2, 'Entwurf und bestellt');
+  assert.strictEqual(row.volume, 50, 'nur bestellt/erhalten zählt');
+  assert.strictEqual(row.last_activity, '2026-10-09');
+  assert.strictEqual(row.inventory_count, 1);
+  assert.strictEqual(list.find(s => s.id === a.id).po_count, 0);
+
+  const detail = await api(`/api/suppliers/${z.id}`);
+  assert.strictEqual(detail.purchase_orders.length, 3);
+  assert.strictEqual(detail.purchase_orders[0].order_date, '2026-10-09', 'neueste zuerst');
+  assert.strictEqual(detail.volume, 50);
+  assert.strictEqual((await api(`/api/purchase-orders/${draft.id}`)).supplier_address, 'Werkstr. 9\n4051 Basel\nSchweiz');
+
+  await api(`/api/suppliers/${z.id}`, 'DELETE');
+  const po = await api(`/api/purchase-orders/${draft.id}`);
+  assert.strictEqual(po.supplier_id, null);
+  assert.strictEqual(po.supplier_name, 'Zeta Filament', 'Bestellung behält den Lieferantennamen');
+  assert.strictEqual((await api(`/api/inventory/${inv.id}`)).supplier_id, null);
+});
+
+test('Kunden kommen alphabetisch', async () => {
+  for (const name of ['zebra Werke', 'Aare Druck', 'mittel AG']) await api('/api/customers', 'POST', { name });
+  const names = (await api('/api/customers')).map(c => c.name).filter(n => ['zebra Werke', 'Aare Druck', 'mittel AG'].includes(n));
+  assert.deepStrictEqual(names, ['Aare Druck', 'mittel AG', 'zebra Werke']);
+});
+
 test('Kunde löschen lässt die Belege druckbar', async () => {
   const k = await api('/api/customers', 'POST', { name: 'Muster AG' });
   const a = await api('/api/orders', 'POST', { title: 'Auftrag A', customer_id: k.id });

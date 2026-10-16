@@ -204,10 +204,11 @@ async function _setDeliveryRev(deliveryItemId, revId, deliveryId) {
 
 function renderDeliveryItems(items, deliveryId, delivered = false) {
   if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">Noch keine Positionen</div>`;
-  const allBtn = items.length > 1 ? `<div style="display:flex;gap:6px;margin-bottom:8px">
-    <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">🖶 Alle kurz</button>
-    <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'full')">🖶 Alle mit Parametern</button>
-  </div>` : '';
+  const allBtn = `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    ${items.length > 1 ? `<button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">🖶 Alle kurz</button>
+    <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'full')">🖶 Alle mit Parametern</button>` : ''}
+    <button class="btn btn-ghost btn-sm" onclick="printPartLabels(${deliveryId})" title="Etiketten mit Kurzcode und QR-Code für Beutel oder Kiste">🏷 Etiketten</button>
+  </div>`;
   return allBtn + items.map((item,idx) => {
     const isFirst = idx===0, isLast = idx===items.length-1;
     return `
@@ -219,6 +220,7 @@ function renderDeliveryItems(items, deliveryId, delivered = false) {
         </div>
         ${item.item_number?`<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${item.item_number}</span>`:''}
         ${_deliveryRevBadge(item, deliveryId, delivered)}
+        ${item.short_code?`<span class="chip" style="flex-shrink:0" title="Kurzcode auf dem Teil">${esc(item.short_code + (item.effective_rev ? '-' + item.effective_rev.rev : ''))}</span>`:''}
         <span style="font-size:13px;font-weight:500;flex:1">${esc(item.description)}</span>
         ${item.rm_name?`<span style="font-size:11px;background:rgba(157,180,255,.12);color:var(--blue);border-radius:3px;padding:1px 6px;font-family:var(--mono);flex-shrink:0">${esc(item.rm_name)}</span>`:''}
         <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${item.unit}</span>

@@ -404,6 +404,7 @@ function renderItemDetail(item, activeRevId) {
   document.getElementById('dp-title').innerHTML =
     `<span style="font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
+    + (item.short_code && !isDOC ? `<span class="chip" style="flex-shrink:0" title="Kurzcode zum Aufdrucken — Datenblatt">${esc(item.short_code)}</span>` : '')
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(item.name)}</strong>`
     + (item.classification ? ' ' + _classChip(item.classification) : '')
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
@@ -728,6 +729,18 @@ function renderItemSheet(item, activeRevId) {
       onblur="saveItemNotes(${item.id}, this)">${esc(item.notes || '')}</textarea>
     <div style="font-size:11px;color:var(--t4);margin-top:4px">Wird beim Verlassen des Feldes gespeichert.</div>`;
 
+  // -- Kurzcode zum Aufdrucken: folgt der gewählten Revision
+  const pcode = item.short_code && item.item_type !== 'doc' ? item.short_code + (rev ? '-' + rev.rev : '') : '';
+  const codeBlock = pcode ? `<div class="print-code">
+      <div>
+        <div class="ps-label">Kurzcode${rev ? ' · rev' + esc(rev.rev) : ''}</div>
+        <div class="print-code-val">${esc(pcode)}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="copyText('${esc(pcode)}','${esc(pcode)} kopiert')" title="Für das Textwerkzeug im Slicer">⧉ Kopieren</button>
+      <div class="print-code-hint">Im Slicer mit dem Textwerkzeug aufs Teil setzen — am besten vertieft
+        auf der Unterseite, mindestens 3 mm hoch. Bei einer neuen Revision nur die Zahl nach dem Strich anpassen.</div>
+    </div>` : '';
+
   // -- QR-Code der Teilenummer
   const qr = typeof qrSvg === 'function'
     ? qrSvg(item.item_number, 104, { dark: '#0d0f14', light: '#f4f6f8' })
@@ -745,6 +758,7 @@ function renderItemSheet(item, activeRevId) {
           <button class="btn btn-ghost btn-sm" onclick="window._docTemplateItem=state.item;generateItemTemplate('datenblatt')">&#128196; Als PDF</button>
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
         </div>
+        ${codeBlock}
       </div>
       ${qr ? `<div style="flex-shrink:0;text-align:center">
         <div style="background:#f4f6f8;padding:5px;border-radius:var(--r-sm);line-height:0">${qr}</div>

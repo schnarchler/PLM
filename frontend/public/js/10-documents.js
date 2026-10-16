@@ -948,6 +948,94 @@ ${itemsHtml || '<p style="color:#9ca3af">Keine Positionen</p>'}
 }
 
 
+// ── TEILE-ETIKETTEN ───────────────────────────────────────────
+// Ein Etikett pro Position für Beutel oder Kiste: Kurzcode wie auf dem Teil,
+// volle Nummer mit Revision, Menge, Material und Produktionsauftrag. Der
+// QR-Code enthält Nummer und Revision — in die Suche gescannt öffnet er
+// genau diesen Stand. Format 70 × 37 mm, 3 × 8 Stück auf A4.
+const LABELS_PER_SHEET = 24;
+function partLabelHtml(d, it) {
+  const rev = it.effective_rev?.rev;
+  const code = it.short_code ? it.short_code + (rev ? '-' + rev : '') : '';
+  const qr = it.item_number ? qrSvg(it.item_number + (rev ? ' rev' + rev : ''), 90, { quiet: 1 }) : '';
+  const material = [it.rm_name, it.rm_color].filter(Boolean).join(' · ');
+  const date = d.manufacture_date || d.delivery_date;
+  return `<div class="label">
+    <div class="txt">
+      ${code ? `<div class="code">${escHtml(code)}</div>` : ''}
+      <div class="name">${escHtml(it.item_name || it.description || '')}</div>
+      ${it.item_number ? `<div class="num">${escHtml(it.item_number)}${rev ? ' · rev' + escHtml(rev) : ''}</div>` : ''}
+      <div class="meta">${escHtml(String(it.quantity ?? ''))} ${escHtml(it.unit || 'Stk')}${material ? ' · ' + escHtml(material) : ''}</div>
+      <div class="meta">${escHtml(d.number)}${date ? ' · ' + fmtD(date) : ''}</div>
+    </div>
+    ${qr ? `<div class="qr">${qr}</div>` : ''}
+  </div>`;
+}
+
+async function printPartLabels(deliveryId) {
+  const d = await api(`/api/deliveries/${deliveryId}/delivery-data`);
+  const labels = (d.items || []).map(it => partLabelHtml(d, it));
+  if (!labels.length) return toast('Keine Positionen', 'err');
+  // "</" im Skriptblock entschärfen, damit der Browser ihn nicht vorzeitig schliesst
+  const data = JSON.stringify(labels).replace(/<\//g, '<\\/');
+  const html = `<!DOCTYPE html>
+<html lang="de-CH">
+<head><meta charset="UTF-8"><title>Etiketten ${escHtml(d.number)}</title>
+<style>
+  @page { size: A4; margin: 0 }
+  body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; color: #111 }
+  .sheet { width: 210mm; height: 297mm; display: grid; grid-template-columns: repeat(3, 70mm);
+    grid-template-rows: repeat(8, 37mm); align-content: start; padding-top: .5mm; box-sizing: border-box;
+    overflow: hidden; break-after: page }
+  .sheet:last-child { break-after: auto }
+  .label { box-sizing: border-box; padding: 3mm 3.5mm; display: flex; gap: 2mm; align-items: center; overflow: hidden }
+  .txt { flex: 1; min-width: 0 }
+  .code { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size: 18pt; font-weight: 700; letter-spacing: .5pt; line-height: 1 }
+  .name { font-size: 9pt; font-weight: 600; margin-top: 1.5mm }
+  .num, .meta { font-size: 7pt; margin-top: .6mm }
+  .num { font-family: Consolas, 'DejaVu Sans Mono', monospace }
+  .meta { color: #444 }
+  .name, .num, .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .qr svg { width: 21mm; height: 21mm; display: block }
+  .bar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 10mm;
+    background: #fff; border-radius: 6px; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.12) }
+  .bar input { width: 56px; padding: 3px 6px }
+  .bar button { padding: 5px 14px; font-size: 13px; cursor: pointer }
+  @media screen {
+    body { background: #e5e7eb; padding: 10mm }
+    .sheet { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15); margin-bottom: 10mm }
+    .label { outline: 1px dashed #cbd5e1; outline-offset: -1px }
+  }
+  @media print { .bar { display: none } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <strong>${labels.length} Etikett${labels.length === 1 ? '' : 'en'} · ${escHtml(d.number)}</strong>
+  <label>Erstes freies Etikett auf dem Bogen:
+    <input type="number" min="1" max="${LABELS_PER_SHEET}" value="1" oninput="render(this.value)"></label>
+  <span style="color:#555">A4-Bogen 70 × 37 mm (3 × 8) — im Druckdialog Ränder «Keine», Skalierung 100 %</span>
+  <button onclick="window.print()">Drucken</button>
+</div>
+<div id="pages"></div>
+<script>
+  const LABELS = ${data};
+  function render(start) {
+    const skip = Math.min(Math.max(parseInt(start) || 1, 1), ${LABELS_PER_SHEET}) - 1;
+    const cells = Array(skip).fill('<div class="label"></div>').concat(LABELS);
+    let html = '';
+    for (let i = 0; i < cells.length; i += ${LABELS_PER_SHEET}) html += '<div class="sheet">' + cells.slice(i, i + ${LABELS_PER_SHEET}).join('') + '</div>';
+    document.getElementById('pages').innerHTML = html;
+  }
+  render(1);
+<\/script>
+</body></html>`;
+  const w = window.open('', '_blank', 'width=950,height=900');
+  if (!w) return toast('Popup blockiert — bitte Popups für PLM erlauben', 'err');
+  w.document.write(html);
+  w.document.close();
+}
+
 // ── BOM PRINT ─────────────────────────────────────────────────
 async function printBom(itemId, revId) {
   const item = await api('/api/items/' + itemId);

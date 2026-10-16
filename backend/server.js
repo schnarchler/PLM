@@ -542,6 +542,9 @@ function applySchema() {
     notes TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
+  // Adresse wie bei Kunden; das Freitextfeld address bleibt für ältere Einträge
+  for (const col of ['street', 'postal_code', 'city', 'country'])
+    try { db.run(`ALTER TABLE suppliers ADD COLUMN ${col} TEXT DEFAULT ''`); } catch {}
 
   db.run(`CREATE TABLE IF NOT EXISTS inventory_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -675,6 +678,21 @@ function applySchema() {
   try { db.run('ALTER TABLE items ADD COLUMN weight_g REAL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN notes TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE items ADD COLUMN short_code TEXT DEFAULT NULL'); } catch {}
+  // Jeder je vergebene Kurzcode bleibt hier reserviert — auch nach dem
+  // Löschen des Teils, damit ein alter Aufdruck nie auf ein neues Teil zeigt.
+  db.run(`CREATE TABLE IF NOT EXISTS short_codes (
+    code TEXT PRIMARY KEY,
+    item_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_items_short_code ON items(short_code)');
+  db.run('INSERT OR IGNORE INTO short_codes (code,item_id) SELECT short_code,id FROM items WHERE short_code IS NOT NULL');
+  {
+    const missing = all('SELECT id FROM items WHERE short_code IS NULL ORDER BY id');
+    missing.forEach(r => assignShortCode(r.id));
+    if (missing.length) console.log(`Kurzcode: ${missing.length} Teil(e) nachgetragen`);
+  }
   try { db.run('ALTER TABLE bom ADD COLUMN child_rev_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
   try { db.run('ALTER TABLE inventory_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
@@ -825,6 +843,19 @@ function applySchema() {
       'Stückliste: Revision': 'BOM: Revision',
     };
     for (const [from, to] of Object.entries(map)) db.run('UPDATE changelog SET action=? WHERE action=?', [to, from]);
+  });
+
+  // Lieferanten-Adressen aus dem Freitext in Strasse/PLZ/Ort/Land übernehmen.
+  // Was sich nicht eindeutig zerlegen lässt, bleibt als Freitext stehen.
+  migrateOnce('supplier-address-split-v1', () => {
+    let n = 0;
+    for (const s of all("SELECT id, address FROM suppliers WHERE COALESCE(address,'')!='' AND COALESCE(city,'')=''")) {
+      const a = splitAddress(s.address);
+      if (!a) continue;
+      db.run('UPDATE suppliers SET street=?,postal_code=?,city=?,country=? WHERE id=?', [a.street, a.postal_code, a.city, a.country, s.id]);
+      n++;
+    }
+    if (n) console.log(`Migration Lieferanten-Adresse: ${n} übernommen`);
   });
 
   saveDb();
@@ -1360,6 +1391,69 @@ function firstRevLabel() {
   return getSetting('rev_format','num') === 'letter' ? 'A' : '1';
 }
 
+// ── KURZCODE ──────────────────────────────────────────────────
+// Kurzer Code zum Aufdrucken auf 3D-Druckteile: "K7M" steht für das Teil,
+// auf dem Teil steht "K7M-3" für Revision 3. Ohne Zeichen, die klein
+// gedruckt leicht verwechselt werden (0 O Q 1 I L 2 Z 5 S 8 B G V).
+// Zufällig statt fortlaufend: ein Tippfehler trifft so meist keinen
+// gültigen Code statt eines anderen Teils.
+const SHORT_CODE_ALPHABET = '34679ACDEFHJKMNPRTUWXY';
+function newShortCode() {
+  // 3 Zeichen reichen für rund 10'000 Teile; wird es eng, kommt eines dazu
+  for (let len = 3; len <= 6; len++) {
+    for (let i = 0; i < 50; i++) {
+      let code = '';
+      for (let k = 0; k < len; k++) code += SHORT_CODE_ALPHABET[crypto.randomInt(SHORT_CODE_ALPHABET.length)];
+      if (!get('SELECT 1 as y FROM short_codes WHERE code=?', [code])) return code;
+    }
+  }
+  throw new Error('Kein freier Kurzcode gefunden');
+}
+function assignShortCode(itemId) {
+  const it = get('SELECT short_code FROM items WHERE id=?', [itemId]);
+  if (!it) return null;
+  if (it.short_code) return it.short_code;
+  const code = newShortCode();
+  db.run('INSERT INTO short_codes (code,item_id) VALUES (?,?)', [code, itemId]);
+  db.run('UPDATE items SET short_code=? WHERE id=?', [code, itemId]);
+  saveDb();
+  return code;
+}
+// Text, der auf das Teil gedruckt wird: Kurzcode und Revision
+const printCode = (shortCode, rev) => shortCode ? shortCode + (rev ? '-' + rev : '') : '';
+
+// Findet ein Teil über das, was auf dem Teil oder dem Etikett steht:
+// "K7M-3", "k7m 3", "K7M rev3", nur "K7M" — oder die volle Nummer mit
+// Revision aus dem QR-Code des Etiketts ("P1042-prt-0012 rev3").
+function findByPrintCode(q) {
+  const s = String(q || '').trim();
+  if (!s || s.length > 80) return null;
+  let item = null, rev = null;
+  const byCode = s.match(/^([A-Za-z0-9]{3,6})(?:(?:\s*[-./]\s*|\s+)(?:rev\s*)?([A-Za-z0-9]{1,3}))?$/i);
+  if (byCode) {
+    item = get('SELECT * FROM items WHERE short_code=?', [byCode[1].toUpperCase()]);
+    rev = byCode[2] || null;
+  }
+  if (!item) {
+    const byNumber = s.match(/^(\S+?)[\s_-]*rev\s*([A-Za-z0-9]{1,3})$/i);
+    if (byNumber) {
+      item = get('SELECT * FROM items WHERE LOWER(item_number)=LOWER(?)', [byNumber[1]]);
+      rev = byNumber[2];
+    }
+  }
+  if (!item) return null;
+  const project = get('SELECT number, name FROM projects WHERE id=?', [item.project_id]) || {};
+  const revision = rev
+    ? get('SELECT id, rev, status FROM revisions WHERE item_id=? AND UPPER(rev)=UPPER(?)', [item.id, rev]) || null
+    : null;
+  return {
+    item: { id: item.id, project_id: item.project_id, item_number: item.item_number, name: item.name,
+      item_type: item.item_type, short_code: item.short_code,
+      project_number: project.number, project_name: project.name },
+    revision, rev_requested: rev, latest_revision: getLatestRevision(item.id) || null,
+  };
+}
+
 function nextItemSeq(projectId, type) {
   const seg = type === 'asm' ? segAsm() : type === 'doc' ? segDoc() : segPrt();
   const sep = itemSep(); const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -1615,6 +1709,7 @@ app.post('/api/projects/:projectId/items', (req, res) => {
 
   const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price,classification) VALUES (?,?,?,?,?,?,?,?,?)',
     [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null, derivedClass]);
+  assignShortCode(itemId);
   run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Erste Revision']);
   log('item', itemId, 'Erstellt', item_type + ' ' + item_number + ' rev' + firstRevLabel());
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
@@ -2567,6 +2662,7 @@ app.post('/api/checkout/import', (req, res) => {
 
       const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description) VALUES (?,?,?,?,?,?)',
         [project.id, null, item_type, item_number, name, '']);
+      assignShortCode(itemId);
       const revId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Erstellt durch Checkout-Import']);
 
       if (filePath && fs.existsSync(filePath)) {
@@ -2743,7 +2839,7 @@ const REVENUE_STATUSES = ['CONFIRMED', 'DELIVERED', 'INVOICED'];
 const OPEN_ORDER_STATUSES = ['DRAFT', 'CONFIRMED', 'DELIVERED'];
 
 app.get('/api/customers', (req, res) => {
-  const customers = all('SELECT * FROM customers ORDER BY number DESC');
+  const customers = all('SELECT * FROM customers ORDER BY name COLLATE NOCASE');
   const orders = all(`
     SELECT o.customer_id, o.status, o.discount_pct, o.include_tax, o.tax_rate,
       COALESCE(o.order_date, substr(o.created_at,1,10)) as activity_date,
@@ -3298,7 +3394,7 @@ app.get('/api/search', (req, res) => {
   const cls = String(req.query.class || '').trim();
   const empty = { items: [], items_total: 0, projects: [], datasets: [], orders: [], customers: [], deliveries: [], rawMaterials: [] };
 
-  const wi = likeAll(tokens, ['i.item_number', 'i.name', 'i.description', 'i.classification', 'i.notes']);
+  const wi = likeAll(tokens, ['i.item_number', 'i.short_code', 'i.name', 'i.description', 'i.classification', 'i.notes']);
   const class_counts = all(`SELECT TRIM(COALESCE(i.classification,'')) as name, COUNT(*) as count
     FROM items i WHERE ${wi.sql} GROUP BY LOWER(TRIM(COALESCE(i.classification,'')))`, wi.params);
   if (!tokens.length && !cls) return res.json({ ...empty, class_counts, class: '' });
@@ -3355,7 +3451,10 @@ app.get('/api/search', (req, res) => {
     WHERE ${wr.sql}
     ORDER BY rm.name LIMIT 15`, wr.params);
 
-  res.json({ items: shown, items_total, projects, datasets, orders, customers, deliveries, rawMaterials, class_counts, class: '' });
+  // Kurzcode oder Etiketten-QR: direkter Treffer auf Teil und Revision
+  const code_match = findByPrintCode(req.query.q);
+
+  res.json({ code_match, items: shown, items_total, projects, datasets, orders, customers, deliveries, rawMaterials, class_counts, class: '' });
 });
 
 // ── KLASSIFIZIERUNG: VERWENDUNG UND UMBENENNEN ────────────────
@@ -4094,7 +4193,7 @@ app.get('/api/deliveries/:id', (req, res) => {
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
-  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,i.short_code,
     rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
     LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id
@@ -4388,7 +4487,7 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
-  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,i.short_code,
     rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
     LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id
@@ -4433,14 +4532,16 @@ app.post('/api/print-receipt', (req, res) => {
   if (!delivery_item_id) return res.status(400).json({ error: 'Position fehlt' });
   const short = mode === 'short';
 
-  const item = get(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price,
-    COALESCE(c.name, d.customer_name_free) as customer_name
+  const item = get(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price, i.short_code,
+    d.status as delivery_status, COALESCE(c.name, d.customer_name_free) as customer_name
     FROM delivery_items di
     LEFT JOIN items i ON di.item_id=i.id
     LEFT JOIN deliveries d ON di.delivery_id=d.id
     LEFT JOIN customers c ON d.customer_id=c.id
     WHERE di.id=?`, [delivery_item_id]);
   if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
+  attachDeliveredRevision(item, item.delivery_status === 'DELIVERED');
+  const rev = item.effective_rev?.rev;
   const rcptSettings = Object.fromEntries(
     all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_footer','receipt_line_width','receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes')")
     .map(r => [r.key, r.value])
@@ -4483,7 +4584,8 @@ app.post('/api/print-receipt', (req, res) => {
   const printData = {
     header:          companyName,
     name:            item.item_name || item.description,
-    number:          item.item_number || '',
+    number:          item.item_number ? item.item_number + (rev ? ' rev' + rev : '') : '',
+    code:            printCode(item.short_code, rev),
     desc:            item.item_name ? '' : (item.description || ''),
     qty:             item.quantity,
     unit:            item.unit,
@@ -4571,7 +4673,7 @@ app.post('/api/print-receipt-delivery', (req, res) => {
     FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id WHERE d.id=?`, [delivery_id]);
   if (!delivery) return res.status(404).json({ error: 'Produktionsauftrag nicht gefunden' });
 
-  const rows = all(`SELECT di.*, i.item_number, i.name as item_name, i.default_price
+  const rows = all(`SELECT di.*, i.item_number, i.item_type, i.name as item_name, i.default_price, i.short_code
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
     WHERE di.delivery_id=? ORDER BY di.position, di.id`, [delivery_id]);
 
@@ -4586,9 +4688,12 @@ app.post('/api/print-receipt-delivery', (req, res) => {
   const items = rows.map(item => {
     const price = item.unit_price != null ? item.unit_price : (item.default_price != null ? item.default_price : null);
     if (price != null) total = (total || 0) + price * item.quantity;
+    attachDeliveredRevision(item, delivery.status === 'DELIVERED');
+    const rev = item.effective_rev?.rev;
     return {
       name:   item.item_name || item.description,
-      number: item.item_number || '',
+      number: item.item_number ? item.item_number + (rev ? ' rev' + rev : '') : '',
+      code:   printCode(item.short_code, rev),
       qty:    item.quantity,
       unit:   item.unit,
       price:  price != null ? price * item.quantity : null,
@@ -5044,14 +5149,61 @@ app.post('/api/backups/restore-upload', uploadRestore.single('file'), (req, res)
 // ==============================================================
 // SUPPLIERS
 // ==============================================================
-app.get('/api/suppliers', (req, res) => res.json(all('SELECT * FROM suppliers ORDER BY number')));
+// "Musterstrasse 1\n8000 Zürich\nSchweiz" oder "Musterstrasse 1, CH-8000 Zürich"
+// → { street, postal_code, city, country }; ohne erkennbare PLZ-Zeile null
+function splitAddress(text) {
+  const parts = String(text || '').split(/\r?\n|,/).map(p => p.trim()).filter(Boolean);
+  const re = /^(?:[A-Z]{1,2}[- ]?)?(\d{4,5})\s+(.+)$/;
+  const i = parts.findIndex(p => re.test(p));
+  if (i < 0) return null;
+  const m = parts[i].match(re);
+  return { street: parts.slice(0, i).join(', '), postal_code: m[1], city: m[2], country: parts.slice(i + 1).join(', ') };
+}
+// Freitext-Adresse für Belege (Bestell-PDF) aus den Einzelfeldern
+function supplierAddressFields(body, current) {
+  const street = body.street || '', postal_code = body.postal_code || '', city = body.city || '', country = body.country || '';
+  const structured = street || postal_code || city;
+  const address = structured
+    ? [street, [postal_code, city].filter(Boolean).join(' '), country].filter(Boolean).join('\n')
+    : (body.address ?? current?.address ?? '');
+  return { street, postal_code, city, country, address };
+}
+
+// Offen = noch nicht erhalten; Volumen = tatsächlich bestellt
+const PO_OPEN_STATUSES = ['DRAFT', 'ORDERED'];
+const PO_VOLUME_STATUSES = ['ORDERED', 'RECEIVED'];
+
+app.get('/api/suppliers', (req, res) => {
+  const suppliers = all('SELECT * FROM suppliers ORDER BY name COLLATE NOCASE');
+  const pos = all(`
+    SELECT po.supplier_id, po.status, COALESCE(po.order_date, substr(po.created_at,1,10)) as activity_date,
+      COALESCE(SUM(poi.quantity * poi.unit_price), 0) as total
+    FROM purchase_orders po LEFT JOIN purchase_order_items poi ON poi.po_id = po.id
+    WHERE po.supplier_id IS NOT NULL GROUP BY po.id`);
+  const bySupplier = {};
+  pos.forEach(p => (bySupplier[p.supplier_id] ??= []).push(p));
+  const invCount = Object.fromEntries(all(
+    'SELECT supplier_id, COUNT(*) as n FROM inventory_items WHERE supplier_id IS NOT NULL GROUP BY supplier_id'
+  ).map(r => [r.supplier_id, r.n]));
+  suppliers.forEach(s => {
+    const list = bySupplier[s.id] || [];
+    s.po_count = list.length;
+    s.open_po_count = list.filter(p => PO_OPEN_STATUSES.includes(p.status)).length;
+    s.volume = list.filter(p => PO_VOLUME_STATUSES.includes(p.status)).reduce((a, p) => a + p.total, 0);
+    s.last_activity = list.reduce((m, p) => (p.activity_date > m ? p.activity_date : m), '') || null;
+    s.inventory_count = invCount[s.id] || 0;
+  });
+  res.json(suppliers);
+});
 
 app.post('/api/suppliers', (req, res) => {
-  const { name, contact_person, email, phone, address, notes } = req.body;
+  const { name, contact_person, email, phone, notes } = req.body;
   if (!name) return res.status(400).json({ error: 'Name fehlt' });
+  const a = supplierAddressFields(req.body);
   const number = nextSupplierNumber();
-  const id = runGetId('INSERT INTO suppliers (number,name,contact_person,email,phone,address,notes) VALUES (?,?,?,?,?,?,?)',
-    [number, name, contact_person||'', email||'', phone||'', address||'', notes||'']);
+  const id = runGetId(`INSERT INTO suppliers (number,name,contact_person,email,phone,address,street,postal_code,city,country,notes)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [number, name, contact_person||'', email||'', phone||'', a.address, a.street, a.postal_code, a.city, a.country, notes||'']);
   res.json(get('SELECT * FROM suppliers WHERE id=?', [id]));
 });
 
@@ -5059,19 +5211,35 @@ app.get('/api/suppliers/:id', (req, res) => {
   const s = get('SELECT * FROM suppliers WHERE id=?', [req.params.id]);
   if (!s) return res.status(404).json({ error: 'Nicht gefunden' });
   s.inventory_items = all('SELECT * FROM inventory_items WHERE supplier_id=? ORDER BY name', [s.id]);
+  s.purchase_orders = all(`
+    SELECT po.*, COUNT(poi.id) as item_count, COALESCE(SUM(poi.quantity * poi.unit_price), 0) as total
+    FROM purchase_orders po LEFT JOIN purchase_order_items poi ON poi.po_id = po.id
+    WHERE po.supplier_id=? GROUP BY po.id ORDER BY COALESCE(po.order_date, po.created_at) DESC, po.id DESC`, [s.id]);
+  s.volume = s.purchase_orders.filter(p => PO_VOLUME_STATUSES.includes(p.status)).reduce((a, p) => a + p.total, 0);
   res.json(s);
 });
 
 app.put('/api/suppliers/:id', (req, res) => {
-  const { name, contact_person, email, phone, address, notes } = req.body;
-  run('UPDATE suppliers SET name=?,contact_person=?,email=?,phone=?,address=?,notes=? WHERE id=?',
-    [name, contact_person||'', email||'', phone||'', address||'', notes||'', req.params.id]);
-  res.json(get('SELECT * FROM suppliers WHERE id=?', [req.params.id]));
+  const cur = get('SELECT * FROM suppliers WHERE id=?', [req.params.id]);
+  if (!cur) return res.status(404).json({ error: 'Nicht gefunden' });
+  const { name, contact_person, email, phone, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name fehlt' });
+  const a = supplierAddressFields(req.body, cur);
+  run(`UPDATE suppliers SET name=?,contact_person=?,email=?,phone=?,address=?,street=?,postal_code=?,city=?,country=?,notes=? WHERE id=?`,
+    [name, contact_person||'', email||'', phone||'', a.address, a.street, a.postal_code, a.city, a.country, notes||'', cur.id]);
+  res.json(get('SELECT * FROM suppliers WHERE id=?', [cur.id]));
 });
 
 app.delete('/api/suppliers/:id', (req, res) => {
-  run('UPDATE inventory_items SET supplier_id=NULL WHERE supplier_id=?', [req.params.id]);
-  run('DELETE FROM suppliers WHERE id=?', [req.params.id]);
+  const s = get('SELECT * FROM suppliers WHERE id=?', [req.params.id]);
+  if (!s) return res.status(404).json({ error: 'Nicht gefunden' });
+  // Wie bei Kunden: Bestellungen behalten den Namen, sonst ist der Beleg leer
+  tx(() => {
+    run(`UPDATE purchase_orders SET supplier_name_free=COALESCE(NULLIF(supplier_name_free,''), ?), supplier_id=NULL WHERE supplier_id=?`,
+      [s.name, s.id]);
+    run('UPDATE inventory_items SET supplier_id=NULL WHERE supplier_id=?', [s.id]);
+    run('DELETE FROM suppliers WHERE id=?', [s.id]);
+  });
   res.json({ success: true });
 });
 

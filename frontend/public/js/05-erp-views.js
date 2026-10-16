@@ -215,161 +215,277 @@ function _renderProfitRows() {
   }).join('') : `<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--t3)">Keine Einträge</td></tr>`;
 }
 
-// ── CUSTOMERS ─────────────────────────────────────────────────
-// Kunden als Karten: Kontakt, offene Vorgaenge und Umsatz auf einen Blick.
-// Die kompakte Liste bleibt als zweite Ansicht; beides merkt sich der Browser.
-const _CUST_PREFS_KEY = 'plm_customer_view';
-let _customerFilter = { text: '', show: '' };
-let _customerPrefs = { view: 'cards', sort: 'recent' };
-try { Object.assign(_customerPrefs, JSON.parse(localStorage.getItem(_CUST_PREFS_KEY) || '{}')); } catch {}
-function _saveCustomerPrefs() {
-  try { localStorage.setItem(_CUST_PREFS_KEY, JSON.stringify(_customerPrefs)); } catch {}
-}
-function _clearCustomerFilter() { _customerFilter = { text: '', show: '' }; renderCustomers(); }
-function _setCustomerView(v) {
-  _customerPrefs.view = v; _saveCustomerPrefs();
-  setLeftHeader('Kunden', _customerHeaderActions());
-  _renderCustomerRows();
-}
+// ── GESCHÄFTSPARTNER ──────────────────────────────────────────
+// Kunden und Lieferanten teilen sich die Darstellung: Karten oder Liste,
+// Suche über mehrere Wörter, Filter, Sortierung und dasselbe Detail-Layout.
+// Was je Art anders ist (Kennzahlen, Filter, Aktionen), steht in ihrer
+// Konfiguration (_registerPartnerKind). Ansicht und eine selbst gewählte
+// Sortierung merkt sich der Browser; ohne eigene Wahl wird nach Name sortiert.
 
-// Initialen mit fester Farbe je Name, damit man Kunden schneller wiedererkennt
-const _CUST_HUES = ['blue', 'green', 'amber', 'purple', 'teal'];
-function _custAvatar(name, size = 38) {
+// Initialen mit fester Farbe je Name, damit man Partner schneller wiedererkennt
+const _PARTNER_HUES = ['blue', 'green', 'amber', 'purple', 'teal'];
+function _avatar(name, size = 38) {
   const words = String(name || '').trim().split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w));
   const first = w => [...(w || '')][0] || '';
   const ini = (words.length > 1 ? first(words[0]) + first(words[1]) : [...(words[0] || '?')].slice(0, 2).join('')).toUpperCase();
   let h = 0;
   for (const ch of String(name || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0;
-  const hue = _CUST_HUES[h % _CUST_HUES.length];
+  const hue = _PARTNER_HUES[h % _PARTNER_HUES.length];
   const bg = hue === 'blue' ? 'var(--blue-glow)' : `var(--${hue}-soft)`;
-  return `<span class="cust-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.37)}px;background:${bg};color:var(--${hue})">${esc(ini)}</span>`;
+  return `<span class="partner-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.37)}px;background:${bg};color:var(--${hue})">${esc(ini)}</span>`;
 }
-const _custCityLine = c => [c.postal_code, c.city].filter(Boolean).join(' ');
-const _custTel = phone => String(phone || '').replace(/[^\d+]/g, '');
-const _custMailLink = c => `<a href="mailto:${esc(c.email)}" onclick="event.stopPropagation()" title="E-Mail schreiben">✉ ${esc(c.email)}</a>`;
-const _custTelLink = c => `<a href="tel:${esc(_custTel(c.phone))}" onclick="event.stopPropagation()" title="Anrufen">☎ ${esc(c.phone)}</a>`;
+const _cityLine = p => [p.postal_code, p.city].filter(Boolean).join(' ');
+// Strukturierte Adresse, sonst das frühere Freitextfeld
+const _addrLines = p => {
+  const lines = [p.street, _cityLine(p), p.country].filter(Boolean);
+  return lines.length ? lines : String(p.address || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+};
+const _telHref = phone => String(phone || '').replace(/[^\d+]/g, '');
+const _mailLink = email => `<a href="mailto:${esc(email)}" onclick="event.stopPropagation()" title="E-Mail schreiben">✉ ${esc(email)}</a>`;
+const _telLink = phone => `<a href="tel:${esc(_telHref(phone))}" onclick="event.stopPropagation()" title="Anrufen">☎ ${esc(phone)}</a>`;
+const _pill = (cls, text, title) => `<span class="partner-pill ${cls}" title="${esc(title)}">${text}</span>`;
+
+const _partner = {};   // je Art: { cfg, prefs, filter }
+function _registerPartnerKind(kind, cfg) {
+  const prefs = { view: 'cards', sort: 'name' };
+  try {
+    const saved = JSON.parse(localStorage.getItem(cfg.prefsKey) || '{}');
+    if (saved.view) prefs.view = saved.view;
+    if (saved.sortChosen && saved.sort) Object.assign(prefs, { sort: saved.sort, sortChosen: true });
+  } catch {}
+  _partner[kind] = { cfg, prefs, filter: { text: '', show: '' } };
+}
+function _savePartnerPrefs(kind) {
+  const p = _partner[kind];
+  try { localStorage.setItem(p.cfg.prefsKey, JSON.stringify(p.prefs)); } catch {}
+}
+function _partnerSetView(kind, view) {
+  _partner[kind].prefs.view = view;
+  _savePartnerPrefs(kind);
+  _partner[kind].cfg.header();
+  _renderPartnerRows(kind);
+}
+function _partnerSetSort(kind, sort) {
+  Object.assign(_partner[kind].prefs, { sort, sortChosen: true });
+  _savePartnerPrefs(kind);
+  _renderPartnerRows(kind);
+}
+function _partnerSetFilter(kind, key, value) { _partner[kind].filter[key] = value; _renderPartnerRows(kind); }
+function _partnerClearFilter(kind) { _partner[kind].filter = { text: '', show: '' }; _partner[kind].cfg.render(); }
+
+function _partnerViewToggle(kind) {
+  const v = _partner[kind].prefs.view;
+  const seg = (key, label, title) =>
+    `<button class="${v === key ? 'active' : ''}" onclick="_partnerSetView('${kind}','${key}')" title="${title}">${label}</button>`;
+  return `<div class="partner-seg">${seg('cards', '▦ Karten', 'Kartenansicht')}${seg('list', '☰ Liste', 'Listenansicht')}</div>`;
+}
+
+// Suchfeld, Filter und Sortierung; die Treffer rendert _renderPartnerRows
+function _partnerBody(kind) {
+  const { cfg, filter, prefs } = _partner[kind];
+  return `<div class="partner-toolbar">
+      <input class="fi" style="flex:1;min-width:200px" placeholder="${esc(cfg.searchHint)}" value="${esc(filter.text)}"
+        oninput="_partnerSetFilter('${kind}','text',this.value)">
+      <select class="fs" style="width:auto" title="Filter" onchange="_partnerSetFilter('${kind}','show',this.value)">
+        ${_selOpts(cfg.filters, filter.show)}</select>
+      <select class="fs" style="width:auto" title="Sortierung" onchange="_partnerSetSort('${kind}',this.value)">
+        ${_selOpts(cfg.sorts, prefs.sort)}</select>
+    </div>
+    <div class="partner-count" id="_${kind}-count"></div>
+    <div id="_${kind}-rows"></div>`;
+}
+
+// Jeder Suchbegriff muss irgendwo vorkommen: "muster zürich" findet die Muster AG in Zürich
+function _visiblePartners(kind) {
+  const { cfg, filter, prefs } = _partner[kind];
+  const terms = filter.text.toLowerCase().split(/\s+/).filter(Boolean);
+  const byName = (a, b) => a.name.localeCompare(b.name, 'de-CH', { sensitivity: 'base' });
+  const recent = p => p.last_activity || (p.created_at || '').slice(0, 10);
+  const cmp = {
+    name:   byName,
+    recent: (a, b) => recent(b).localeCompare(recent(a)),
+    value:  (a, b) => (cfg.value(b) || 0) - (cfg.value(a) || 0),
+    number: (a, b) => String(b.number || '').localeCompare(String(a.number || ''), undefined, { numeric: true }),
+  }[prefs.sort] || byName;
+  return cfg.rows().filter(p => {
+    const hay = cfg.searchFields(p).filter(Boolean).join(' ').toLowerCase();
+    return terms.every(t => hay.includes(t)) && (!filter.show || cfg.show[filter.show](p));
+  }).sort((a, b) => cmp(a, b) || byName(a, b));
+}
+
+function _renderPartnerRows(kind) {
+  const { cfg, filter, prefs } = _partner[kind];
+  const el = document.getElementById(`_${kind}-rows`);
+  if (!el) return;
+  const rows = _visiblePartners(kind);
+  const total = cfg.rows().length;
+  const [one, many] = cfg.noun;
+  document.getElementById(`_${kind}-count`).innerHTML = (filter.text || filter.show)
+    ? `${rows.length} von ${total} ${many} · <a href="#" onclick="event.preventDefault();_partnerClearFilter('${kind}')">Filter zurücksetzen</a>`
+    : `${total} ${total === 1 ? one : many}`;
+  el.innerHTML = !rows.length
+    ? `<div class="empty" style="padding:40px 20px"><div class="empty-text">Keine Treffer</div></div>`
+    : prefs.view === 'list'
+      ? _partnerTable(kind, rows)
+      : `<div class="partner-grid">${rows.map(p => _partnerCard(kind, p)).join('')}</div>`;
+  if (!document.getElementById('detail-panel')?.classList.contains('hidden')) _markActiveRow(cfg.detailId());
+}
+
+const _partnerSub = p => `<span class="partner-num">${esc(p.number || '')}</span>${_cityLine(p) ? ' · ' + esc(_cityLine(p)) : ''}`;
+
+function _partnerCard(kind, p) {
+  const { cfg } = _partner[kind];
+  const s = cfg.card(p, false);
+  const open = cfg.openFn;
+  return `<div class="card partner-card" data-id="${p.id}" tabindex="0" onclick="${open}(${p.id})"
+      onkeydown="if(event.key==='Enter'&&event.target===this)${open}(${p.id})">
+    ${s.quick ? `<button class="btn btn-ghost btn-sm partner-quick" title="${esc(s.quick.title)}"
+      onclick="event.stopPropagation();${s.quick.onclick}">${s.quick.label}</button>` : ''}
+    <div class="partner-head">
+      ${_avatar(p.name)}
+      <div style="min-width:0">
+        <div class="partner-name" title="${esc(p.name)}">${esc(p.name)}</div>
+        <div class="partner-sub">${_partnerSub(p)}</div>
+      </div>
+    </div>
+    ${s.contact.length ? `<div class="partner-contact">${s.contact.join('')}</div>` : `<div class="partner-contact partner-muted">Keine Kontaktdaten</div>`}
+    ${s.pills ? `<div class="partner-pills">${s.pills}</div>` : ''}
+    <div class="partner-foot">
+      <span class="partner-muted">${s.meta}</span>
+      ${s.value > 0 ? `<span class="partner-value" title="${esc(cfg.valueTitle)}">${fmtCHF(s.value)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function _partnerTable(kind, rows) {
+  const { cfg } = _partner[kind];
+  return `<div class="tbl-wrap"><table class="partner-table">
+    <thead><tr><th>${cfg.noun[0]}</th><th>Kontakt</th><th>Offen</th><th style="text-align:right">${cfg.valueLabel}</th></tr></thead>
+    <tbody>${rows.map(p => {
+      const s = cfg.card(p, true);
+      return `<tr data-id="${p.id}" onclick="${cfg.openFn}(${p.id})">
+      <td><div class="partner-head" style="max-width:240px">${_avatar(p.name, 28)}
+        <div style="min-width:0"><div class="partner-name" style="font-size:13px;font-weight:500" title="${esc(p.name)}">${esc(p.name)}</div>
+        <div class="partner-sub">${_partnerSub(p)}</div></div></div></td>
+      <td><div class="partner-contact" style="max-width:180px">${s.contact.join('') || '<span class="partner-muted">—</span>'}</div></td>
+      <td><div class="partner-pills" style="flex-wrap:nowrap">${s.pills || '<span class="partner-muted">—</span>'}</div></td>
+      <td style="text-align:right;white-space:nowrap;font-family:var(--mono)">
+        <div style="color:${s.value > 0 ? 'var(--green)' : 'var(--t4)'}">${s.value > 0 ? fmtCHF(s.value) : '—'}</div>
+        ${p.last_activity ? `<div style="font-size:12px;color:var(--t3);margin-top:2px">${fmtD(p.last_activity)}</div>` : ''}</td>
+    </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+// ── Detail-Bausteine ──
+const _partnerTitle = p => `${_avatar(p.name, 26)} <strong>${esc(p.name)}</strong>
+  <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(p.number || '')}</span>`;
+const _partnerTabCount = n => ` <span class="chip" style="margin-left:5px">${n}</span>`;
+const _partnerList = rows => `<div class="partner-list">${rows.join('')}</div>`;
+const _partnerEmpty = msg => `<div class="partner-muted" style="font-size:13px;padding:10px 2px">${msg}</div>`;
+const _partnerKpis = kpis => `<div class="partner-kpis">${kpis.map(([label, val, sub, color]) => `<div class="partner-kpi">
+    <div class="ps-label">${label}</div>
+    <div class="partner-kpi-val"${color ? ` style="color:${color}"` : ''}>${val}</div>
+    ${sub ? `<div class="partner-kpi-sub">${sub}</div>` : ''}
+  </div>`).join('')}</div>`;
+
+function _partnerDocRow(onclick, badge, title, meta, total, count) {
+  return `<div class="partner-row" onclick="${onclick}">
+    ${badge}
+    <div style="min-width:0">
+      <div class="partner-row-title">${esc(title)}</div>
+      <div class="partner-row-meta">${meta}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:var(--mono);font-size:13px">${total}</div>
+      <div class="partner-row-meta">${count} Pos.</div>
+    </div>
+  </div>`;
+}
+
+// Belege nach Phase gruppiert; was in keine Gruppe passt, landet unter "Sonstige"
+function _partnerGroups(groups, docs, rowFn) {
+  const others = docs.filter(d => !groups.some(([, s]) => s.includes(d.status)));
+  return [...groups.map(([label, sts]) => [label, docs.filter(d => sts.includes(d.status))]), ['Sonstige', others]]
+    .filter(([, rows]) => rows.length)
+    .map(([label, rows]) => `<div class="sep-label">${label} · ${rows.length}</div>${_partnerList(rows.map(rowFn))}`)
+    .join('');
+}
+
+// Adresse (mit Kopieren), Kontakt und Notizen; extra = weitere Felder vor E-Mail
+function _partnerInfo(p, copyCall, extra = []) {
+  const addr = _addrLines(p);
+  const field = (label, html, first) => `<div class="ps-label"${first ? '' : ' style="margin-top:10px"'}>${label}</div><div class="ps-val">${html}</div>`;
+  const dash = '<span class="partner-muted">—</span>';
+  const contact = [...extra,
+    ['E-Mail', p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--blue)">${esc(p.email)}</a>` : dash],
+    ['Telefon', p.phone ? `<a href="tel:${esc(_telHref(p.phone))}" style="color:var(--blue)">${esc(p.phone)}</a>` : dash]];
+  return `<div class="partner-info">
+    <div>
+      <div class="ps-label">Adresse</div>
+      ${addr.length
+        ? `<div class="ps-val" style="line-height:1.5">${addr.map(esc).join('<br>')}</div>
+           <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="${copyCall}">⧉ Adresse kopieren</button>`
+        : `<div class="partner-muted">—</div>`}
+    </div>
+    <div>${contact.map(([l, h], i) => field(l, h, i === 0)).join('')}</div>
+    ${p.notes ? `<div style="grid-column:span 2"><div class="ps-label">Notizen</div>
+      <div class="ps-val" style="white-space:pre-wrap;color:var(--t2);font-weight:400">${esc(p.notes)}</div></div>` : ''}
+  </div>`;
+}
+const _partnerAddressText = p => [p.name, ..._addrLines(p)].join('\n');
+
+// ── CUSTOMERS ─────────────────────────────────────────────────
+_registerPartnerKind('customer', {
+  prefsKey: 'plm_customer_view',
+  noun: ['Kunde', 'Kunden'],
+  rows: () => state.customers || [],
+  detailId: () => state.customerDetailId,
+  openFn: 'openCustomerDetail',
+  render: () => renderCustomers(),
+  header: () => setLeftHeader('Kunden', _customerHeaderActions()),
+  searchHint: 'Suchen nach Name, Ort, E-Mail, Telefon…',
+  searchFields: c => [c.name, c.number, c.email, c.phone, c.street, c.postal_code, c.city, c.country, c.notes],
+  filters: [['', 'Alle Kunden'], ['open', 'Mit offenen Vorgängen'], ['none', 'Ohne Aufträge']],
+  show: { open: c => (c.open_order_count + c.open_quote_count) > 0, none: c => !c.order_count },
+  sorts: [['name', 'Name A–Z'], ['recent', 'Zuletzt aktiv'], ['value', 'Umsatz'], ['number', 'Nummer']],
+  value: c => c.revenue,
+  valueLabel: 'Umsatz',
+  valueTitle: 'Umsatz aus bestätigten, gelieferten und fakturierten Aufträgen',
+  card: (c, short) => {
+    const open = c.open_order_count || 0, quotes = c.open_quote_count || 0;
+    return {
+      contact: [c.email && _mailLink(c.email), c.phone && _telLink(c.phone)].filter(Boolean),
+      pills: (open ? _pill('amber', short ? open : `${open} ${open === 1 ? 'offener Auftrag' : 'offene Aufträge'}`,
+                'Offene Aufträge (Entwurf, bestätigt, geliefert)') : '')
+           + (quotes ? _pill('blue', short ? `${quotes} Ang.` : `${quotes} ${quotes === 1 ? 'Angebot' : 'Angebote'} offen`,
+                'Offene Angebote') : ''),
+      meta: c.order_count
+        ? `${c.order_count} Auftr${c.order_count === 1 ? 'ag' : 'äge'}${c.last_activity ? ' · zuletzt ' + fmtD(c.last_activity) : ''}`
+        : 'Noch keine Aufträge',
+      value: c.revenue,
+      quick: { label: '+ Auftrag', title: 'Neuen Auftrag für diesen Kunden anlegen', onclick: `openOrderModal(null,{customerId:${c.id}})` },
+    };
+  },
+});
 
 function _customerHeaderActions() {
-  const v = _customerPrefs.view;
-  const seg = (key, label, title) =>
-    `<button class="${v === key ? 'active' : ''}" onclick="_setCustomerView('${key}')" title="${title}">${label}</button>`;
   return `<div style="display:flex;gap:8px;align-items:center">
-    <div class="cust-seg">${seg('cards', '▦ Karten', 'Kartenansicht')}${seg('list', '☰ Liste', 'Listenansicht')}</div>
+    ${_partnerViewToggle('customer')}
     <button class="btn btn-primary btn-sm" onclick="openCustomerModal()">+ Kunde</button>
   </div>`;
 }
 
 async function renderCustomers() {
-  setLeftHeader('Kunden', _customerHeaderActions());
+  _partner.customer.cfg.header();
   state.customers = await api('/api/customers');
   if (!state.customers.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">👤</div><div class="empty-text">Noch keine Kunden</div>
       <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="openCustomerModal()">+ Ersten Kunden anlegen</button></div>`);
     return;
   }
-  const f = _customerFilter;
-  setLeftBody(`
-    <div class="cust-toolbar">
-      <input class="fi" style="flex:1;min-width:200px" placeholder="Suchen nach Name, Ort, E-Mail, Telefon…" value="${esc(f.text)}"
-        oninput="_customerFilter.text=this.value;_renderCustomerRows()">
-      <select class="fs" style="width:auto" title="Filter" onchange="_customerFilter.show=this.value;_renderCustomerRows()">
-        ${_selOpts([['', 'Alle Kunden'], ['open', 'Mit offenen Vorgängen'], ['none', 'Ohne Aufträge']], f.show)}
-      </select>
-      <select class="fs" style="width:auto" title="Sortierung" onchange="_customerPrefs.sort=this.value;_saveCustomerPrefs();_renderCustomerRows()">
-        ${_selOpts([['recent', 'Zuletzt aktiv'], ['name', 'Name A–Z'], ['revenue', 'Umsatz'], ['number', 'Nummer']], _customerPrefs.sort)}
-      </select>
-    </div>
-    <div class="cust-count" id="_customer-count"></div>
-    <div id="_customer-rows"></div>`);
-  _renderCustomerRows();
-}
-
-// Jeder Suchbegriff muss irgendwo vorkommen: "muster zürich" findet die Muster AG in Zürich
-function _visibleCustomers() {
-  const terms = _customerFilter.text.toLowerCase().split(/\s+/).filter(Boolean);
-  const show = _customerFilter.show;
-  const byName = (a, b) => a.name.localeCompare(b.name, 'de-CH', { sensitivity: 'base' });
-  const recent = c => c.last_activity || (c.created_at || '').slice(0, 10);
-  const cmp = {
-    recent:  (a, b) => recent(b).localeCompare(recent(a)),
-    name:    byName,
-    revenue: (a, b) => (b.revenue || 0) - (a.revenue || 0),
-    number:  (a, b) => b.number.localeCompare(a.number, undefined, { numeric: true }),
-  }[_customerPrefs.sort] || byName;
-  return (state.customers || []).filter(c => {
-    const hay = [c.name, c.number, c.email, c.phone, c.street, c.postal_code, c.city, c.country, c.notes]
-      .filter(Boolean).join(' ').toLowerCase();
-    if (!terms.every(t => hay.includes(t))) return false;
-    if (show === 'open' && !(c.open_order_count + c.open_quote_count)) return false;
-    if (show === 'none' && c.order_count) return false;
-    return true;
-  }).sort((a, b) => cmp(a, b) || byName(a, b));
-}
-
-function _renderCustomerRows() {
-  const el = document.getElementById('_customer-rows');
-  if (!el) return;
-  const rows = _visibleCustomers();
-  const total = (state.customers || []).length;
-  document.getElementById('_customer-count').innerHTML = (_customerFilter.text || _customerFilter.show)
-    ? `${rows.length} von ${total} Kunden · <a href="#" onclick="event.preventDefault();_clearCustomerFilter()">Filter zurücksetzen</a>`
-    : `${total} Kunde${total === 1 ? '' : 'n'}`;
-  el.innerHTML = !rows.length
-    ? `<div class="empty" style="padding:40px 20px"><div class="empty-text">Keine Treffer</div></div>`
-    : _customerPrefs.view === 'list'
-      ? _customerTable(rows)
-      : `<div class="cust-grid">${rows.map(_customerCard).join('')}</div>`;
-  if (!document.getElementById('detail-panel')?.classList.contains('hidden')) _markActiveRow(state.customerDetailId);
-}
-
-function _custOpenPills(c, short) {
-  const open = c.open_order_count || 0, quotes = c.open_quote_count || 0;
-  return [
-    open ? `<span class="cust-pill open" title="Offene Aufträge (Entwurf, bestätigt, geliefert)">${open}${short ? '' : open === 1 ? ' offener Auftrag' : ' offene Aufträge'}</span>` : '',
-    quotes ? `<span class="cust-pill quote" title="Offene Angebote">${quotes} ${short ? 'Ang.' : quotes === 1 ? 'Angebot offen' : 'Angebote offen'}</span>` : '',
-  ].join('');
-}
-
-function _customerCard(c) {
-  const contact = [c.email ? _custMailLink(c) : '', c.phone ? _custTelLink(c) : ''].join('');
-  const pills = _custOpenPills(c, false);
-  const meta = c.order_count
-    ? `${c.order_count} Auftr${c.order_count === 1 ? 'ag' : 'äge'}${c.last_activity ? ' · zuletzt ' + fmtD(c.last_activity) : ''}`
-    : 'Noch keine Aufträge';
-  return `<div class="card cust-card" data-id="${c.id}" tabindex="0" onclick="openCustomerDetail(${c.id})"
-      onkeydown="if(event.key==='Enter'&&event.target===this)openCustomerDetail(${c.id})">
-    <button class="btn btn-ghost btn-sm cust-quick" title="Neuen Auftrag für diesen Kunden anlegen"
-      onclick="event.stopPropagation();openOrderModal(null,{customerId:${c.id}})">+ Auftrag</button>
-    <div class="cust-head">
-      ${_custAvatar(c.name)}
-      <div style="min-width:0">
-        <div class="cust-name" title="${esc(c.name)}">${esc(c.name)}</div>
-        <div class="cust-sub"><span class="cust-num">${esc(c.number)}</span>${_custCityLine(c) ? ' · ' + esc(_custCityLine(c)) : ''}</div>
-      </div>
-    </div>
-    ${contact ? `<div class="cust-contact">${contact}</div>` : `<div class="cust-contact cust-muted">Keine Kontaktdaten</div>`}
-    ${pills ? `<div class="cust-pills">${pills}</div>` : ''}
-    <div class="cust-foot">
-      <span class="cust-muted">${meta}</span>
-      ${c.revenue > 0 ? `<span class="cust-rev" title="Umsatz aus bestätigten, gelieferten und fakturierten Aufträgen">${fmtCHF(c.revenue)}</span>` : ''}
-    </div>
-  </div>`;
-}
-
-function _customerTable(rows) {
-  return `<div class="tbl-wrap"><table class="cust-table">
-    <thead><tr><th>Kunde</th><th>Kontakt</th><th>Offen</th><th style="text-align:right">Umsatz</th></tr></thead>
-    <tbody>${rows.map(c => `<tr data-id="${c.id}" onclick="openCustomerDetail(${c.id})">
-      <td><div class="cust-head" style="max-width:240px">${_custAvatar(c.name, 28)}
-        <div style="min-width:0"><div class="cust-name" style="font-size:13px;font-weight:500" title="${esc(c.name)}">${esc(c.name)}</div>
-        <div class="cust-sub"><span class="cust-num">${esc(c.number)}</span>${_custCityLine(c) ? ' · ' + esc(_custCityLine(c)) : ''}</div></div></div></td>
-      <td><div class="cust-contact" style="max-width:180px">${c.email ? _custMailLink(c) : ''}${c.phone ? _custTelLink(c) : ''}${!c.email && !c.phone ? '<span class="cust-muted">—</span>' : ''}</div></td>
-      <td><div class="cust-pills" style="flex-wrap:nowrap">${_custOpenPills(c, true) || '<span class="cust-muted">—</span>'}</div></td>
-      <td style="text-align:right;white-space:nowrap;font-family:var(--mono)">
-        <div style="color:${c.revenue > 0 ? 'var(--green)' : 'var(--t4)'}">${c.revenue > 0 ? fmtCHF(c.revenue) : '—'}</div>
-        ${c.last_activity ? `<div style="font-size:12px;color:var(--t3);margin-top:2px">${fmtD(c.last_activity)}</div>` : ''}</td>
-    </tr>`).join('')}</tbody>
-  </table></div>`;
+  setLeftBody(_partnerBody('customer'));
+  _renderPartnerRows('customer');
 }
 
 // Auftragsphasen in der Reihenfolge des Ablaufs; Angebote sind die erste Phase
@@ -388,19 +504,6 @@ async function _openFromCustomer(view, id) {
   if (view === 'orders') openOrderDetail(id); else openDeliveryDetail(id);
 }
 
-function _custDocRow(onclick, badge, title, meta, total, count) {
-  return `<div class="cust-row" onclick="${onclick}">
-    ${badge}
-    <div style="min-width:0">
-      <div class="cust-row-title">${esc(title)}</div>
-      <div class="cust-row-meta">${meta}</div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-family:var(--mono);font-size:13px">${total}</div>
-      <div class="cust-row-meta">${count} Pos.</div>
-    </div>
-  </div>`;
-}
 function _custOrderRow(o) {
   const today = new Date().toISOString().slice(0, 10);
   const validity = o.status === 'QUOTE' && o.valid_until
@@ -408,20 +511,18 @@ function _custOrderRow(o) {
     : '';
   const meta = [esc(o.number), o.order_date ? fmtD(o.order_date) : '', validity,
     o.status !== 'QUOTE' && o.delivery_date ? '📅 ' + fmtD(o.delivery_date) : ''].filter(Boolean).join(' · ');
-  return _custDocRow(`_openFromCustomer('orders',${o.id})`, stBadge('order', o.status), o.title, meta, fmtCHF(o.total || 0), o.item_count);
+  return _partnerDocRow(`_openFromCustomer('orders',${o.id})`, stBadge('order', o.status), o.title, meta, fmtCHF(o.total || 0), o.item_count);
 }
 function _custDeliveryRow(d) {
   const meta = [esc(d.number), d.order_number ? 'Auftrag ' + esc(d.order_number) : '',
     d.delivery_date ? fmtD(d.delivery_date) : ''].filter(Boolean).join(' · ');
-  return _custDocRow(`_openFromCustomer('deliveries',${d.id})`, stBadge('delivery', d.status), d.title, meta,
+  return _partnerDocRow(`_openFromCustomer('deliveries',${d.id})`, stBadge('delivery', d.status), d.title, meta,
     d.total != null ? fmtCHF(d.total) : '—', d.item_count);
 }
 
 async function _copyCustomerAddress(id) {
   const c = (state.customers || []).find(x => x.id === id) || await api(`/api/customers/${id}`);
-  const text = [c.name, c.street, _custCityLine(c), c.country].filter(Boolean).join('\n');
-  try { await navigator.clipboard.writeText(text); toast('Adresse kopiert', 'ok'); }
-  catch { toast('Kopieren nicht möglich', 'err'); }
+  copyText(_partnerAddressText(c), 'Adresse kopiert');
 }
 
 async function openCustomerDetail(id) {
@@ -430,78 +531,45 @@ async function openCustomerDetail(id) {
   _trackRecent('customer', c.id, c.name, c.number);
   _pushHistory({ view: 'customers', detailType: 'customer', detailId: c.id });
 
-  const empty = msg => `<div class="cust-muted" style="font-size:13px;padding:10px 2px">${msg}</div>`;
-  const list = rows => `<div class="cust-list">${rows.join('')}</div>`;
   const openOrders = c.orders.filter(o => _CUST_OPEN_STATUSES.includes(o.status));
   const nQuotes = openOrders.filter(o => o.status === 'QUOTE').length;
   const nOpen = openOrders.length - nQuotes;
   const lastDate = c.orders.map(o => o.order_date || (o.created_at || '').slice(0, 10)).sort().pop();
-  const addrLines = [c.street, _custCityLine(c), c.country].filter(Boolean);
-  const kpi = (label, val, sub, color) => `<div class="cust-kpi">
-    <div class="ps-label">${label}</div>
-    <div class="cust-kpi-val"${color ? ` style="color:${color}"` : ''}>${val}</div>
-    ${sub ? `<div class="cust-kpi-sub">${sub}</div>` : ''}
-  </div>`;
 
-  const others = c.orders.filter(o => !_CUST_ORDER_GROUPS.some(([, s]) => s.includes(o.status)));
-  const groups = [..._CUST_ORDER_GROUPS.map(([label, sts]) => [label, c.orders.filter(o => sts.includes(o.status))]),
-    ['Sonstige', others]]
-    .filter(([, rows]) => rows.length)
-    .map(([label, rows]) => `<div class="sep-label">${label} · ${rows.length}</div>${list(rows.map(_custOrderRow))}`)
-    .join('');
-
-  document.getElementById('dp-title').innerHTML = `${_custAvatar(c.name, 26)} <strong>${esc(c.name)}</strong>
-    <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(c.number)}</span>`;
-
-  const count = n => ` <span class="chip" style="margin-left:5px">${n}</span>`;
+  document.getElementById('dp-title').innerHTML = _partnerTitle(c);
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'cd-overview')">Übersicht</button>
-    <button class="tab" onclick="switchTab(this,'cd-orders')">Aufträge${count(c.orders.length)}</button>
-    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Produktion${count(c.deliveries.length)}</button>`;
+    <button class="tab" onclick="switchTab(this,'cd-orders')">Aufträge${_partnerTabCount(c.orders.length)}</button>
+    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Produktion${_partnerTabCount(c.deliveries.length)}</button>`;
 
   document.getElementById('dp-body').innerHTML = `
     <div id="cd-overview">
-      <div class="cust-actions">
+      <div class="partner-actions">
         <button class="btn btn-primary btn-sm" onclick="openOrderModal(null,{customerId:${c.id}})">+ Auftrag</button>
         <button class="btn btn-ghost btn-sm" onclick="openOrderModal(null,{customerId:${c.id},status:'QUOTE'})">+ Angebot</button>
         <span style="flex:1"></span>
         <button class="btn btn-ghost btn-sm" onclick="openCustomerModal(${c.id})">✏️ Bearbeiten</button>
         <button class="btn btn-red btn-sm" onclick="delCustomer(${c.id})">🗑 Löschen</button>
       </div>
-      <div class="cust-kpis">
-        ${kpi('Umsatz', c.revenue > 0 ? fmtCHF(c.revenue) : '—', 'bestätigt bis fakturiert', c.revenue > 0 ? 'var(--green)' : '')}
-        ${kpi('Offene Aufträge', nOpen, '', nOpen ? 'var(--amber)' : '')}
-        ${kpi('Offene Angebote', nQuotes, '', nQuotes ? 'var(--blue)' : '')}
-        ${kpi('Letzter Auftrag', lastDate ? fmtD(lastDate) : '—', c.created_at ? 'Kunde seit ' + fmtD(c.created_at) : '')}
-      </div>
-      <div class="cust-info">
-        <div>
-          <div class="ps-label">Adresse</div>
-          ${addrLines.length
-            ? `<div class="ps-val" style="line-height:1.5">${addrLines.map(esc).join('<br>')}</div>
-               <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="_copyCustomerAddress(${c.id})">⧉ Adresse kopieren</button>`
-            : `<div class="cust-muted">—</div>`}
-        </div>
-        <div>
-          <div class="ps-label">E-Mail</div>
-          <div class="ps-val">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a>` : '<span class="cust-muted">—</span>'}</div>
-          <div class="ps-label" style="margin-top:10px">Telefon</div>
-          <div class="ps-val">${c.phone ? `<a href="tel:${esc(_custTel(c.phone))}" style="color:var(--blue)">${esc(c.phone)}</a>` : '<span class="cust-muted">—</span>'}</div>
-        </div>
-        ${c.notes ? `<div style="grid-column:span 2"><div class="ps-label">Notizen</div>
-          <div class="ps-val" style="white-space:pre-wrap;color:var(--t2);font-weight:400">${esc(c.notes)}</div></div>` : ''}
-      </div>
+      ${_partnerKpis([
+        ['Umsatz', c.revenue > 0 ? fmtCHF(c.revenue) : '—', 'bestätigt bis fakturiert', c.revenue > 0 ? 'var(--green)' : ''],
+        ['Offene Aufträge', nOpen, '', nOpen ? 'var(--amber)' : ''],
+        ['Offene Angebote', nQuotes, '', nQuotes ? 'var(--blue)' : ''],
+        ['Letzter Auftrag', lastDate ? fmtD(lastDate) : '—', c.created_at ? 'Kunde seit ' + fmtD(c.created_at) : ''],
+      ])}
+      ${_partnerInfo(c, `_copyCustomerAddress(${c.id})`)}
       <div class="sep-label">Offene Vorgänge</div>
-      ${openOrders.length ? list(openOrders.map(_custOrderRow))
-        : empty(c.orders.length ? 'Nichts offen — alle Aufträge sind abgeschlossen.' : 'Noch keine Aufträge für diesen Kunden.')}
+      ${openOrders.length ? _partnerList(openOrders.map(_custOrderRow))
+        : _partnerEmpty(c.orders.length ? 'Nichts offen — alle Aufträge sind abgeschlossen.' : 'Noch keine Aufträge für diesen Kunden.')}
     </div>
     <div id="cd-orders" style="display:none">
-      ${c.orders.length ? `<div class="cust-sum"><span>${c.orders.length} Aufträge und Angebote</span>
-        <span>Umsatz <b style="font-family:var(--mono);color:var(--t1)">${fmtCHF(c.revenue || 0)}</b></span></div>${groups}`
-        : empty('Noch keine Aufträge für diesen Kunden.')}
+      ${c.orders.length ? `<div class="partner-sum"><span>${c.orders.length} Aufträge und Angebote</span>
+        <span>Umsatz <b style="font-family:var(--mono);color:var(--t1)">${fmtCHF(c.revenue || 0)}</b></span></div>
+        ${_partnerGroups(_CUST_ORDER_GROUPS, c.orders, _custOrderRow)}`
+        : _partnerEmpty('Noch keine Aufträge für diesen Kunden.')}
     </div>
     <div id="cd-deliveries" style="display:none">
-      ${c.deliveries.length ? list(c.deliveries.map(_custDeliveryRow)) : empty('Keine Produktionsaufträge')}
+      ${c.deliveries.length ? _partnerList(c.deliveries.map(_custDeliveryRow)) : _partnerEmpty('Keine Produktionsaufträge')}
     </div>`;
 
   _markActiveRow(c.id);
@@ -874,16 +942,60 @@ function renderSearchView() {
 function onSearch(q) {
   clearTimeout(searchTimer);
   if ((!q || q.length < 2) && !_searchClass) return;
-  searchTimer = setTimeout(() => {
-    if (state.view !== 'search') {
-      state.view = 'search';
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.getElementById('ni-search')?.classList.add('active');
-      renderSearchView();
-      return;
-    }
-    _runSearch(q);
-  }, 300);
+  searchTimer = setTimeout(() => _showSearch(q), 300);
+}
+function _showSearch(q) {
+  if (state.view !== 'search') {
+    state.view = 'search';
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('ni-search')?.classList.add('active');
+    renderSearchView();
+    return;
+  }
+  _runSearch(q);
+}
+
+// Enter — auch vom Barcode-Scanner, der nach dem QR-Inhalt Enter schickt:
+// ein Kurzcode-Treffer öffnet Teil und Revision direkt, sonst normale Suche.
+async function onSearchEnter(q) {
+  q = String(q || '').trim();
+  clearTimeout(searchTimer);
+  if (q.length < 2) return;
+  let r;
+  try { r = await api('/api/search?' + new URLSearchParams({ q })); } catch { return; }
+  if (r.code_match) _openCodeMatch(r.code_match);
+  else _showSearch(q);
+}
+let _lastCodeMatch = null;
+async function _openCodeMatch(m) {
+  if (!m) return;
+  if (m.rev_requested && !m.revision) toast(`Revision ${m.rev_requested} gibt es bei ${m.item.item_number} nicht`, 'err');
+  await openProjectAndItem(m.item.project_id, m.item.id, m.revision?.id);
+}
+
+// Treffer über Kurzcode oder Etiketten-QR: oben als eigene Karte
+function _renderCodeMatch(m) {
+  if (!m) return '';
+  _lastCodeMatch = m;
+  const it = m.item, rev = m.revision, latest = m.latest_revision;
+  const shown = it.short_code + (m.rev_requested ? '-' + (rev?.rev || m.rev_requested) : '');
+  const note = m.rev_requested && !rev
+    ? `<span style="color:var(--red)">Revision ${esc(m.rev_requested)} gibt es nicht${latest ? ' — neueste ist rev' + esc(latest.rev) : ''}</span>`
+    : rev && latest && latest.id !== rev.id
+      ? `<span style="color:var(--amber)">Neuere Revision vorhanden: rev${esc(latest.rev)}</span>`
+      : rev ? '<span style="color:var(--green)">Aktueller Stand</span>' : '';
+  const revBadge = r => r ? `<span class="status st-${r.status}" title="${esc(PLM_ST_LABEL[r.status] || '')}">rev${esc(r.rev)} · ${r.status}</span>` : '';
+  return `<div class="sep-label" style="margin-top:4px">Kurzcode-Treffer</div>
+    <div class="code-hit" onclick="_openCodeMatch(_lastCodeMatch)" title="Öffnen (Enter)">
+      <div class="print-code-val">${esc(shown)}</div>
+      <div style="min-width:0;flex:1">
+        <div style="font-weight:600">${esc(it.name)}</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:2px">
+          <span style="font-family:var(--mono);color:var(--blue)">${esc(it.item_number)}</span> · ${esc(it.project_name || '')}</div>
+        <div style="font-size:12px;margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${revBadge(rev || latest)} ${note}</div>
+      </div>
+      <span class="chip" style="flex-shrink:0">Öffnen ↵</span>
+    </div>`;
 }
 
 function setSearchClass(name) {
@@ -941,19 +1053,20 @@ function _renderSearchResults(r, q) {
   const filterLabel = _searchClass === '__none__' ? 'ohne Klassifizierung' : `Klassifizierung „${esc(_searchClass)}"`;
   const noHits = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer${q ? ` für „${esc(q)}"` : ''}${_searchClass ? ' mit ' + filterLabel : ''}</div></div>`;
   const total = ['projects','items','datasets','orders','customers','deliveries','rawMaterials'].reduce((n, k) => n + (r[k]?.length || 0), 0);
-  if (!total) return noHits;
+  const codeHit = _searchClass ? '' : _renderCodeMatch(r.code_match);
+  if (!total) return codeHit || noHits;
 
   // Bauteile und Baugruppen vor Dokumenten, innerhalb davon nach Relevanz (Serverreihenfolge)
   const typeOrder = { prt: 0, asm: 0, doc: 1 };
   const items = (r.items || []).map((x, i) => ({ ...x, _i: i }))
     .sort((a, b) => (typeOrder[a.item_type] ?? 9) - (typeOrder[b.item_type] ?? 9) || a._i - b._i);
 
-  return `
+  return `${codeHit}
     ${_searchClass ? `<div style="font-size:13px;color:var(--t3);margin-bottom:4px">Gefiltert nach ${filterLabel}${q ? ` · Suchwort „${esc(q)}"` : ''}</div>` : ''}
     ${items.length ? section('Items', items.length, r.items_total) + `<div class="tbl-wrap"><table>
       <thead><tr><th>Nummer</th><th>Name</th><th>Typ</th><th>Klassifizierung</th><th>Projekt</th><th>Revision</th><th>Status</th></tr></thead>
       <tbody>${items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
-        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}${i.short_code && i.item_type !== 'doc' ? ` <span class="chip" title="Kurzcode">${esc(i.short_code)}</span>` : ''}</td>
         <td>${esc(i.name)}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${(i.item_type||'—').toUpperCase()}</td>
         <td>${i.classification ? _classChip(i.classification, 10) : '<span style="color:var(--t4)">—</span>'}</td>
