@@ -146,51 +146,67 @@ async function _renderUsersSettings() {
   if (!box) return;
   const [users, s] = await Promise.all([api('/api/users').catch(() => []), loadSession()]);
   _usersCache = users;
+  box.innerHTML = _usersPanel(users, s, isAdmin());
+}
+
+// Nur Admins verwalten Personen; alle anderen sehen die Liste ohne Knöpfe.
+// Der letzte aktive Admin lässt sich weder deaktivieren noch herabstufen.
+function _usersPanel(users, s, admin) {
   const mode = s?.mode || 'none';
-  const admin = isAdmin();
-  const dis = admin ? '' : ' disabled';
   const active = users.filter(u => u.active);
   const inactive = users.filter(u => !u.active);
-  const roleSelect = (u, onchange) => `<select class="fs" style="width:auto"${dis} onchange="${onchange}">
-      ${['user', 'superuser', 'admin'].map(r => `<option value="${r}"${u.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
-    </select>`;
+  const lastAdmin = u => u.role === 'admin' && active.filter(x => x.role === 'admin').length <= 1;
+  const ONLY_ADMIN = 'Es braucht immer mindestens einen aktiven Admin';
+  const roleChip = u => `<span class="chip">${esc(ROLE_LABEL[u.role] || u.role)}</span>`;
+  const roleSelect = u => lastAdmin(u)
+    ? `<span title="${ONLY_ADMIN}" style="display:inline-flex"><select class="fs" style="width:auto" disabled><option>Admin</option></select></span>`
+    : `<select class="fs" style="width:auto" onchange="_saveUser(${u.id}, { role: this.value })">
+        ${['user', 'superuser', 'admin'].map(r => `<option value="${r}"${u.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
+      </select>`;
   const intro = {
     none: 'Noch keine Personen. Trägst du deinen Namen ein, steht er in der Historie und bei Freigaben — sonst ändert sich nichts.',
     single: 'Allein: PLM fragt nicht, wer dran ist, alles läuft unter diesem Namen. Ab der zweiten Person fragt PLM beim Öffnen „Wer ist dran?“.',
     team: 'Team: PLM fragt beim Öffnen „Wer ist dran?“ und nach einer Pause bei der nächsten Änderung noch einmal kurz nach. Ein Klick auf den Namen oben wechselt die Person.',
   }[mode];
 
-  const rows = active.map(u => `<div class="user-row">
+  const editRow = u => `<div class="user-row">
       ${_avatar(u.name, 30)}
-      <input class="fi" style="flex:1;min-width:120px" value="${esc(u.name)}"${dis}
-        onchange="_saveUser(${u.id}, { name: this.value })" aria-label="Name">
-      ${mode === 'team' ? roleSelect(u, `_saveUser(${u.id}, { role: this.value })`) : '<span class="chip">Admin</span>'}
+      <input class="fi" style="flex:1;min-width:120px" value="${esc(u.name)}" onchange="_saveUser(${u.id}, { name: this.value })" aria-label="Name">
+      ${mode === 'team' ? roleSelect(u) : roleChip(u)}
       ${u.role === 'admin' && mode === 'team' ? (u.has_pin
-        ? `<button class="btn btn-ghost btn-sm"${dis} onclick="_setUserPin(${u.id})">PIN ändern</button>
-           <button class="btn btn-ghost btn-sm"${dis} onclick="_saveUser(${u.id}, { pin: null })">PIN entfernen</button>`
-        : `<button class="btn btn-ghost btn-sm"${dis} onclick="_setUserPin(${u.id})">PIN setzen</button>`) : ''}
-      ${mode === 'team' ? `<button class="btn btn-ghost btn-sm"${dis} onclick="_saveUser(${u.id}, { active: false })" title="Bleibt in der Historie, steht aber nicht mehr zur Auswahl">Deaktivieren</button>` : ''}
-    </div>`).join('');
+        ? `<button class="btn btn-ghost btn-sm" onclick="_setUserPin(${u.id})">PIN ändern</button>
+           <button class="btn btn-ghost btn-sm" onclick="_saveUser(${u.id}, { pin: null })">PIN entfernen</button>`
+        : `<button class="btn btn-ghost btn-sm" onclick="_setUserPin(${u.id})">PIN setzen</button>`) : ''}
+      ${mode !== 'team' ? '' : lastAdmin(u)
+        ? `<span class="chip" title="${ONLY_ADMIN}">einziger Admin</span>`
+        : `<button class="btn btn-ghost btn-sm" onclick="_saveUser(${u.id}, { active: false })" title="Bleibt in der Historie, steht aber nicht mehr zur Auswahl">Deaktivieren</button>`}
+    </div>`;
+  const readRow = u => `<div class="user-row">${_avatar(u.name, 30)}<span style="flex:1">${esc(u.name)}</span>${roleChip(u)}</div>`;
+  const rows = active.map(admin ? editRow : readRow).join('');
+  const noPin = mode === 'team' && admin && active.some(u => u.role === 'admin' && !u.has_pin);
 
-  box.innerHTML = `
+  return `
     <div style="font-size:13px;color:var(--t3);margin-bottom:12px;line-height:1.55">${intro}</div>
     ${!admin ? '<div class="st-notice">Personen verwalten dürfen nur Admins.</div>' : ''}
+    ${noPin ? `<div class="st-notice">Ohne PIN kann jede Person die Admin-Kachel wählen — und damit auch Personen verwalten.
+      Wer das verhindern will, setzt beim Admin eine PIN.</div>` : ''}
     ${rows ? `<div style="display:flex;flex-direction:column;gap:6px">${rows}</div>` : ''}
-    <div class="user-row" style="margin-top:${rows ? '12px' : '0'}">
-      <input class="fi" id="st-user-new" style="flex:1;min-width:120px" placeholder="${mode === 'none' ? 'Dein Name' : 'Name der neuen Person'}"${dis}
+    ${admin ? `<div class="user-row" style="margin-top:${rows ? '12px' : '0'}">
+      <input class="fi" id="st-user-new" style="flex:1;min-width:120px" placeholder="${mode === 'none' ? 'Dein Name' : 'Name der neuen Person'}"
         onkeydown="if(event.key==='Enter')_addUser()">
-      ${mode !== 'none' ? `<select class="fs" id="st-user-new-role" style="width:auto"${dis}>
+      ${mode !== 'none' ? `<select class="fs" id="st-user-new-role" style="width:auto">
         ${['user', 'superuser', 'admin'].map(r => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select>` : ''}
-      <button class="btn btn-primary btn-sm"${dis} onclick="_addUser()">${mode === 'none' ? 'Speichern' : '+ Person'}</button>
-    </div>
+      <button class="btn btn-primary btn-sm" onclick="_addUser()">${mode === 'none' ? 'Speichern' : '+ Person'}</button>
+    </div>` : ''}
     ${inactive.length ? `<div class="sep-label" style="margin-top:20px">Deaktiviert</div>
       <div style="display:flex;flex-direction:column;gap:6px">${inactive.map(u => `<div class="user-row" style="opacity:.7">
         ${_avatar(u.name, 30)}<span style="flex:1">${esc(u.name)}</span>
-        <button class="btn btn-ghost btn-sm"${dis} onclick="_saveUser(${u.id}, { active: true })">Aktivieren</button></div>`).join('')}</div>` : ''}
+        ${admin ? `<button class="btn btn-ghost btn-sm" onclick="_saveUser(${u.id}, { active: true })">Aktivieren</button>` : ''}</div>`).join('')}</div>` : ''}
     ${mode === 'team' ? `<div class="sep-label" style="margin-top:20px">Nachfragen nach einer Pause</div>
       <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2)">
-        Nach <input class="fi" type="number" min="0" step="5" style="width:80px" value="${s.idle_minutes || 0}"${dis}
-          onchange="_saveIdleMinutes(this.value)"> Minuten ohne Aktivität bei der nächsten Änderung nachfragen (0 = nie)
+        ${admin ? `Nach <input class="fi" type="number" min="0" step="5" style="width:80px" value="${s.idle_minutes || 0}"
+          onchange="_saveIdleMinutes(this.value)"> Minuten ohne Aktivität bei der nächsten Änderung nachfragen (0 = nie)`
+          : (s.idle_minutes ? `Nach ${s.idle_minutes} Minuten ohne Aktivität fragt PLM bei der nächsten Änderung nach.` : 'PLM fragt nach einer Pause nicht nach.')}
       </div>` : ''}
     <div class="sep-label" style="margin-top:20px">Rollen</div>
     <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px">

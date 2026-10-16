@@ -133,6 +133,12 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
   const order = (await ok('/api/orders', { method: 'POST', body: { title: 'Weg damit' }, cookie: ben })).body;
   await ok(`/api/orders/${order.id}`, { method: 'DELETE', cookie: ben });
   assert.strictEqual((await req('/api/users', { method: 'POST', body: { name: 'Dora' }, cookie: cleo })).status, 403);
+  for (const body of [{ active: false }, { name: 'Umbenannt' }, { role: 'admin' }]) {
+    assert.strictEqual((await req(`/api/users/${ids.ben}`, { method: 'PUT', body, cookie: cleo })).status, 403,
+      'nur Admins verwalten Personen: ' + JSON.stringify(body));
+  }
+  assert.strictEqual((await req(`/api/users/${ids.cleo}`, { method: 'PUT', body: { role: 'admin' }, cookie: cleo })).status, 403,
+    'auch sich selbst nicht zum Admin machen');
 });
 
 test('Admin-PIN, mindestens ein Admin, Deaktivieren beendet die Auswahl', async () => {

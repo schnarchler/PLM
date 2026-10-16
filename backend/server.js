@@ -80,9 +80,34 @@ function flushDb() {
   clearTimeout(saveTimer);
   const tmpPath = DB_PATH + '.tmp';
   fs.writeFileSync(tmpPath, Buffer.from(db.export()));
-  fs.renameSync(tmpPath, DB_PATH);
+  if (_replaceFile(tmpPath, DB_PATH) === 'copied') {
+    console.warn('  plm.db war gesperrt (Sync-Programm, Virenscanner?) - direkt geschrieben statt umbenannt.');
+  }
   dbDirty = false;
 }
+
+// ── DATEI ERSETZEN ────────────────────────────────────────────
+// Unter Windows sperren Sync-Programme (Proton Drive, OneDrive), Virenscanner
+// und die Suche eine Datei, während sie sie lesen — Umbenennen darüber
+// scheitert dann mit EPERM/EBUSY. Kurz warten und neu versuchen; hält die
+// Sperre an, den Inhalt direkt hineinkopieren: Gesperrt ist meist nur das
+// Ersetzen, nicht das Schreiben. Die .tmp-Datei bleibt bis dahin als
+// vollständige Kopie liegen.
+const FILE_LOCK_CODES = ['EPERM', 'EBUSY', 'EACCES'];
+function _sleepSync(ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
+function _replaceFile(tmpPath, destPath, { tries = 8, sleep = _sleepSync } = {}) {
+  for (let i = 0; ; i++) {
+    try { fs.renameSync(tmpPath, destPath); return 'renamed'; }
+    catch (err) {
+      if (!FILE_LOCK_CODES.includes(err.code)) throw err;
+      if (i < tries) { sleep(40 * (i + 1)); continue; }   // zusammen höchstens ~1.4 s
+      fs.copyFileSync(tmpPath, destPath);
+      try { fs.unlinkSync(tmpPath); } catch {}
+      return 'copied';
+    }
+  }
+}
+// ── ENDE DATEI ERSETZEN
 
 // Debounce 500ms — aber spätestens nach 5s flushen, damit ununterbrochene
 // Schreibvorgänge das Speichern nicht endlos hinauszögern.
@@ -92,9 +117,13 @@ function saveDb() {
   if (!dbDirty) { dbDirty = true; dirtySince = Date.now(); }
   clearTimeout(saveTimer);
   const overdue = Date.now() - dirtySince >= MAX_FLUSH_DELAY;
-  saveTimer = setTimeout(() => {
+  // Schlägt das Speichern fehl, nicht auf die nächste Änderung warten
+  saveTimer = setTimeout(function attempt() {
     try { flushDb(); }
-    catch (err) { console.error('DB-Speichern fehlgeschlagen:', err.message); }
+    catch (err) {
+      console.error('  DB-Speichern fehlgeschlagen: ' + err.message + ' - neuer Versuch in 5 s');
+      saveTimer = setTimeout(attempt, 5000);
+    }
   }, overdue ? 0 : 500);
 }
 
