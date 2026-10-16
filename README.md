@@ -523,6 +523,23 @@ PLM/
 
 ---
 
+## Sicherheit
+
+PLM hat keine Anmeldung: Wer die Oberfläche erreicht, darf alles. Der Server lauscht auf
+Port 3000 aller Netzwerkschnittstellen. Ob andere Geräte herankommen, entscheidet die
+Firewall des PCs.
+
+- Anfragen fremder Webseiten (fremder Origin oder Host) werden abgewiesen, es gibt keine CORS-Freigabe.
+- CAD, Slicer und „Ordner öffnen“ starten ohne Shell und nur für Anfragen vom PC selbst.
+  Programmpfade stehen in `plm.config`, nicht in der Oberfläche.
+- Check-in und Import arbeiten nur im Checkout-Verzeichnis, und dieses lässt sich nur am PC ändern.
+- Paketlücken prüfen: `cd backend && npm audit --omit=dev`
+
+Wie Benutzer, Rollen und Anmeldung aussehen könnten, beschreibt
+[KONZEPT-BENUTZERVERWALTUNG.md](KONZEPT-BENUTZERVERWALTUNG.md).
+
+---
+
 ## Update einspielen
 
 ```bash

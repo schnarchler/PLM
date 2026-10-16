@@ -29,17 +29,22 @@ async function status(url, method, body) {
   const r = await fetch(BASE + url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
   return { status: r.status, body: await r.json().catch(() => ({})) };
 }
-// Anfrage mit fremdem Host — wie eine Webseite nach DNS-Rebinding
-function foreignHost(url, method, body) {
+// Anfrage mit frei wählbaren Kopfzeilen (Host, Origin) — fetch setzt den Host selbst
+function raw(url, method, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body ?? {});
     const req = http.request({ host: '127.0.0.1', port: PORT, path: url, method,
-      headers: { Host: 'boese.example:' + PORT, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
-    res => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...headers } },
+    res => { res.resume(); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers })); });
     req.on('error', reject);
     req.end(data);
   });
 }
+// Wie eine Webseite nach DNS-Rebinding: fremder Name, der auf 127.0.0.1 zeigt
+const foreignHost = async (url, method, body) =>
+  (await raw(url, method, body, { Host: 'boese.example:' + PORT, Origin: 'http://boese.example:' + PORT })).status;
+// Wie eine fremde Webseite, die per JavaScript localhost anspricht
+const foreignOrigin = (url, method, body) => raw(url, method, body, { Origin: 'https://boese.example' });
 async function waitFor(fn, ms = 3000) {
   for (let t = 0; t < ms; t += 50) { const v = fn(); if (v) return v; await new Promise(r => setTimeout(r, 50)); }
   return fn();
@@ -135,9 +140,25 @@ test('Ordner öffnen: nur Checkout-Ordner, nur von diesem PC', { skip }, async (
 
 test('Checkout-Verzeichnis lässt sich nur von diesem PC aus ändern', { skip }, async () => {
   assert.strictEqual(await foreignHost('/api/settings', 'PUT', { checkout_dir: tmp }), 403);
-  assert.strictEqual(await foreignHost('/api/settings', 'PUT', { company_name: 'Firma', checkout_dir: '' }), 200,
-    'unverändert mitgeschickt ist erlaubt (Einstellungen speichern von einem anderen Gerät)');
   assert.strictEqual((await api('/api/settings')).checkout_dir ?? '', '');
+});
+
+test('Fremde Webseiten können weder lesen noch schreiben', { skip }, async () => {
+  const lesen = await foreignOrigin('/api/customers', 'GET');
+  assert.strictEqual(lesen.status, 403);
+  assert.strictEqual(lesen.headers['access-control-allow-origin'], undefined, 'keine CORS-Freigabe');
+  const vorab = await foreignOrigin('/api/projects', 'OPTIONS');
+  assert.strictEqual(vorab.headers['access-control-allow-origin'], undefined, 'Preflight ohne Freigabe');
+
+  const vorher = (await api('/api/projects')).length;
+  assert.strictEqual((await foreignOrigin('/api/projects', 'POST', { name: 'Eingeschleust' })).status, 403);
+  assert.strictEqual(await foreignHost('/api/projects', 'POST', { name: 'Rebinding' }), 403);
+  assert.strictEqual((await api('/api/projects')).length, vorher, 'nichts angelegt');
+
+  // Die eigene Oberfläche schickt ihre Herkunft mit — gleiche Herkunft geht durch
+  const eigen = await raw('/api/projects', 'POST', { name: 'Eigene Oberfläche' }, { Origin: BASE, Host: '127.0.0.1:' + PORT });
+  assert.strictEqual(eigen.status, 200);
+  assert.strictEqual((await raw('/api/stats', 'GET', null, { Host: 'localhost:' + PORT })).status, 200);
 });
 
 test('CAD: Pfad aus plm.config, Start ohne Shell, nur von diesem PC', { skip }, async () => {

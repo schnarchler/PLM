@@ -3,7 +3,6 @@ const AdmZip   = require('adm-zip');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
-const cors     = require('cors');
 const crypto   = require('crypto');
 const initSqlJs = require('sql.js');
 
@@ -1526,7 +1525,22 @@ const storage = multer.diskStorage({
 // defParamCharset utf8: sonst kommen Umlaute in hochgeladenen Dateinamen als Zeichensalat an
 const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 }, defParamCharset: 'utf8' });
 
-app.use(cors());
+// Fremde Webseiten abweisen. Ohne Anmeldung könnte sonst jede Seite, die im
+// Browser auf diesem PC offen ist, per JavaScript Daten lesen, ändern oder
+// löschen. Die eigene Oberfläche kommt vom selben Server: gleiche Herkunft
+// (Origin), und der Host ist ein Name oder eine Adresse dieses PCs. Den Host
+// prüfen hält DNS-Rebinding ab — eine fremde Domain, die auf 127.0.0.1 zeigt.
+// Programme ohne Browser (Tests, curl) schicken keinen Origin.
+app.use((req, res, next) => {
+  if (!_isOwnHost(_hostOf(req))) return res.status(403).json({ error: 'Unbekannter Host: ' + (req.headers.host || '—') });
+  const origin = req.headers.origin;
+  if (origin !== undefined) {
+    let same = false;
+    try { same = new URL(origin).host === req.headers.host; } catch {}
+    if (!same) return res.status(403).json({ error: 'Anfrage von fremder Webseite abgelehnt' });
+  }
+  next();
+});
 app.use(express.json());
 
 // Während einer laufenden Datenverschiebung keine Schreibzugriffe zulassen,
@@ -2887,12 +2901,21 @@ function slicerStatus() {
 // fremde Webseite kann den Browser per DNS-Rebinding auf 127.0.0.1 lenken,
 // schickt dann aber ihren eigenen Namen als Host mit.
 function _isLocalRequest(req) {
-  const own = Object.values(os.networkInterfaces()).flat().filter(Boolean).map(i => i.address.toLowerCase());
-  const name = os.hostname().toLowerCase();
-  const host = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[(.*)\]$/, '$1');
-  if (!['localhost', '127.0.0.1', '::1', name, name + '.local', ...own].includes(host)) return false;
+  if (!_isOwnHost(_hostOf(req))) return false;
   const a = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '').toLowerCase();
-  return a === '127.0.0.1' || a === '::1' || own.includes(a);
+  return a === '127.0.0.1' || a === '::1' || _ownAddresses().includes(a);
+}
+function _hostOf(req) {
+  return String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[(.*)\]$/, '$1');
+}
+function _ownAddresses() {
+  return Object.values(os.networkInterfaces()).flat().filter(Boolean).map(i => i.address.toLowerCase());
+}
+// Namen, unter denen dieser PC erreichbar ist — auch pc.local, pc.fritz.box …
+function _isOwnHost(host) {
+  const name = os.hostname().toLowerCase();
+  return ['localhost', '127.0.0.1', '::1', name].includes(host) || host.startsWith(name + '.')
+    || _ownAddresses().includes(host);
 }
 
 // K7M-3_Halter.stl — mehrere Modelle gleichen Typs in einer Revision mit _2, _3
