@@ -689,8 +689,11 @@ function renderItemSheet(item, activeRevId) {
       .map(([key, label]) => [label, fmtPrintParam(key, ps[key])])
       .filter(([, v]) => v !== null && v !== undefined && v !== '');
     if (cells.length) {
+      // Eine Zeile je Wert statt Kacheln, drei Spalten im Detailpanel
       psBlock = `<div class="sep-label">Druckparameter <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
-        <div class="ps-grid">${cells.map(([k, v]) => _sheetCell(k, v, { mono: true })).join('')}</div>
+        <div class="ps-kv">${cells.map(([k, v]) => `<div class="ps-kv-row">
+          <span class="ps-kv-label">${esc(k)}</span><span class="ps-kv-val">${esc(v)}</span>
+        </div>`).join('')}</div>
         ${ps.notes ? `<div style="font-size:13px;color:var(--t3);margin-top:7px;white-space:pre-wrap">${esc(ps.notes)}</div>` : ''}`;
     }
   }

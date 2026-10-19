@@ -540,3 +540,70 @@ test('Benutzer verwalten: nur Admins, der einzige Admin bleibt Admin', () => {
   }
   assert.match(asUser, /Nach 30 Minuten ohne Aktivität fragt PLM/);
 });
+
+// ── Druckparameter im Datenblatt und als PDF ──────────────────
+const PS_DEMO = { revision_id: 31, material: 'PETG', color: 'Schwarz', layer_height: '0.2', infill: '20',
+  supports: 0, nozzle: '0.4', print_temp: '240', bed_temp: '85', printer: 'Original Prusa MK4S',
+  part_weight: 41.5, filament_weight_total: 45.2, print_duration: 2.5, filament_price_kg: 24,
+  printer_cost_hr: 1.2, raw_material_id: 3, raw_material_name: 'Prusament PETG Jet Black', notes: 'Naht hinten' };
+
+test('Datenblatt: Druckparameter kompakt, eine Zeile je Wert', () => {
+  const item = demoItem({ revisions: [{ id: 31, rev: '2', status: 'DFT', datasets: [], print_settings: PS_DEMO }] });
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  const ps = h.slice(h.indexOf('Druckparameter'));
+  assert.match(ps, /class="ps-kv"/);
+  assert.match(ps, /<span class="ps-kv-label">Düse<\/span><span class="ps-kv-val">0.4 mm<\/span>/);
+  assert.match(ps, /Druckdauer[\s\S]*2 h 30 min/);
+  assert.ok(!ps.slice(0, ps.indexOf('Naht hinten')).includes('ps-cell'), 'keine Kacheln mehr');
+  assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
+
+evalPart('js/10-documents.js', 'function escHtml(', '// type:', 'globalThis.escHtml = escHtml');
+const { generateItemTemplate } = evalPart('js/10-documents.js', '// -- DOKUMENTVORLAGEN',
+  '// -- PDF GENERATION', '({ generateItemTemplate })');
+
+function pdfOf(item, activeRevId) {
+  let html = '';
+  global.closeModal = () => {};
+  global.window = { _docTemplateItem: item, open: () => ({ document: { write: h => { html += h; }, close() {} } }) };
+  global.state.activeRevId = activeRevId;
+  try { generateItemTemplate('datenblatt'); } finally { delete global.window; global.state.activeRevId = null; }
+  return html;
+}
+
+test('PDF-Datenblatt: enthält Druckparameter, Notizen, Lager und echte Dateinamen', () => {
+  const item = demoItem({
+    short_code: 'K7M', notes: 'Nur in Schwarz liefern', dev_hours: 3.25, weight_g: 184,
+    inventory: [{ name: 'Klemmbacke links', sku: 'KB-L', unit: 'Stk', stock_qty: 12, min_qty: 5, price_per_unit: 9.9 }],
+    revisions: [
+      { id: 32, rev: '3', status: 'DFT', description: 'Neu', datasets: [] },
+      { id: 31, rev: '2', status: 'REL', description: 'Passung korrigiert', eco_reason: 'Zu eng',
+        released_at: '2026-10-10 08:00:00', released_by: 'Anna', print_settings: PS_DEMO,
+        datasets: [{ ds_type: 'CAD', filename: '1779473701990-1e39bb2a.3mf', original_name: 'P1042_rev2.3mf', file_size: 204800, uploaded_at: '2026-10-09' }] },
+    ],
+  });
+  const h = pdfOf(item, 31);
+  assert.match(h, /Revision rev2/, 'gewählte Revision, nicht die neuste');
+  assert.match(h, /Kurzcode <b[^>]*>K7M-2</);
+  assert.match(h, /<svg/, 'QR-Code im Kopf');
+  for (const v of ['PETG', '0.4 mm', '240 °C', '85 °C', 'Original Prusa MK4S', '45.2 g', '2 h 30 min',
+                   '24.00 CHF/kg', '1.20 CHF/h', 'Prusament PETG Jet Black', 'Naht hinten']) {
+    assert.ok(h.includes(v), `Druckparameter: ${v}`);
+  }
+  assert.match(h, /Nur in Schwarz liefern/);
+  assert.match(h, /Zu eng/);
+  assert.match(h, /3 h 15 min/, 'Entwicklungszeit');
+  assert.match(h, /KB-L/);
+  assert.match(h, /P1042_rev2\.3mf/);
+  assert.ok(!h.includes('1779473701990'), 'nicht der interne Speichername');
+  assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
+
+test('PDF-Datenblatt: Teil ohne Angaben zeigt keine leeren Abschnitte', () => {
+  const h = pdfOf({ id: 1, item_type: 'prt', item_number: 'X', name: 'Y', revisions: [] }, null);
+  for (const sec of ['Druckparameter', 'Notizen', 'Lagerbestand', 'Dateien']) {
+    assert.ok(!h.includes(`class="sec">${sec}`), `kein Abschnitt ${sec}`);
+  }
+  assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
