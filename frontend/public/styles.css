@@ -49,8 +49,10 @@
   --teal-line:   rgba(121,221,227,.40);
 
   /* Fonts */
-  --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-  --sans: 'Manrope', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Nur vorinstallierte Schriften, damit PLM ohne Internet gleich aussieht:
+     Windows (Segoe UI, Cascadia/Consolas), macOS (SF), Linux (Noto, DejaVu) */
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, 'SF Mono', Menlo, 'Noto Sans Mono', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
+  --sans: system-ui, -apple-system, 'Segoe UI', 'Noto Sans', Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
 
   /* Radii */
   --r-xs: 4px;
