@@ -560,15 +560,15 @@ test('Datenblatt: Druckparameter kompakt, eine Zeile je Wert', () => {
 });
 
 evalPart('js/10-documents.js', 'function escHtml(', '// type:', 'globalThis.escHtml = escHtml');
-const { generateItemTemplate } = evalPart('js/10-documents.js', '// -- DOKUMENTVORLAGEN',
-  '// -- PDF GENERATION', '({ generateItemTemplate })');
+const { generateItemTemplate, getPruefTemplate } = evalPart('js/10-documents.js', '// -- DOKUMENTVORLAGEN',
+  '// -- PDF GENERATION', '({ generateItemTemplate, getPruefTemplate })');
 
-function pdfOf(item, activeRevId) {
+function pdfOf(item, activeRevId, type = 'datenblatt', opts) {
   let html = '';
   global.closeModal = () => {};
   global.window = { _docTemplateItem: item, open: () => ({ document: { write: h => { html += h; }, close() {} } }) };
   global.state.activeRevId = activeRevId;
-  try { generateItemTemplate('datenblatt'); } finally { delete global.window; global.state.activeRevId = null; }
+  try { generateItemTemplate(type, opts); } finally { delete global.window; global.state.activeRevId = null; }
   return html;
 }
 
@@ -606,4 +606,63 @@ test('PDF-Datenblatt: Teil ohne Angaben zeigt keine leeren Abschnitte', () => {
     assert.ok(!h.includes(`class="sec">${sec}`), `kein Abschnitt ${sec}`);
   }
   assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
+
+// ── Prüfprotokoll-Vorlage aus den Einstellungen ───────────────
+test('Prüfprotokoll-Vorlage: ohne Einstellung gilt der bisherige Standard', () => {
+  for (const raw of [undefined, '', '{kaputt']) {
+    const t = getPruefTemplate(raw);
+    assert.deepStrictEqual(t.points.map(p => p.label), ['Masshaltigkeit / Abmessungen', 'Oberflächenqualität',
+      'Materialprüfung', 'Funktionsprüfung', 'Kennzeichnung / Beschriftung', 'Verpackung / Versand'], `raw=${raw}`);
+    assert.strictEqual(t.empty_rows, 3);
+    assert.deepStrictEqual(t.decisions, ['Freigegeben', 'Nacharbeit', 'Ausschuss']);
+    assert.deepStrictEqual(t.signatures, ['Geprüft durch', 'Freigegeben durch', 'Datum']);
+  }
+});
+
+test('Prüfprotokoll-Vorlage: eigene Werte, fehlende Felder vom Standard, leere Listen bleiben leer', () => {
+  const t = getPruefTemplate(JSON.stringify({
+    points: [{ label: ' Gewinde M5 ', soll: 'Lehre gut' }, { label: '', soll: 'ohne Prüfpunkt' }, null],
+    empty_rows: 99, decisions: [],
+  }));
+  assert.deepStrictEqual(t.points, [{ label: 'Gewinde M5', soll: 'Lehre gut' }], 'Zeilen ohne Prüfpunkt fallen weg');
+  assert.strictEqual(t.empty_rows, 20, 'höchstens 20 Leerzeilen');
+  assert.deepStrictEqual(t.decisions, [], 'Prüfentscheid bewusst weggelassen');
+  assert.deepStrictEqual(t.signatures, ['Geprüft durch', 'Freigegeben durch', 'Datum']);
+  assert.strictEqual(getPruefTemplate('{"empty_rows":-4}').empty_rows, 0);
+});
+
+test('Prüfprotokoll: Standard sieht aus wie bisher und öffnet den Druckdialog', () => {
+  global.state.settings = {};
+  const h = pdfOf(demoItem(), 31, 'pruefprotokoll');
+  assert.match(h, /<td style="color:#9ca3af;font-size:12px">6<\/td>\s*<td>Verpackung \/ Versand<\/td>/);
+  assert.strictEqual((h.match(/<tr style="height:28px">/g) || []).length, 9, '6 Prüfpunkte + 3 Leerzeilen');
+  for (const v of ['Prüfentscheid', 'Nacharbeit', 'Ausschuss', 'Geprüft durch', 'Freigegeben durch']) assert.ok(h.includes(v), v);
+  assert.match(h, /window\.print\(\)/);
+  assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
+
+test('Prüfprotokoll: folgt der gespeicherten Vorlage', () => {
+  global.state.settings = { pruef_template: JSON.stringify({
+    points: [{ label: 'Gewinde <M5>', soll: 'Lehre gut' }, { label: 'Gewicht', soll: '12 ± 0.5 g' }],
+    empty_rows: 1, decisions: [], signatures: ['Prüfer'], note: 'Prüfmittel: Messschieber\nbei Tageslicht' }) };
+  try {
+    const h = pdfOf(demoItem(), 31, 'pruefprotokoll');
+    assert.match(h, /<td>Gewinde &lt;M5&gt;<\/td><td>Lehre gut<\/td>/, 'Soll vorgedruckt, Text escaped');
+    assert.match(h, /<td>Gewicht<\/td><td>12 ± 0.5 g<\/td>/);
+    assert.strictEqual((h.match(/<tr style="height:28px">/g) || []).length, 3, '2 Prüfpunkte + 1 Leerzeile');
+    assert.ok(!h.includes('Prüfentscheid'), 'ohne Entscheid kein Abschnitt');
+    assert.match(h, />Prüfer<\/div>/);
+    assert.ok(!h.includes('Freigegeben durch'));
+    assert.match(h, /Prüfmittel: Messschieber<br>bei Tageslicht/);
+    assert.ok(!h.includes('Masshaltigkeit'));
+  } finally { global.state.settings = {}; }
+});
+
+test('Prüfprotokoll: Vorschau aus den Einstellungen ohne Druckdialog', () => {
+  const item = { id: 0, item_type: 'prt', item_number: 'P000-prt-001', name: 'Beispielteil', revisions: [{ id: 0, rev: '1', status: 'DFT' }] };
+  const h = pdfOf(null, null, 'pruefprotokoll', { item, pruef: getPruefTemplate('{"points":[{"label":"Probe"}]}'), preview: true });
+  assert.match(h, /P000-prt-001/);
+  assert.match(h, /<td>Probe<\/td>/);
+  assert.ok(!h.includes('window.print'), 'kein Druckdialog in der Vorschau');
 });

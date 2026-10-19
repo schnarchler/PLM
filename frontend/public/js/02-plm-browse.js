@@ -1140,6 +1140,17 @@ function initSTLViewer(canvasId, url) {
       else if(e.touches.length===2&&t0.length===2){const d0=Math.hypot(t0[0].clientX-t0[1].clientX,t0[0].clientY-t0[1].clientY),d1=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);zoom*=d1/Math.max(d0,1);zoom=Math.max(0.2,Math.min(6,zoom));}
       t0=[...e.touches];draw();
     },{passive:false});
+    // Das Detailpanel fährt beim ersten Öffnen auf (CSS-Übergang der Breite).
+    // Lädt das Modell schneller, wäre das erste Bild mit der Zwischenbreite
+    // gerechnet und danach in die Breite gezogen — darum bei jeder
+    // Grössenänderung neu zeichnen.
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => {
+        if (!canvas.isConnected) { ro.disconnect(); return; }
+        if (canvas.clientWidth && (canvas.clientWidth !== canvas.width || canvas.clientHeight !== canvas.height)) draw();
+      });
+      ro.observe(canvas);
+    }
     draw();
   }).catch(e=>{if(loadDiv)loadDiv.textContent='Fehler beim Laden.';console.error('STL viewer:',e);});
 }

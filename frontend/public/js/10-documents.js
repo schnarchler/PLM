@@ -290,13 +290,42 @@ function _renderRevisionCompare(c, only) {
 }
 
 // -- DOKUMENTVORLAGEN ------------------------------------------
+// Prüfprotokoll: Vorlage aus den Einstellungen (PLM-Tab), ohne Eintrag
+// gilt der Standard. Gespeichert als JSON unter pruef_template.
+const PRUEF_DEFAULT = {
+  points: ['Masshaltigkeit / Abmessungen', 'Oberflächenqualität', 'Materialprüfung',
+    'Funktionsprüfung', 'Kennzeichnung / Beschriftung', 'Verpackung / Versand'].map(label => ({ label, soll: '' })),
+  empty_rows: 3,
+  decisions: ['Freigegeben', 'Nacharbeit', 'Ausschuss'],
+  signatures: ['Geprüft durch', 'Freigegeben durch', 'Datum'],
+  note: '',
+};
+
+// Fehlende oder kaputte Felder fallen einzeln auf den Standard zurück.
+// Eine leere Liste bleibt leer — so lässt sich z.B. der Prüfentscheid weglassen.
+function getPruefTemplate(raw = state.settings?.pruef_template) {
+  let t = {};
+  try { t = JSON.parse(raw || '{}') || {}; } catch {}
+  const words = (v, def) => Array.isArray(v) ? v.map(x => String(x ?? '').trim()).filter(Boolean) : [...def];
+  const n = parseInt(t.empty_rows, 10);
+  return {
+    points: Array.isArray(t.points)
+      ? t.points.map(p => ({ label: String(p?.label ?? '').trim(), soll: String(p?.soll ?? '').trim() })).filter(p => p.label)
+      : PRUEF_DEFAULT.points.map(p => ({ ...p })),
+    empty_rows: Number.isFinite(n) ? Math.max(0, Math.min(20, n)) : PRUEF_DEFAULT.empty_rows,
+    decisions: words(t.decisions, PRUEF_DEFAULT.decisions),
+    signatures: words(t.signatures, PRUEF_DEFAULT.signatures),
+    note: typeof t.note === 'string' ? t.note.trim() : '',
+  };
+}
+
 function openDocTemplateModal(itemId) {
   window._docTemplateItem = state.item;
   const isASM = state.item?.item_type === 'asm';
   document.getElementById('dtpl-cards').innerHTML = [
     { type:'datenblatt', label:'Datenblatt', desc:'Allgemeine Informationen, Druckparameter, Revisionen, Lager, Dateien und Varianten' },
     isASM ? { type:'stueckliste', label:'Stückliste', desc:'Vollständige BOM-Tabelle mit Mengen, Preisen und Entwicklungszeit' } : null,
-    { type:'pruefprotokoll', label:'Prüfprotokoll', desc:'Leeres Prüfprotokoll mit Item-Kopf und Unterschriftszeilen' },
+    { type:'pruefprotokoll', label:'Prüfprotokoll', desc:'Prüfpunkte und Unterschriften nach der Vorlage in Einstellungen → PLM' },
   ].filter(Boolean).map(t => `
     <div onclick="generateItemTemplate('${t.type}')" style="padding:14px 16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
       <div style="font-weight:600;font-size:14px;color:var(--t1);margin-bottom:3px">${t.label}</div>
@@ -305,9 +334,11 @@ function openDocTemplateModal(itemId) {
   openModal('docTemplateModal');
 }
 
-function generateItemTemplate(type) {
+// opts (Vorschau aus den Einstellungen): item, pruef = ungespeicherte
+// Vorlage, preview = ohne Druckdialog
+function generateItemTemplate(type, opts = {}) {
   closeModal('docTemplateModal');
-  const item = window._docTemplateItem;
+  const item = opts.item || window._docTemplateItem;
   if (!item) return;
   const s = state.settings || {};
   const today = new Date().toLocaleDateString('de-CH');
@@ -521,42 +552,33 @@ function generateItemTemplate(type) {
     if (!bom.length && !bomStd.length) body += '<div style="color:#9ca3af;font-size:13px">Keine Positionen.</div>';
 
   } else if (type === 'pruefprotokoll') {
-    const checkRows = [
-      'Masshaltigkeit / Abmessungen',
-      'Oberflächenqualität',
-      'Materialprüfung',
-      'Funktionsprüfung',
-      'Kennzeichnung / Beschriftung',
-      'Verpackung / Versand',
-      '', '', '',
-    ];
+    const tpl = opts.pruef || getPruefTemplate();
+    // Leerzeilen ohne Nummer — zum Ergänzen von Hand
+    const checkRows = [...tpl.points, ...Array.from({ length: tpl.empty_rows }, () => ({ label: '', soll: '' }))];
     body += `<div style="display:flex;gap:20px;margin-bottom:16px;font-size:13px;color:#6b7280">
       <span>Revision: <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
       <span class="badge" style="background:#dbeafe;color:#1d4ed8">${rev?.status||''}</span>
       ${item.effective_weight_g != null ? `<span>Gewicht: <strong>${fmtN(item.effective_weight_g,1)} g</strong></span>` : ''}
       ${item.classification ? `<span>Klassifizierung: <strong>${escHtml(item.classification)}</strong></span>` : ''}
     </div>
+    ${tpl.note ? `<div class="txt">${escHtml(tpl.note)}</div>` : ''}
     <div class="sec">Prüfpunkte</div>
     <table>
       <thead><tr><th style="width:28px">Nr</th><th>Prüfpunkt</th><th style="width:120px">Soll</th><th style="width:120px">Ist</th><th style="width:36px">OK</th><th style="width:120px">Bemerkung</th></tr></thead>
       <tbody>${checkRows.map((c,i)=>`<tr style="height:28px">
-        <td style="color:#9ca3af;font-size:12px">${c ? i+1 : ''}</td>
-        <td>${escHtml(c)}</td><td></td><td></td>
+        <td style="color:#9ca3af;font-size:12px">${c.label ? i+1 : ''}</td>
+        <td>${escHtml(c.label)}</td><td>${escHtml(c.soll)}</td><td></td>
         <td style="text-align:center;font-size:16px"></td>
         <td></td>
       </tr>`).join('')}</tbody>
     </table>
-    <div class="sec" style="margin-top:24px">Prüfentscheid</div>
-    <div style="display:flex;gap:24px;margin-bottom:28px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> Freigegeben</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> Nacharbeit</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> Ausschuss</label>
-    </div>
-    <div style="display:flex;gap:32px;margin-top:16px">
-      <div style="flex:1"><div style="font-size:12px;color:#6b7280;margin-bottom:4px">Geprüft durch</div><div style="border-bottom:1px solid #9ca3af;height:36px"></div></div>
-      <div style="flex:1"><div style="font-size:12px;color:#6b7280;margin-bottom:4px">Freigegeben durch</div><div style="border-bottom:1px solid #9ca3af;height:36px"></div></div>
-      <div style="flex:1"><div style="font-size:12px;color:#6b7280;margin-bottom:4px">Datum</div><div style="border-bottom:1px solid #9ca3af;height:36px"></div></div>
-    </div>`;
+    ${tpl.decisions.length ? `<div class="sec" style="margin-top:24px">Prüfentscheid</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:28px">
+      ${tpl.decisions.map(d => `<label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> ${escHtml(d)}</label>`).join('')}
+    </div>` : ''}
+    ${tpl.signatures.length ? `<div style="display:flex;gap:32px;margin-top:16px">
+      ${tpl.signatures.map(sg => `<div style="flex:1"><div style="font-size:12px;color:#6b7280;margin-bottom:4px">${escHtml(sg)}</div><div style="border-bottom:1px solid #9ca3af;height:36px"></div></div>`).join('')}
+    </div>` : ''}`;
   }
 
   const templateLabels = { datenblatt:'Datenblatt', stueckliste:'Stückliste', pruefprotokoll:'Prüfprotokoll' };
@@ -565,11 +587,117 @@ function generateItemTemplate(type) {
     <style>${css}</style></head><body>
     ${hdr}${body}
     <div style="margin-top:28px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:12px;color:#d1d5db;text-align:right">${escHtml(item.item_number)} · ${templateLabels[type]||type} · ${today}</div>
-    <script>window.onload=()=>window.print();<\/script>
+    ${opts.preview ? '' : '<script>window.onload=()=>window.print();<\/script>'}
     </body></html>`;
   const w = window.open('', '_blank', 'width=950,height=750');
   w.document.write(html);
   w.document.close();
+}
+
+// -- PRUEFPROTOKOLL-VORLAGE (Einstellungen → PLM) --------------
+function _renderPruefSettings(tpl = getPruefTemplate()) {
+  const el = document.getElementById('st-pruef-box');
+  if (!el) return;
+  const n = tpl.points.length;
+  el.innerHTML = `
+    <div id="st-pruef-points" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+      ${tpl.points.map((p, i) => `<div class="pruef-row" style="display:flex;align-items:center;gap:6px">
+        <span style="font-family:var(--mono);font-size:12px;color:var(--t4);width:18px;text-align:right;flex-shrink:0">${i + 1}</span>
+        <input class="fi pruef-label" value="${esc(p.label)}" placeholder="Prüfpunkt" style="flex:1;font-size:13px;padding:3px 7px;height:28px">
+        <input class="fi pruef-soll" value="${esc(p.soll)}" placeholder="Soll (optional)" style="width:160px;font-size:13px;padding:3px 7px;height:28px">
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="_movePruefPoint(${i},-1)" title="Nach oben"${i === 0 ? ' disabled' : ''}>↑</button>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="_movePruefPoint(${i},1)" title="Nach unten"${i === n - 1 ? ' disabled' : ''}>↓</button>
+        <button class="btn btn-red btn-icon btn-sm" onclick="_removePruefPoint(${i})" title="Entfernen">✕</button>
+      </div>`).join('') || '<div style="font-size:13px;color:var(--t3)">Keine Prüfpunkte — das Protokoll hat dann nur Leerzeilen.</div>'}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <input class="fi" id="st-pruef-new" placeholder="Neuer Prüfpunkt…" style="max-width:280px" onkeydown="if(event.key==='Enter')_addPruefPoint()">
+      <button class="btn btn-ghost btn-sm" onclick="_addPruefPoint()">+ Hinzufügen</button>
+    </div>
+    <div class="form-row cols3">
+      <div class="fg"><label class="fl">Leerzeilen zum Ausfüllen</label>
+        <input class="fi" id="st-pruef-empty" type="number" min="0" max="20" value="${tpl.empty_rows}"></div>
+    </div>
+    <div class="form-row cols2">
+      <div class="fg"><label class="fl">Prüfentscheid (mit Komma getrennt)</label>
+        <input class="fi" id="st-pruef-dec" value="${esc(tpl.decisions.join(', '))}" placeholder="leer = kein Prüfentscheid"></div>
+      <div class="fg"><label class="fl">Unterschriften (mit Komma getrennt)</label>
+        <input class="fi" id="st-pruef-sig" value="${esc(tpl.signatures.join(', '))}" placeholder="leer = keine Unterschriftszeilen"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label class="fl">Hinweis über den Prüfpunkten (optional)</label>
+        <textarea class="ft" id="st-pruef-note" rows="2" placeholder="z.B. Prüfmittel: Messschieber · Sichtprüfung bei Tageslicht">${esc(tpl.note)}</textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+      <button class="btn btn-primary btn-sm" onclick="_savePruefSettings()">Speichern</button>
+      <button class="btn btn-ghost btn-sm" onclick="_previewPruef()">Vorschau</button>
+      <button class="btn btn-ghost btn-sm" onclick="_resetPruefSettings()">Standard einsetzen</button>
+      <span id="st-pruef-msg" style="font-size:13px;color:var(--t3)"></span>
+    </div>`;
+}
+
+// Formular → Vorlage, geprüft wie beim Laden. keepEmpty: beim Verschieben
+// und Entfernen müssen die Indizes zu den Zeilen im Formular passen, auch
+// wenn ein Prüfpunkt gerade leer ist — sonst verschöbe sich alles danach.
+function _readPruefForm(keepEmpty = false) {
+  const val = id => document.getElementById(id)?.value || '';
+  const split = id => val(id).split(',').map(x => x.trim()).filter(Boolean);
+  const points = [...document.querySelectorAll('#st-pruef-points .pruef-row')].map(r => ({
+    label: r.querySelector('.pruef-label').value.trim(),
+    soll:  r.querySelector('.pruef-soll').value.trim(),
+  }));
+  const t = getPruefTemplate(JSON.stringify({
+    points, empty_rows: val('st-pruef-empty'),
+    decisions: split('st-pruef-dec'), signatures: split('st-pruef-sig'), note: val('st-pruef-note'),
+  }));
+  if (keepEmpty) t.points = points;
+  return t;
+}
+
+function _movePruefPoint(i, dir) {
+  const t = _readPruefForm(true);
+  const j = i + dir;
+  if (j < 0 || j >= t.points.length) return;
+  [t.points[i], t.points[j]] = [t.points[j], t.points[i]];
+  _renderPruefSettings(t);
+}
+function _removePruefPoint(i) {
+  const t = _readPruefForm(true);
+  t.points.splice(i, 1);
+  _renderPruefSettings(t);
+}
+function _addPruefPoint() {
+  const inp = document.getElementById('st-pruef-new');
+  const label = inp?.value.trim();
+  if (!label) return;
+  const t = _readPruefForm(true);
+  t.points.push({ label, soll: '' });
+  _renderPruefSettings(t);
+  document.getElementById('st-pruef-new')?.focus();
+}
+function _resetPruefSettings() {
+  _renderPruefSettings(getPruefTemplate(''));
+  const msg = document.getElementById('st-pruef-msg');
+  if (msg) { msg.textContent = 'Standard eingesetzt — mit Speichern übernehmen'; msg.style.color = 'var(--amber)'; }
+}
+
+// Vorschau mit einem Beispielteil und der Vorlage, wie sie gerade im Formular steht
+function _previewPruef() {
+  generateItemTemplate('pruefprotokoll', {
+    item: { id: 0, item_type: 'prt', item_number: 'P000-prt-001', name: 'Beispielteil', description: 'Vorschau der Prüfprotokoll-Vorlage',
+      classification: getClassifications()[0]?.name || null, effective_weight_g: 12.5, revisions: [{ id: 0, rev: '1', status: 'DFT' }] },
+    pruef: _readPruefForm(),
+    preview: true,
+  });
+}
+
+async function _savePruefSettings() {
+  await api('/api/settings', 'PUT', { pruef_template: JSON.stringify(_readPruefForm()) });
+  state.settings = await api('/api/settings');
+  _renderPruefSettings();
+  const msg = document.getElementById('st-pruef-msg');
+  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
+  toast('Prüfprotokoll-Vorlage gespeichert', 'ok');
 }
 
 // -- PDF GENERATION (Rechnung + Angebot) -----------------------
