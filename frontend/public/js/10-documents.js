@@ -294,7 +294,7 @@ function openDocTemplateModal(itemId) {
   window._docTemplateItem = state.item;
   const isASM = state.item?.item_type === 'asm';
   document.getElementById('dtpl-cards').innerHTML = [
-    { type:'datenblatt', label:'Datenblatt', desc:'Allgemeine Informationen, Revisionen, Dateien und Varianten' },
+    { type:'datenblatt', label:'Datenblatt', desc:'Allgemeine Informationen, Druckparameter, Revisionen, Lager, Dateien und Varianten' },
     isASM ? { type:'stueckliste', label:'Stückliste', desc:'Vollständige BOM-Tabelle mit Mengen, Preisen und Entwicklungszeit' } : null,
     { type:'pruefprotokoll', label:'Prüfprotokoll', desc:'Leeres Prüfprotokoll mit Item-Kopf und Unterschriftszeilen' },
   ].filter(Boolean).map(t => `
@@ -311,7 +311,11 @@ function generateItemTemplate(type) {
   if (!item) return;
   const s = state.settings || {};
   const today = new Date().toLocaleDateString('de-CH');
-  const rev = item.revisions?.[0];
+  // Dieselbe Revision wie am Bildschirm (Auswahl im Revisionen-Tab)
+  const rev = (item.revisions || []).find(r => r.id === state.activeRevId) || item.revisions?.[0];
+  const pcode = item.short_code && item.item_type !== 'doc' ? item.short_code + (rev ? '-' + rev.rev : '') : '';
+  const qr = type === 'datenblatt' && typeof qrSvg === 'function'
+    ? qrSvg(item.item_number, 76, { dark: '#111827', light: '#ffffff' }) : '';
 
   const companyLines = [s.company_street, [s.company_postal_code, s.company_city].filter(Boolean).join(' ')].filter(Boolean);
   const hdr = `
@@ -320,10 +324,14 @@ function generateItemTemplate(type) {
         <div style="font-size:18px;font-weight:700;color:#1d4ed8">${escHtml(s.company_name||'')}</div>
         <div style="font-size:12px;color:#6b7280;margin-top:2px;line-height:1.6">${companyLines.map(l=>escHtml(l)).join(' · ')}${s.company_phone?' · '+escHtml(s.company_phone):''}${s.company_email?' · '+escHtml(s.company_email):''}</div>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:2px">${escHtml(item.item_type.toUpperCase())}</div>
-        <div style="font-family:monospace;font-size:15px;font-weight:700;color:#1d4ed8">${escHtml(item.item_number)}</div>
-        <div style="font-size:12px;color:#6b7280">${today}</div>
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="text-align:right">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:2px">${escHtml(item.item_type.toUpperCase())}</div>
+          <div style="font-family:monospace;font-size:15px;font-weight:700;color:#1d4ed8">${escHtml(item.item_number)}</div>
+          ${pcode ? `<div style="font-size:12px;color:#6b7280">Kurzcode <b style="font-family:monospace;color:#111827">${escHtml(pcode)}</b></div>` : ''}
+          <div style="font-size:12px;color:#6b7280">${today}</div>
+        </div>
+        ${qr ? `<div style="line-height:0">${qr}</div>` : ''}
       </div>
     </div>
     <div style="margin-bottom:22px">
@@ -334,45 +342,125 @@ function generateItemTemplate(type) {
   const css = `body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:28px}
     table{width:100%;border-collapse:collapse;margin-bottom:16px}
     th{background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;text-align:left;border:1px solid #e5e7eb;color:#6b7280}
-    td{padding:6px 10px;border:1px solid #e5e7eb;font-size:13px;vertical-align:top}
+    td{padding:6px 10px;border:1px solid #e5e7eb;font-size:13px;vertical-align:top;overflow-wrap:anywhere}
+    .kv td{width:32%}.kv td.k{width:18%;color:#6b7280;font-weight:600;overflow-wrap:normal}
+    .txt{font-size:13px;line-height:1.6;color:#374151;margin-bottom:16px}
     .sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:18px 0 6px}
     .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600}
-    @media print{body{padding:14px}}`;
+    @media print{body{padding:14px}.sec{break-after:avoid}tr{break-inside:avoid}}`;
+
+  // Bezeichnung/Wert-Paare, zwei je Zeile. Leere Werte fallen weg; ein
+  // dritter Eintrag true gibt dem Wert die ganze Breite (lange Texte).
+  const kvTable = rows => {
+    const keep = rows.filter(([, v]) => v !== null && v !== undefined && v !== '');
+    if (!keep.length) return '';
+    const td = ([k, v]) => `<td class="k">${escHtml(k)}</td><td>${escHtml(v)}</td>`;
+    const pad = '<td class="k"></td><td></td>';
+    const trs = [];
+    let half = null;
+    for (const r of keep) {
+      if (r[2]) {
+        if (half) { trs.push(`<tr>${td(half)}${pad}</tr>`); half = null; }
+        trs.push(`<tr><td class="k">${escHtml(r[0])}</td><td colspan="3">${escHtml(r[1])}</td></tr>`);
+      } else if (half) { trs.push(`<tr>${td(half)}${td(r)}</tr>`); half = null; }
+      else half = r;
+    }
+    if (half) trs.push(`<tr>${td(half)}${pad}</tr>`);
+    return `<table class="kv"><tbody>${trs.join('')}</tbody></table>`;
+  };
 
   let body = '';
 
+  // Gleiche Abschnitte wie das Datenblatt am Bildschirm (renderItemSheet)
   if (type === 'datenblatt') {
-    const infoRows = [
+    body += `<div class="sec">Allgemein</div>` + kvTable([
       ['Typ', item.item_type.toUpperCase()],
-      ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : '—'],
-      ['Klassifizierung', item.classification || '—'],
-      ['Gewicht', item.effective_weight_g != null ? fmtN(item.effective_weight_g, 1) + ' g' : '—'],
-      ['Verkaufspreis', item.default_price != null ? 'CHF ' + fmtN(item.default_price, 2) : '—'],
-      ['Quelle', item.source_url || '—'],
-    ];
-    body += `<div class="sec">Allgemein</div>
-      <table><tbody>${infoRows.map(([k,v])=>`<tr><td style="width:140px;color:#6b7280;font-weight:600">${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('')}</tbody></table>`;
+      ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
+      ['Klassifizierung', item.classification],
+      ['Gewicht', item.effective_weight_g != null
+        ? fmtN(item.effective_weight_g, 1) + ' g' + (item.weight_g == null && item.item_type === 'asm' ? ' (aus BOM)' : '') : null],
+      ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null],
+      ['Entwicklungszeit', _fmtHours(item.dev_hours)],
+      ['Erstellt', fmtD(item.created_at, null)],
+      ['Quelle', item.source_url, true],
+    ]);
 
-    if ((item.revisions||[]).length) {
-      body += `<div class="sec">Revisionen</div><table>
-        <thead><tr><th>Revision</th><th>Status</th><th>Beschreibung</th><th>Angelegt</th></tr></thead>
-        <tbody>${item.revisions.map(r=>`<tr>
-          <td style="font-family:monospace;font-weight:700">rev${r.rev}</td>
-          <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">${r.status}</span></td>
-          <td>${escHtml(r.description||'')}</td>
-          <td style="color:#6b7280;font-size:12px">${fmtD(r.created_at,'')}</td>
+    if (item.notes) body += `<div class="sec">Notizen</div><div class="txt">${escHtml(item.notes)}</div>`;
+
+    if (rev) {
+      body += `<div class="sec">Revision rev${escHtml(rev.rev)}</div>` + kvTable([
+        ['Status', rev.status + (PLM_ST_LABEL[rev.status] ? ' · ' + PLM_ST_LABEL[rev.status] : '')],
+        ['Angelegt', fmtD(rev.created_at, null)],
+        ['Freigegeben', rev.released_at ? fmtD(rev.released_at) + (rev.released_by ? ' · ' + rev.released_by : '') : null],
+        ['Beschreibung', rev.description, true],
+        ['ECO-Grund', rev.eco_reason, true],
+      ]);
+    }
+
+    // Alle Druckparameter, nicht nur die zwölf vom Bildschirm
+    const ps = rev?.print_settings;
+    if (ps) {
+      const psRows = PRINT_PARAMS.filter(([k]) => k !== 'notes').map(([k, label]) =>
+        [label, k === 'raw_material_id' ? ps.raw_material_name || null : fmtPrintParam(k, ps[k])]);
+      psRows.push(['Notizen', ps.notes, true]);
+      const t = kvTable(psRows);
+      if (t) body += `<div class="sec">Druckparameter rev${escHtml(rev.rev)}</div>` + t;
+    }
+
+    if (item.item_type === 'asm' && rev) {
+      const bom = rev.bom || [];
+      const std = rev.bom_std || [];
+      if (bom.length || std.length) {
+        const bomTotal = bom.reduce((s, b) => s + (b.default_price != null ? b.default_price * b.quantity : 0), 0);
+        const stdTotal = std.reduce((s, b) => s + (b.unit_price || 0) * b.quantity, 0);
+        const unpriced = bom.filter(b => b.default_price == null).length;
+        body += `<div class="sec">Stückliste rev${escHtml(rev.rev)}</div>` + kvTable([
+          ['Positionen', String(bom.length + std.length)],
+          ['Eigene Teile', String(bom.length)],
+          ['Normteile', String(std.length)],
+          ['Teilesumme', bomTotal ? fmtChf(bomTotal) : null],
+          ['Normteilsumme', stdTotal ? fmtChf(stdTotal) : null],
+          ['Gesamt', (bomTotal + stdTotal) ? fmtChf(bomTotal + stdTotal) : null],
+          ['Hinweis', unpriced ? `${unpriced} von ${bom.length} eigenen Teilen ohne Preis — Summe unvollständig` : null, true],
+        ]);
+      }
+    }
+
+    const inv = item.inventory || [];
+    if (inv.length) {
+      body += `<div class="sec">Lagerbestand</div><table>
+        <thead><tr><th>Lagerartikel</th><th>SKU</th><th style="text-align:right">Bestand</th><th style="text-align:right">Minimum</th><th style="text-align:right">Preis</th></tr></thead>
+        <tbody>${inv.map(l => `<tr>
+          <td>${escHtml(l.name)}</td>
+          <td style="font-family:monospace;font-size:12px">${escHtml(l.sku||'')}</td>
+          <td style="text-align:right;font-family:monospace">${fmtN(l.stock_qty||0, 1)} ${escHtml(l.unit||'Stk')}</td>
+          <td style="text-align:right;font-family:monospace">${l.min_qty != null ? fmtN(l.min_qty, 1) : '—'}</td>
+          <td style="text-align:right;font-family:monospace">${l.price_per_unit != null ? fmtChf(l.price_per_unit) + '/' + escHtml(l.unit||'Stk') : '—'}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
+    if ((item.revisions||[]).length) {
+      body += `<div class="sec">Revisionen</div><table>
+        <thead><tr><th>Revision</th><th>Status</th><th>Beschreibung</th><th>Angelegt</th><th>Freigegeben</th></tr></thead>
+        <tbody>${item.revisions.map(r=>`<tr>
+          <td style="font-family:monospace;font-weight:700">rev${escHtml(r.rev)}</td>
+          <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">${escHtml(r.status)}</span></td>
+          <td>${escHtml(r.description||'')}</td>
+          <td style="color:#6b7280;font-size:12px">${fmtD(r.created_at,'')}</td>
+          <td style="color:#6b7280;font-size:12px">${fmtD(r.released_at,'')}${r.released_by ? ' · ' + escHtml(r.released_by) : ''}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    // original_name ist der Name, den der Benutzer sieht; filename nur der Speichername
     const allDatasets = (item.revisions||[]).flatMap(r=>(r.datasets||[]).map(d=>({...d, rev:r.rev, revStatus:r.status})));
     if (allDatasets.length) {
       body += `<div class="sec">Dateien</div><table>
         <thead><tr><th>Revision</th><th>Typ</th><th>Dateiname</th><th>Grösse</th><th>Datum</th></tr></thead>
         <tbody>${allDatasets.map(d=>`<tr>
-          <td style="font-family:monospace">rev${d.rev}</td>
-          <td style="color:#6b7280">${escHtml(d.ds_type||'')}</td>
-          <td style="font-family:monospace;font-size:12px">${escHtml(d.original_filename||d.filename)}</td>
-          <td style="color:#6b7280">${d.file_size ? Math.round(d.file_size/1024)+' KB' : '—'}</td>
+          <td style="font-family:monospace">rev${escHtml(d.rev)}</td>
+          <td style="color:#6b7280">${escHtml(fileLabel(d.original_name, d.ds_type))}</td>
+          <td style="font-family:monospace;font-size:12px">${escHtml(d.original_name||d.filename)}</td>
+          <td style="color:#6b7280;white-space:nowrap">${fmtSize(d.file_size)}</td>
           <td style="color:#6b7280;font-size:12px">${fmtD(d.uploaded_at,'')}</td>
         </tr>`).join('')}</tbody></table>`;
     }

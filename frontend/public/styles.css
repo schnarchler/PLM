@@ -575,6 +575,13 @@ tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; 
 .ps-cell:hover { border-color: var(--line2); }
 .ps-label { font-family: var(--mono); font-size: 11px; color: var(--t4); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 3px; font-weight: 500; }
 .ps-val { font-size: 13px; font-weight: 500; color: var(--t1); }
+/* Druckparameter im Datenblatt: Bezeichnung und Wert auf einer Zeile */
+.ps-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); column-gap: 16px; }
+.ps-kv-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 4px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.ps-kv-label { font-size: 12px; color: var(--t3); white-space: nowrap; flex-shrink: 0; }
+.ps-kv-val { font-family: var(--mono); font-size: 13px; color: var(--t1); text-align: right;
+  overflow-wrap: anywhere; min-width: 0; }
 
 /* ── CHANGELOG ── */
 .cl-row { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }

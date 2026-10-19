@@ -1914,7 +1914,9 @@ app.get('/api/items/:id', (req, res) => {
   item.revisions = all('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid DESC', [item.id]);
   item.revisions.forEach(rev => {
     rev.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [rev.id]);
-    rev.print_settings = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]) || null;
+    // Rohmaterial mit Namen — das PDF-Datenblatt zeigt sonst nur die ID
+    rev.print_settings = get(`SELECT ps.*, rm.name AS raw_material_name FROM print_settings ps
+      LEFT JOIN raw_materials rm ON rm.id=ps.raw_material_id WHERE ps.revision_id=?`, [rev.id]) || null;
     // Gelieferte Revisionen sind fixiert (siehe GELIEFERTER STAND)
     rev.delivered = deliveriesOfRevision(rev.id);
     if (item.item_type === 'asm') {
