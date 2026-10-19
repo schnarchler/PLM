@@ -229,6 +229,13 @@ async function renderSettings() {
           <button class="btn btn-primary btn-sm" onclick="_savePlmPrefs()">Speichern</button>
           <span id="st-plmprefs-msg" style="font-size:13px;color:var(--t3);margin-left:8px"></span>
         </div>
+
+        <div class="sep-label" style="margin-top:28px">Prüfprotokoll</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
+          Vorlage für „Dokument erstellen → Prüfprotokoll“. Die Prüfpunkte erscheinen in dieser Reihenfolge,
+          ein Soll-Wert wird ins Protokoll vorgedruckt. „Vorschau“ zeigt die Vorlage, wie sie gerade hier steht.
+        </div>
+        <div id="st-pruef-box"></div>
       </div>
 
       <!-- TAB: Daten -->
@@ -452,7 +459,9 @@ async function renderSettings() {
       styleActiveTabs();
       if (b.dataset.tab === 'loeschen') _loadDelTab();
       if (b.dataset.tab === 'benutzer') _renderUsersSettings();
-      if (b.dataset.tab === 'plm') _loadPlmTab();
+      // Prüfprotokoll nicht in _loadPlmTab: das läuft auch nach dem Speichern
+      // der Klassifizierungen und würfe ungespeicherte Änderungen hier weg
+      if (b.dataset.tab === 'plm') { _loadPlmTab(); _renderPruefSettings(); }
       if (b.dataset.tab === 'daten') loadBackupList();
     });
   });
