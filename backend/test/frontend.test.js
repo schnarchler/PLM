@@ -666,3 +666,16 @@ test('Prüfprotokoll: Vorschau aus den Einstellungen ohne Druckdialog', () => {
   assert.match(h, /<td>Probe<\/td>/);
   assert.ok(!h.includes('window.print'), 'kein Druckdialog in der Vorschau');
 });
+
+test('Datenblatt: „Allgemein“ im selben kompakten Stil wie die Druckparameter', () => {
+  const item = demoItem({ default_price: null, dev_hours: 1.5 });
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  const allg = h.slice(h.indexOf('>Allgemein<'), h.indexOf('>Notizen<'));
+  assert.match(allg, /class="ps-kv"/);
+  assert.ok(!allg.includes('ps-cell'), 'keine Kacheln mehr');
+  assert.match(allg, /<span class="ps-kv-label">Gewicht<\/span><span class="ps-kv-val">184\.0 g<\/span>/);
+  assert.match(allg, /<span class="ps-kv-label">Klassifizierung<\/span><span class="ps-kv-val"><span class="chip">Bauteil<\/span><\/span>/, 'Chip als HTML');
+  assert.match(allg, /<span class="ps-kv-label">Verkaufspreis<\/span><span class="ps-kv-val" style="color:var\(--t3\)">—<\/span>/, 'fehlender Wert gedimmt');
+  assert.match(allg, /Entwicklungszeit<\/span><span class="ps-kv-val">1 h 30 min</);
+});

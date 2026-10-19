@@ -528,6 +528,16 @@ function _sheetCell(label, value, opts = {}) {
   </div>`;
 }
 
+// Bezeichnung und Wert auf einer Zeile, drei Spalten im Detailpanel —
+// „Allgemein“ und Druckparameter. rows: [label, wert, rawHtml]; leer → „—“
+function _sheetKv(rows) {
+  return `<div class="ps-kv">${rows.map(([k, v, raw]) => {
+    const empty = v === null || v === undefined || v === '';
+    return `<div class="ps-kv-row"><span class="ps-kv-label">${esc(k)}</span>`
+      + `<span class="ps-kv-val"${empty ? ' style="color:var(--t3)"' : ''}>${empty ? '—' : raw ? v : esc(v)}</span></div>`;
+  }).join('')}</div>`;
+}
+
 function _sheetRows(rows) {
   const keep = rows.filter(([, v]) => v !== null && v !== undefined && v !== '');
   if (!keep.length) return '';
@@ -652,17 +662,18 @@ function renderItemSheet(item, activeRevId) {
     ? fmtN(item.effective_weight_g, 1) + ' g' + (item.weight_g == null && item.item_type === 'asm' ? ' (aus BOM)' : '')
     : null;
 
-  const facts = `<div class="ps-grid">
-    ${_sheetCell('Typ', typeCode, { mono: true })}
-    ${_sheetCell('Klassifizierung', item.classification ? _classChip(item.classification, 13) : null, { raw: !!item.classification })}
-    ${_sheetCell('Projekt', item.project ? item.project.number + ' · ' + item.project.name : null)}
-    ${_sheetCell('Gewicht', weightTxt, { mono: true })}
-    ${_sheetCell('Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null, { mono: true })}
-    ${_sheetCell('Entwicklungszeit', _fmtHours(item.dev_hours), { mono: true })}
-    ${_sheetCell('Erstellt', item.created_at ? fmtDate(item.created_at) : null, { mono: true })}
-    ${_sheetCell('Revisionen', revCount ? String(revCount) : null, { mono: true })}
-    ${_sheetCell('Dateien', allDs.length ? allDs.length + ' · ' + fmtSize(dsBytes) : null, { mono: true })}
-  </div>`;
+  // Erstellt nur mit Datum — mit Uhrzeit bräche die Zeile in der Spalte um
+  const facts = _sheetKv([
+    ['Typ', typeCode],
+    ['Klassifizierung', item.classification ? _classChip(item.classification, 12) : null, true],
+    ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
+    ['Gewicht', weightTxt],
+    ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null],
+    ['Entwicklungszeit', _fmtHours(item.dev_hours)],
+    ['Erstellt', item.created_at ? fmtD(item.created_at) : null],
+    ['Revisionen', revCount ? String(revCount) : null],
+    ['Dateien', allDs.length ? allDs.length + ' · ' + fmtSize(dsBytes) : null],
+  ]);
 
   // -- Aktive Revision
   let revBlock = '<div style="font-size:13px;color:var(--t3)">Keine Revision vorhanden.</div>';
@@ -689,11 +700,8 @@ function renderItemSheet(item, activeRevId) {
       .map(([key, label]) => [label, fmtPrintParam(key, ps[key])])
       .filter(([, v]) => v !== null && v !== undefined && v !== '');
     if (cells.length) {
-      // Eine Zeile je Wert statt Kacheln, drei Spalten im Detailpanel
       psBlock = `<div class="sep-label">Druckparameter <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
-        <div class="ps-kv">${cells.map(([k, v]) => `<div class="ps-kv-row">
-          <span class="ps-kv-label">${esc(k)}</span><span class="ps-kv-val">${esc(v)}</span>
-        </div>`).join('')}</div>
+        ${_sheetKv(cells)}
         ${ps.notes ? `<div style="font-size:13px;color:var(--t3);margin-top:7px;white-space:pre-wrap">${esc(ps.notes)}</div>` : ''}`;
     }
   }

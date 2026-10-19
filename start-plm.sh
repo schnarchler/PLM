@@ -18,7 +18,11 @@ if [ -z "$PLM_DATA_DIR" ]; then
 fi
 
 cd "$SCRIPT_DIR/backend"
-npm install --silent 2>/dev/null
+# Pakete nur installieren, wenn sie fehlen oder package.json neuer ist —
+# sonst startet PLM ohne Internet (wie START-PLM.bat)
+if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ]; then
+  npm install --silent --no-audit --no-fund 2>/dev/null
+fi
 # Den Port waehlt der Server selbst (3000, sonst der naechste freie) und
 # oeffnet dann den Browser - nur er weiss, welchen Port er bekommen hat.
 PLM_DATA_DIR="$PLM_DATA_DIR" PLM_OPEN_BROWSER=1 node server.js
