@@ -330,6 +330,35 @@ test('Zeiterfassung: Listen zeigen Stunden und Minuten statt 1.5 h', () => {
     ['1 h 30 min', '15 min', '2 h', '0 min', '2 h'], 'auf Minuten gerundet, nie „1 h 60 min“');
 });
 
+// ── Dashboard: Fristen ────────────────────────────────────────
+const _dashDue = evalPart('js/03-dashboard.js', 'function _dashDue(', 'async function renderDashboard(', '_dashDue');
+
+test('Dashboard: Fristen rot überfällig, gelb bald, sonst grau', () => {
+  const tag = n => { const t = new Date(); t.setDate(t.getDate() + n); return t.toLocaleDateString('sv-SE'); };
+  assert.match(_dashDue(tag(-2), 'delivery'), /var\(--red\);[^>]*>2 T\. überfällig/);
+  assert.match(_dashDue(tag(0), 'delivery'), /var\(--amber\);[^>]*>heute fällig/);
+  assert.match(_dashDue(tag(2), 'delivery'), /var\(--amber\);[^>]*>fällig in 2 T\./);
+  assert.match(_dashDue(tag(10), 'order'), /var\(--t3\);[^>]*>fällig in 10 T\./);
+  assert.match(_dashDue(tag(30), 'delivery'), new RegExp(`fällig ${tag(30)}`));
+  assert.match(_dashDue(tag(-1), 'quote'), /var\(--red\);[^>]*>abgelaufen/);
+  assert.match(_dashDue(tag(3), 'quote'), /läuft in 3 T\. ab/);
+  assert.match(_dashDue(tag(40), 'quote'), /gültig bis /);
+  assert.strictEqual(_dashDue(null, 'quote'), '', 'ohne Datum kein Hinweis');
+});
+
+const _dashStats = evalPart('js/03-dashboard.js', 'function _dashStats(', 'async function renderDashboard(', '_dashStats');
+
+test('Dashboard: Kennzahlen zur Datenbank, Fehlendes als Strich', () => {
+  const h = _dashStats({ projects: 12, assemblies: 4, parts: 1234, documents: 0, released: 7, revisions: 40, standard_parts: 3,
+    customers: 9, orders: 21, delivered: 15, hours: 12.5, files: 88, files_bytes: 2048, db_bytes: 4096,
+    last_backup: null, since: '2026-05-11', version: { version: '2.0.<b>', dirty: true } });
+  for (const t of ['>Datenbank<', '>PLM<', '>ERP<', '>Daten<', '>Teile<', '1234<', '12 h 30 min', '88 · 2.0KB', '4.0KB', '2026-05-11'])
+    assert.ok(h.includes(t), t);
+  assert.match(h, /Letzte Sicherung<\/span><span[^>]*>—</, 'ohne Sicherung ein Strich');
+  assert.match(h, /v2\.0\.&lt;b&gt; · geändert/, 'Version escaped');
+  assert.strictEqual(_dashStats(undefined), '', 'ältere Antwort ohne Kennzahlen');
+});
+
 // ── Mindmap-Layout ────────────────────────────────────────────
 const MM = (0, eval)(read('js/15-mindmap.js') + '; ({ _MM, _mmLayout, _mmNodeSvg, _mmEdgeSvg })');
 

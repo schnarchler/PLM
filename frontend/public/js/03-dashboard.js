@@ -2,249 +2,113 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── DASHBOARD ─────────────────────────────────────────────────
+// Nur was offen ist: Produktion, Aufträge, Angebote, Freigabe, Lager. Leere
+// Bereiche erscheinen nicht, Fristen stehen direkt in der Zeile.
+const DASH_MAX = 8;   // mehr pro Bereich → Link auf die ganze Liste
+
+// Frist als kurzer Hinweis: rot überfällig, gelb in den nächsten drei Tagen
+function _dashDue(date, kind) {
+  if (!date) return '';
+  const days = Math.round((new Date(date) - new Date(new Date().toLocaleDateString('sv-SE'))) / 86400000);
+  const quote = kind === 'quote';
+  const txt = days < 0 ? (quote ? 'abgelaufen' : `${-days} T. überfällig`)
+    : days === 0 ? (quote ? 'läuft heute ab' : 'heute fällig')
+    : days <= 14 ? (quote ? `läuft in ${days} T. ab` : `fällig in ${days} T.`)
+    : (quote ? 'gültig bis ' : 'fällig ') + fmtD(date);
+  const col = days < 0 ? 'var(--red)' : days <= 3 ? 'var(--amber)' : 'var(--t3)';
+  return `<span style="font-size:13px;color:${col};white-space:nowrap">${txt}</span>`;
+}
+
+// Kennzahlen zur Datenbank — ruhig am Ende, die offenen Dinge stehen oben
+function _dashStats(st) {
+  if (!st) return '';
+  const num = v => fmtN(v || 0, 0);
+  // Sicherung kurz: „heute 15:58“, „gestern 15:58“ oder das Datum
+  const when = iso => {
+    if (!iso) return null;
+    const t = new Date(iso), day = t.toLocaleDateString('sv-SE');
+    const hm = t.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+    if (day === new Date().toLocaleDateString('sv-SE')) return `heute ${hm}`;
+    if (day === new Date(Date.now() - 86400000).toLocaleDateString('sv-SE')) return `gestern ${hm}`;
+    return t.toLocaleDateString('de-CH');
+  };
+  const v = st.version || {};
+  const group = (title, rows) => `<div>
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--t4);margin-bottom:4px">${title}</div>
+      ${rows.map(([k, val]) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:13px">
+        <span style="color:var(--t3);white-space:nowrap">${k}</span><span style="font-family:var(--mono);color:var(--t2);text-align:right;white-space:nowrap">${val ?? '—'}</span></div>`).join('')}
+    </div>`;
+  return `<div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;margin-top:4px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px">Datenbank</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 28px">
+      ${group('PLM', [['Projekte', num(st.projects)], ['Baugruppen', num(st.assemblies)], ['Teile', num(st.parts)],
+        ['Dokumente', num(st.documents)], ['Freigegeben', num(st.released)], ['Revisionen', num(st.revisions)],
+        ['Normteile', num(st.standard_parts)]])}
+      ${group('ERP', [['Kunden', num(st.customers)], ['Aufträge', num(st.orders)], ['Geliefert', num(st.delivered)],
+        ['Erfasste Zeit', _fmtDur(st.hours)]])}
+      ${group('Daten', [['Dateien', st.files ? `${num(st.files)} · ${fmtSize(st.files_bytes)}` : '0'],
+        ['Datenbank', fmtSize(st.db_bytes)], ['Letzte Sicherung', when(st.last_backup)],
+        ['Im Einsatz seit', st.since ? fmtD(st.since) : null],
+        ['PLM-Version', v.version ? 'v' + esc(v.version) + (v.dirty ? ' · geändert' : '') : null]])}
+    </div>
+  </div>`;
+}
+
 async function renderDashboard() {
   const today = new Date().toLocaleDateString('de-CH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   setLeftHeader('Dashboard', `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">${today}</span><button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="renderDashboard()">↺</button>`);
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
-  const [s, d, invItems] = await Promise.all([api('/api/stats'), api('/api/dashboard'), api('/api/inventory')]);
+  const d = await api('/api/dashboard');
 
-  // Status-Wörter und -Farben aus 01-core.js (stBadge), damit sie überall gleich sind
-  const stColors = {DFT:'var(--blue)',REV:'var(--amber)',REL:'var(--green)',ECO:'var(--purple)',OBS:'var(--t3)'};
-  const itemIcon = t => _itemChip(t, 18);
-
-  const invCritical = invItems.filter(i => i.min_qty > 0 && i.stock_qty < i.min_qty);
-  const invWarn     = invItems.filter(i => i.min_qty > 0 && i.stock_qty === i.min_qty);
-  const invLow      = [...invCritical, ...invWarn];
-  const activeDeliveries = d.recentDeliveries.filter(x => x.status !== 'DELIVERED');
-
-  // ── KPI tiles ──
-  const kpiTile = (label, value, sub, accent, click) => `
-    <div onclick="${click||''}" style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:${click?'pointer':'default'};transition:border-color .15s" onmouseover="this.style.borderColor='var(--line3)'" onmouseout="this.style.borderColor='var(--line)'">
-      <div style="font-size:13px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
-        <span style="width:6px;height:6px;border-radius:50%;background:${accent};flex-shrink:0;display:inline-block"></span>
-        ${label}
-      </div>
-      <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--t1);line-height:1;letter-spacing:-0.02em">${value}</div>
-      ${sub ? `<div style="font-size:13px;color:var(--t3);margin-top:6px">${sub}</div>` : ''}
-    </div>`;
-
-  const confirmedOrders = d.openOrders.filter(o => o.status === 'CONFIRMED').length;
-  // Angebote sind Aufträge in der Phase „Angebot"
-  const expiringQuotes = (d.quotesExpiring || []).length;
-  const invAlert = invCritical.length
-    ? `<span style="color:var(--red)">${invCritical.length} kritisch</span>${invWarn.length ? ` · <span style="color:var(--amber)">${invWarn.length} Warnung</span>` : ''}`
-    : invWarn.length ? `<span style="color:var(--amber)">${invWarn.length} auf Min.</span>` : '<span style="color:var(--green)">alles ok</span>';
-
-  // Revenue tile wider than others
-  const kpiHtml = `
-    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:24px">
-      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px">
-        <div style="font-size:13px;color:var(--t3);margin-bottom:8px;display:flex;align-items:center;gap:5px">
-          <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
-          Umsatz
-        </div>
-        <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--t1);line-height:1;letter-spacing:-0.02em">${fmtCHF(d.revenueMonth||0)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:6px">diesen Monat · <span style="color:var(--t2)">${fmtCHF(d.revenueTotal||0)} gesamt</span></div>
-      </div>
-      ${kpiTile('Aufträge', d.openOrders.length, confirmedOrders + ' bestätigt', 'var(--blue)', "gotoView('orders')")}
-      ${kpiTile('Angebote', d.openQuotes.length, expiringQuotes ? expiringQuotes + ' laufen bald ab' : 'offen', 'var(--teal)', "gotoView('orders')")}
-      ${kpiTile('Produktion', activeDeliveries.length, 'nicht geliefert', 'var(--amber)', "gotoView('deliveries')")}
-      ${kpiTile('Freigabe', d.inReview.length, 'warten auf REV', 'var(--purple)', '')}
-      ${kpiTile('Lager', invLow.length || '—', invAlert, invCritical.length ? 'var(--red)' : invWarn.length ? 'var(--amber)' : 'var(--green)', "gotoView('inventory')")}
-      ${kpiTile('Rohmaterial', d.rawMatActive + ' / ' + d.rawMatCount, d.rawMatValue > 0 ? fmtCHF(d.rawMatValue) + ' Warenwert' : '—', 'var(--teal)', "gotoView('rawmaterials')")}
-    </div>`;
-
-  // ── Section header ──
-  const sh = label => `<div style="font-family:var(--mono);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--t4);font-weight:500;padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:8px">${label}</div>`;
-  const emptyRow = msg => `<div style="color:var(--t3);font-size:13px;padding:10px 0">${msg}</div>`;
-
-  // ── Aufträge ──
-  const ordersHtml = d.openOrders.length ? d.openOrders.map(o => `
-    <div onclick="gotoView('orders');openOrderDetail(${o.id})" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      ${stBadge('order', o.status, 'flex-shrink:0')}
+  const row = (onclick, left, title, sub, right) => `
+    <div onclick="${onclick}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="flex-shrink:0">${left}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px">${o.number} · ${esc(o.customer_name||'—')}${o.delivery_date?' · '+fmtD(o.delivery_date):''}</div>
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>
+        ${sub ? `<div style="font-size:13px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>` : ''}
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:13px;color:var(--t1)">${fmtCHF(o.total||0)}</div>
-        <div style="font-size:13px;color:var(--t4);margin-top:1px">${o.item_count} Pos.</div>
-      </div>
-    </div>`).join('') : emptyRow('Keine offenen Aufträge');
-
-  // ── Angebote ──
-  const quotesHtml = d.openQuotes.length ? d.openQuotes.map(q => `
-    <div onclick="gotoView('orders');openOrderDetail(${q.id})" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      ${stBadge('order', q.status, 'flex-shrink:0')}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}${q.valid_until?' · bis '+fmtD(q.valid_until):''}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:13px;color:var(--t1)">${fmtCHF(q.total||0)}</div>
-        <div style="font-size:13px;color:var(--t4);margin-top:1px">${q.item_count} Pos.</div>
-      </div>
-    </div>`).join('') : emptyRow('Keine offenen Angebote');
-
-  // ── Freigabe ──
-  const reviewHtml = d.inReview.length ? d.inReview.map(r => `
-    <div onclick="gotoPlmItem(${r.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="width:22px;height:22px;border-radius:var(--r-xs);background:var(--amber-soft);display:grid;place-items:center;flex-shrink:0">
-        <span style="font-size:13px">${itemIcon(r.item_type)}</span>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px;font-family:var(--mono)">${r.item_number} · ${esc(r.project_number)}</div>
-      </div>
-      <span class="status st-REV">rev${r.rev}</span>
-    </div>`).join('') : emptyRow('Keine Items in Prüfung');
-
-  // ── Fällige Produktionsaufträge ──
-  const todayIso = new Date().toISOString().slice(0,10);
-  const dueSoon = d.dueSoon || [];
-  const dueSoonHtml = dueSoon.length ? dueSoon.map(ls => {
-    const daysLeft = Math.round((new Date(ls.delivery_date) - new Date(todayIso)) / 86400000);
-    const urgent = daysLeft <= 3;
-    const color = daysLeft < 0 ? 'var(--red)' : urgent ? 'var(--amber)' : 'var(--t2)';
-    const label = daysLeft < 0 ? `${Math.abs(daysLeft)}d überfällig` : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
-    return `<div onclick="gotoView('deliveries');openDeliveryDetail(${ls.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ls.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px">${ls.number} · ${esc(ls.customer_name||'—')}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${label}</div>
-        <div style="font-size:13px;color:var(--t4)">${fmtD(ls.delivery_date)}</div>
-      </div>
+      <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:2px">${right}</div>
     </div>`;
-  }).join('') : emptyRow('Keine Produktionsaufträge fällig in 14 Tagen');
-
-  // ── Ablaufende Angebote ──
-  const quotesExpiring = d.quotesExpiring || [];
-  const quotesExpHtml = quotesExpiring.length ? quotesExpiring.map(q => {
-    const daysLeft = Math.round((new Date(q.valid_until) - new Date(todayIso)) / 86400000);
-    const color = daysLeft < 0 ? 'var(--red)' : daysLeft <= 3 ? 'var(--amber)' : 'var(--t3)';
-    const label = daysLeft < 0 ? 'Abgelaufen' : daysLeft === 0 ? 'Heute' : `in ${daysLeft}d`;
-    return `<div onclick="gotoView('orders');openOrderDetail(${q.id})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.title)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px">${q.number} · ${esc(q.customer_name||'—')}</div>
+  const section = (title, list, view, render) => !list.length ? '' : `
+    <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);padding:10px 6px 6px;margin-bottom:12px">
+      <div style="display:flex;align-items:baseline;gap:8px;padding:0 10px 6px">
+        <span style="font-size:13px;font-weight:600">${title}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${list.length}</span>
+        ${view ? `<span onclick="gotoView('${view}')" style="margin-left:auto;font-size:13px;color:var(--blue);cursor:pointer">${list.length > DASH_MAX ? `alle ${list.length} →` : 'Liste →'}</span>` : ''}
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${label}</div>
-        <div style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtCHF(q.total||0)}</div>
-      </div>
+      ${list.slice(0, DASH_MAX).map(render).join('')}
     </div>`;
-  }).join('') : emptyRow('Keine Angebote laufen in 14 Tagen ab');
+  const money = v => `<span style="font-family:var(--mono);font-size:13px;color:var(--t1)">${fmtCHF(v || 0)}</span>`;
+  const who = x => `${esc(x.number)} · ${esc(x.customer_name || '—')}`;
 
-  // ── Produktion ──
-  const grouped = {};
-  d.inProduction.forEach(x => {
-    if (!grouped[x.delivery_id]) grouped[x.delivery_id] = { number: x.delivery_number, status: x.delivery_status, customer: x.customer_name, items: [] };
-    grouped[x.delivery_id].items.push(x);
-  });
-  const prodHtml = Object.values(grouped).length ? Object.values(grouped).map(g => `
-    <div style="border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:6px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3)">
-        ${stBadge('delivery', g.status)}
-        <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${g.number}</span>
-        <span style="font-size:13px;color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.customer||'—')}</span>
-      </div>
-      ${g.items.map(x => `
-        <div onclick="openProject(${x.project_id})" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--line);cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-          <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${x.item_number||'—'}</span>
-          <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)">${esc(x.description)}</span>
-          <span style="font-size:13px;color:var(--t3);flex-shrink:0;font-family:var(--mono)">${x.quantity} ${x.unit}</span>
-        </div>`).join('')}
-    </div>`).join('') : emptyRow('Keine aktive Produktion');
+  const sections = [
+    section('Produktion', d.openDeliveries, 'deliveries', x => row(`gotoView('deliveries');openDeliveryDetail(${x.id})`,
+      stBadge('delivery', x.status), esc(x.title), who(x), _dashDue(x.delivery_date, 'delivery'))),
+    section('Aufträge', d.openOrders, 'orders', o => row(`gotoView('orders');openOrderDetail(${o.id})`,
+      stBadge('order', o.status), esc(o.title), who(o), money(o.total) + _dashDue(o.delivery_date, 'order'))),
+    section('Angebote', d.openQuotes, 'orders', q => row(`gotoView('orders');openOrderDetail(${q.id})`,
+      stBadge('order', q.status), esc(q.title), who(q), money(q.total) + _dashDue(q.valid_until, 'quote'))),
+    section('Zur Freigabe', d.inReview, '', r => row(`gotoPlmItem(${r.id})`,
+      _itemChip(r.item_type, 18), esc(r.name), `${esc(r.item_number)} · ${esc(r.project_number)}`,
+      `<span class="status st-REV">rev${esc(r.rev)}</span>`)),
+    section('Lager nachbestellen', d.lowStock, 'inventory', i => {
+      const col = i.stock_qty < i.min_qty ? 'var(--red)' : 'var(--amber)';
+      return row(`gotoView('inventory');openInventoryDetail(${i.id})`,
+        `<span style="display:block;width:7px;height:7px;border-radius:50%;background:${col}"></span>`,
+        esc(i.name), [i.color, i.material].filter(Boolean).map(esc).join(' · '),
+        `<span style="font-family:var(--mono);font-size:13px;color:${col}">${fmtN(i.stock_qty, 1)} / min ${fmtN(i.min_qty, 1)} ${esc(i.unit || '')}</span>`);
+    }),
+  ].join('');
 
-  // ── PLM Status-Verteilung ──
-  const total = s.assemblies + s.parts || 1;
-  const statusHtml = `
-    <div style="display:flex;flex-direction:column;gap:6px">
-      ${s.by_status.map(st => `
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="status st-${st.status}" style="width:34px;justify-content:center">${st.status}</span>
-          <div style="flex:1;height:3px;background:var(--line);border-radius:2px;overflow:hidden">
-            <div style="width:${Math.round(st.count/total*100)}%;height:100%;background:${stColors[st.status]||'var(--t3)'};border-radius:2px"></div>
-          </div>
-          <span style="font-family:var(--mono);font-size:13px;color:var(--t2);width:22px;text-align:right">${st.count}</span>
-        </div>`).join('')}
-      <div style="font-size:13px;color:var(--t3);margin-top:4px;text-align:right">${s.assemblies} Baugruppen · ${s.parts} Parts · ${s.projects} Projekte</div>
-    </div>`;
-
-  // ── Lager-Warnungen ──
-  const invLowHtml = invLow.length ? invLow.map(i => {
-    const isCritical = i.stock_qty < i.min_qty;
-    const col = isCritical ? 'var(--red)' : 'var(--amber)';
-    return `<div onclick="gotoView('inventory');openInventoryDetail(${i.id})" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-      <div style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0"></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(i.name)}${i.color?` <span style="color:var(--t3);font-weight:400;font-size:13px">${esc(i.color)}</span>`:''}${i.material?` <span style="color:var(--t3);font-weight:400;font-size:13px">${esc(i.material)}</span>`:''}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:1px">${esc(i.category)}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--mono);font-size:13px;color:${col};font-weight:600">${fmtN(i.stock_qty,1)} <span style="font-size:13px;font-weight:400">${i.unit}</span></div>
-        <div style="font-size:13px;color:var(--t4);margin-top:1px">Min ${fmtN(i.min_qty,1)}</div>
-      </div>
-    </div>`;
-  }).join('') : `<div style="display:flex;align-items:center;gap:8px;padding:10px;color:var(--green);font-size:13px">
-    <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
-    Alle Lagerartikel über Mindestbestand
-  </div>`;
-
-  setLeftBody(`<div style="max-width:1100px;padding-bottom:24px">
-
-    ${kpiHtml}
-
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
-
-      <!-- Spalte 1 -->
-      <div>
-        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
-          <div style="padding:12px 14px 8px">${sh('Offene Aufträge')}</div>
-          <div style="padding:0 4px 8px">${ordersHtml}</div>
-        </div>
-        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
-          <div style="padding:12px 14px 8px">${sh('Offene Angebote')}</div>
-          <div style="padding:0 4px 8px">${quotesHtml}</div>
-        </div>
-      </div>
-
-      <!-- Spalte 2 -->
-      <div>
-        <div style="background:var(--bg1);border:1px solid ${dueSoon.length ? 'var(--amber-line)' : 'var(--line)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
-          <div style="padding:12px 14px 8px">${sh('Fällige Produktionsaufträge'+(dueSoon.length?` <span style="color:var(--amber)">${dueSoon.length}</span>`:''))}</div>
-          <div style="padding:0 4px 8px">${dueSoonHtml}</div>
-        </div>
-        <div style="background:var(--bg1);border:1px solid ${quotesExpiring.length ? 'var(--red-line)' : 'var(--line)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
-          <div style="padding:12px 14px 8px">${sh('Ablaufende Angebote'+(quotesExpiring.length?` <span style="color:var(--red)">${quotesExpiring.length}</span>`:''))}</div>
-          <div style="padding:0 4px 8px">${quotesExpHtml}</div>
-        </div>
-        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
-          <div style="padding:12px 14px 8px">${sh('Lager — Warnungen')}</div>
-          <div style="padding:0 4px 8px">${invLowHtml}</div>
-        </div>
-      </div>
-
-      <!-- Spalte 3 -->
-      <div>
-        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
-          <div style="padding:12px 14px 8px">${sh('Aktive Produktion')}</div>
-          <div style="padding:8px 10px">${prodHtml}</div>
-        </div>
-        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
-          <div style="padding:12px 14px 8px">${sh('Freigabe-Pipeline')}</div>
-          <div style="padding:0 4px 8px">${reviewHtml}</div>
-        </div>
-        <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);overflow:hidden">
-          <div style="padding:12px 14px 8px">${sh('PLM Status')}</div>
-          <div style="padding:8px 14px 14px">${statusHtml}</div>
-        </div>
-      </div>
-
+  const month = new Date().toLocaleDateString('de-CH', { month: 'long' });
+  setLeftBody(`<div style="max-width:760px;padding-bottom:24px">
+    <div style="display:flex;gap:18px;align-items:baseline;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:var(--t3)">
+      <span>Umsatz ${month} <strong style="font-family:var(--mono);color:var(--t1);font-size:15px;margin-left:4px">${fmtCHF(d.revenueMonth || 0)}</strong></span>
+      <span>gesamt <span style="font-family:var(--mono);color:var(--t2);margin-left:4px">${fmtCHF(d.revenueTotal || 0)}</span></span>
     </div>
+    ${sections || `<div class="empty"><div class="empty-icon" style="color:var(--green)">✓</div><div class="empty-text">Nichts offen — alles erledigt.</div></div>`}
+    ${_dashStats(d.stats)}
   </div>`);
 }
 

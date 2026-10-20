@@ -283,6 +283,35 @@ test('Check-in freigegebene Baugruppe: geändertes Unterteil bekommt seine eigen
   assert.deepStrictEqual(await revStates(bg.id), ['1:REL'], 'Baugruppe bleibt freigegeben');
 });
 
+test('Dashboard: nur Offenes, die dringendsten Fristen zuerst', async () => {
+  const k = await api('/api/customers', 'POST', { name: 'Dash AG' });
+  const tag = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  const spaet = await api('/api/deliveries', 'POST', { title: 'Dash später', customer_id: k.id, delivery_date: tag(20) });
+  const bald = await api('/api/deliveries', 'POST', { title: 'Dash bald', customer_id: k.id, delivery_date: tag(1) });
+  const fertig = await api('/api/deliveries', 'POST', { title: 'Dash geliefert', customer_id: k.id, status: 'DELIVERED' });
+  const ang = await api('/api/orders', 'POST', { title: 'Dash Angebot', customer_id: k.id, status: 'QUOTE', valid_until: tag(3) });
+  const auf = await api('/api/orders', 'POST', { title: 'Dash Auftrag', customer_id: k.id });
+  await api(`/api/orders/${auf.id}/items`, 'POST', { description: 'Teil', quantity: 2, unit: 'Stk', unit_price: 10 });
+  const lager = await api('/api/inventory', 'POST', { name: 'Dash Schraube', min_qty: 5 });
+
+  const d = await api('/api/dashboard');
+  const mine = [spaet.id, bald.id, fertig.id];
+  assert.deepStrictEqual(d.openDeliveries.map(x => x.id).filter(id => mine.includes(id)), [bald.id, spaet.id],
+    'fälligste zuerst, Geliefertes nicht');
+  assert.ok(d.openQuotes.some(q => q.id === ang.id && q.customer_name === 'Dash AG'));
+  assert.strictEqual(d.openOrders.find(o => o.id === auf.id).total, 20);
+  assert.ok(d.lowStock.some(i => i.id === lager.id), 'Bestand 0 unter Minimum 5');
+  assert.ok(!('rawMatValue' in d) && !('inProduction' in d), 'nur noch, was die Übersicht zeigt');
+
+  // Kennzahlen zur Datenbank: gleiche Zählung wie die Seitenleiste, Grössen aus der DB
+  const st = d.stats, s = await api('/api/stats');
+  assert.deepStrictEqual([st.projects, st.assemblies, st.parts, st.customers], [s.projects, s.assemblies, s.parts, s.customers]);
+  // db_bytes ist die Datei auf der Platte — der Testserver hat sie evtl. noch nicht geschrieben
+  assert.ok(typeof st.db_bytes === 'number' && st.files >= 1 && st.files_bytes > 0, 'Grössen ohne die Dateien einzeln zu lesen');
+  assert.match(st.version.version, /^\d+\.\d+\.\d+$/);
+  assert.ok('last_backup' in st && 'since' in st);
+});
+
 test('Normteil bestellen legt beim Wareneingang einen Lagerartikel an', async () => {
   const sp = await api('/api/standard-parts', 'POST', { designation: 'DIN 912 M6x20', standard: 'DIN', unit_price: 0.42 });
   const sup = await api('/api/suppliers', 'POST', { name: 'Schraubenhandel' });
