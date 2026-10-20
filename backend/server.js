@@ -4997,6 +4997,8 @@ app.post('/api/print-receipt', (req, res) => {
   if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
   attachDeliveredRevision(item, item.delivery_status === 'DELIVERED');
   const rev = item.effective_rev?.rev;
+  // Der Kurzcode trägt die Revision (K7M-2) — ohne Kurzcode bleibt sie an der Nummer
+  const code = printCode(item.short_code, rev);
   const rcptSettings = Object.fromEntries(
     all("SELECT key,value FROM settings WHERE key IN ('company_name','receipt_footer','receipt_line_width','receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes')")
     .map(r => [r.key, r.value])
@@ -5039,8 +5041,8 @@ app.post('/api/print-receipt', (req, res) => {
   const printData = {
     header:          companyName,
     name:            item.item_name || item.description,
-    number:          item.item_number ? item.item_number + (rev ? ' rev' + rev : '') : '',
-    code:            printCode(item.short_code, rev),
+    number:          item.item_number ? item.item_number + (rev && !code ? ' rev' + rev : '') : '',
+    code,
     desc:            item.item_name ? '' : (item.description || ''),
     qty:             item.quantity,
     unit:            item.unit,
@@ -5145,10 +5147,11 @@ app.post('/api/print-receipt-delivery', (req, res) => {
     if (price != null) total = (total || 0) + price * item.quantity;
     attachDeliveredRevision(item, delivery.status === 'DELIVERED');
     const rev = item.effective_rev?.rev;
+    const code = printCode(item.short_code, rev);   // trägt die Revision
     return {
       name:   item.item_name || item.description,
-      number: item.item_number ? item.item_number + (rev ? ' rev' + rev : '') : '',
-      code:   printCode(item.short_code, rev),
+      number: item.item_number ? item.item_number + (rev && !code ? ' rev' + rev : '') : '',
+      code,
       qty:    item.quantity,
       unit:   item.unit,
       price:  price != null ? price * item.quantity : null,
