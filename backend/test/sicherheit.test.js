@@ -153,6 +153,11 @@ test('Import: Dateien auf oberster Ebene — neues Item, dann an das Item anhän
   assert.ok(fs.existsSync(stl), 'Datei bleibt, wo sie war');
   assert.ok(!fs.existsSync(path.join(coDir, '.checkout.json')), 'oberste Ebene wird kein Checkout');
   assert.deepStrictEqual(await neuName(), [], 'schon im PLM: nicht mehr als neu gemeldet');
+  // Die Prüfsumme liegt jetzt in der Datenbank — der nächste Scan liest die Datei nicht mehr
+  const sha1 = require('node:crypto').createHash('sha1').update(fs.readFileSync(stl)).digest('hex');
+  const stored = (await api(`/api/items/${item.id}`)).revisions[0].datasets.map(d => d.sha1);
+  assert.ok(stored.includes(sha1), 'Prüfsumme gespeichert');
+  assert.deepStrictEqual(await neuName(), [], 'zweiter Scan: gleiches Ergebnis');
 
   fs.writeFileSync(stl, 'solid HALTER\nendsolid halter\n');   // gleiche Grösse, anderer Inhalt
   assert.deepStrictEqual(await neuName(), ['Halter.stl'], 'geändert: wieder neu');

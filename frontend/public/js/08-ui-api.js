@@ -43,10 +43,13 @@ function setLeftHeader(title, actionsHtml) {
 }
 function setLeftBody(html) { document.getElementById('left-body').innerHTML = html; }
 
-let _loadStatsTimer;
+// Beim Start sofort, danach gesammelt: mehrere Änderungen kurz
+// hintereinander ergeben nur eine Abfrage
+let _loadStatsTimer, _statsShown = false;
 async function loadStats() {
   clearTimeout(_loadStatsTimer);
   _loadStatsTimer = setTimeout(async () => {
+    _statsShown = true;
     const s = await api('/api/stats');
     document.getElementById('badge-projects').textContent = s.projects||0;
     document.getElementById('badge-customers').textContent = s.customers||0;
@@ -63,7 +66,7 @@ async function loadStats() {
     if (bn) bn.textContent = s.standard_parts ?? '—';
     const bp = document.getElementById('badge-purchasing');
     if (bp) bp.textContent = s.open_pos ?? '—';
-  }, 800);
+  }, _statsShown ? 800 : 0);
 }
 
 // ── API ───────────────────────────────────────────────────────

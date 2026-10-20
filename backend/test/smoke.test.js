@@ -142,6 +142,18 @@ test('Zeiterfassung: Von–Bis wird gespeichert, nur Dauer löscht die Uhrzeiten
   assert.strictEqual((await api(`/api/time-entries?order_id=${o.id}`)).length, 2);
 });
 
+test('Programmdateien: Browser fragt immer nach, lädt Unverändertes aber nicht neu', async () => {
+  for (const f of ['/js/01-core.js', '/styles.css', '/']) {
+    const r = await fetch(BASE + f);
+    assert.strictEqual(r.headers.get('cache-control'), 'no-cache', `${f}: nach einem Update nie veraltet`);
+    const etag = r.headers.get('etag');
+    assert.ok(etag, `${f}: mit ETag`);
+    // Wie der Browser beim Neuladen (fetch würde sonst selbst no-cache anhängen)
+    const again = await fetch(BASE + f, { headers: { 'If-None-Match': etag, 'Cache-Control': 'max-age=0' } });
+    assert.strictEqual(again.status, 304, `${f}: unverändert → 304 ohne Inhalt`);
+  }
+});
+
 test('Datei-Upload hinterlegt den Original-Dateinamen als Notiz', async () => {
   const p = await api('/api/projects', 'POST', { name: 'Uploadprojekt' });
   const item = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Uploadteil', item_type: 'part' });
