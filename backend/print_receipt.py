@@ -57,9 +57,9 @@ def build_receipt(data):
     if s_dt: o+=row(now,small=True,centered=True,w=w)
     if s_cu and customer: o+=row(customer,small=True,centered=True,w=w)
     o+=sep(w)
-    if code: o+=row(code,bold=True,centered=True,w=w)
     if s_nr and number: o+=row(number,bold=True,w=w)
-    o+=row(name,bold=True,w=w)
+    # Kurzcode in Klammern hinter dem Namen — er zeigt auch die Revision
+    o+=row(f'{name} ({code})' if code else name,bold=True,w=w)
     if desc and desc!=name: o+=row(desc,small=True,w=w)
     if s_no and notes: o+=row(notes,small=True,w=w)
     qty_line = f'{qty} {unit}'.strip() if qty is not None else ''
@@ -169,9 +169,8 @@ def build_multi_receipt(data):
         code=item.get('code') or ''
         qty=item.get('qty',1); unit=item.get('unit','Stk')
         price=item.get('price'); notes=item.get('notes') or ''
-        if code: o+=row(code,bold=True,w=w)
         if s_nr and number: o+=row(number,small=True,w=w)
-        o+=row(name,bold=True,w=w)
+        o+=row(f'{name} ({code})' if code else name,bold=True,w=w)
         if s_no and notes: o+=row(notes,small=True,w=w)
         if price is not None:
             o+=lr(f'{qty} {unit}',f'CHF {rnd5(price):.2f}',w=w)
