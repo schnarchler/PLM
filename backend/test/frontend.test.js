@@ -226,6 +226,31 @@ test('Datenblatt: Slicer-Knopf ist ausgegraut, solange keiner nutzbar ist', () =
   } finally { global.state.slicer = null; }
 });
 
+// ── 3D-Vorschau: isometrische Startansicht ────────────────────
+const STLV = evalPart('js/02-plm-browse.js', '// Isometrische Ansicht wie im CAD', 'function initSTLViewer(', '({ STL_ISO, _stlRotation })');
+const applyRot = (m, [x, y, z]) => [0, 1, 2].map(i => m[i] * x + m[4 + i] * y + m[8 + i] * z);
+
+test('3D-Vorschau: startet isometrisch, Z zeigt nach oben', () => {
+  const m = STLV._stlRotation(STLV.STL_ISO.elev, STLV.STL_ISO.azim);
+  const s = 1 / Math.sqrt(3);
+  const blick = applyRot(m, [s, -s, s]);
+  assert.ok(Math.abs(blick[0]) < 1e-6 && Math.abs(blick[1]) < 1e-6 && Math.abs(blick[2] - 1) < 1e-6, 'Blick von vorne rechts oben (1,-1,1)');
+  const oben = applyRot(m, [0, 0, 1]);
+  assert.ok(Math.abs(oben[0]) < 1e-6 && oben[1] > 0.8, 'Z zeigt auf dem Bildschirm nach oben');
+  // Sichtbar sind genau Oberseite, Vorderseite und rechte Seite
+  for (const [n, sichtbar] of [[[0, 0, 1], true], [[0, -1, 0], true], [[1, 0, 0], true],
+                               [[0, 0, -1], false], [[0, 1, 0], false], [[-1, 0, 0], false]]) {
+    assert.strictEqual(applyRot(m, n)[2] > 0, sichtbar, `Fläche ${n}`);
+  }
+});
+
+test('3D-Vorschau: Drehen um die Hochachse lässt Z oben', () => {
+  for (const azim of [0, 1, 2.5, -3]) {
+    const oben = applyRot(STLV._stlRotation(STLV.STL_ISO.elev, azim), [0, 0, 1]);
+    assert.ok(Math.abs(oben[0]) < 1e-6 && oben[1] > 0.8, `gedreht um ${azim}`);
+  }
+});
+
 // ── Stücklistenposition: Revisionsanzeige ─────────────────────
 const _bomRevBadge = evalPart('js/02-plm-browse.js', 'function _bomRevBadge(', 'function renderBomList(', '_bomRevBadge');
 

@@ -570,7 +570,7 @@ function _stlPreview(key, stls, top = '12px') {
     : '';
   return `<div class="sep-label" style="margin-top:${top}">3D-Vorschau${sel}</div>
     <div style="position:relative;width:100%;height:220px;border-radius:var(--r);overflow:hidden;margin-bottom:10px">
-      <canvas id="stl-c-${key}" data-stl-url="${url(stls[0])}" style="width:100%;height:100%;display:block;cursor:grab"></canvas>
+      <canvas id="stl-c-${key}" data-stl-url="${url(stls[0])}" title="Ziehen: drehen · Mausrad: zoomen · Doppelklick: isometrische Ansicht" style="width:100%;height:100%;display:block;cursor:grab"></canvas>
       <div id="stl-load-${key}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--t3);font-size:13px;pointer-events:none">Lade…</div>
     </div>`;
 }
@@ -1084,6 +1084,21 @@ function parseSTL(buf) {
   return { pos: new Float32Array(pos), nrm: new Float32Array(nrm) };
 }
 
+// Isometrische Ansicht wie im CAD: STL aus CAD und Slicer haben Z nach oben,
+// der Blick kommt von vorne rechts oben (Richtung 1, -1, 1).
+const STL_ISO = { elev: Math.atan(Math.SQRT1_2), azim: -Math.PI / 4 };
+function _mul4(a, b) {
+  const r = new Float32Array(16);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) r[j*4+i] += a[k*4+i] * b[j*4+k];
+  return r;
+}
+// Z nach oben stellen, um die Hochachse drehen (Drehteller), dann von oben neigen
+function _stlRotation(elev, azim) {
+  const Rx = a => { const c = Math.cos(a), s = Math.sin(a); return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); };
+  const Ry = a => { const c = Math.cos(a), s = Math.sin(a); return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]); };
+  return _mul4(Rx(elev), _mul4(Ry(azim), Rx(-Math.PI / 2)));
+}
+
 function initSTLViewer(canvasId, url) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
@@ -1102,8 +1117,11 @@ function initSTLViewer(canvasId, url) {
     }
     const sc = 1.8 / Math.max(x1-x0, y1-y0, z1-z0, 1e-9);
     const cx=(x0+x1)/2, cy=(y0+y1)/2, cz=(z0+z1)/2;
+    // Umkugel des Modells: so passt es in jeder Drehung ganz ins Bild
+    const rad = 0.5 * Math.hypot(x1-x0, y1-y0, z1-z0) * sc;
     const VS = 'attribute vec3 aP,aN;uniform mat4 uM;uniform mat3 uN;uniform vec3 uC;uniform float uS;varying vec3 vN;void main(){gl_Position=uM*vec4((aP-uC)*uS,1.);vN=normalize(uN*aN);}';
-    const FS = 'precision mediump float;varying vec3 vN;void main(){float d=clamp(dot(normalize(vN),normalize(vec3(1.,1.5,1.))),0.,1.)*.7+.3;gl_FragColor=vec4(.3*d,.55*d,.9*d,1.);}';
+    // Licht von leicht rechts oben vorne: in der Isometrie drei klar verschiedene Flächen
+    const FS = 'precision mediump float;varying vec3 vN;void main(){float d=clamp(dot(normalize(vN),normalize(vec3(.2,.6,1.))),0.,1.)*.7+.3;gl_FragColor=vec4(.3*d,.55*d,.9*d,1.);}';
     function mk(type, src) { const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); return s; }
     const prog = gl.createProgram();
     gl.attachShader(prog, mk(gl.VERTEX_SHADER, VS));
@@ -1118,12 +1136,13 @@ function initSTLViewer(canvasId, url) {
     const uM=gl.getUniformLocation(prog,'uM'), uN=gl.getUniformLocation(prog,'uN');
     const uC=gl.getUniformLocation(prog,'uC'), uS=gl.getUniformLocation(prog,'uS');
     gl.uniform3f(uC,cx,cy,cz); gl.uniform1f(uS,sc);
-    let rX=-0.4, rY=0.6, zoom=1, drag=false, lx=0, ly=0;
-    const mul4=(a,b)=>{const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)r[j*4+i]+=a[k*4+i]*b[j*4+k];return r;};
-    const Rx=a=>{const c=Math.cos(a),s=Math.sin(a);return new Float32Array([1,0,0,0,0,c,s,0,0,-s,c,0,0,0,0,1]);};
-    const Ry=a=>{const c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1]);};
+    let rX=STL_ISO.elev, rY=STL_ISO.azim, zoom=1, drag=false, lx=0, ly=0;
+    // Neigen höchstens senkrecht von oben oder unten — das Teil steht nie auf dem Kopf
+    const tilt=d=>{rX=Math.max(-Math.PI/2,Math.min(Math.PI/2,rX+d));};
     const Tr=(x,y,z)=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1]);
-    const Pr=(f,a,n,fa)=>{const t=Math.tan(f/2);return new Float32Array([1/(a*t),0,0,0,0,1/t,0,0,0,0,-(fa+n)/(fa-n),-1,0,0,-2*fa*n/(fa-n),0]);};
+    // Parallelprojektion wie die ISO-Ansicht im CAD: Kanten bleiben parallel
+    const Or=(a)=>{const s=rad*1.08/zoom, w=a>=1?s*a:s, h=a>=1?s:s/a, n=0.1, f=10;
+      return new Float32Array([1/w,0,0,0, 0,1/h,0,0, 0,0,-2/(f-n),0, 0,0,-(f+n)/(f-n),1]);};
     const m3=(m)=>new Float32Array([m[0],m[1],m[2],m[4],m[5],m[6],m[8],m[9],m[10]]);
     function draw() {
       canvas.width=canvas.clientWidth||400; canvas.height=canvas.clientHeight||220;
@@ -1131,20 +1150,21 @@ function initSTLViewer(canvasId, url) {
       gl.viewport(0,0,W,H);
       gl.clearColor(0.11,0.12,0.14,1); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
       gl.enable(gl.DEPTH_TEST);
-      const mod=mul4(Rx(rX),Ry(rY));
-      gl.uniformMatrix4fv(uM,false,mul4(Pr(Math.PI/4,W/H,0.01,100),mul4(Tr(0,0,-3.2/zoom),mod)));
+      const mod=_stlRotation(rX,rY);
+      gl.uniformMatrix4fv(uM,false,_mul4(Or(W/H),_mul4(Tr(0,0,-3.2),mod)));
       gl.uniformMatrix3fv(uN,false,m3(mod));
       gl.drawArrays(gl.TRIANGLES,0,pos.length/3);
     }
     canvas.onmousedown = e=>{drag=true;lx=e.clientX;ly=e.clientY;canvas.style.cursor='grabbing';e.preventDefault();};
-    window.addEventListener('mousemove', e=>{if(!drag||!document.getElementById(canvasId))return;rY+=(e.clientX-lx)*0.01;rX+=(e.clientY-ly)*0.01;lx=e.clientX;ly=e.clientY;draw();});
+    canvas.ondblclick = ()=>{rX=STL_ISO.elev;rY=STL_ISO.azim;zoom=1;draw();};
+    window.addEventListener('mousemove', e=>{if(!drag||!document.getElementById(canvasId))return;rY+=(e.clientX-lx)*0.01;tilt((e.clientY-ly)*0.01);lx=e.clientX;ly=e.clientY;draw();});
     window.addEventListener('mouseup', ()=>{if(drag){drag=false;const c=document.getElementById(canvasId);if(c)c.style.cursor='grab';}});
     canvas.addEventListener('wheel', e=>{zoom*=e.deltaY>0?0.92:1.09;zoom=Math.max(0.2,Math.min(6,zoom));draw();e.preventDefault();},{passive:false});
     let t0=[];
     canvas.addEventListener('touchstart',e=>{t0=[...e.touches];e.preventDefault();},{passive:false});
     canvas.addEventListener('touchmove',e=>{
       e.preventDefault();
-      if(e.touches.length===1&&t0.length){rY+=(e.touches[0].clientX-t0[0].clientX)*0.01;rX+=(e.touches[0].clientY-t0[0].clientY)*0.01;}
+      if(e.touches.length===1&&t0.length){rY+=(e.touches[0].clientX-t0[0].clientX)*0.01;tilt((e.touches[0].clientY-t0[0].clientY)*0.01);}
       else if(e.touches.length===2&&t0.length===2){const d0=Math.hypot(t0[0].clientX-t0[1].clientX,t0[0].clientY-t0[1].clientY),d1=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);zoom*=d1/Math.max(d0,1);zoom=Math.max(0.2,Math.min(6,zoom));}
       t0=[...e.touches];draw();
     },{passive:false});
@@ -1170,7 +1190,7 @@ function switchSTLViewer(key, url) {
   const loadDiv = document.getElementById('stl-load-' + key);
   if (loadDiv) { loadDiv.style.display = ''; loadDiv.textContent = 'Lade…'; }
   const nc = document.createElement('canvas');
-  nc.id = canvasId; nc.style.cssText = 'width:100%;height:100%;display:block;cursor:grab';
+  nc.id = canvasId; nc.title = old.title; nc.style.cssText = 'width:100%;height:100%;display:block;cursor:grab';
   nc.dataset.stlUrl = url;
   nc._stlInit = true;
   old.replaceWith(nc);

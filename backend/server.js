@@ -762,6 +762,9 @@ function applySchema() {
   // Füllmuster aus dem Slicer (gyroid, grid …). Für schon hochgeladene 3MF
   // einmalig nachtragen, damit es nicht erst nach einem neuen Upload erscheint.
   try { db.run('ALTER TABLE print_settings ADD COLUMN infill_pattern TEXT DEFAULT NULL'); } catch {}
+  // Prüfsumme der gespeicherten Datei — wird beim ersten Vergleich berechnet
+  // und dann nicht mehr neu gelesen (Checkout-Scan, Check-in, Revisionsvergleich)
+  try { db.run('ALTER TABLE datasets ADD COLUMN sha1 TEXT DEFAULT NULL'); } catch {}
   migrateOnce('infill-pattern-from-3mf-v1', () => {
     let n = 0;
     for (const ps of all("SELECT revision_id FROM print_settings WHERE infill_pattern IS NULL OR infill_pattern=''")) {
@@ -839,10 +842,12 @@ function applySchema() {
     'CREATE INDEX IF NOT EXISTS idx_items_variant        ON items(variant_group_id)',
     'CREATE INDEX IF NOT EXISTS idx_revisions_item       ON revisions(item_id)',
     'CREATE INDEX IF NOT EXISTS idx_datasets_revision    ON datasets(revision_id)',
+    'CREATE INDEX IF NOT EXISTS idx_datasets_size        ON datasets(file_size)',
     'CREATE INDEX IF NOT EXISTS idx_bom_parent           ON bom(parent_rev_id)',
     'CREATE INDEX IF NOT EXISTS idx_bom_child            ON bom(child_item_id)',
     'CREATE INDEX IF NOT EXISTS idx_bom_std_part         ON bom_std_parts(std_part_id)',
     'CREATE INDEX IF NOT EXISTS idx_changelog_entity     ON changelog(entity_type, entity_id)',
+    'CREATE INDEX IF NOT EXISTS idx_changelog_created    ON changelog(created_at)',
     'CREATE INDEX IF NOT EXISTS idx_order_items_order    ON order_items(order_id)',
     'CREATE INDEX IF NOT EXISTS idx_order_items_item     ON order_items(item_id)',
     'CREATE INDEX IF NOT EXISTS idx_quote_items_quote    ON quote_items(quote_id)',
@@ -1345,8 +1350,8 @@ function copyRevisionContent(from, toRevId, toRevLabel) {
       const newFile = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
       fs.copyFileSync(path.join(FILES_DIR, ds.filename), path.join(FILES_DIR, newFile));
       const newName = (ds.original_name || '').replace(`_rev${from.rev}`, `_rev${toRevLabel}`);
-      runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-        [toRevId, ds.ds_type, newFile, newName || ds.original_name, ds.file_size, ds.version, ds.notes]);
+      runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes,sha1) VALUES (?,?,?,?,?,?,?,?)',
+        [toRevId, ds.ds_type, newFile, newName || ds.original_name, ds.file_size, ds.version, ds.notes, ds.sha1 ?? null]);
       files++;
     } catch (e) { console.error('Datei-Kopie fehlgeschlagen:', e.message); }
   }
@@ -1823,9 +1828,13 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(FRONTEND_DIR, { etag: false, lastModified: false, setHeaders: (res, filePath) => {
+// no-cache: Der Browser fragt bei jedem Laden nach, ob sich die Datei geändert
+// hat — nach einem Update gibt es also nie ein veraltetes Skript. Unverändert
+// antwortet der Server nur mit 304, und der Browser nutzt seine Kopie samt
+// bereits übersetztem JavaScript, statt alles neu zu laden.
+app.use(express.static(FRONTEND_DIR, { setHeaders: (res, filePath) => {
   if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', 'no-cache');
   }
 }}));
 
@@ -2359,14 +2368,35 @@ function _hashOf(p) {
     return crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex');
   } catch { return null; }
 }
-function _fileHash(ds) { return _hashOf(path.join(FILES_DIR, ds.filename)); }
+// Prüfsumme einer gespeicherten Datei: einmal berechnet, dann in der DB.
+// Gespeicherte Dateien ändern sich nie — neuer Inhalt ist immer eine neue Datei.
+function _fileHash(ds) {
+  if (ds.sha1) return ds.sha1;
+  if (!ds.filename) return null;
+  const h = _hashOf(path.join(FILES_DIR, ds.filename));
+  if (h && ds.id) run('UPDATE datasets SET sha1=? WHERE id=?', [h, ds.id]);
+  return h;
+}
+// Dateien im Checkout-Ordner: Prüfsumme merken, solange Grösse und
+// Änderungsdatum gleich bleiben. Der Scan läuft bei jedem Seitenaufruf.
+const _hashCache = new Map();
+function _cachedHash(p, st) {
+  const c = _hashCache.get(p);
+  if (c && c.size === st.size && c.mtimeMs === st.mtimeMs) return c.hash;
+  const hash = _hashOf(p);
+  _hashCache.set(p, { size: st.size, mtimeMs: st.mtimeMs, hash });
+  return hash;
+}
 // Liegt genau dieser Inhalt schon im PLM? Verglichen wird nur mit Dateien
 // gleicher Grösse, damit der Scan schnell bleibt.
-function _contentInPlm(p, size) {
-  const same = all('SELECT filename FROM datasets WHERE file_size=?', [size]);
-  if (!same.length) return false;
-  const h = _hashOf(p);
-  return !!h && same.some(ds => _fileHash(ds) === h);
+function _contentInPlm(p, st) {
+  if (!get('SELECT 1 AS y FROM datasets WHERE file_size=? LIMIT 1', [st.size])) return false;
+  const h = _cachedHash(p, st);
+  if (!h) return false;
+  if (get('SELECT 1 AS y FROM datasets WHERE file_size=? AND sha1=? LIMIT 1', [st.size, h])) return true;
+  // Ältere Dateien ohne gespeicherte Prüfsumme: jetzt einmal berechnen
+  return all('SELECT id, filename, sha1 FROM datasets WHERE file_size=? AND sha1 IS NULL', [st.size])
+    .some(ds => _fileHash(ds) === h);
 }
 // Dateiname ohne Revisionskennung: 0028-prt-001_rev2.stl → 0028-prt-001.stl
 function _datasetKey(ds) {
@@ -2438,8 +2468,8 @@ app.get('/api/items/:id/compare', (req, res) => {
       if (row.change !== 'same') return row;
       // gleich benannt: Inhalt prüfen
       if (row.a.file_size !== row.b.file_size) return { ...row, change: 'changed', content: 'different' };
-      const ha = _fileHash({ filename: get('SELECT filename FROM datasets WHERE id=?', [row.a.id])?.filename });
-      const hb = _fileHash({ filename: get('SELECT filename FROM datasets WHERE id=?', [row.b.id])?.filename });
+      const ha = _fileHash(get('SELECT id, filename, sha1 FROM datasets WHERE id=?', [row.a.id]) || {});
+      const hb = _fileHash(get('SELECT id, filename, sha1 FROM datasets WHERE id=?', [row.b.id]) || {});
       if (ha && hb) return ha === hb ? { ...row, content: 'identical' } : { ...row, change: 'changed', content: 'different' };
       return { ...row, content: 'unknown' };
     });
@@ -2850,10 +2880,11 @@ app.post('/api/items/:id/checkout', (req, res) => {
       const dest = path.join(outDir, name);
       fs.copyFileSync(src, dest);
       if (ds.rev_status === 'REL') { try { fs.chmodSync(dest, 0o444); } catch {} }
-      // Änderungsdatum und Grösse merken: zeigt beim Einchecken, ob die Datei bearbeitet wurde
+      // Änderungsdatum (volle Genauigkeit, nicht auf ms gerundet) und Grösse merken:
+      // zeigt beim Einchecken, ob die Datei bearbeitet wurde
       const st = fs.statSync(dest);
       copied.push({ name, ds_type: ds.ds_type, item_number: ds.item_number, item_name: ds.item_name, readonly: ds.rev_status === 'REL',
-        mtime: Math.round(st.mtimeMs), size: st.size });
+        mtime: st.mtimeMs, size: st.size });
     }
 
     if (!copied.length) {
@@ -2895,7 +2926,7 @@ app.get('/api/checkout/scan', (req, res) => {
       if (e.startsWith('.')) continue;
       const p = path.join(checkoutDir, e);
       const st = fs.statSync(p);
-      if (st.isFile() && !_contentInPlm(p, st.size)) {
+      if (st.isFile() && !_contentInPlm(p, st)) {
         result.root_files.push({ name: e, path: p, ds_type: guessType(e) });
       }
     }
@@ -3049,8 +3080,8 @@ function _changedInCheckout(folder, meta) {
     try { st = fs.statSync(p); } catch { return false; }
     if (!st.isFile()) return false;
     const k = known.get(name);
-    if (k && k.mtime === Math.round(st.mtimeMs) && k.size === st.size) return false;
-    return !_contentInPlm(p, st.size);
+    if (k && k.mtime === st.mtimeMs && k.size === st.size) return false;
+    return !_contentInPlm(p, st);
   });
 }
 
@@ -4053,7 +4084,7 @@ app.post('/api/classifications/rename', (req, res) => {
 
 app.get('/api/changelog', (req, res) => {
   const limit = parseInt(req.query.limit) || 150;
-  const rows = all('SELECT * FROM changelog ORDER BY created_at DESC LIMIT ?', [limit]);
+  const rows = all('SELECT * FROM changelog ORDER BY created_at DESC, id DESC LIMIT ?', [limit]);
   rows.forEach(r => {
     if (r.entity_type === 'item') {
       const item = get('SELECT item_number, name, project_id, item_type FROM items WHERE id=?', [r.entity_id]);
