@@ -759,6 +759,22 @@ function applySchema() {
   // wurden. NULL = nur die Dauer wurde eingegeben.
   try { db.run('ALTER TABLE time_entries ADD COLUMN start_time TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE time_entries ADD COLUMN end_time TEXT DEFAULT NULL'); } catch {}
+  // Füllmuster aus dem Slicer (gyroid, grid …). Für schon hochgeladene 3MF
+  // einmalig nachtragen, damit es nicht erst nach einem neuen Upload erscheint.
+  try { db.run('ALTER TABLE print_settings ADD COLUMN infill_pattern TEXT DEFAULT NULL'); } catch {}
+  migrateOnce('infill-pattern-from-3mf-v1', () => {
+    let n = 0;
+    for (const ps of all("SELECT revision_id FROM print_settings WHERE infill_pattern IS NULL OR infill_pattern=''")) {
+      const files = all("SELECT filename FROM datasets WHERE revision_id=? AND LOWER(original_name) LIKE '%.3mf' ORDER BY id DESC", [ps.revision_id]);
+      for (const f of files) {
+        let parsed;
+        try { parsed = parse3mfSettings(fs.readFileSync(path.join(FILES_DIR, f.filename))); } catch { continue; }
+        const pattern = parsed.settings && printSettingsFrom3mf(parsed.settings).infill_pattern;
+        if (pattern) { run('UPDATE print_settings SET infill_pattern=? WHERE revision_id=?', [pattern, ps.revision_id]); n++; break; }
+      }
+    }
+    if (n) console.log(`Füllmuster aus 3MF nachgetragen: ${n} Revision(en)`);
+  });
   // Bei Baugruppen zusätzlich die komplette Struktur zum Lieferzeitpunkt:
   // jedes Unterteil mit der Revision, die damals verbaut war. Nummer und Name
   // sind kopiert, damit der Stand lesbar bleibt, auch wenn ein Item später
@@ -1143,6 +1159,7 @@ function printSettingsFrom3mf(settings) {
     color:        pick('filament_colour', 'filament_color'),
     layer_height: pickNum('layer_height'),
     infill:       pickNum('fill_density', 'sparse_infill_density'),
+    infill_pattern: pick('fill_pattern', 'sparse_infill_pattern'),
     supports:     supportRaw === null ? null : (supportRaw === '1' || supportRaw.toLowerCase() === 'true' ? 1 : 0),
     nozzle:       pickNum('nozzle_diameter'),
     print_temp:   pickNum('temperature', 'nozzle_temperature'),
@@ -1335,9 +1352,9 @@ function copyRevisionContent(from, toRevId, toRevLabel) {
   }
   const ps = get('SELECT * FROM print_settings WHERE revision_id=?', [from.id]);
   if (ps) {
-    run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [toRevId, ps.material, ps.color, ps.layer_height, ps.infill, ps.supports, ps.nozzle,
+    run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,infill_pattern,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [toRevId, ps.material, ps.color, ps.layer_height, ps.infill, ps.infill_pattern, ps.supports, ps.nozzle,
        ps.print_temp, ps.bed_temp, ps.printer, ps.notes, ps.printer_cost_hr, ps.filament_price_kg,
        ps.filament_weight_total, ps.part_weight, ps.print_duration, ps.raw_material_id]);
   }
@@ -2323,7 +2340,7 @@ app.get('/api/revisions/:id', (req, res) => {
 // oder bei „Neue Revision" kopierte Datei gilt so als unverändert.
 // Liefert Rohwerte — Bezeichnungen und Einheiten setzt das Frontend, damit
 // Vergleich und Datenblatt dieselben Begriffe verwenden.
-const COMPARE_PS_FIELDS = ['material', 'color', 'layer_height', 'infill', 'supports', 'nozzle',
+const COMPARE_PS_FIELDS = ['material', 'layer_height', 'infill', 'infill_pattern', 'supports', 'nozzle',
   'print_temp', 'bed_temp', 'printer', 'print_duration', 'filament_weight_total', 'part_weight',
   'filament_price_kg', 'printer_cost_hr', 'raw_material_id', 'notes'];
 const COMPARE_HASH_LIMIT = 256 * 1024 * 1024;
@@ -2555,23 +2572,23 @@ app.delete('/api/revisions/:id', (req, res) => {
 });
 
 app.put('/api/revisions/:id/print-settings', (req, res) => {
-  const { material, color, layer_height, infill, supports, nozzle, print_temp, bed_temp, printer, notes,
+  const { material, color, layer_height, infill, infill_pattern, supports, nozzle, print_temp, bed_temp, printer, notes,
     printer_cost_hr, filament_price_kg, filament_weight_total, part_weight, print_duration, raw_material_id } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
   if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
   if (rejectIfDelivered(res, rev.id)) return;
-  run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,infill_pattern,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(revision_id) DO UPDATE SET
     material=excluded.material, color=excluded.color, layer_height=excluded.layer_height,
-    infill=excluded.infill, supports=excluded.supports, nozzle=excluded.nozzle,
+    infill=excluded.infill, infill_pattern=excluded.infill_pattern, supports=excluded.supports, nozzle=excluded.nozzle,
     print_temp=excluded.print_temp, bed_temp=excluded.bed_temp, printer=excluded.printer, notes=excluded.notes,
     printer_cost_hr=excluded.printer_cost_hr, filament_price_kg=excluded.filament_price_kg,
     filament_weight_total=excluded.filament_weight_total, part_weight=excluded.part_weight,
     print_duration=excluded.print_duration, raw_material_id=excluded.raw_material_id`,
     // Fehlende Felder als NULL binden — sql.js lehnt undefined ab, und ein
     // Teil-Payload soll die Position nicht in einen Fehler laufen lassen.
-    [rev.id, material ?? null, color ?? null, layer_height ?? null, infill ?? null, supports ?? null,
+    [rev.id, material ?? null, color ?? null, layer_height ?? null, infill ?? null, infill_pattern ?? null, supports ?? null,
      nozzle ?? null, print_temp ?? null, bed_temp ?? null, printer ?? null, notes ?? null,
      printer_cost_hr||null, filament_price_kg||null, filament_weight_total||null, part_weight||null, print_duration||null,
      raw_material_id||null]);

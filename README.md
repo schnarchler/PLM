@@ -102,7 +102,7 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - **Freigabe-Workflow abschaltbar** – unter Einstellungen → PLM wählbar zwischen
   Freigabelauf (DFT → REV → REL → ECO) und einfachem Betrieb ohne Freigabe
 - **Druckparameter aus 3MF** – beim Hochladen einer `.3mf` an eine Revision werden
-  Schichthöhe, Füllung, Temperaturen, Material und Drucker automatisch übernommen
+  Schichthöhe, Füllung, Füllmuster, Temperaturen, Material und Drucker automatisch übernommen
 - **Klassifizierung automatisch** – neue Items werden anhand der Quelle als Eigen-
   oder Kaufteil eingestuft (Vorgaben unter Einstellungen → PLM)
 - **Freie Notizen** pro Item – für alles was nicht in die Beschreibung gehört
