@@ -551,8 +551,10 @@ async function openRawMatDetail(id) {
     `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc(item.material_type||'')}</span>${esc(item.name)}`;
   document.getElementById('dp-tabs').innerHTML =
     `<button class="tab active" onclick="switchTab(this,'rm-info')">Details</button>
-     <button class="tab" onclick="switchTab(this,'rm-moves')">Buchungen</button>`;
+     <button class="tab" onclick="switchTab(this,'rm-moves')">Buchungen</button>
+     <button class="tab" onclick="switchTab(this,'rm-trace');loadRawMaterialTrace(${id})">Verwendet in</button>`;
   document.getElementById('dp-body').innerHTML = `
+    <div id="rm-trace" style="display:none"></div>
     <div id="rm-info">
       <div style="display:flex;gap:6px;margin-bottom:14px">
         <button class="btn btn-ghost btn-sm" onclick="openRawMatModal(${id})">✎ Bearbeiten</button>

@@ -312,6 +312,84 @@ test('Dashboard: nur Offenes, die dringendsten Fristen zuerst', async () => {
   assert.ok('last_backup' in st && 'since' in st);
 });
 
+// ── Rückverfolgung und Änderungsanträge ───────────────────────
+test('Rückverfolgung: Charge, Revision und Prüfung je Position — und rückwärts je Charge', async () => {
+  const k = await api('/api/customers', 'POST', { name: 'Rückruf AG' });
+  const proj = await api('/api/projects', 'POST', { name: 'Rückverfolgung' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Clip', item_type: 'prt' });
+  const rm = await api('/api/raw-materials', 'POST', { name: 'PETG Schwarz', material_type: 'PETG', unit: 'kg' });
+  await api(`/api/raw-materials/${rm.id}/adjust`, 'POST', { type: 'in', qty: 2, lot_number: 'L-2026-07' });
+  const d = await api('/api/deliveries', 'POST', { title: 'Clips', customer_id: k.id });
+  const pos = await api(`/api/deliveries/${d.id}/items`, 'POST', { description: 'Clip', item_id: teil.id, quantity: 50, raw_material_id: rm.id });
+  // Ohne Position im Aufruf gilt die einzige Position mit diesem Material
+  await api(`/api/deliveries/${d.id}/consume-material`, 'POST', { consumptions: [{ raw_material_id: rm.id, qty: 0.4, lot_number: 'L-2026-07' }] });
+  await api(`/api/delivery-items/${pos.id}/inspection`, 'PUT', { result: 'OK', note: 'Masse geprüft' });
+
+  const t = await api(`/api/deliveries/${d.id}/trace`);
+  const p = t.positions.find(x => x.id === pos.id);
+  assert.deepStrictEqual(p.lots.map(l => [l.material, l.lot_number, l.qty]), [['PETG Schwarz', 'L-2026-07', 0.4]]);
+  assert.strictEqual(p.revision.rev, '1');
+  assert.deepStrictEqual([p.inspection.result, p.inspection.note], ['OK', 'Masse geprüft']);
+  assert.deepStrictEqual(t.unassigned_lots, []);
+
+  const back = await api(`/api/raw-materials/${rm.id}/trace`);
+  assert.deepStrictEqual(back.map(r => [r.lot_number, r.delivery_number, r.customer_name, r.item_number]),
+    [['L-2026-07', d.number, 'Rückruf AG', teil.item_number]], 'rückwärts: Charge → Kunde und Teil');
+
+  await api(`/api/delivery-items/${pos.id}/inspection`, 'PUT', {});
+  assert.strictEqual((await api(`/api/deliveries/${d.id}/trace`)).positions[0].inspection, null, 'zurückgesetzt');
+});
+
+test('Änderungsantrag: Auswirkung, Genehmigung, Umsetzen per ECO, Abschluss', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'ECR' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Halter', item_type: 'prt' });
+  const bg = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Gerät', item_type: 'asm' });
+  await api(`/api/revisions/${await firstRev(bg.id)}/bom`, 'POST', { child_item_id: teil.id, quantity: 2, unit: 'Stk' });
+  await release(await firstRev(teil.id));
+  const auftrag = await api('/api/orders', 'POST', { title: 'Geräte' });
+  await api(`/api/orders/${auftrag.id}/items`, 'POST', { description: 'Gerät', item_id: bg.id, quantity: 1, unit: 'Stk', unit_price: 100 });
+  const prod = await api('/api/deliveries', 'POST', { title: 'Halter fertigen' });
+  await api(`/api/deliveries/${prod.id}/items`, 'POST', { description: 'Halter', item_id: teil.id, quantity: 4 });
+
+  const e = await api('/api/ecrs', 'POST', { title: 'Wand verstärken', reason: 'Bruch beim Kunden',
+    items: [{ item_id: teil.id, note: '2.4 statt 1.6 mm' }, { item_id: teil.id }, { item_id: 999999 }] });
+  assert.match(e.number, /^ECR-\d{4}-\d{3}$/);
+  assert.strictEqual(e.status, 'OPEN');
+  assert.strictEqual(e.items.length, 1, 'jedes Teil einmal, unbekannte fallen weg');
+  const im = e.items[0].impact;
+  assert.deepStrictEqual(im.parents.map(x => x.id), [bg.id], 'verbaut in der Baugruppe');
+  assert.ok(im.orders.some(o => o.id === auftrag.id), 'offener Auftrag über die Baugruppe');
+  assert.ok(im.production.some(x => x.id === prod.id), 'offene Produktion');
+  assert.strictEqual(e.items[0].before.status, 'REL');
+  assert.deepStrictEqual((await api(`/api/items/${teil.id}`)).ecrs.map(x => x.id), [e.id], 'Teil zeigt den offenen Antrag');
+
+  assert.strictEqual((await apiFails(`/api/ecrs/${e.id}/implement`, 'POST', {})).status, 400, 'erst nach der Genehmigung');
+  await api(`/api/ecrs/${e.id}/decision`, 'PUT', { approve: true, note: 'ok' });
+  const umgesetzt = await api(`/api/ecrs/${e.id}/implement`, 'POST', {});
+  assert.strictEqual(umgesetzt.status, 'IN_WORK');
+  assert.deepStrictEqual(await revStates(teil.id), ['1:ECO', '2:DFT'], 'Freigabe bleibt, Änderung per ECO');
+  assert.strictEqual(umgesetzt.items[0].after.rev, '2');
+
+  assert.strictEqual((await apiFails(`/api/ecrs/${e.id}`, 'DELETE')).status, 400, 'genehmigt bleibt als Nachweis');
+  assert.strictEqual((await api(`/api/ecrs/${e.id}/close`, 'POST', {})).status, 'DONE');
+  assert.deepStrictEqual((await api(`/api/items/${teil.id}`)).ecrs, [], 'erledigt: kein Hinweis mehr am Teil');
+  const hist = (await api('/api/changelog?limit=80')).filter(h => h.entity_type === 'ecr' && h.entity_id === e.id);
+  assert.deepStrictEqual(hist.map(h => h.action).sort(), ['Angelegt', 'Erledigt', 'Genehmigt', 'In Umsetzung']);
+  assert.ok(hist.every(h => h.ref === e.number), 'Historie zeigt die ECR-Nummer');
+});
+
+test('Änderungsantrag: Titel und Teil sind Pflicht, ablehnen und löschen', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'ECR 2' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Deckel', item_type: 'prt' });
+  assert.strictEqual((await apiFails('/api/ecrs', 'POST', { title: ' ', items: [{ item_id: teil.id }] })).status, 400);
+  assert.strictEqual((await apiFails('/api/ecrs', 'POST', { title: 'X', items: [] })).status, 400);
+  const e = await api('/api/ecrs', 'POST', { title: 'Farbe ändern', items: [{ item_id: teil.id }] });
+  await api(`/api/ecrs/${e.id}/decision`, 'PUT', { approve: false, note: 'nicht nötig' });
+  assert.strictEqual((await api(`/api/ecrs/${e.id}`)).status, 'REJECTED');
+  await api(`/api/ecrs/${e.id}`, 'DELETE');
+  assert.ok(!(await api('/api/ecrs')).some(x => x.id === e.id));
+});
+
 test('Normteil bestellen legt beim Wareneingang einen Lagerartikel an', async () => {
   const sp = await api('/api/standard-parts', 'POST', { designation: 'DIN 912 M6x20', standard: 'DIN', unit_price: 0.42 });
   const sup = await api('/api/suppliers', 'POST', { name: 'Schraubenhandel' });

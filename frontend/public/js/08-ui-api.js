@@ -66,6 +66,8 @@ async function loadStats() {
     if (bn) bn.textContent = s.standard_parts ?? '—';
     const bp = document.getElementById('badge-purchasing');
     if (bp) bp.textContent = s.open_pos ?? '—';
+    const be = document.getElementById('badge-ecr');
+    if (be) be.textContent = s.ecr_open || '—';
   }, _statsShown ? 800 : 0);
 }
 

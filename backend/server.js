@@ -765,6 +765,51 @@ function applySchema() {
   // Prüfsumme der gespeicherten Datei — wird beim ersten Vergleich berechnet
   // und dann nicht mehr neu gelesen (Checkout-Scan, Check-in, Revisionsvergleich)
   try { db.run('ALTER TABLE datasets ADD COLUMN sha1 TEXT DEFAULT NULL'); } catch {}
+
+  // Rückverfolgung: welche Material-Charge in welcher Produktionsposition
+  // steckt, und die Prüfung je Position (wer, wann, Ergebnis)
+  try { db.run('ALTER TABLE raw_material_movements ADD COLUMN delivery_id INTEGER DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE raw_material_movements ADD COLUMN delivery_item_id INTEGER DEFAULT NULL'); } catch {}
+  for (const col of ['inspection_result', 'inspection_note', 'inspected_by', 'inspected_at']) {
+    try { db.run(`ALTER TABLE delivery_items ADD COLUMN ${col} TEXT DEFAULT NULL`); } catch {}
+  }
+  // Ältere Abbuchungen kennen den Produktionsauftrag nur aus der Notiz
+  // („Verbrauch LS-2026-001") — einmalig verknüpfen, die Position nur wenn eindeutig
+  migrateOnce('trace-consumption-links-v1', () => {
+    for (const m of all("SELECT id, raw_material_id, notes FROM raw_material_movements WHERE type='out' AND delivery_id IS NULL AND notes LIKE 'Verbrauch %'")) {
+      const d = get('SELECT id FROM deliveries WHERE number=?', [m.notes.slice('Verbrauch '.length).trim()]);
+      if (!d) continue;
+      const pos = all('SELECT id FROM delivery_items WHERE delivery_id=? AND raw_material_id=?', [d.id, m.raw_material_id]);
+      db.run('UPDATE raw_material_movements SET delivery_id=?, delivery_item_id=? WHERE id=?', [d.id, pos.length === 1 ? pos[0].id : null, m.id]);
+    }
+  });
+
+  // Änderungsanträge (ECR): eine Änderung mit Begründung für ein oder mehrere
+  // Teile. OPEN → APPROVED → IN_WORK → DONE, oder REJECTED.
+  db.run(`CREATE TABLE IF NOT EXISTS ecrs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    number TEXT UNIQUE,
+    title TEXT NOT NULL,
+    reason TEXT DEFAULT '',
+    description TEXT DEFAULT '',
+    status TEXT DEFAULT 'OPEN',
+    created_by TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    decided_by TEXT,
+    decided_at TEXT,
+    decision_note TEXT,
+    done_at TEXT
+  )`);
+  // rev_before: Stand beim Anlegen, rev_after: Revision, in der geändert wird
+  db.run(`CREATE TABLE IF NOT EXISTS ecr_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ecr_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    note TEXT DEFAULT '',
+    rev_before INTEGER,
+    rev_after INTEGER,
+    UNIQUE(ecr_id, item_id)
+  )`);
   migrateOnce('infill-pattern-from-3mf-v1', () => {
     let n = 0;
     for (const ps of all("SELECT revision_id FROM print_settings WHERE infill_pattern IS NULL OR infill_pattern=''")) {
@@ -857,6 +902,10 @@ function applySchema() {
     'CREATE INDEX IF NOT EXISTS idx_documents_project    ON documents(project_id)',
     'CREATE INDEX IF NOT EXISTS idx_inv_movements_item   ON inventory_movements(item_id)',
     'CREATE INDEX IF NOT EXISTS idx_rm_movements_mat     ON raw_material_movements(raw_material_id)',
+    'CREATE INDEX IF NOT EXISTS idx_rm_movements_del     ON raw_material_movements(delivery_id)',
+    'CREATE INDEX IF NOT EXISTS idx_rm_movements_di      ON raw_material_movements(delivery_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_ecr_items_ecr        ON ecr_items(ecr_id)',
+    'CREATE INDEX IF NOT EXISTS idx_ecr_items_item       ON ecr_items(item_id)',
     'CREATE INDEX IF NOT EXISTS idx_std_part_files_part  ON standard_part_files(std_part_id)',
     'CREATE INDEX IF NOT EXISTS idx_time_entries_order   ON time_entries(order_id)',
     'CREATE INDEX IF NOT EXISTS idx_time_entries_item    ON time_entries(item_id)',
@@ -1703,6 +1752,8 @@ function requiredRole(req) {
   if (key === 'PUT /api/settings' && Object.keys(req.body || {}).every(k => PERSONAL_SETTINGS.includes(k))) return 'user';
   if (ADMIN_ONLY.some(r => r.test(key))) return 'admin';
   if (/^PUT \/api\/revisions\/\d+\/status$/.test(key) && ['REL', 'OBS'].includes(req.body?.status)) return 'superuser';
+  // Einen Änderungsantrag genehmigen oder ablehnen ist wie Freigeben
+  if (/^PUT \/api\/ecrs\/\d+\/decision$/.test(key)) return 'superuser';
   return 'user';
 }
 const ROLE_ERROR = { superuser: 'Freigeben dürfen nur Superuser und Admins.', admin: 'Das dürfen nur Admins.' };
@@ -1976,6 +2027,9 @@ app.get('/api/items/:id', (req, res) => {
   item.dev_hours = calcDevHours(item.id);
   item.inventory = all(`SELECT id, name, sku, unit, stock_qty, min_qty, price_per_unit, notes
     FROM inventory_items WHERE item_id=? ORDER BY name`, [item.id]);
+  // Offene Änderungsanträge, die dieses Teil betreffen
+  item.ecrs = all(`SELECT e.id, e.number, e.title, e.status FROM ecr_items ei JOIN ecrs e ON e.id=ei.ecr_id
+    WHERE ei.item_id=? AND e.status IN ('OPEN','APPROVED','IN_WORK') ORDER BY e.id DESC`, [item.id]);
   res.json(item);
 });
 
@@ -3085,10 +3139,11 @@ function _changedInCheckout(folder, meta) {
   });
 }
 
-// Wohin geänderte Dateien eines Items beim Einchecken kommen: in einen offenen
-// Entwurf; ist das Item freigegeben, per ECO in eine neue Revision; sonst
+// In welcher Revision wird geändert? Ein offener Entwurf nimmt die Änderung
+// direkt; ist das Item freigegeben, per ECO in eine neue Revision; sonst
 // (veraltet, geliefert) in eine neue Revision mit dem bisherigen Inhalt.
-function _checkinRevision(itemId, reason) {
+// Für den Check-in geänderter Dateien und fürs Umsetzen eines Änderungsantrags.
+function _draftRevision(itemId, reason) {
   const last = getLatestRevision(itemId);
   if (!last) return null;
   if (last.status === 'DFT' && !deliveriesOfRevision(last.id).length) return last;
@@ -3159,7 +3214,7 @@ app.post('/api/checkout/checkin', (req, res) => {
         for (const name of changed) byItem.set(ownerOf(name), [...(byItem.get(ownerOf(name)) || []), name]);
         for (const [number, names] of byItem) {
           const item = get('SELECT * FROM items WHERE item_number=?', [number]) || get('SELECT * FROM items WHERE id=?', [meta.item_id]);
-          const rev = item && _checkinRevision(item.id, 'Beim Einchecken geändert');
+          const rev = item && _draftRevision(item.id, 'Beim Einchecken geändert');
           if (!rev) continue;
           for (const name of names) uploaded.push(_checkinFile(rev, item, path.join(folder, name)));
           revisions.push({ item_number: item.item_number, rev: rev.rev });
@@ -3749,6 +3804,247 @@ app.post('/api/quotes/:id/convert', (req, res) => {
 });
 
 // ==============================================================
+// RÜCKVERFOLGUNG
+// ==============================================================
+// Pro Position eines Produktionsauftrags: Revision, verbrauchte Material-
+// Chargen und die Prüfung. Umgekehrt pro Rohmaterial: welche Charge in welchen
+// Produktionsauftrag und zu welchem Kunden ging — für einen Rückruf.
+const _userName = () => userContext.getStore()?.name || null;
+function _positionRev(di) {
+  const rev = di.revision_id ? get('SELECT id, rev, status FROM revisions WHERE id=?', [di.revision_id])
+    : di.item_id ? getActiveRevision(di.item_id) : null;
+  return rev ? { rev: rev.rev, status: rev.status, fixed: !!di.revision_id } : null;
+}
+const _usedLots = (where, params) => all(`SELECT m.qty, m.lot_number, m.created_at, rm.id AS raw_material_id,
+    rm.name AS material, rm.unit
+  FROM raw_material_movements m JOIN raw_materials rm ON rm.id=m.raw_material_id
+  WHERE m.type='out' AND ${where} ORDER BY m.id`, params);
+
+app.get('/api/deliveries/:id/trace', (req, res) => {
+  const d = get(`SELECT d.*, COALESCE(c.name, d.customer_name_free) AS customer_name FROM deliveries d
+    LEFT JOIN customers c ON c.id=d.customer_id WHERE d.id=?`, [req.params.id]);
+  if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
+  const positions = all(`SELECT di.*, i.item_number, i.item_type FROM delivery_items di
+    LEFT JOIN items i ON i.id=di.item_id WHERE di.delivery_id=? ORDER BY di.position, di.id`, [d.id]).map(di => ({
+    id: di.id, description: di.description, item_id: di.item_id, item_number: di.item_number, item_type: di.item_type,
+    quantity: di.quantity, unit: di.unit, revision: _positionRev(di),
+    lots: _usedLots('m.delivery_item_id=?', [di.id]),
+    inspection: di.inspection_result ? { result: di.inspection_result, note: di.inspection_note,
+      by: di.inspected_by, at: di.inspected_at } : null,
+  }));
+  res.json({ id: d.id, number: d.number, title: d.title, status: d.status, customer_name: d.customer_name,
+    delivery_date: d.delivery_date, material_consumed: !!d.material_consumed, positions,
+    unassigned_lots: _usedLots('m.delivery_id=? AND m.delivery_item_id IS NULL', [d.id]) });
+});
+
+// Prüfung einer Position: OK, NOK oder zurücksetzen (ohne result)
+app.put('/api/delivery-items/:id/inspection', (req, res) => {
+  const di = get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]);
+  if (!di) return res.status(404).json({ error: 'Nicht gefunden' });
+  const result = ['OK', 'NOK'].includes(req.body?.result) ? req.body.result : null;
+  const note = result ? String(req.body?.note ?? '').trim().slice(0, 500) : '';
+  run(`UPDATE delivery_items SET inspection_result=?, inspection_note=?, inspected_by=?,
+    inspected_at=${result ? "datetime('now')" : 'NULL'} WHERE id=?`, [result, note || null, result ? _userName() : null, di.id]);
+  log('delivery', di.delivery_id, 'Prüfung', `${di.description}: ${
+    result === 'OK' ? 'in Ordnung' : result === 'NOK' ? 'nicht in Ordnung' : 'zurückgesetzt'}${note ? ' – ' + note : ''}`);
+  res.json(get('SELECT id, inspection_result, inspection_note, inspected_by, inspected_at FROM delivery_items WHERE id=?', [di.id]));
+});
+
+app.get('/api/raw-materials/:id/trace', (req, res) => {
+  const rows = all(`SELECT m.lot_number, m.qty, m.created_at, d.id AS delivery_id, d.number AS delivery_number,
+      d.title AS delivery_title, d.status AS delivery_status, d.delivery_date,
+      COALESCE(c.name, d.customer_name_free) AS customer_name,
+      di.id AS delivery_item_id, di.description, di.item_id, di.revision_id, i.item_number
+    FROM raw_material_movements m
+    JOIN deliveries d ON d.id=m.delivery_id
+    LEFT JOIN customers c ON c.id=d.customer_id
+    LEFT JOIN delivery_items di ON di.id=m.delivery_item_id
+    LEFT JOIN items i ON i.id=di.item_id
+    WHERE m.raw_material_id=? AND m.type='out'
+    ORDER BY m.lot_number, m.id DESC`, [req.params.id]);
+  rows.forEach(r => { r.revision = r.delivery_item_id ? _positionRev(r) : null; delete r.revision_id; });
+  res.json(rows);
+});
+
+// ==============================================================
+// ÄNDERUNGSANTRÄGE (ECR)
+// ==============================================================
+function nextEcrNumber() {
+  const y = new Date().getFullYear(), key = 'ecr-' + y;
+  db.run('INSERT OR IGNORE INTO counters (key,value) VALUES (?,0)', [key]);
+  db.run('UPDATE counters SET value=value+1 WHERE key=?', [key]);
+  return `ECR-${y}-${String(get('SELECT value FROM counters WHERE key=?', [key]).value).padStart(3, '0')}`;
+}
+
+// Auswirkung einer Änderung: übergeordnete Baugruppen über alle Ebenen (jeweils
+// der aktuelle Stand), offene Angebote, Aufträge und Produktionsaufträge mit
+// dem Teil oder einer dieser Baugruppen, dazu der Lagerbestand.
+function _ecrImpact(itemId) {
+  const parents = [], seen = new Set([itemId]);
+  for (let level = [itemId]; level.length;) {
+    const next = [];
+    for (const id of level) {
+      for (const p of all(`SELECT DISTINCT i.id, i.item_number, i.name, i.item_type FROM bom b
+          JOIN revisions r ON r.id=b.parent_rev_id JOIN items i ON i.id=r.item_id
+          WHERE b.child_item_id=? AND r.id=(SELECT MAX(id) FROM revisions WHERE item_id=i.id)`, [id])) {
+        if (seen.has(p.id)) continue;
+        seen.add(p.id); parents.push(p); next.push(p.id);
+      }
+    }
+    level = next;
+  }
+  const ids = [...seen], ph = ids.map(() => '?').join(',');
+  return {
+    parents,
+    orders: all(`SELECT DISTINCT o.id, o.number, o.title, o.status FROM order_items oi JOIN orders o ON o.id=oi.order_id
+      WHERE oi.item_id IN (${ph}) AND o.status IN ('QUOTE','DRAFT','CONFIRMED') ORDER BY o.number`, ids),
+    production: all(`SELECT DISTINCT d.id, d.number, d.title, d.status FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id
+      WHERE di.item_id IN (${ph}) AND d.status!='DELIVERED' ORDER BY d.number`, ids),
+    stock: get('SELECT COALESCE(SUM(stock_qty),0) AS n FROM inventory_items WHERE item_id=?', [itemId]).n,
+  };
+}
+
+function _ecrFull(id) {
+  const e = get('SELECT * FROM ecrs WHERE id=?', [id]);
+  if (!e) return null;
+  const rev = rid => (rid && get('SELECT id, rev, status FROM revisions WHERE id=?', [rid])) || null;
+  e.items = all(`SELECT ei.*, i.item_number, i.name, i.item_type FROM ecr_items ei JOIN items i ON i.id=ei.item_id
+    WHERE ei.ecr_id=? ORDER BY i.item_number`, [e.id]).map(x => {
+    const l = getLatestRevision(x.item_id);
+    return { ...x, before: rev(x.rev_before), after: rev(x.rev_after),
+      latest: l ? { id: l.id, rev: l.rev, status: l.status } : null, impact: _ecrImpact(x.item_id) };
+  });
+  return e;
+}
+
+// Teile aus der Anfrage: nur vorhandene, jedes einmal
+function _ecrItemList(items) {
+  const out = [], seen = new Set();
+  for (const x of Array.isArray(items) ? items : []) {
+    const id = parseInt(x?.item_id, 10);
+    if (!id || seen.has(id) || !get('SELECT id FROM items WHERE id=?', [id])) continue;
+    seen.add(id);
+    out.push({ item_id: id, note: String(x.note ?? '').trim().slice(0, 1000) });
+  }
+  return out;
+}
+function _ecrOr404(req, res) {
+  const e = get('SELECT * FROM ecrs WHERE id=?', [req.params.id]);
+  if (!e) res.status(404).json({ error: 'Nicht gefunden' });
+  return e;
+}
+function _ecrFields(req, res) {
+  const title = String(req.body?.title ?? '').trim();
+  if (!title) { res.status(400).json({ error: 'Titel fehlt' }); return null; }
+  const items = _ecrItemList(req.body?.items);
+  if (!items.length) { res.status(400).json({ error: 'Mindestens ein Teil wählen' }); return null; }
+  return { title, reason: String(req.body?.reason ?? ''), description: String(req.body?.description ?? ''), items };
+}
+
+app.get('/api/ecrs', (req, res) => {
+  res.json(all(`SELECT e.*, (SELECT COUNT(*) FROM ecr_items WHERE ecr_id=e.id) AS item_count FROM ecrs e
+    ORDER BY CASE e.status WHEN 'OPEN' THEN 0 WHEN 'APPROVED' THEN 1 WHEN 'IN_WORK' THEN 2 ELSE 3 END, e.id DESC`));
+});
+
+app.get('/api/ecrs/:id', (req, res) => {
+  const e = _ecrFull(req.params.id);
+  if (!e) return res.status(404).json({ error: 'Nicht gefunden' });
+  res.json(e);
+});
+
+app.post('/api/ecrs', (req, res) => {
+  const f = _ecrFields(req, res);
+  if (!f) return;
+  const id = tx(() => {
+    const number = nextEcrNumber();
+    const id = runGetId('INSERT INTO ecrs (number,title,reason,description,created_by) VALUES (?,?,?,?,?)',
+      [number, f.title, f.reason, f.description, _userName()]);
+    for (const x of f.items) {
+      run('INSERT INTO ecr_items (ecr_id,item_id,note,rev_before) VALUES (?,?,?,?)',
+        [id, x.item_id, x.note, getLatestRevision(x.item_id)?.id ?? null]);
+      log('item', x.item_id, 'Änderungsantrag', `${number} – ${f.title}`);
+    }
+    log('ecr', id, 'Angelegt', `${number} – ${f.title} (${f.items.length} ${f.items.length === 1 ? 'Teil' : 'Teile'})`);
+    return id;
+  });
+  res.json(_ecrFull(id));
+});
+
+app.put('/api/ecrs/:id', (req, res) => {
+  const e = _ecrOr404(req, res);
+  if (!e) return;
+  if (e.status !== 'OPEN') return res.status(400).json({ error: 'Nur offene Änderungsanträge lassen sich bearbeiten' });
+  const f = _ecrFields(req, res);
+  if (!f) return;
+  tx(() => {
+    run('UPDATE ecrs SET title=?, reason=?, description=? WHERE id=?', [f.title, f.reason, f.description, e.id]);
+    // Der Stand beim Anlegen bleibt für Teile, die schon dabei waren
+    const before = new Map(all('SELECT item_id, rev_before FROM ecr_items WHERE ecr_id=?', [e.id]).map(x => [x.item_id, x.rev_before]));
+    run('DELETE FROM ecr_items WHERE ecr_id=?', [e.id]);
+    for (const x of f.items) {
+      run('INSERT INTO ecr_items (ecr_id,item_id,note,rev_before) VALUES (?,?,?,?)', [e.id, x.item_id, x.note,
+        before.has(x.item_id) ? before.get(x.item_id) : (getLatestRevision(x.item_id)?.id ?? null)]);
+    }
+    log('ecr', e.id, 'Geändert', `${e.number} – ${f.title}`);
+  });
+  res.json(_ecrFull(e.id));
+});
+
+app.put('/api/ecrs/:id/decision', (req, res) => {
+  const e = _ecrOr404(req, res);
+  if (!e) return;
+  if (e.status !== 'OPEN') return res.status(400).json({ error: 'Über diesen Änderungsantrag ist schon entschieden' });
+  const approve = !!req.body?.approve;
+  const note = String(req.body?.note ?? '').trim().slice(0, 1000);
+  run("UPDATE ecrs SET status=?, decided_by=?, decided_at=datetime('now'), decision_note=? WHERE id=?",
+    [approve ? 'APPROVED' : 'REJECTED', _userName(), note, e.id]);
+  log('ecr', e.id, approve ? 'Genehmigt' : 'Abgelehnt', `${e.number}${note ? ' – ' + note : ''}`);
+  res.json(_ecrFull(e.id));
+});
+
+// Umsetzen: je Teil die Revision, in der geändert wird — ein offener Entwurf
+// oder eine neue Revision (freigegebene Teile per ECO)
+app.post('/api/ecrs/:id/implement', (req, res) => {
+  const e = _ecrOr404(req, res);
+  if (!e) return;
+  if (e.status !== 'APPROVED') return res.status(400).json({ error: 'Umsetzen geht erst nach der Genehmigung' });
+  tx(() => {
+    for (const x of all('SELECT * FROM ecr_items WHERE ecr_id=?', [e.id])) {
+      const rev = _draftRevision(x.item_id, `${e.number}: ${e.title}`);
+      if (!rev) continue;
+      run('UPDATE ecr_items SET rev_after=? WHERE id=?', [rev.id, x.id]);
+      log('item', x.item_id, 'Änderungsantrag umsetzen', `${e.number} → rev${rev.rev}`);
+    }
+    run("UPDATE ecrs SET status='IN_WORK' WHERE id=?", [e.id]);
+    log('ecr', e.id, 'In Umsetzung', e.number);
+  });
+  res.json(_ecrFull(e.id));
+});
+
+app.post('/api/ecrs/:id/close', (req, res) => {
+  const e = _ecrOr404(req, res);
+  if (!e) return;
+  if (e.status !== 'IN_WORK') return res.status(400).json({ error: 'Abschliessen geht erst nach dem Umsetzen' });
+  run("UPDATE ecrs SET status='DONE', done_at=datetime('now') WHERE id=?", [e.id]);
+  log('ecr', e.id, 'Erledigt', e.number);
+  res.json(_ecrFull(e.id));
+});
+
+app.delete('/api/ecrs/:id', (req, res) => {
+  const e = _ecrOr404(req, res);
+  if (!e) return;
+  if (!['OPEN', 'REJECTED'].includes(e.status)) {
+    return res.status(400).json({ error: 'Genehmigte Änderungsanträge bleiben als Nachweis erhalten' });
+  }
+  tx(() => {
+    run('DELETE FROM ecr_items WHERE ecr_id=?', [e.id]);
+    run('DELETE FROM ecrs WHERE id=?', [e.id]);
+    log('ecr', e.id, 'Gelöscht', `${e.number} – ${e.title}`);
+  });
+  res.json({ ok: true });
+});
+
+// ==============================================================
 // DASHBOARD
 // ==============================================================
 // Nur was offen ist und Aufmerksamkeit braucht — leere Bereiche blendet die
@@ -3832,7 +4128,11 @@ app.get('/api/dashboard', (req, res) => {
     version:    APP_VERSION,
   };
 
-  res.json({ openDeliveries, openOrders, openQuotes, inReview, lowStock,
+  const openEcrs = all(`SELECT e.id, e.number, e.title, e.status,
+      (SELECT COUNT(*) FROM ecr_items WHERE ecr_id=e.id) AS item_count
+    FROM ecrs e WHERE e.status IN ('OPEN','APPROVED','IN_WORK') ORDER BY e.id DESC`);
+
+  res.json({ openDeliveries, openOrders, openQuotes, inReview, lowStock, openEcrs,
     revenueMonth: revenue(true), revenueTotal: revenue(false), stats });
 });
 
@@ -3856,6 +4156,7 @@ app.get('/api/stats', (req, res) => {
     raw_materials: count('SELECT COUNT(*) as c FROM raw_materials'),
     standard_parts:count('SELECT COUNT(*) as c FROM standard_parts'),
     open_pos:      count("SELECT COUNT(*) as c FROM purchase_orders WHERE status IN ('DRAFT','ORDERED')"),
+    ecr_open:      count("SELECT COUNT(*) as c FROM ecrs WHERE status IN ('OPEN','APPROVED','IN_WORK')"),
     by_status:     all(`SELECT r.status, COUNT(*) as count FROM revisions r JOIN items i ON r.item_id=i.id WHERE r.id=(SELECT MAX(r2.id) FROM revisions r2 WHERE r2.item_id=r.item_id) GROUP BY r.status ORDER BY r.status`),
     recent_items:  recentItems,
     recent_projects: all('SELECT * FROM projects ORDER BY updated_at DESC LIMIT 5'),
@@ -4062,6 +4363,9 @@ app.get('/api/changelog', (req, res) => {
     } else if (r.entity_type === 'customer') {
       const c = get('SELECT number, name FROM customers WHERE id=?', [r.entity_id]);
       if (c) { r.ref = c.number; r.label = c.name; }
+    } else if (r.entity_type === 'ecr') {
+      const e = get('SELECT number, title FROM ecrs WHERE id=?', [r.entity_id]);
+      if (e) { r.ref = e.number; r.label = e.title; }
     }
   });
   res.json(rows);
@@ -4937,8 +5241,16 @@ app.post('/api/deliveries/:id/consume-material', (req, res) => {
     if (!mat) continue;
     const newQty = Math.max(0, (parseFloat(mat.stock_qty) || 0) - qty);
     run("UPDATE raw_materials SET stock_qty=?,updated_at=datetime('now') WHERE id=?", [newQty, mat.id]);
-    run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,lot_number) VALUES (?,?,?,?,?)',
-      [mat.id, qty, 'out', 'Verbrauch ' + d.number, c.lot_number || '']);
+    // Rückverfolgung: Charge fest mit der Position verknüpfen. Kommt keine
+    // Position mit, gilt die einzige Position mit diesem Material.
+    let pos = c.delivery_item_id
+      ? get('SELECT id FROM delivery_items WHERE id=? AND delivery_id=?', [c.delivery_item_id, d.id]) : null;
+    if (!pos) {
+      const same = all('SELECT id FROM delivery_items WHERE delivery_id=? AND raw_material_id=?', [d.id, mat.id]);
+      if (same.length === 1) pos = same[0];
+    }
+    run('INSERT INTO raw_material_movements (raw_material_id,qty,type,notes,lot_number,delivery_id,delivery_item_id) VALUES (?,?,?,?,?,?,?)',
+      [mat.id, qty, 'out', 'Verbrauch ' + d.number, c.lot_number || '', d.id, pos?.id ?? null]);
     booked.push({ raw_material_id: mat.id, name: mat.name, qty, stock_qty: newQty });
   }
 

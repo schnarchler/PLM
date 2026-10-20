@@ -127,6 +127,12 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
   await ok(`/api/revisions/${rev.id}/status`, { method: 'PUT', body: { status: 'REL' }, cookie: cleo });
   assert.strictEqual((await ok(`/api/items/${teil.id}`)).body.revisions[0].released_by, 'Cleo');
 
+  // Änderungsantrag: anlegen darf jeder, genehmigen nur wer freigeben darf
+  const ecr = (await ok('/api/ecrs', { method: 'POST', body: { title: 'Lasche kürzen', items: [{ item_id: teil.id }] }, cookie: ben })).body;
+  assert.strictEqual(ecr.created_by, 'Ben');
+  assert.strictEqual((await req(`/api/ecrs/${ecr.id}/decision`, { method: 'PUT', body: { approve: true }, cookie: ben })).status, 403);
+  assert.strictEqual((await ok(`/api/ecrs/${ecr.id}/decision`, { method: 'PUT', body: { approve: true }, cookie: cleo })).body.decided_by, 'Cleo');
+
   assert.strictEqual((await req('/api/settings', { method: 'PUT', body: { company_name: 'X' }, cookie: cleo })).status, 403);
   await ok('/api/settings', { method: 'PUT', body: { font_scale: '1.1' }, cookie: ben });
   assert.strictEqual((await req(`/api/projects/${proj.id}`, { method: 'DELETE', cookie: cleo })).status, 403, 'Stammdaten löscht der Admin');
