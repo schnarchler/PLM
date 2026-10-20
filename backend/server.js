@@ -2435,6 +2435,21 @@ app.get('/api/items/:id/compare', (req, res) => {
   });
 });
 
+// ECO: freigegebene Revision sperren und eine neue DFT-Revision mit ihrem
+// Inhalt anlegen. Statuswechsel und Check-in eines geänderten freigegebenen
+// Teils gehen denselben Weg.
+function startEco(rev, reason) {
+  run("UPDATE revisions SET status='ECO',eco_reason=?,updated_at=datetime('now') WHERE id=?", [reason || '', rev.id]);
+  const lastRev = get('SELECT rev FROM revisions WHERE item_id=? ORDER BY rowid DESC LIMIT 1', [rev.item_id]);
+  const newRev = nextRev(lastRev ? lastRev.rev : '0');
+  const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
+    [rev.item_id, newRev, 'DFT', 'ECO: ' + (reason || '')]);
+  // Wie „Neue Revision": Dateien, Druckparameter und Stückliste übernehmen
+  const copied = copyRevisionContent(rev, newRevId, newRev);
+  log('revision', rev.id, 'ECO', `Neue Revision rev${newRev} erstellt, ${copied.files} Datei(en), Druckparameter und BOM übernommen`);
+  return get('SELECT * FROM revisions WHERE id=?', [newRevId]);
+}
+
 app.put('/api/revisions/:id/status', (req, res) => {
   const { status, description, eco_reason } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
@@ -2468,14 +2483,7 @@ app.put('/api/revisions/:id/status', (req, res) => {
     run("UPDATE revisions SET status='OBS',updated_at=datetime('now') WHERE item_id=? AND status='REL' AND id!=?",
       [rev.item_id, rev.id]);
   } else if (status === 'ECO') {
-    run("UPDATE revisions SET status=?,eco_reason=?,updated_at=datetime('now') WHERE id=?", [status, eco_reason || '', rev.id]);
-    const lastRev = get('SELECT rev FROM revisions WHERE item_id=? ORDER BY rowid DESC LIMIT 1', [rev.item_id]);
-    const newRev = nextRev(lastRev ? lastRev.rev : '0');
-    const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
-      [rev.item_id, newRev, 'DFT', 'ECO: ' + (eco_reason || '')]);
-    // Wie „Neue Revision": Dateien, Druckparameter und Stückliste übernehmen
-    const copied = copyRevisionContent(rev, newRevId, newRev);
-    log('revision', rev.id, 'ECO', `Neue Revision rev${newRev} erstellt, ${copied.files} Datei(en), Druckparameter und BOM übernommen`);
+    startEco(rev, eco_reason);
   } else {
     run("UPDATE revisions SET status=?,updated_at=datetime('now') WHERE id=?", [status, rev.id]);
   }
@@ -2825,7 +2833,10 @@ app.post('/api/items/:id/checkout', (req, res) => {
       const dest = path.join(outDir, name);
       fs.copyFileSync(src, dest);
       if (ds.rev_status === 'REL') { try { fs.chmodSync(dest, 0o444); } catch {} }
-      copied.push({ name, ds_type: ds.ds_type, item_number: ds.item_number, item_name: ds.item_name, readonly: ds.rev_status === 'REL' });
+      // Änderungsdatum und Grösse merken: zeigt beim Einchecken, ob die Datei bearbeitet wurde
+      const st = fs.statSync(dest);
+      copied.push({ name, ds_type: ds.ds_type, item_number: ds.item_number, item_name: ds.item_name, readonly: ds.rev_status === 'REL',
+        mtime: Math.round(st.mtimeMs), size: st.size });
     }
 
     if (!copied.length) {
@@ -3009,6 +3020,59 @@ app.get('/api/checkout/list', (req, res) => {
   res.json(entries.sort((a, b) => b.checked_out.localeCompare(a.checked_out)));
 });
 
+// Im Checkout bearbeitet? Gleiches Änderungsdatum und gleiche Grösse wie beim
+// Auschecken: nein. Sonst entscheidet der Inhalt — liegt er schon im PLM, wurde
+// die Datei nur angefasst (Checkouts von früher kennen das Datum noch nicht).
+function _changedInCheckout(folder, meta) {
+  const known = new Map((meta.files || []).map(f => [f.name, f]));
+  return fs.readdirSync(folder).filter(name => {
+    if (name.startsWith('.')) return false;
+    const p = path.join(folder, name);
+    let st;
+    try { st = fs.statSync(p); } catch { return false; }
+    if (!st.isFile()) return false;
+    const k = known.get(name);
+    if (k && k.mtime === Math.round(st.mtimeMs) && k.size === st.size) return false;
+    return !_contentInPlm(p, st.size);
+  });
+}
+
+// Wohin geänderte Dateien eines Items beim Einchecken kommen: in einen offenen
+// Entwurf; ist das Item freigegeben, per ECO in eine neue Revision; sonst
+// (veraltet, geliefert) in eine neue Revision mit dem bisherigen Inhalt.
+function _checkinRevision(itemId, reason) {
+  const last = getLatestRevision(itemId);
+  if (!last) return null;
+  if (last.status === 'DFT' && !deliveriesOfRevision(last.id).length) return last;
+  if (last.status === 'REL') {
+    const rev = startEco(last, reason);
+    log('revision', last.id, 'Status → ECO', reason);
+    return rev;
+  }
+  const label = nextRev(last.rev);
+  const id = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, label, 'DFT', reason]);
+  copyRevisionContent(last, id, label);
+  log('item', itemId, 'Neue Revision', `rev${label}: ${reason}`);
+  return get('SELECT * FROM revisions WHERE id=?', [id]);
+}
+
+// Datei aus dem Checkout in eine Revision übernehmen — eine gleichnamige wird ersetzt
+function _checkinFile(rev, item, src) {
+  const ext = path.extname(src).toLowerCase();
+  const stored = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
+  fs.copyFileSync(src, path.join(FILES_DIR, stored));
+  const stat = fs.statSync(src);
+  const displayName = (item ? `${item.item_number}_rev${rev.rev}` : path.basename(src, ext)) + ext;
+  const existingDs = get('SELECT * FROM datasets WHERE revision_id=? AND original_name=?', [rev.id, displayName]);
+  if (existingDs) {
+    trashFile(existingDs.filename);
+    run('DELETE FROM datasets WHERE id=?', [existingDs.id]);
+  }
+  runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
+    [rev.id, guessType(src), stored, displayName, stat.size, '1', 'Check-in']);
+  return displayName;
+}
+
 app.post('/api/checkout/checkin', (req, res) => {
   try {
     // Gelöscht wird nur ein Ordner, den ein Checkout angelegt hat
@@ -3025,9 +3089,35 @@ app.post('/api/checkout/checkin', (req, res) => {
     } catch {}
 
     const uploaded = [];
+    const revisions = [];
+    let discarded = 0;
     const wasRel = meta?.rev_status === 'REL' || meta?.rev_status === 'OBS';
 
-    if (meta?.item_id && !wasRel) {
+    if (meta?.item_id && wasRel) {
+      // Freigegeben: unverändert ist nichts zu tun. Wurde trotzdem etwas
+      // bearbeitet, bleibt der Ordner, bis entschieden ist — neue Revision
+      // (bei REL per ECO) oder verwerfen.
+      const changed = _changedInCheckout(folder, meta);
+      const ownerOf = name => (meta.files || []).find(f => f.name === name)?.item_number || meta.item_number;
+      const choice = req.body.rel_changes;
+      if (changed.length && choice !== 'new_revision' && choice !== 'discard') {
+        return res.json({ ask: 'rel_changed', item_number: meta.item_number, item_name: meta.item_name,
+          files: changed.map(name => ({ name, item_number: ownerOf(name) })) });
+      }
+      if (choice === 'discard') discarded = changed.length;
+      else {
+        // Dateien eines Unterteils (Checkout einer Baugruppe) gehören in dessen Revision
+        const byItem = new Map();
+        for (const name of changed) byItem.set(ownerOf(name), [...(byItem.get(ownerOf(name)) || []), name]);
+        for (const [number, names] of byItem) {
+          const item = get('SELECT * FROM items WHERE item_number=?', [number]) || get('SELECT * FROM items WHERE id=?', [meta.item_id]);
+          const rev = item && _checkinRevision(item.id, 'Beim Einchecken geändert');
+          if (!rev) continue;
+          for (const name of names) uploaded.push(_checkinFile(rev, item, path.join(folder, name)));
+          revisions.push({ item_number: item.item_number, rev: rev.rev });
+        }
+      }
+    } else if (meta?.item_id) {
       // Find or create active revision
       let rev = get("SELECT * FROM revisions WHERE item_id=? AND status NOT IN ('REL','OBS') ORDER BY id DESC LIMIT 1", [meta.item_id]);
       // Eine gelieferte Revision ist fixiert — die eingecheckten Dateien
@@ -3056,30 +3146,15 @@ app.post('/api/checkout/checkin', (req, res) => {
         try {
           if (!fs.statSync(src).isFile()) continue;
         } catch { continue; }
-        const ext  = path.extname(fname).toLowerCase();
-        const stored = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
-        fs.copyFileSync(src, path.join(FILES_DIR, stored));
-        const stat = fs.statSync(src);
-        const dsType = guessType(fname);
-        const base = item ? `${item.item_number}_rev${rev.rev}` : path.basename(fname, ext);
-        const displayName = base + ext;
-
-        // Replace existing dataset with same name if present
-        const existingDs = get('SELECT * FROM datasets WHERE revision_id=? AND original_name=?', [rev.id, displayName]);
-        if (existingDs) {
-          trashFile(existingDs.filename);
-          run('DELETE FROM datasets WHERE id=?', [existingDs.id]);
-        }
-        runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes) VALUES (?,?,?,?,?,?,?)',
-          [rev.id, dsType, stored, displayName, stat.size, '1', 'Check-in']);
-        uploaded.push(displayName);
+        uploaded.push(_checkinFile(rev, item, src));
       }
     }
 
     // Delete folder
     deleteFolderRecursive(folder);
-    if (meta) log('item', meta.item_id, 'Eingecheckt', `${uploaded.length} Datei(en) hochgeladen, Ordner gelöscht`);
-    res.json({ success: true, uploaded });
+    if (meta) log('item', meta.item_id, 'Eingecheckt', `${uploaded.length} Datei(en) hochgeladen, `
+      + (discarded ? `${discarded} geänderte verworfen, ` : '') + 'Ordner gelöscht');
+    res.json({ success: true, uploaded, revisions, discarded });
   } catch (err) {
     res.status(500).json({ error: 'Einchecken fehlgeschlagen: ' + err.message });
   }
