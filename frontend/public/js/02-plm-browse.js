@@ -647,6 +647,20 @@ async function openInSlicer(dsId) {
   } catch { /* api() meldet den Fehler */ }
 }
 
+// QR-Code der Teilenummer gross — zum Scannen direkt vom Bildschirm
+function showItemQr() {
+  const n = state.item?.item_number;
+  if (!n || typeof qrSvg !== 'function') return;
+  _showDynModal(`<div class="modal" style="max-width:320px">
+    <div class="modal-head"><div class="modal-title">QR-Code</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="background:#f4f6f8;padding:10px;border-radius:var(--r-sm);line-height:0">${qrSvg(n, 240, { dark: '#0d0f14', light: '#f4f6f8' })}</div>
+      <div style="font-family:var(--mono);font-size:14px;color:var(--t2)">${esc(n)}</div>
+    </div>
+  </div>`);
+}
+
 function renderItemSheet(item, activeRevId) {
   const rev = (item.revisions || []).find(r => r.id === activeRevId) || (item.revisions || [])[0];
   // Kurzcode wie im Panel-Titel — die Langform kollidiert mit frei
@@ -853,9 +867,9 @@ function renderItemSheet(item, activeRevId) {
   const slicerBtn = modelFile ? _slicerButton(modelFile, false) : '';
   const stlBlock = rev ? _stlPreview('sheet' + rev.id, _stlFiles(rev), '0') : '';
 
-  // -- QR-Code der Teilenummer
+  // -- QR-Code der Teilenummer: klein im Kopf, ein Klick zeigt ihn gross
   const qr = typeof qrSvg === 'function'
-    ? qrSvg(item.item_number, 104, { dark: '#0d0f14', light: '#f4f6f8' })
+    ? qrSvg(item.item_number, 48, { dark: '#0d0f14', light: '#f4f6f8' })
     : '';
 
   return `<div id="it-sheet">
@@ -873,10 +887,7 @@ function renderItemSheet(item, activeRevId) {
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
         </div>
       </div>
-      ${qr ? `<div style="flex-shrink:0;text-align:center">
-        <div style="background:#f4f6f8;padding:5px;border-radius:var(--r-sm);line-height:0">${qr}</div>
-        <div style="font-family:var(--mono);font-size:12px;color:var(--t3);margin-top:5px;letter-spacing:.3px">${esc(item.item_number)}</div>
-      </div>` : ''}
+      ${qr ? `<div onclick="showItemQr()" title="QR-Code vergrössern" style="flex-shrink:0;background:#f4f6f8;padding:3px;border-radius:var(--r-sm);line-height:0;cursor:zoom-in">${qr}</div>` : ''}
     </div>
 
     ${stlBlock}

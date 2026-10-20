@@ -160,6 +160,19 @@ test('Datenblatt: gefährliche Quelle wird nicht verlinkt', () => {
   assert.ok(!h.includes('<img src=x'), 'Beschreibung wird escaped');
 });
 
+test('Datenblatt: QR-Code klein im Kopf, ein Klick zeigt ihn gross', () => {
+  const item = demoItem();
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  assert.match(h, /onclick="showItemQr\(\)" title="QR-Code vergrössern"[^>]*cursor:zoom-in[^>]*><svg[^>]*width="48"/);
+  assert.ok(!h.includes('width="104"'), 'nicht mehr gross im Kopf');
+  let modal = '';
+  global._showDynModal = html => { modal = html; };
+  try { showItemQr(); } finally { delete global._showDynModal; }
+  assert.match(modal, /<svg[^>]*width="240"/, 'gross zum Scannen');
+  assert.ok(modal.includes('>P1042-asm-001-prt-0012<'), 'Teilenummer darunter');
+});
+
 test('Datenblatt: leeres Teil zeigt Hinweise statt leerer Felder', () => {
   const item = { id: 1, item_type: 'asm', item_number: 'X', name: 'Y', revisions: [] };
   global.state.item = item;

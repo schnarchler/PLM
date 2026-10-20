@@ -13,12 +13,12 @@
   --line2: #3f4552;
   --line3: #515869;
 
-  /* Text — 4 stops. Kontrast auf --bg1: 15.4 / 10.0 / 6.4 / 3.9
-     --t4 ist bewusst unter AA: nur Labels, Deko und Zeitstempel. */
+  /* Text — 4 stops. Kontrast auf --bg1: 15.4 / 11.3 / 8.4 / 6.0, auch auf dem
+     hellsten Hintergrund (--bg3) mindestens 4.7:1 — alle Stufen über WCAG AA. */
   --t1: #f4f6f8;
-  --t2: #c3c9d4;
-  --t3: #99a1b0;
-  --t4: #737b8a;
+  --t2: #cfd5df;
+  --t3: #b0b8c5;
+  --t4: #939cab;
 
   /* Neutral tint — ersetzt die alten rgba(74,79,91,…)-Flaechen.
      Muss heller als die Flaeche sein, sonst reisst sie ein Loch. */
