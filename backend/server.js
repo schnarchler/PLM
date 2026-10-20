@@ -4330,8 +4330,47 @@ app.put('/api/counters', (req, res) => {
   res.json(Object.fromEntries(all('SELECT key, value FROM counters').map(r => [r.key, r.value])));
 });
 
+// Firmenlogo für Angebote, Rechnungen usw. — als Data-URL in den Einstellungen,
+// damit es in jeder Sicherung steckt. /api/settings lädt bei jedem Seitenstart,
+// dort steht deshalb nur company_logo_at (Zeitpunkt = Version des Logos).
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+const LOGO_KEYS = ['company_logo', 'company_logo_at'];
+const uploadLogo = _keepUser(multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }));
+function _publicSettings() {
+  const s = Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value]));
+  delete s.company_logo;
+  return s;
+}
+
 app.get('/api/settings', (req, res) => {
-  res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
+  res.json(_publicSettings());
+});
+
+app.get('/api/settings/logo', (req, res) => {
+  const m = /^data:([\w/+.-]+);base64,(.+)$/.exec(getSetting('company_logo', ''));
+  if (!m) return res.status(404).json({ error: 'Kein Logo hinterlegt' });
+  res.setHeader('Content-Type', m[1]);
+  // Ein SVG kann Skripte enthalten — direkt im Browser geöffnet laufen sie so nicht
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(Buffer.from(m[2], 'base64'));
+});
+
+app.post('/api/settings/logo', (req, res) => uploadLogo.single('file')(req, res, err => {
+  if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Das Logo ist zu gross (höchstens 2 MB)' : err.message });
+  const f = req.file;
+  if (!f || !LOGO_TYPES.includes(f.mimetype)) return res.status(400).json({ error: 'Bitte ein Bild wählen: PNG, JPG, WebP oder SVG' });
+  const vals = [`data:${f.mimetype};base64,${f.buffer.toString('base64')}`, String(Date.now())];
+  LOGO_KEYS.forEach((k, i) => db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, vals[i]]));
+  saveDb();
+  res.json(_publicSettings());
+}));
+
+app.delete('/api/settings/logo', (req, res) => {
+  db.run(`DELETE FROM settings WHERE key IN (${LOGO_KEYS.map(() => '?').join(',')})`, LOGO_KEYS);
+  saveDb();
+  res.json(_publicSettings());
 });
 
 // Bestimmt, wo der Check-in Ordner löscht — nur vom PC aus änderbar
@@ -4342,11 +4381,12 @@ app.put('/api/settings', (req, res) => {
   if (changed.length && !_isLocalRequest(req)) {
     return res.status(403).json({ error: 'Das Checkout-Verzeichnis lässt sich nur auf dem PC ändern, auf dem das PLM läuft.' });
   }
-  Object.entries(req.body).forEach(([k, v]) => {
+  // Das Logo kommt nur über /api/settings/logo
+  Object.entries(req.body).filter(([k]) => !LOGO_KEYS.includes(k)).forEach(([k, v]) => {
     db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, String(v??'')]);
   });
   saveDb();
-  res.json(Object.fromEntries(all('SELECT key, value FROM settings').map(r => [r.key, r.value])));
+  res.json(_publicSettings());
 });
 
 // -- DATA PATH -------------------------------------------------

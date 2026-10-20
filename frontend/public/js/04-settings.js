@@ -69,6 +69,7 @@ async function renderSettings() {
           ${fi('company_name','Firmenname *',s.company_name,'Muster GmbH')}
           ${fi('company_uid','UID / MwSt-Nr.',s.company_uid,'CHE-123.456.789 MWST')}
         </div>
+        <div class="form-row">${_logoBlock(s)}</div>
         <div class="form-row">
           ${fi('company_street','Strasse + Hausnummer',s.company_street,'Industriestrasse 42')}
         </div>
@@ -682,6 +683,40 @@ async function saveCheckoutDir() {
   const msg = document.getElementById('st-checkout-msg');
   if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
   state.settings = await api('/api/settings');
+}
+
+// Firmenlogo für Angebote, Rechnungen und Lieferscheine. Wird sofort
+// gespeichert; neu gezeichnet wird nur dieser Block, damit noch nicht
+// gespeicherte Eingaben in den übrigen Feldern bleiben.
+function _logoBlock(s) {
+  const has = !!s.company_logo_at;
+  return `<div class="fg" id="st-logo"><label class="fl">Logo auf Angeboten, Rechnungen und Lieferscheinen</label>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ${has ? `<img src="/api/settings/logo?v=${esc(s.company_logo_at)}" alt="Logo" style="max-height:48px;max-width:200px;background:#fff;padding:4px;border-radius:var(--r-sm)">`
+            : `<span style="font-size:13px;color:var(--t3)">Kein Logo — die Belege zeigen den Firmennamen wie bisher</span>`}
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer">${has ? 'Anderes Logo…' : 'Logo hochladen…'}
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="uploadCompanyLogo(this.files[0])"></label>
+      ${has ? `<button class="btn btn-ghost btn-sm" onclick="removeCompanyLogo()">Entfernen</button>` : ''}
+    </div>
+  </div>`;
+}
+function _refreshLogoBlock() {
+  const el = document.getElementById('st-logo');
+  if (el) el.outerHTML = _logoBlock(state.settings);
+}
+async function uploadCompanyLogo(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try { state.settings = await apiForm('/api/settings/logo', fd); } catch { return; }
+  _refreshLogoBlock();
+  toast('Logo gespeichert', 'ok');
+}
+async function removeCompanyLogo() {
+  if (!confirm('Logo entfernen? Die Belege zeigen dann wieder den Firmennamen.')) return;
+  state.settings = await api('/api/settings/logo', 'DELETE');
+  _refreshLogoBlock();
+  toast('Logo entfernt', 'ok');
 }
 
 async function saveSettings() {

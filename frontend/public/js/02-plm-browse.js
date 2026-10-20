@@ -2,8 +2,18 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── PROJECTS LIST ─────────────────────────────────────────────
+// Projekte als Liste oder Kacheln — die Wahl merkt sich der Browser
+let _projectView = (() => { try { return localStorage.getItem('plm.projectView') || 'list'; } catch { return 'list'; } })();
+function setProjectView(v) {
+  _projectView = v;
+  try { localStorage.setItem('plm.projectView', v); } catch {}
+  renderProjectsList();
+}
+
 async function renderProjectsList() {
-  setLeftHeader('Projekte', `<button class="btn btn-primary btn-sm" onclick="openNewProjectModal()">+ Projekt</button>`);
+  const viewBtn = (v, icon, title) => `<button class="btn btn-sm ${_projectView === v ? 'btn-primary' : 'btn-ghost'}" onclick="setProjectView('${v}')" title="${title}">${icon}</button>`;
+  setLeftHeader('Projekte', `<span style="display:inline-flex;gap:4px;align-items:center">${viewBtn('list', '☰', 'Als Liste')}${viewBtn('tiles', '▦', 'Als Kacheln')}
+    <button class="btn btn-primary btn-sm" style="margin-left:6px" onclick="openNewProjectModal()">+ Projekt</button></span>`);
   const projects = await api('/api/projects');
   state.projects = projects;
   if (!projects.length) {
@@ -13,29 +23,48 @@ async function renderProjectsList() {
   const statChip = (val, label, color) => val
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:${color}"><span style="font-family:var(--mono);font-weight:600">${val}</span><span style="color:var(--t4)">${label}</span></span>`
     : '';
-  setLeftBody(`<div style="display:flex;flex-direction:column;gap:6px;max-width:860px">${projects.map(p => `
-    <div onclick="openProject(${p.id})" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'">
-      ${p.color ? `<span style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${esc(p.color)}"></span>` : ''}
-      <div style="width:38px;height:38px;border-radius:var(--r-sm);background:${p.color ? esc(p.color)+'1f' : 'rgba(157,180,255,.1)'};border:1px solid ${p.color ? esc(p.color)+'4d' : 'rgba(157,180,255,.2)'};display:grid;place-items:center;flex-shrink:0;margin-left:${p.color ? '4px' : '0'}">
+  // Die Nummer steht im Kästchen — unter dem Namen nur noch der Kunde
+  const badge = (p, ml) => `<div style="width:38px;height:38px;border-radius:var(--r-sm);background:${p.color ? esc(p.color)+'1f' : 'rgba(157,180,255,.1)'};border:1px solid ${p.color ? esc(p.color)+'4d' : 'rgba(157,180,255,.2)'};display:grid;place-items:center;flex-shrink:0;margin-left:${ml}" title="${esc(p.number)}">
         <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${p.color ? esc(p.color) : 'var(--blue)'}">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em">${esc(p.name)}</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span style="font-family:var(--mono);font-size:13px;color:${p.color ? esc(p.color) : 'var(--blue)'}">${p.number}</span>
-          ${p.customer ? `<span style="color:var(--t3)">${esc(p.customer)}</span>` : ''}
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-        ${statChip(p.asm_count, 'asm', 'var(--blue)')}
+      </div>`;
+  const title = p => `<div style="font-size:13.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em">${esc(p.name)}</div>
+        ${p.customer ? `<div style="font-size:13px;color:var(--t3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.customer)}</div>` : ''}`;
+  const stats = p => `${statChip(p.asm_count, 'asm', 'var(--blue)')}
         ${statChip(p.prt_count, 'prt', 'var(--teal)')}
         ${statChip(p.doc_count, 'doc', 'var(--purple)')}
-        ${p.file_count ? `<span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}
-        <span style="font-size:13px;color:var(--t4);white-space:nowrap">${parseDbDate(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'})}</span>
-        <button onclick="event.stopPropagation();pinProject(${p.id})" title="${p.pinned?'Angeheftet – klicken zum Lösen':'Anpinnen'}"
+        ${p.file_count ? `<span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${p.file_count} <span style="font-family:var(--sans);font-weight:400">files</span></span>` : ''}`;
+  const date = p => `<span style="font-size:13px;color:var(--t4);white-space:nowrap">${parseDbDate(p.created_at).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'})}</span>`;
+  const pin = p => `<button onclick="event.stopPropagation();pinProject(${p.id})" title="${p.pinned?'Angeheftet – klicken zum Lösen':'Anpinnen'}"
           style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;opacity:${p.pinned?'1':'0.3'};transition:opacity .15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='${p.pinned?'1':'0.3'}'">
           📌
-        </button>
+        </button>`;
+  const hover = `onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'"`;
+
+  if (_projectView === 'tiles') {
+    setLeftBody(`<div class="card-grid">${projects.map(p => `
+      <div onclick="openProject(${p.id})" style="display:flex;flex-direction:column;gap:10px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s;position:relative;overflow:hidden" ${hover}>
+        ${p.color ? `<span style="position:absolute;left:0;right:0;top:0;height:3px;background:${esc(p.color)}"></span>` : ''}
+        <div style="display:flex;align-items:center;gap:10px">
+          ${badge(p, '0')}
+          <div style="flex:1;min-width:0">${title(p)}</div>
+          ${pin(p)}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          ${stats(p)}
+          <span style="margin-left:auto">${date(p)}</span>
+        </div>
+      </div>`).join('')}</div>`);
+    return;
+  }
+  setLeftBody(`<div style="display:flex;flex-direction:column;gap:6px;max-width:860px">${projects.map(p => `
+    <div onclick="openProject(${p.id})" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s;position:relative;overflow:hidden" ${hover}>
+      ${p.color ? `<span style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${esc(p.color)}"></span>` : ''}
+      ${badge(p, p.color ? '4px' : '0')}
+      <div style="flex:1;min-width:0">${title(p)}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        ${stats(p)}
+        ${date(p)}
+        ${pin(p)}
         <span style="color:var(--t4);font-size:13px">›</span>
       </div>
     </div>`).join('')}</div>`);
@@ -548,11 +577,13 @@ function _sheetRows(rows) {
 }
 
 function _fmtHours(h) {
-  const n = parseFloat(h) || 0;
-  if (!n) return null;
-  const hh = Math.floor(n), mm = Math.round((n - hh) * 60);
+  const min = Math.round((parseFloat(h) || 0) * 60);
+  if (!min) return null;
+  const hh = Math.floor(min / 60), mm = min % 60;
   return hh ? `${hh} h${mm ? ' ' + mm + ' min' : ''}` : `${mm} min`;
 }
+// Zeiterfassung: immer Stunden und Minuten, auch bei null
+function _fmtDur(h) { return _fmtHours(h) || '0 min'; }
 
 // ── 3D-VORSCHAU UND SLICER ────────────────────────────────────
 function _stlFiles(rev) {

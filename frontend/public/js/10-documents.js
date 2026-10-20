@@ -290,6 +290,14 @@ function _renderRevisionCompare(c, only) {
 }
 
 // -- DOKUMENTVORLAGEN ------------------------------------------
+// Briefkopf: mit Logo das Logo und der Firmenname klein darunter (Rechnungen
+// brauchen den Namen, nicht jedes Logo enthält ihn) — ohne Logo wie bisher.
+function _docLogo(s, nameHtml) {
+  if (!s.company_logo_at) return nameHtml;
+  return `<img src="${location.origin}/api/settings/logo?v=${escHtml(String(s.company_logo_at))}" alt="${escHtml(s.company_name || '')}" style="display:block;max-height:60px;max-width:220px;margin-bottom:6px">
+    ${s.company_name ? `<div style="font-size:13px;font-weight:600;color:#1f2937">${escHtml(s.company_name)}</div>` : ''}`;
+}
+
 // Prüfprotokoll: Vorlage aus den Einstellungen (PLM-Tab), ohne Eintrag
 // gilt der Standard. Gespeichert als JSON unter pruef_template.
 const PRUEF_DEFAULT = {
@@ -352,7 +360,7 @@ function generateItemTemplate(type, opts = {}) {
   const hdr = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:14px;border-bottom:2px solid #1d4ed8">
       <div>
-        <div style="font-size:18px;font-weight:700;color:#1d4ed8">${escHtml(s.company_name||'')}</div>
+        ${_docLogo(s, `<div style="font-size:18px;font-weight:700;color:#1d4ed8">${escHtml(s.company_name||'')}</div>`)}
         <div style="font-size:12px;color:#6b7280;margin-top:2px;line-height:1.6">${companyLines.map(l=>escHtml(l)).join(' · ')}${s.company_phone?' · '+escHtml(s.company_phone):''}${s.company_email?' · '+escHtml(s.company_email):''}</div>
       </div>
       <div style="display:flex;gap:12px;align-items:flex-start">
@@ -831,7 +839,7 @@ async function generateDoc(id, type) {
 <body>
 <div class="header">
   <div>
-    <div class="company-name">${escHtml(s.company_name || '')}</div>
+    ${_docLogo(s, `<div class="company-name">${escHtml(s.company_name || '')}</div>`)}
     <div class="company-detail">
       ${companyLines.map(l => escHtml(l)).join('<br>')}
       ${s.company_phone ? '<br>'+escHtml(s.company_phone) : ''}
@@ -1109,7 +1117,7 @@ async function generateDeliveryDoc(id) {
 <body>
 <div class="header">
   <div>
-    <div class="company-name">${escHtml(s.company_name||'')}</div>
+    ${_docLogo(s, `<div class="company-name">${escHtml(s.company_name||'')}</div>`)}
     <div style="font-size:13px;color:#6b7280;margin-top:2px;line-height:1.6">
       ${companyLines.map(l=>escHtml(l)).join('<br>')}
       ${s.company_phone?' · '+escHtml(s.company_phone):''}
@@ -1306,7 +1314,7 @@ async function printBom(itemId, revId) {
     <div>
       <h1>${escH(item.item_number)} — ${escH(item.name)}</h1>
       <div class="sub">Stückliste rev${rev.rev} · Status: ${rev.status}${item.classification?' · '+escH(item.classification):''}</div>
-      ${s.company_name?`<div class="company">${escH(s.company_name)}</div>`:''}
+      ${_docLogo(s, s.company_name ? `<div class="company">${escH(s.company_name)}</div>` : '')}
     </div>
     <div style="text-align:right;font-size:12px;color:#6b7280">
       ${new Date().toLocaleDateString('de-CH')}<br>

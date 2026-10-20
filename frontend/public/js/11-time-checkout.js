@@ -15,15 +15,15 @@ async function loadTimeEntries(orderId) {
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <div class="sep-label" style="margin:0;flex:1">Zeiterfassung</div>
-      <span style="font-size:13px;color:var(--t3)">Total: <strong style="color:var(--t1)">${fmtN(totalH,2)} h</strong></span>
-      ${billableH>0&&hourlyRate>0?`<span style="font-size:13px;color:var(--green)">verrechenbar: <strong>${fmtN(billableH,2)} h = ${fmtCHF(billableH*hourlyRate)}</strong></span>`:''}
+      <span style="font-size:13px;color:var(--t3)">Total: <strong style="color:var(--t1)">${_fmtDur(totalH)}</strong></span>
+      ${billableH>0&&hourlyRate>0?`<span style="font-size:13px;color:var(--green)">verrechenbar: <strong>${_fmtDur(billableH)} = ${fmtCHF(billableH*hourlyRate)}</strong></span>`:''}
       <button class="btn btn-primary btn-sm" onclick="openTimeModal()">+ Eintrag</button>
     </div>
     ${entries.length ? `<div class="tbl-wrap"><table>
       <thead><tr><th>Datum</th><th>Stunden</th><th>Beschreibung</th><th>Verrechnen</th><th></th></tr></thead>
       <tbody>${entries.map(e => `<tr>
         <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(e.date)}${_teRangeLine(e)}</td>
-        <td style="font-family:var(--mono);font-size:13px;font-weight:600">${fmtN(e.hours,2)} h</td>
+        <td style="font-family:var(--mono);font-size:13px;font-weight:600">${_fmtDur(e.hours)}</td>
         <td style="color:var(--t2)">${esc(e.description||'')}</td>
         <td style="text-align:center"><span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(110,222,156,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
         <td style="display:flex;gap:4px">
@@ -45,32 +45,48 @@ function _showDynModal(html) {
 }
 function _hideDynModal() { document.getElementById('dynModal')?.remove(); }
 
-// Von / Bis / Stunden: entweder die Dauer direkt eintippen oder Start und Ende —
-// sobald beide Uhrzeiten stehen, rechnet PLM die Stunden aus. Bis vor Von
-// zählt über Mitternacht. p = Präfix der Feld-IDs im Dialog.
-function _teHours(start, end) {
+// Von / Bis / Dauer: entweder die Dauer direkt eintippen oder Start und Ende —
+// sobald beide Uhrzeiten stehen, rechnet PLM die Dauer aus. Bis vor Von
+// zählt über Mitternacht. Im Feld steht die Dauer als Stunden:Minuten (1:30),
+// gespeichert wird sie in Stunden. p = Präfix der Feld-IDs im Dialog.
+function _teMinutes(start, end) {
   if (!start || !end) return null;
   const min = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-  return Math.round((min(end) - min(start) + 1440) % 1440 / 60 * 100) / 100;
+  return (min(end) - min(start) + 1440) % 1440;
+}
+
+// 90 → "1:30"
+function _teHM(min) { return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`; }
+
+// Eingetippte Dauer in Minuten: 1:30, 1h30, 1 h 30 min, 90 min oder 1.5 (Stunden)
+function _teParseDuration(s) {
+  const t = String(s || '').trim().toLowerCase().replace(',', '.');
+  let m;
+  if ((m = /^(\d+):([0-5]?\d)$/.exec(t))) return +m[1] * 60 + +m[2];
+  if ((m = /^(\d+)\s*h\s*(\d+)\s*(?:min|m)?$/.exec(t))) return +m[1] * 60 + +m[2];
+  if ((m = /^(\d+)\s*(?:min|m)$/.exec(t))) return +m[1];
+  if ((m = /^(\d+(?:\.\d+)?)\s*h?$/.exec(t))) return Math.round(+m[1] * 60);
+  return null;
 }
 
 function _teTimeFields(p, e) {
+  const min = e.hours ? Math.round(e.hours * 60) : 0;
   return `<div class="form-row cols3" style="margin:0">
         <div class="fg"><label class="fl">Von</label>
           <input id="${p}-start" type="time" class="fi" value="${esc(e.start_time||'')}" oninput="_teFromRange('${p}')"></div>
         <div class="fg"><label class="fl">Bis</label>
           <input id="${p}-end" type="time" class="fi" value="${esc(e.end_time||'')}" oninput="_teFromRange('${p}')"></div>
-        <div class="fg"><label class="fl">Stunden</label>
-          <input id="${p}-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}" oninput="_teClearRange('${p}')"></div>
+        <div class="fg"><label class="fl">Dauer (h:min)</label>
+          <input id="${p}-hours" type="text" class="fi" placeholder="1:30" value="${min ? _teHM(min) : ''}" oninput="_teClearRange('${p}')"></div>
       </div>`;
 }
 
 function _teFromRange(p) {
-  const h = _teHours(document.getElementById(`${p}-start`).value, document.getElementById(`${p}-end`).value);
-  if (h != null) document.getElementById(`${p}-hours`).value = h;
+  const min = _teMinutes(document.getElementById(`${p}-start`).value, document.getElementById(`${p}-end`).value);
+  if (min != null) document.getElementById(`${p}-hours`).value = _teHM(min);
 }
 
-// Wer die Stunden selbst eintippt, gibt die Dauer direkt an — Von/Bis passen dann nicht mehr
+// Wer die Dauer selbst eintippt, gibt sie direkt an — Von/Bis passen dann nicht mehr
 function _teClearRange(p) {
   document.getElementById(`${p}-start`).value = '';
   document.getElementById(`${p}-end`).value = '';
@@ -80,7 +96,8 @@ function _teTimeValues(p) {
   const start = document.getElementById(`${p}-start`).value;
   const end = document.getElementById(`${p}-end`).value;
   const both = !!(start && end);
-  return { hours: parseFloat(document.getElementById(`${p}-hours`).value),
+  const min = _teParseDuration(document.getElementById(`${p}-hours`).value);
+  return { hours: min ? min / 60 : NaN,
            start_time: both ? start : null, end_time: both ? end : null };
 }
 
@@ -120,7 +137,7 @@ async function saveTimeEntry(id) {
   const time = _teTimeValues('te');
   const description = document.getElementById('te-desc').value.trim();
   const billable = document.getElementById('te-billable').checked ? 1 : 0;
-  if (!time.hours || time.hours <= 0) { toast('Stunden oder Von und Bis eingeben', 'err'); return; }
+  if (!time.hours || time.hours <= 0) { toast('Dauer (z.B. 1:30) oder Von und Bis eingeben', 'err'); return; }
   try {
     if (id) {
       await api(`/api/time-entries/${id}`, 'PUT', { date, ...time, description, billable });
@@ -270,7 +287,7 @@ async function loadItemTimeEntries(itemId) {
   const totalH = entries.reduce((s, e) => s + (parseFloat(e.hours)||0), 0);
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:13px;color:var(--t3)">${entries.length ? `${entries.length} Einträge · ${fmtN(totalH,2)} h gesamt` : 'Noch keine Einträge'}</span>
+      <span style="font-size:13px;color:var(--t3)">${entries.length ? `${entries.length} Einträge · ${_fmtDur(totalH)} gesamt` : 'Noch keine Einträge'}</span>
       <button class="btn btn-primary btn-sm" onclick="openItemTimeModal()">+ Eintrag</button>
     </div>
     ${entries.length ? `<div class="tbl-wrap"><table>
@@ -280,7 +297,7 @@ async function loadItemTimeEntries(itemId) {
       <tbody>
         ${entries.map(e => `<tr>
           <td style="font-family:var(--mono);font-size:13px">${fmtD(e.date)}${_teRangeLine(e)}</td>
-          <td style="font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtN(parseFloat(e.hours)||0,2)} h</td>
+          <td style="font-family:var(--mono);font-size:13px;white-space:nowrap">${_fmtDur(e.hours)}</td>
           <td style="font-size:13px;color:var(--t2)">${esc(e.description||'—')}</td>
           <td style="white-space:nowrap">
             <button class="btn btn-ghost btn-sm btn-icon" onclick="openItemTimeModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏</button>
@@ -316,7 +333,7 @@ async function saveItemTimeEntry(id) {
   const date  = document.getElementById('ite-date').value;
   const time  = _teTimeValues('ite');
   const description = document.getElementById('ite-desc').value.trim();
-  if (!time.hours || time.hours <= 0) { toast('Stunden oder Von und Bis eingeben', 'err'); return; }
+  if (!time.hours || time.hours <= 0) { toast('Dauer (z.B. 1:30) oder Von und Bis eingeben', 'err'); return; }
   if (id) {
     await api(`/api/time-entries/${id}`, 'PUT', { date, ...time, description, billable: 0 });
   } else {
