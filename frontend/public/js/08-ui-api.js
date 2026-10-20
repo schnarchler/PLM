@@ -211,7 +211,7 @@ async function shutdownServer() {
 async function _doShutdown(checkinFirst) {
   if (checkinFirst) {
     for (const c of [...state.checkouts]) {
-      try { await api('/api/checkout/checkin', 'POST', { folder: c.folder }); } catch {}
+      try { await _checkin(c.folder); } catch {}
     }
   }
   _hideDynModal();

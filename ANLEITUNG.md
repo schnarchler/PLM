@@ -285,6 +285,8 @@ Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin*
 
 **Einchecken:** **⬆ Einchecken** → Ordner wird gelöscht, Eintrag in der Historie. Ist die Revision bereits geliefert, landen die Dateien in einer neuen Revision.
 
+**Freigegebene Teile (REL):** Unverändert (gleiches Änderungsdatum oder gleicher Inhalt) wird beim Einchecken nur der Ordner gelöscht. Wurde trotzdem etwas bearbeitet, fragt PLM nach: **Neue Revision anlegen** (die Freigabe bleibt, die Änderungen kommen per ECO in eine neue Revision; bei Baugruppen in die Revision des geänderten Unterteils), **Änderungen verwerfen** oder **Abbrechen** (der Ordner bleibt).
+
 **Neue Dateien:** PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht (⬆ Checkouts):
 - Im Unterordner eines Items → „Zum Item hinzufügen"
 - Im Hauptordner → „Als neues Item anlegen"

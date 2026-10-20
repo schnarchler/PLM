@@ -184,6 +184,90 @@ test('Einfacher Workflow legt Revisionen ohne Freigabe an', async () => {
   assert.match(blocked.text, /ECO/, 'nach Freigabe wird auf den ECO-Weg verwiesen');
 });
 
+// ── Check-in freigegebener Teile ──────────────────────────────
+async function uploadText(revId, name, text) {
+  const form = new FormData();
+  form.append('file', new Blob([text]), name);
+  assert.ok((await fetch(`${BASE}/api/revisions/${revId}/datasets`, { method: 'POST', body: form })).ok);
+}
+const release = async revId => { for (const status of ['REV', 'REL']) await api(`/api/revisions/${revId}/status`, 'PUT', { status }); };
+const revStates = async itemId => (await api(`/api/items/${itemId}`)).revisions.map(r => `${r.rev}:${r.status}`).sort();
+// Im CAD bearbeiten: der Schreibschutz der freigegebenen Datei wird aufgehoben
+function edit(file, text) { fs.chmodSync(file, 0o644); fs.writeFileSync(file, text); }
+
+test('Check-in freigegeben: unverändert ohne Rückfrage, bearbeitet → neue Revision oder verwerfen', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Freigabe' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Lager', item_type: 'prt' });
+  await uploadText(await firstRev(teil.id), 'lager.stl', 'solid lager\nendsolid lager\n');
+  await release(await firstRev(teil.id));
+  const checkout = async () => {
+    const co = await api(`/api/items/${teil.id}/checkout`, 'POST', {});
+    return { folder: co.folder, file: path.join(co.folder, co.files[0].name) };
+  };
+  const checkin = (folder, rel_changes) => api('/api/checkout/checkin', 'POST', { folder, rel_changes });
+
+  let co = await checkout();
+  let r = await checkin(co.folder);
+  assert.deepStrictEqual([r.success, r.uploaded.length, fs.existsSync(co.folder)], [true, 0, false], 'unverändert: nur aufräumen');
+
+  // Checkout von früher (ohne gemerktes Datum), Datei nur angefasst
+  co = await checkout();
+  const metaPath = path.join(co.folder, '.checkout.json');
+  const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+  meta.files.forEach(f => { delete f.mtime; delete f.size; });
+  fs.writeFileSync(metaPath, JSON.stringify(meta));
+  fs.utimesSync(co.file, new Date(), new Date(Date.now() + 60000));
+  r = await checkin(co.folder);
+  assert.ok(!r.ask && r.success, 'gleicher Inhalt: keine Rückfrage');
+  assert.deepStrictEqual(await revStates(teil.id), ['1:REL']);
+
+  // Bearbeitet: erst fragen, bis dahin bleibt alles stehen
+  co = await checkout();
+  edit(co.file, 'solid lager v2\nendsolid lager\n');
+  r = await checkin(co.folder);
+  assert.strictEqual(r.ask, 'rel_changed');
+  assert.deepStrictEqual(r.files, [{ name: path.basename(co.file), item_number: teil.item_number }]);
+  assert.ok(fs.existsSync(co.file), 'Ordner bleibt bis zur Entscheidung');
+  assert.deepStrictEqual(await revStates(teil.id), ['1:REL']);
+
+  r = await checkin(co.folder, 'new_revision');
+  assert.deepStrictEqual(r.revisions, [{ item_number: teil.item_number, rev: '2' }]);
+  assert.deepStrictEqual(await revStates(teil.id), ['1:ECO', '2:DFT'], 'Freigabe bleibt, Änderung per ECO');
+  const rev2 = (await api(`/api/items/${teil.id}`)).revisions.find(x => x.rev === '2');
+  assert.strictEqual(rev2.datasets.length, 1, 'ersetzt, nicht dazugelegt');
+  assert.match(await (await fetch(`${BASE}/api/datasets/${rev2.datasets[0].id}/download`)).text(), /lager v2/);
+  assert.ok(!fs.existsSync(co.folder));
+
+  // Verwerfen
+  await release(rev2.id);
+  co = await checkout();
+  edit(co.file, 'solid lager v3\nendsolid lager\n');
+  r = await checkin(co.folder, 'discard');
+  assert.deepStrictEqual([r.discarded, fs.existsSync(co.folder)], [1, false]);
+  assert.deepStrictEqual(await revStates(teil.id), ['1:ECO', '2:REL'], 'keine neue Revision');
+});
+
+test('Check-in freigegebene Baugruppe: geändertes Unterteil bekommt seine eigene Revision', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Freigabe BG' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Welle', item_type: 'prt' });
+  const bg = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Getriebe', item_type: 'asm' });
+  await uploadText(await firstRev(teil.id), 'welle.stl', 'solid welle\nendsolid welle\n');
+  await uploadText(await firstRev(bg.id), 'getriebe.step', 'ISO-10303-21; getriebe');
+  await api(`/api/revisions/${await firstRev(bg.id)}/bom`, 'POST', { child_item_id: teil.id, quantity: 1, unit: 'Stk' });
+  await release(await firstRev(teil.id));
+  await release(await firstRev(bg.id));
+
+  const co = await api(`/api/items/${bg.id}/checkout`, 'POST', {});
+  const welle = co.files.find(f => f.item_number === teil.item_number);
+  edit(path.join(co.folder, welle.name), 'solid welle v2\nendsolid welle\n');
+  const r = await api('/api/checkout/checkin', 'POST', { folder: co.folder });
+  assert.deepStrictEqual(r.files, [{ name: welle.name, item_number: teil.item_number }], 'nur die Welle ist geändert');
+  const done = await api('/api/checkout/checkin', 'POST', { folder: co.folder, rel_changes: 'new_revision' });
+  assert.deepStrictEqual(done.revisions, [{ item_number: teil.item_number, rev: '2' }]);
+  assert.deepStrictEqual(await revStates(teil.id), ['1:ECO', '2:DFT']);
+  assert.deepStrictEqual(await revStates(bg.id), ['1:REL'], 'Baugruppe bleibt freigegeben');
+});
+
 test('Normteil bestellen legt beim Wareneingang einen Lagerartikel an', async () => {
   const sp = await api('/api/standard-parts', 'POST', { designation: 'DIN 912 M6x20', standard: 'DIN', unit_price: 0.42 });
   const sup = await api('/api/suppliers', 'POST', { name: 'Schraubenhandel' });

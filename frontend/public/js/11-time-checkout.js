@@ -453,21 +453,75 @@ function _showCheckoutResult(r) {
   </div>`);
 }
 
+// Einchecken. Wurde ein freigegebenes Teil trotzdem bearbeitet, fragt PLM
+// nach: neue Revision, verwerfen oder abbrechen. null = abgebrochen, der
+// Checkout-Ordner bleibt.
+async function _checkin(folder) {
+  const r = await api('/api/checkout/checkin', 'POST', { folder });
+  if (r.ask !== 'rel_changed') return r;
+  const choice = await _askRelChanged(r);
+  return choice ? api('/api/checkout/checkin', 'POST', { folder, rel_changes: choice }) : null;
+}
+
+function _askRelChanged(r) {
+  return new Promise(resolve => {
+    window._relChoice = v => { _hideDynModal(); resolve(v); };
+    const n = r.files.length;
+    _showDynModal(`<div class="modal" style="max-width:580px;width:95vw">
+      <div class="modal-head">
+        <div class="modal-title" style="color:var(--amber)">Freigegebenes Teil bearbeitet</div>
+        <button class="btn btn-icon btn-ghost" onclick="_relChoice(null)">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:13px;color:var(--t2)">
+          <span style="font-family:var(--mono);color:var(--blue)">${esc(r.item_number)}</span> – ${esc(r.item_name)}
+          ist freigegeben, im Checkout wurde${n !== 1 ? 'n' : ''} aber ${n} Datei${n !== 1 ? 'en' : ''} geändert:
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto">
+          ${r.files.map(f => `<div style="font-family:var(--mono);font-size:13px;color:var(--t2)">${esc(f.name)}${f.item_number !== r.item_number
+            ? ` <span style="color:var(--t4)">(${esc(f.item_number)})</span>` : ''}</div>`).join('')}
+        </div>
+        <div style="font-size:13px;color:var(--t3);line-height:1.5">
+          <strong style="color:var(--t2)">Neue Revision</strong> — die Freigabe bleibt unverändert (ECO), die neue Revision
+          übernimmt Dateien, Stückliste und Druckparameter und bekommt die Änderungen.<br>
+          <strong style="color:var(--t2)">Verwerfen</strong> löscht die geänderten Dateien mit dem Checkout-Ordner.
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="_relChoice(null)">Abbrechen</button>
+        <button class="btn btn-red" onclick="_relChoice('discard')">Änderungen verwerfen</button>
+        <button class="btn btn-primary" onclick="_relChoice('new_revision')">Neue Revision anlegen</button>
+      </div>
+    </div>`);
+    document.getElementById('dynModal').addEventListener('click', e => { if (e.target.id === 'dynModal') resolve(null); });
+  });
+}
+
+function _checkinMessage(r) {
+  if (r.revisions?.length) return `Eingecheckt — Änderungen in ${r.revisions.map(x => `${x.item_number} rev${x.rev}`).join(', ')}, Ordner gelöscht`;
+  if (r.discarded) return 'Eingecheckt — Änderungen verworfen, Ordner gelöscht';
+  const count = r.uploaded?.length || 0;
+  return count > 0
+    ? `Eingecheckt — ${count} Datei${count!==1?'en':''} hochgeladen, Ordner gelöscht`
+    : `Eingecheckt — Ordner gelöscht (REL-Element, keine Dateien hochgeladen)`;
+}
+
 async function doCheckin(folder, btn) {
   if (!confirm('Dateien in PLM hochladen und Checkout-Ordner löschen?')) return;
   const orig = btn?.innerHTML;
   if (btn) { btn.innerHTML = '⏳…'; btn.disabled = true; }
   try {
-    const r = await api('/api/checkout/checkin', 'POST', { folder });
+    const r = await _checkin(folder);
     await loadCheckouts();
     _hideDynModal();
-    const count = r.uploaded?.length || 0;
-    const msg = count > 0
-      ? `Eingecheckt — ${count} Datei${count!==1?'en':''} hochgeladen, Ordner gelöscht`
-      : `Eingecheckt — Ordner gelöscht (REL-Element, keine Dateien hochgeladen)`;
-    toast(msg, 'ok');
+    if (!r) {
+      if (btn) { btn.innerHTML = orig; btn.disabled = false; }
+      toast('Nicht eingecheckt — der Checkout-Ordner bleibt', 'ok');
+      return;
+    }
+    toast(_checkinMessage(r), 'ok');
     if (state.project) renderProjectTree(state.project);
-    if (state.item) { const fresh = await api('/api/items/'+state.item.id); renderItemDetail(fresh, state.activeRevId); }
+    if (state.item) { const fresh = await api('/api/items/'+state.item.id); renderItemDetail(fresh, r.revisions?.length ? null : state.activeRevId); }
   } catch(e) {
     if (btn) { btn.innerHTML = orig; btn.disabled = false; }
     toast('Fehler beim Einchecken: ' + (e.message||''), 'err');
@@ -477,12 +531,13 @@ async function doCheckin(folder, btn) {
 async function doCheckinAll() {
   if (!state.checkouts.length) return;
   if (!confirm(`Alle ${state.checkouts.length} Checkouts einchecken und Ordner löschen?`)) return;
+  let kept = 0;
   for (const c of [...state.checkouts]) {
-    try { await api('/api/checkout/checkin', 'POST', { folder: c.folder }); } catch {}
+    try { if (!await _checkin(c.folder)) kept++; } catch {}
   }
   await loadCheckouts();
   _hideDynModal();
-  toast('Alle Checkouts eingecheckt', 'ok');
+  toast(kept ? `Eingecheckt — ${kept} Checkout${kept !== 1 ? 's bleiben' : ' bleibt'} bestehen` : 'Alle Checkouts eingecheckt', 'ok');
   if (state.project) renderProjectTree(state.project);
   if (state.item) renderItemDetail(state.item, state.activeRevId);
 }
