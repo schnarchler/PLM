@@ -208,7 +208,7 @@ test('ECO übernimmt Stückliste und Druckparameter in die neue Revision', async
   const bg = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'BG', item_type: 'asm' });
   const tr = await firstRev(teil.id), br = await firstRev(bg.id);
   await api(`/api/revisions/${br.id}/bom`, 'POST', { child_item_id: teil.id, quantity: 4, unit: 'Stk' });
-  await api(`/api/revisions/${br.id}/print-settings`, 'PUT', { material: 'ASA' });
+  await api(`/api/revisions/${br.id}/print-settings`, 'PUT', { material: 'ASA', infill_pattern: 'gyroid' });
   for (const rev of [tr, br]) {
     await api(`/api/revisions/${rev.id}/status`, 'PUT', { status: 'REV' });
     await api(`/api/revisions/${rev.id}/status`, 'PUT', { status: 'REL', released_by: 'Test' });
@@ -219,6 +219,7 @@ test('ECO übernimmt Stückliste und Druckparameter in die neue Revision', async
   assert.strictEqual(fresh.bom.length, 1, 'Stückliste übernommen');
   assert.strictEqual(fresh.bom[0].quantity, 4);
   assert.strictEqual(fresh.print_settings.material, 'ASA', 'Druckparameter übernommen');
+  assert.strictEqual(fresh.print_settings.infill_pattern, 'gyroid', 'Füllmuster übernommen');
 });
 
 test('Suche: mehrere Wörter und Filter nach Klassifizierung', async () => {

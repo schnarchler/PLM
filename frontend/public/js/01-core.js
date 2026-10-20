@@ -158,8 +158,8 @@ const PRINT_PARAMS = [
   ['nozzle',                'Düse',            v => v + ' mm'],
   ['layer_height',          'Schichthöhe',     v => fmtN(v, 2) + ' mm'],
   ['material',              'Material'],
-  ['color',                 'Farbe'],
   ['infill',                'Füllung',         v => v + ' %'],
+  ['infill_pattern',        'Füllmuster',      v => fmtInfillPattern(v)],
   ['supports',              'Stützen',         v => Number(v) ? 'ja' : 'nein'],
   ['print_temp',            'Düsentemperatur', v => v + ' °C'],
   ['bed_temp',              'Betttemperatur',  v => v + ' °C'],
@@ -177,6 +177,21 @@ function fmtPrintParam(key, v) {
   if (v === null || v === undefined || v === '') return null;
   const f = PRINT_PARAMS.find(p => p[0] === key)?.[2];
   return f ? f(v) : String(v);
+}
+
+// Füllmuster: Schlüssel aus PrusaSlicer, Orca und Bambu → Name wie im Slicer.
+// Bambu und Orca nennen „Geradlinig“ intern zig-zag. Unbekannte bleiben, wie sie sind.
+const INFILL_PATTERNS = {
+  rectilinear: 'Geradlinig', 'zig-zag': 'Geradlinig', alignedrectilinear: 'Geradlinig ausgerichtet',
+  grid: 'Gitter', triangles: 'Dreiecke', stars: 'Sterne', 'tri-hexagon': 'Tri-Hexagon',
+  cubic: 'Kubisch', adaptivecubic: 'Adaptiv kubisch', supportcubic: 'Stützkubisch', quartercubic: 'Viertelkubisch',
+  line: 'Linie', concentric: 'Konzentrisch', honeycomb: 'Bienenwabe', '3dhoneycomb': '3D-Bienenwabe',
+  gyroid: 'Gyroid', hilbertcurve: 'Hilbertkurve', archimedeanchords: 'Archimedische Akkorde',
+  octagramspiral: 'Oktagramm-Spirale', lightning: 'Blitz', crosshatch: 'Kreuzschraffur',
+};
+function fmtInfillPattern(v) {
+  const s = String(v).trim();
+  return INFILL_PATTERNS[s.toLowerCase()] || s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // ── ITEM TYPE ICONS ───────────────────────────────────────────

@@ -581,7 +581,7 @@ test('Benutzer verwalten: nur Admins, der einzige Admin bleibt Admin', () => {
 });
 
 // ── Druckparameter im Datenblatt und als PDF ──────────────────
-const PS_DEMO = { revision_id: 31, material: 'PETG', color: 'Schwarz', layer_height: '0.2', infill: '20',
+const PS_DEMO = { revision_id: 31, material: 'PETG', color: 'Schwarz', layer_height: '0.2', infill: '20', infill_pattern: 'gyroid',
   supports: 0, nozzle: '0.4', print_temp: '240', bed_temp: '85', printer: 'Original Prusa MK4S',
   part_weight: 41.5, filament_weight_total: 45.2, print_duration: 2.5, filament_price_kg: 24,
   printer_cost_hr: 1.2, raw_material_id: 3, raw_material_name: 'Prusament PETG Jet Black', notes: 'Naht hinten' };
@@ -594,8 +594,19 @@ test('Datenblatt: Druckparameter kompakt, eine Zeile je Wert', () => {
   assert.match(ps, /class="ps-kv"/);
   assert.match(ps, /<span class="ps-kv-label">Düse<\/span><span class="ps-kv-val">0.4 mm<\/span>/);
   assert.match(ps, /Druckdauer[\s\S]*2 h 30 min/);
+  assert.match(ps, /<span class="ps-kv-label">Füllmuster<\/span><span class="ps-kv-val">Gyroid<\/span>/, 'Füllmuster statt Farbe');
+  assert.ok(!ps.includes('Farbe') && !ps.includes('Schwarz'));
   assert.ok(!ps.slice(0, ps.indexOf('Naht hinten')).includes('ps-cell'), 'keine Kacheln mehr');
   assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
+
+test('Füllmuster: Slicer-Schlüssel werden zu lesbaren Namen', () => {
+  assert.strictEqual(fmtPrintParam('infill_pattern', 'gyroid'), 'Gyroid');
+  assert.strictEqual(fmtPrintParam('infill_pattern', 'zig-zag'), 'Geradlinig', 'so heisst es in Orca und Bambu');
+  assert.strictEqual(fmtPrintParam('infill_pattern', 'AdaptiveCubic'), 'Adaptiv kubisch');
+  assert.strictEqual(fmtPrintParam('infill_pattern', 'lateral-lattice'), 'Lateral-lattice', 'unbekannt: wie im Slicer');
+  assert.strictEqual(printParamLabel('infill_pattern'), 'Füllmuster');
+  assert.ok(!PRINT_PARAMS.slice(0, 12).some(([k]) => k === 'color'), 'Farbe nicht mehr im Datenblatt');
 });
 
 evalPart('js/10-documents.js', 'function escHtml(', '// type:', 'globalThis.escHtml = escHtml');
@@ -626,7 +637,7 @@ test('PDF-Datenblatt: enthält Druckparameter, Notizen, Lager und echte Dateinam
   assert.match(h, /Revision rev2/, 'gewählte Revision, nicht die neuste');
   assert.match(h, /Kurzcode <b[^>]*>K7M-2</);
   assert.match(h, /<svg/, 'QR-Code im Kopf');
-  for (const v of ['PETG', '0.4 mm', '240 °C', '85 °C', 'Original Prusa MK4S', '45.2 g', '2 h 30 min',
+  for (const v of ['PETG', 'Gyroid', '0.4 mm', '240 °C', '85 °C', 'Original Prusa MK4S', '45.2 g', '2 h 30 min',
                    '24.00 CHF/kg', '1.20 CHF/h', 'Prusament PETG Jet Black', 'Naht hinten']) {
     assert.ok(h.includes(v), `Druckparameter: ${v}`);
   }

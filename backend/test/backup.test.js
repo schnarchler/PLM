@@ -131,6 +131,31 @@ test('Ältere Sicherung bekommt beim Wiederherstellen das aktuelle Schema', asyn
   assert.ok(!actions.some(a => a.startsWith('Stückliste')));
 });
 
+test('Ältere Sicherung: Füllmuster wird aus schon hochgeladenen 3MF nachgetragen', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Füllmuster' });
+  const it = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Gitterteil', item_type: 'prt' });
+  const rev = (await api(`/api/items/${it.id}`)).revisions[0];
+  const zip = new (require('adm-zip'))();
+  zip.addFile('Metadata/Slic3r_PE.config', Buffer.from('layer_height = 0.2\nfill_pattern = adaptivecubic\n'));
+  const form = new FormData();
+  form.append('file', new Blob([zip.toBuffer()]), 'teil.3mf');
+  assert.ok((await fetch(`${BASE}/api/revisions/${rev.id}/datasets`, { method: 'POST', body: form })).ok);
+  const { name } = await api('/api/backups', 'POST');
+
+  // Stand vor dem Füllmuster: keine Spalte, Migration nie gelaufen
+  const SQL = await require('sql.js')();
+  const old = new SQL.Database(fs.readFileSync(path.join(dataDir, 'backups', name)));
+  old.run('ALTER TABLE print_settings DROP COLUMN infill_pattern');
+  old.run("DELETE FROM applied_migrations WHERE key='infill-pattern-from-3mf-v1'");
+  const buf = Buffer.from(old.export());
+  old.close();
+
+  assert.strictEqual((await uploadRestore('vor-fuellmuster.db', buf)).status, 200);
+  const ps = (await api(`/api/items/${it.id}`)).revisions[0].print_settings;
+  assert.strictEqual(ps.infill_pattern, 'adaptivecubic');
+  assert.strictEqual(parseFloat(ps.layer_height), 0.2, 'übrige Werte unverändert');
+});
+
 test('Sicherung löschen', async () => {
   const { name } = await api('/api/backups', 'POST');
   await api(`/api/backups/${encodeURIComponent(name)}`, 'DELETE');
