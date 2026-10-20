@@ -655,7 +655,7 @@ function _renderBillableTimeSection(timeEntries, taxRate, discountPct, includeTa
           <td style="padding:6px 8px;width:28px"></td>
           <td style="padding:6px 8px;font-size:13px">${esc(e.description||'Arbeitszeit')}
             <div style="font-size:13px;color:var(--t3)">${fmtD(e.date,'')}</div></td>
-          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtN(e.hours,2)} h</td>
+          <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${_fmtDur(e.hours)}</td>
           <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtCHF(hourlyRate)}/h</td>
           <td style="padding:6px 8px;text-align:right;font-family:var(--mono);font-size:13px">${fmtCHF(cost)}</td>
           <td style="padding:6px 8px"></td>
@@ -666,7 +666,7 @@ function _renderBillableTimeSection(timeEntries, taxRate, discountPct, includeTa
       <div style="display:flex;justify-content:flex-end;gap:24px">
         <div style="text-align:right">
           <div style="color:var(--t3)">Positionen: <span style="font-family:var(--mono)">${fmtCHF(netItems)}</span></div>
-          <div style="color:var(--t2)">+ Arbeitszeit ${fmtN(billableH,2)} h: <span style="font-family:var(--mono)">${fmtCHF(timeCost)}</span></div>
+          <div style="color:var(--t2)">+ Arbeitszeit ${_fmtDur(billableH)}: <span style="font-family:var(--mono)">${fmtCHF(timeCost)}</span></div>
           ${includeTax?`<div style="color:var(--t3)">MwSt. ${taxRate}%: <span style="font-family:var(--mono)">${fmtCHF(tax)}</span></div>`:''}
           <div style="font-size:13px;font-weight:600;margin-top:4px;color:var(--green)">Gesamttotal: <span style="font-family:var(--mono)">${fmtCHF(grandTotal)}</span></div>
         </div>
@@ -795,7 +795,7 @@ async function orderToDelivery(orderId) {
         <input type="checkbox" id="dtd-include-time" checked style="width:15px;height:15px;margin-top:1px;cursor:pointer;accent-color:var(--blue);flex-shrink:0">
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--t1)">Verrechenbare Zeiten übernehmen</div>
-          <div style="font-size:13px;color:var(--t3);margin-top:2px">${billable.length} Einträge · ${fmtN(billableH,2)} h${hourlyRate>0?' · '+fmtCHF(billableH*hourlyRate):''}</div>
+          <div style="font-size:13px;color:var(--t3);margin-top:2px">${billable.length} Einträge · ${_fmtDur(billableH)}${hourlyRate>0?' · '+fmtCHF(billableH*hourlyRate):''}</div>
         </div>
       </label>` : `<div style="font-size:13px;color:var(--t3);padding:8px 0">Keine verrechenbaren Zeiteinträge vorhanden.</div>`}
     </div>

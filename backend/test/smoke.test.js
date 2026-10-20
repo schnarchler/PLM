@@ -154,6 +154,30 @@ test('Programmdateien: Browser fragt immer nach, lädt Unverändertes aber nicht
   }
 });
 
+test('Firmenlogo: hochladen, abrufen, nicht in den Einstellungen, entfernen', async () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  const form = new FormData();
+  form.append('file', new Blob([png], { type: 'image/png' }), 'logo.png');
+  const r = await fetch(`${BASE}/api/settings/logo`, { method: 'POST', body: form });
+  assert.strictEqual(r.status, 200);
+  const s = await r.json();
+  assert.ok(s.company_logo_at, 'Version gesetzt');
+  assert.ok(!('company_logo' in s) && !('company_logo' in await api('/api/settings')), 'Bilddaten nicht bei jedem Seitenstart');
+  const logo = await fetch(`${BASE}/api/settings/logo`);
+  assert.strictEqual(logo.headers.get('content-type'), 'image/png');
+  assert.match(logo.headers.get('content-security-policy'), /sandbox/);
+  assert.ok(Buffer.from(await logo.arrayBuffer()).equals(png));
+  // Über die normalen Einstellungen lässt sich das Logo nicht setzen
+  await api('/api/settings', 'PUT', { company_logo: 'data:text/html;base64,PHNjcmlwdD4=', company_logo_at: '1' });
+  assert.ok(Buffer.from(await (await fetch(`${BASE}/api/settings/logo`)).arrayBuffer()).equals(png));
+  assert.strictEqual((await api('/api/settings')).company_logo_at, s.company_logo_at);
+  const txt = new FormData();
+  txt.append('file', new Blob(['hallo'], { type: 'text/plain' }), 'x.txt');
+  assert.strictEqual((await fetch(`${BASE}/api/settings/logo`, { method: 'POST', body: txt })).status, 400);
+  assert.ok(!(await api('/api/settings/logo', 'DELETE')).company_logo_at);
+  assert.strictEqual((await fetch(`${BASE}/api/settings/logo`)).status, 404, 'ohne Logo: Belege wie bisher');
+});
+
 test('Datei-Upload hinterlegt den Original-Dateinamen als Notiz', async () => {
   const p = await api('/api/projects', 'POST', { name: 'Uploadprojekt' });
   const item = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Uploadteil', item_type: 'part' });

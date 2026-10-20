@@ -275,16 +275,24 @@ test('Stückliste: fixierte und veraltete Position wird markiert', () => {
   assert.ok(!_bomRevBadge(b, true, 3, 4).includes('openBomRevPicker('), 'gesperrt nicht klickbar');
 });
 
-// ── Zeiterfassung: Von / Bis / Stunden ────────────────────────
-const TE = evalPart('js/11-time-checkout.js', 'function _teHours(', 'function openTimeModal(',
-  '({ _teHours, _teTimeFields, _teFromRange, _teClearRange, _teTimeValues, _teRangeLine })');
+// ── Zeiterfassung: Von / Bis / Dauer in Stunden und Minuten ───
+const TE = evalPart('js/11-time-checkout.js', 'function _teMinutes(', 'function openTimeModal(',
+  '({ _teMinutes, _teHM, _teParseDuration, _teTimeFields, _teFromRange, _teClearRange, _teTimeValues, _teRangeLine })');
 
-test('Zeiterfassung: Stunden aus Von–Bis, auch über Mitternacht', () => {
-  assert.strictEqual(TE._teHours('08:00', '11:30'), 3.5);
-  assert.strictEqual(TE._teHours('13:15', '17:00'), 3.75);
-  assert.strictEqual(TE._teHours('08:00', '08:10'), 0.17, 'auf zwei Stellen gerundet');
-  assert.strictEqual(TE._teHours('22:00', '01:30'), 3.5, 'über Mitternacht');
-  assert.strictEqual(TE._teHours('08:00', ''), null, 'erst wenn beide Zeiten stehen');
+test('Zeiterfassung: Dauer aus Von–Bis in Minuten, auch über Mitternacht', () => {
+  assert.strictEqual(TE._teMinutes('08:00', '11:30'), 210);
+  assert.strictEqual(TE._teMinutes('08:00', '08:10'), 10, 'minutengenau, nicht gerundet');
+  assert.strictEqual(TE._teMinutes('22:00', '01:30'), 210, 'über Mitternacht');
+  assert.strictEqual(TE._teMinutes('08:00', ''), null, 'erst wenn beide Zeiten stehen');
+  assert.deepStrictEqual([TE._teHM(210), TE._teHM(10), TE._teHM(60)], ['3:30', '0:10', '1:00']);
+});
+
+test('Zeiterfassung: Dauer eintippen als 1:30, 1h30, 90 min oder 1.5', () => {
+  for (const [ein, min] of [['1:30', 90], ['0:05', 5], ['1h30', 90], ['1 h 30 min', 90], ['90 min', 90], ['45m', 45],
+                            ['1.5', 90], ['1,25', 75], ['2h', 120], ['2', 120]]) {
+    assert.strictEqual(TE._teParseDuration(ein), min, ein);
+  }
+  for (const falsch of ['', '1:75', 'abc', '1:30:00']) assert.strictEqual(TE._teParseDuration(falsch), null, falsch);
 });
 
 test('Zeiterfassung: entweder Dauer oder Von–Bis', () => {
@@ -293,25 +301,33 @@ test('Zeiterfassung: entweder Dauer oder Von–Bis', () => {
   global.document = { getElementById: id => f[id] };
   try {
     f['te-start'].value = '08:00'; TE._teFromRange('te');
-    assert.strictEqual(f['te-hours'].value, '', 'nur Von: Stunden bleiben');
+    assert.strictEqual(f['te-hours'].value, '', 'nur Von: Dauer bleibt leer');
     f['te-end'].value = '11:30'; TE._teFromRange('te');
-    assert.strictEqual(String(f['te-hours'].value), '3.5');
+    assert.strictEqual(f['te-hours'].value, '3:30');
     assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 3.5, start_time: '08:00', end_time: '11:30' });
-    f['te-hours'].value = '3'; TE._teClearRange('te');
-    assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 3, start_time: null, end_time: null }, 'Stunden getippt: Von/Bis weg');
+    f['te-hours'].value = '1:15'; TE._teClearRange('te');
+    assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 1.25, start_time: null, end_time: null }, 'Dauer getippt: Von/Bis weg');
     f['te-start'].value = '09:00';
-    assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 3, start_time: null, end_time: null }, 'Von allein zählt nicht');
+    assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 1.25, start_time: null, end_time: null }, 'Von allein zählt nicht');
+    f['te-hours'].value = 'quatsch';
+    assert.ok(Number.isNaN(TE._teTimeValues('te').hours), 'unlesbar: wird nicht gespeichert');
   } finally { global.document = prev; }
 });
 
-test('Zeiterfassung: Dialog und Liste zeigen die Uhrzeiten', () => {
+test('Zeiterfassung: Dialog zeigt Stunden:Minuten, Liste die Uhrzeiten', () => {
   const h = TE._teTimeFields('ite', { start_time: '08:00', end_time: '11:30', hours: 3.5 });
   assert.match(h, /id="ite-start" type="time"[^>]*value="08:00"/);
   assert.match(h, /id="ite-end" type="time"[^>]*value="11:30"/);
-  assert.match(h, /id="ite-hours"[^>]*value="3.5"/);
+  assert.match(h, /id="ite-hours"[^>]*value="3:30"/);
+  assert.match(TE._teTimeFields('te', { hours: 0.17 }), /value="0:10"/, 'alte Einträge mit 0.17 h');
   assert.ok(!TE._teTimeFields('te', {}).includes('undefined'), 'neuer Eintrag: leere Felder');
   assert.match(TE._teRangeLine({ start_time: '08:00', end_time: '11:30' }), />08:00–11:30</);
   assert.strictEqual(TE._teRangeLine({ hours: 2 }), '', 'nur Dauer: keine Zeile');
+});
+
+test('Zeiterfassung: Listen zeigen Stunden und Minuten statt 1.5 h', () => {
+  assert.deepStrictEqual([_fmtDur(1.5), _fmtDur(0.25), _fmtDur(2), _fmtDur(0), _fmtDur(1.999)],
+    ['1 h 30 min', '15 min', '2 h', '0 min', '2 h'], 'auf Minuten gerundet, nie „1 h 60 min“');
 });
 
 // ── Mindmap-Layout ────────────────────────────────────────────
@@ -673,6 +689,22 @@ test('PDF-Datenblatt: enthält Druckparameter, Notizen, Lager und echte Dateinam
   assert.match(h, /P1042_rev2\.3mf/);
   assert.ok(!h.includes('1779473701990'), 'nicht der interne Speichername');
   assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
+
+test('Briefkopf: mit Logo das Logo und der Firmenname, ohne Logo wie bisher', () => {
+  const item = demoItem({ revisions: [{ id: 31, rev: '2', status: 'DFT', datasets: [] }] });
+  global.location = { origin: 'http://plm' };
+  try {
+    global.state.settings = { company_name: 'Muster AG' };
+    const ohne = pdfOf(item, 31);
+    assert.ok(!ohne.includes('/api/settings/logo'), 'ohne Logo kein Bild');
+    assert.match(ohne, /font-size:18px;font-weight:700;color:#1d4ed8">Muster AG</, 'bisheriger Kopf');
+    global.state.settings = { company_name: 'Muster <AG>', company_logo_at: '1792491433174' };
+    const mit = pdfOf(item, 31);
+    assert.match(mit, /<img src="http:\/\/plm\/api\/settings\/logo\?v=1792491433174" alt="Muster &lt;AG&gt;"/);
+    assert.match(mit, />Muster &lt;AG&gt;</, 'Firmenname bleibt, escaped');
+    assert.ok(!mit.includes('font-size:18px;font-weight:700;color:#1d4ed8">'), 'Logo ersetzt den grossen Namen');
+  } finally { global.state.settings = {}; delete global.location; }
 });
 
 test('PDF-Datenblatt: Teil ohne Angaben zeigt keine leeren Abschnitte', () => {

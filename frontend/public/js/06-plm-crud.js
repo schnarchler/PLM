@@ -1173,7 +1173,7 @@ async function doParseStep(revId, projectId) {
         ${esc(c.name)}
         ${c.children?.length ? `<span style="font-size:11px;color:var(--teal);margin-left:4px">[ASM · ${c.children.length}]</span>` : ''}
       </td>
-      <td><input type="number" id="sq-${i}" value="${c.qty||1}" min="0.001" step="1"
+      <td><input type="number" id="sq-${i}" value="${c.qty||1}" min="1" step="1"
         style="width:58px;font-size:13px;background:var(--bg2);color:var(--t1);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 5px"></td>
       <td>
         <select id="sm-${i}" style="font-size:13px;background:var(--bg2);color:var(--t1);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px 6px;width:100%">
