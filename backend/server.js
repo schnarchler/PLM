@@ -3751,30 +3751,31 @@ app.post('/api/quotes/:id/convert', (req, res) => {
 // ==============================================================
 // DASHBOARD
 // ==============================================================
+// Nur was offen ist und Aufmerksamkeit braucht — leere Bereiche blendet die
+// Oberfläche aus. Fristen sind schon sortiert: die dringendsten zuerst.
 app.get('/api/dashboard', (req, res) => {
   const thisMonth = new Date().toISOString().slice(0, 7);
-
-  // Offene Angebote laufen als Auftragsphase QUOTE
-  const openQuotePhase = all(`
-    SELECT o.*, COALESCE(c.name, o.customer_name_free) as customer_name,
-      COUNT(oi.id) as item_count,
+  const orders = (statuses, orderBy) => all(`
+    SELECT o.id, o.number, o.title, o.status, o.delivery_date, o.valid_until,
+      COALESCE(c.name, o.customer_name_free) as customer_name,
       SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total
     FROM orders o
     LEFT JOIN customers c ON o.customer_id = c.id
     LEFT JOIN order_items oi ON oi.order_id = o.id
-    WHERE o.status='QUOTE'
-    GROUP BY o.id ORDER BY o.number DESC`);
+    WHERE o.status IN (${statuses.map(() => '?').join(',')})
+    GROUP BY o.id ORDER BY ${orderBy}`, statuses);
+  const openOrders = orders(['DRAFT', 'CONFIRMED'], 'o.id DESC');
+  // Angebote sind Aufträge in der Phase QUOTE — die bald ablaufenden zuerst
+  const openQuotes = orders(['QUOTE'], 'o.valid_until IS NULL, o.valid_until, o.id DESC');
 
-  // Open orders (DRAFT + CONFIRMED)
-  const openOrders = all(`
-    SELECT o.*, COALESCE(c.name, o.customer_name_free) as customer_name,
-      COUNT(oi.id) as item_count,
-      SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total
-    FROM orders o
-    LEFT JOIN customers c ON o.customer_id = c.id
-    LEFT JOIN order_items oi ON oi.order_id = o.id
-    WHERE o.status IN ('DRAFT','CONFIRMED')
-    GROUP BY o.id ORDER BY o.id DESC`);
+  // Produktion: noch nicht geliefert, die fälligsten zuerst
+  const openDeliveries = all(`
+    SELECT d.id, d.number, d.title, d.status, d.delivery_date,
+      COALESCE(c.name, d.customer_name_free) as customer_name
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id = c.id
+    WHERE d.status != 'DELIVERED'
+    ORDER BY d.delivery_date IS NULL, d.delivery_date, d.id DESC`);
 
   // PLM items currently in REV (awaiting approval)
   const inReview = all(`
@@ -3787,95 +3788,52 @@ app.get('/api/dashboard', (req, res) => {
     WHERE r.status = 'REV'
     ORDER BY r.updated_at DESC`);
 
-  // Recent deliveries with order + customer link
-  const recentDeliveries = all(`
-    SELECT d.*, COALESCE(c.name, d.customer_name_free) as customer_name,
-      o.number as order_number, o.title as order_title,
-      COUNT(di.id) as item_count,
-      SUM(di.quantity * COALESCE(di.unit_price,0)) as total
-    FROM deliveries d
-    LEFT JOIN customers c ON d.customer_id = c.id
-    LEFT JOIN orders o ON d.order_id = o.id
-    LEFT JOIN delivery_items di ON di.delivery_id = d.id
-    GROUP BY d.id ORDER BY d.id DESC LIMIT 8`);
+  // Lager auf oder unter dem Mindestbestand, die knappsten zuerst
+  const lowStock = all(`
+    SELECT id, name, color, material, unit, stock_qty, min_qty FROM inventory_items
+    WHERE min_qty > 0 AND stock_qty <= min_qty
+    ORDER BY stock_qty < min_qty DESC, name`);
 
-  // Revenue this month (CONFIRMED + INVOICED + DELIVERED orders)
-  const revMonth = get(`
+  const revenue = monthOnly => get(`
     SELECT COALESCE(SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)), 0) as total
     FROM order_items oi JOIN orders o ON oi.order_id = o.id
-    WHERE o.status IN ('CONFIRMED','INVOICED','DELIVERED')
-    AND o.created_at LIKE ?`, [thisMonth + '%']);
+    WHERE o.status IN ('CONFIRMED','INVOICED','DELIVERED')${monthOnly ? ' AND o.created_at LIKE ?' : ''}`,
+    monthOnly ? [thisMonth + '%'] : [])?.total || 0;
 
-  // Revenue total (all confirmed+)
-  const revTotal = get(`
-    SELECT COALESCE(SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)), 0) as total
-    FROM order_items oi JOIN orders o ON oi.order_id = o.id
-    WHERE o.status IN ('CONFIRMED','INVOICED','DELIVERED')`);
-
-  // Active production: delivery_items linked to PLM items, delivery not yet DELIVERED
-  const inProduction = all(`
-    SELECT di.id, di.description, di.quantity, di.unit, di.unit_price,
-      d.id as delivery_id, d.number as delivery_number, d.status as delivery_status,
-      COALESCE(c.name, d.customer_name_free) as customer_name,
-      i.item_number, i.name as item_name, i.item_type, i.project_id,
-      p.number as project_number
-    FROM delivery_items di
-    JOIN deliveries d ON di.delivery_id = d.id
-    LEFT JOIN customers c ON d.customer_id = c.id
-    LEFT JOIN items i ON di.item_id = i.id
-    LEFT JOIN projects p ON i.project_id = p.id
-    WHERE d.status != 'DELIVERED' AND di.item_id IS NOT NULL
-    ORDER BY d.id DESC LIMIT 20`);
-
-  const today = new Date().toISOString().slice(0, 10);
-  const in14 = new Date(Date.now() + 14*86400000).toISOString().slice(0, 10);
-
-  // Deliveries due within 14 days (not yet delivered)
-  const dueSoon = all(`
-    SELECT d.id, d.number, d.title, d.status, d.delivery_date,
-      COALESCE(c.name, d.customer_name_free) as customer_name,
-      COUNT(di.id) as item_count
-    FROM deliveries d
-    LEFT JOIN customers c ON d.customer_id=c.id
-    LEFT JOIN delivery_items di ON di.delivery_id=d.id
-    WHERE d.status != 'DELIVERED' AND d.delivery_date IS NOT NULL
-      AND d.delivery_date <= ? AND d.delivery_date >= date(?,'-3 days')
-    GROUP BY d.id ORDER BY d.delivery_date ASC`, [in14, today]);
-
-  // Angebote (Auftragsphase QUOTE), die innerhalb von 14 Tagen ablaufen
-  const quotesExpiring = all(`
-    SELECT o.id, o.number, o.title, o.status, o.valid_until,
-      COALESCE(c.name, o.customer_name_free) as customer_name,
-      SUM(oi.quantity * oi.unit_price * (1 - COALESCE(oi.discount_pct,0)/100.0)) as total
-    FROM orders o
-    LEFT JOIN customers c ON o.customer_id=c.id
-    LEFT JOIN order_items oi ON oi.order_id=o.id
-    WHERE o.status='QUOTE' AND o.valid_until IS NOT NULL AND o.valid_until <= ?
-    GROUP BY o.id ORDER BY o.valid_until ASC`, [in14]);
-
-  // Raw material stats
-  const rawMats = all('SELECT * FROM raw_materials');
-  const rawMatCount = rawMats.length;
-  const rawMatActive = rawMats.filter(m => m.stock_qty > 0).length;
-  // Total purchase value: for each material, sum (latest price per lot × remaining qty) for active lots
-  let rawMatValue = 0;
-  for (const m of rawMats) {
-    const lots = all(`SELECT lot_number,
-      SUM(CASE WHEN type='in' THEN qty ELSE -qty END) as remaining_qty,
-      MAX(CASE WHEN type='in' THEN unit_price ELSE NULL END) as unit_price
-      FROM raw_material_movements WHERE raw_material_id=? AND lot_number IS NOT NULL AND lot_number!=''
-      GROUP BY lot_number`, [m.id]);
-    for (const l of lots) {
-      const rem = Math.max(0, l.remaining_qty || 0);
-      if (rem > 0 && l.unit_price) rawMatValue += rem * l.unit_price;
+  // Kennzahlen zur Datenbank — Zählungen und Summen aus der DB (die
+  // Dateigrössen stehen in datasets), ohne jede Datei auf der Platte anzufassen
+  const n = sql => get(sql)?.n || 0;
+  let dbBytes = 0, lastBackup = null;
+  try { dbBytes = fs.statSync(DB_PATH).size; } catch {}
+  try {
+    for (const f of fs.readdirSync(BACKUP_DIR)) {
+      if (!BACKUP_NAME_RE.test(f)) continue;
+      const t = fs.statSync(path.join(BACKUP_DIR, f)).mtime.toISOString();
+      if (!lastBackup || t > lastBackup) lastBackup = t;
     }
-  }
+  } catch {}
+  const stats = {
+    projects:   n('SELECT COUNT(*) n FROM projects'),
+    assemblies: n("SELECT COUNT(*) n FROM items WHERE item_type='asm'"),
+    parts:      n("SELECT COUNT(*) n FROM items WHERE item_type='prt'"),
+    documents:  n("SELECT COUNT(*) n FROM items WHERE item_type='doc'"),
+    released:   n("SELECT COUNT(DISTINCT item_id) n FROM revisions WHERE status='REL'"),
+    revisions:  n('SELECT COUNT(*) n FROM revisions'),
+    standard_parts: n('SELECT COUNT(*) n FROM standard_parts'),
+    customers:  n('SELECT COUNT(*) n FROM customers'),
+    orders:     n("SELECT COUNT(*) n FROM orders WHERE status IN ('DRAFT','CONFIRMED','DELIVERED','INVOICED')"),
+    delivered:  n("SELECT COUNT(*) n FROM deliveries WHERE status='DELIVERED'"),
+    hours:      n('SELECT COALESCE(SUM(hours),0) n FROM time_entries'),
+    files:      n('SELECT COUNT(*) n FROM datasets'),
+    files_bytes: n('SELECT COALESCE(SUM(file_size),0) n FROM datasets'),
+    db_bytes:   dbBytes,
+    last_backup: lastBackup,
+    since:      get('SELECT MIN(created_at) n FROM changelog')?.n || null,   // erster Eintrag der Historie
+    version:    APP_VERSION,
+  };
 
-  res.json({ openOrders, openQuotes: openQuotePhase,
-    inReview, recentDeliveries, inProduction,
-    revenueMonth: revMonth?.total || 0, revenueTotal: revTotal?.total || 0,
-    dueSoon, quotesExpiring,
-    rawMatCount, rawMatActive, rawMatValue });
+  res.json({ openDeliveries, openOrders, openQuotes, inReview, lowStock,
+    revenueMonth: revenue(true), revenueTotal: revenue(false), stats });
 });
 
 // ==============================================================

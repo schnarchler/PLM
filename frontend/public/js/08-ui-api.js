@@ -125,7 +125,7 @@ const fmtDT = (d, empty='—') => {
   const time = String(d).replace('T',' ').slice(11,16);
   return fmtD(d) + (time ? ' ' + time : '');
 };
-const fmtSize = b => { if(!b) return '—'; if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; };
+const fmtSize = b => { if(!b) return '—'; if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; if(b<1073741824) return (b/1048576).toFixed(1)+'MB'; return (b/1073741824).toFixed(2)+'GB'; };
 const fmtChf = v => fmtCHF(parseFloat(v)||0);
 
 async function copyText(text, okMsg = 'Kopiert') {
