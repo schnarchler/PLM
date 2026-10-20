@@ -2336,12 +2336,20 @@ function _sameValue(a, b) {
   if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb;
   return String(a).trim() === String(b).trim();
 }
-function _fileHash(ds) {
+function _hashOf(p) {
   try {
-    const p = path.join(FILES_DIR, ds.filename);
     if (fs.statSync(p).size > COMPARE_HASH_LIMIT) return null;
     return crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex');
   } catch { return null; }
+}
+function _fileHash(ds) { return _hashOf(path.join(FILES_DIR, ds.filename)); }
+// Liegt genau dieser Inhalt schon im PLM? Verglichen wird nur mit Dateien
+// gleicher Grösse, damit der Scan schnell bleibt.
+function _contentInPlm(p, size) {
+  const same = all('SELECT filename FROM datasets WHERE file_size=?', [size]);
+  if (!same.length) return false;
+  const h = _hashOf(p);
+  return !!h && same.some(ds => _fileHash(ds) === h);
 }
 // Dateiname ohne Revisionskennung: 0028-prt-001_rev2.stl → 0028-prt-001.stl
 function _datasetKey(ds) {
@@ -2852,10 +2860,14 @@ app.get('/api/checkout/scan', (req, res) => {
     const result = { item_files: [], root_files: [] };
     const entries = fs.readdirSync(checkoutDir);
 
-    // Root-level files (not directories, not hidden)
+    // Root-level files (not directories, not hidden). Was schon im PLM ist —
+    // als neues Item angelegt oder an ein Item angehängt — gilt nicht mehr als
+    // neu, obwohl die Datei hier liegen bleibt. Ändert sie sich, ist sie wieder neu.
     for (const e of entries) {
+      if (e.startsWith('.')) continue;
       const p = path.join(checkoutDir, e);
-      if (!e.startsWith('.') && fs.statSync(p).isFile()) {
+      const st = fs.statSync(p);
+      if (st.isFile() && !_contentInPlm(p, st.size)) {
         result.root_files.push({ name: e, path: p, ds_type: guessType(e) });
       }
     }
@@ -2894,7 +2906,8 @@ app.post('/api/checkout/import', (req, res) => {
     const { mode, item_id, files, new_item } = req.body;
 
     if (mode === 'item') {
-      const folder = checkoutFolderFrom(req.body.folder);
+      // Auch von der obersten Ebene: Dateien, die nicht im Ordner eines Items liegen
+      const folder = checkoutFolderFrom(req.body.folder, { allowRoot: true });
       if (!folder) return res.status(400).json({ error: 'Kein Ordner im Checkout-Verzeichnis' });
       // Add files to existing item's latest non-REL revision
       const item = get('SELECT * FROM items WHERE id=?', [item_id]);
