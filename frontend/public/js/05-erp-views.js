@@ -1024,7 +1024,7 @@ function _renderSearchChips(counts) {
         _searchClass.toLowerCase() === c.name.toLowerCase() ? 'Filter aufheben' : `Nur Items mit „${c.name}"`)).join('')
     + orphans.map(c => chip(c.name, c.name, '#9aa3b2', c.count,
         `„${c.name}" steht nicht in der Liste (Einstellungen → PLM)`, true)).join('')
-    + chip('__none__', 'ohne', '#737b8a', countOf.get(''), 'Items ohne Klassifizierung', true)
+    + chip('__none__', 'ohne', '#939cab', countOf.get(''), 'Items ohne Klassifizierung', true)
     + (_searchClass ? `<button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="setSearchClass(_searchClass)">✕ Filter aufheben</button>` : '');
 }
 
