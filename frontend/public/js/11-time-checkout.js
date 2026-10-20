@@ -22,7 +22,7 @@ async function loadTimeEntries(orderId) {
     ${entries.length ? `<div class="tbl-wrap"><table>
       <thead><tr><th>Datum</th><th>Stunden</th><th>Beschreibung</th><th>Verrechnen</th><th></th></tr></thead>
       <tbody>${entries.map(e => `<tr>
-        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(e.date)}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(e.date)}${_teRangeLine(e)}</td>
         <td style="font-family:var(--mono);font-size:13px;font-weight:600">${fmtN(e.hours,2)} h</td>
         <td style="color:var(--t2)">${esc(e.description||'')}</td>
         <td style="text-align:center"><span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${e.billable?'rgba(110,222,156,.12)':'var(--bg2)'};color:${e.billable?'var(--green)':'var(--t3)'}">${e.billable?'Ja':'—'}</span></td>
@@ -45,6 +45,51 @@ function _showDynModal(html) {
 }
 function _hideDynModal() { document.getElementById('dynModal')?.remove(); }
 
+// Von / Bis / Stunden: entweder die Dauer direkt eintippen oder Start und Ende —
+// sobald beide Uhrzeiten stehen, rechnet PLM die Stunden aus. Bis vor Von
+// zählt über Mitternacht. p = Präfix der Feld-IDs im Dialog.
+function _teHours(start, end) {
+  if (!start || !end) return null;
+  const min = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  return Math.round((min(end) - min(start) + 1440) % 1440 / 60 * 100) / 100;
+}
+
+function _teTimeFields(p, e) {
+  return `<div class="form-row cols3" style="margin:0">
+        <div class="fg"><label class="fl">Von</label>
+          <input id="${p}-start" type="time" class="fi" value="${esc(e.start_time||'')}" oninput="_teFromRange('${p}')"></div>
+        <div class="fg"><label class="fl">Bis</label>
+          <input id="${p}-end" type="time" class="fi" value="${esc(e.end_time||'')}" oninput="_teFromRange('${p}')"></div>
+        <div class="fg"><label class="fl">Stunden</label>
+          <input id="${p}-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}" oninput="_teClearRange('${p}')"></div>
+      </div>`;
+}
+
+function _teFromRange(p) {
+  const h = _teHours(document.getElementById(`${p}-start`).value, document.getElementById(`${p}-end`).value);
+  if (h != null) document.getElementById(`${p}-hours`).value = h;
+}
+
+// Wer die Stunden selbst eintippt, gibt die Dauer direkt an — Von/Bis passen dann nicht mehr
+function _teClearRange(p) {
+  document.getElementById(`${p}-start`).value = '';
+  document.getElementById(`${p}-end`).value = '';
+}
+
+function _teTimeValues(p) {
+  const start = document.getElementById(`${p}-start`).value;
+  const end = document.getElementById(`${p}-end`).value;
+  const both = !!(start && end);
+  return { hours: parseFloat(document.getElementById(`${p}-hours`).value),
+           start_time: both ? start : null, end_time: both ? end : null };
+}
+
+// Uhrzeiten unter dem Datum in der Liste, leer wenn nur die Dauer erfasst ist
+function _teRangeLine(e) {
+  return e.start_time && e.end_time
+    ? `<div style="font-size:12px;color:var(--t4)">${esc(e.start_time)}–${esc(e.end_time)}</div>` : '';
+}
+
 function openTimeModal(entry) {
   const e = entry || {};
   const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
@@ -54,8 +99,7 @@ function openTimeModal(entry) {
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
       <div class="fg"><label class="fl">Datum</label>
         <input id="te-date" type="date" class="fi" value="${e.date||new Date().toISOString().slice(0,10)}"></div>
-      <div class="fg"><label class="fl">Stunden</label>
-        <input id="te-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}"></div>
+      ${_teTimeFields('te', e)}
       <div class="fg"><label class="fl">Beschreibung</label>
         <input id="te-desc" type="text" class="fi" placeholder="Konstruktion, Montage …" value="${esc(e.description||'')}"></div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;padding:6px 0;border-top:1px solid var(--line)">
@@ -73,15 +117,15 @@ function openTimeModal(entry) {
 
 async function saveTimeEntry(id) {
   const date = document.getElementById('te-date').value;
-  const hours = parseFloat(document.getElementById('te-hours').value);
+  const time = _teTimeValues('te');
   const description = document.getElementById('te-desc').value.trim();
   const billable = document.getElementById('te-billable').checked ? 1 : 0;
-  if (!hours || hours <= 0) { toast('Stunden erforderlich', 'err'); return; }
+  if (!time.hours || time.hours <= 0) { toast('Stunden oder Von und Bis eingeben', 'err'); return; }
   try {
     if (id) {
-      await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description, billable });
+      await api(`/api/time-entries/${id}`, 'PUT', { date, ...time, description, billable });
     } else {
-      await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, hours, description, billable });
+      await api('/api/time-entries', 'POST', { order_id: _teOrderId, date, ...time, description, billable });
     }
     _hideDynModal();
     loadTimeEntries(_teOrderId);
@@ -235,7 +279,7 @@ async function loadItemTimeEntries(itemId) {
       </tr></thead>
       <tbody>
         ${entries.map(e => `<tr>
-          <td style="font-family:var(--mono);font-size:13px">${fmtD(e.date)}</td>
+          <td style="font-family:var(--mono);font-size:13px">${fmtD(e.date)}${_teRangeLine(e)}</td>
           <td style="font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtN(parseFloat(e.hours)||0,2)} h</td>
           <td style="font-size:13px;color:var(--t2)">${esc(e.description||'—')}</td>
           <td style="white-space:nowrap">
@@ -257,8 +301,7 @@ function openItemTimeModal(entry) {
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
       <div class="fg"><label class="fl">Datum</label>
         <input id="ite-date" type="date" class="fi" value="${e.date||new Date().toISOString().slice(0,10)}"></div>
-      <div class="fg"><label class="fl">Stunden</label>
-        <input id="ite-hours" type="number" step="0.25" min="0.25" class="fi" placeholder="1.5" value="${e.hours||''}"></div>
+      ${_teTimeFields('ite', e)}
       <div class="fg"><label class="fl">Beschreibung</label>
         <input id="ite-desc" type="text" class="fi" placeholder="Konstruktion, Recherche, CAD …" value="${esc(e.description||'')}"></div>
     </div>
@@ -271,13 +314,13 @@ function openItemTimeModal(entry) {
 
 async function saveItemTimeEntry(id) {
   const date  = document.getElementById('ite-date').value;
-  const hours = parseFloat(document.getElementById('ite-hours').value);
+  const time  = _teTimeValues('ite');
   const description = document.getElementById('ite-desc').value.trim();
-  if (!hours || hours <= 0) { toast('Stunden erforderlich', 'err'); return; }
+  if (!time.hours || time.hours <= 0) { toast('Stunden oder Von und Bis eingeben', 'err'); return; }
   if (id) {
-    await api(`/api/time-entries/${id}`, 'PUT', { date, hours, description, billable: 0 });
+    await api(`/api/time-entries/${id}`, 'PUT', { date, ...time, description, billable: 0 });
   } else {
-    await api('/api/time-entries', 'POST', { item_id: _teItemId, date, hours, description, billable: 0 });
+    await api('/api/time-entries', 'POST', { item_id: _teItemId, date, ...time, description, billable: 0 });
   }
   _hideDynModal();
   loadItemTimeEntries(_teItemId);
