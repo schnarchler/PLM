@@ -164,7 +164,7 @@ test('Datenblatt: QR-Code klein im Kopf, ein Klick zeigt ihn gross', () => {
   const item = demoItem();
   global.state.item = item;
   const h = renderItemSheet(item, 31);
-  assert.match(h, /onclick="showItemQr\(\)" title="QR-Code vergrössern"[^>]*cursor:zoom-in[^>]*><svg[^>]*width="48"/);
+  assert.match(h, /onclick="showItemQr\(\)" title="QR-Code vergrössern"[^>]*cursor:zoom-in[^>]*><svg[^>]*width="64"/);
   assert.ok(!h.includes('width="104"'), 'nicht mehr gross im Kopf');
   let modal = '';
   global._showDynModal = html => { modal = html; };
@@ -370,6 +370,49 @@ test('Dashboard: Kennzahlen zur Datenbank, Fehlendes als Strich', () => {
   assert.match(h, /Letzte Sicherung<\/span><span[^>]*>—</, 'ohne Sicherung ein Strich');
   assert.match(h, /v2\.0\.&lt;b&gt; · geändert/, 'Version escaped');
   assert.strictEqual(_dashStats(undefined), '', 'ältere Antwort ohne Kennzahlen');
+});
+
+// ── Änderungsanträge und Rückverfolgung: Darstellung ──────────
+global.stBadge = global.stBadge || ((t, s) => `<span class="status">${s}</span>`);
+evalPart('js/17-aenderungen.js', 'const ECR_ST', '// ── Anlegen und bearbeiten', '0');
+evalPart('js/18-rueckverfolgung.js', 'const INSPECTION_LABEL', 'async function loadDeliveryTrace(', '0');
+evalPart('js/18-rueckverfolgung.js', 'function _rawMaterialTraceHtml(', 'async function loadRawMaterialTrace(', '0');
+
+test('Änderungsantrag: Knöpfe je Status, Genehmigen nur mit Recht, Auswirkung sichtbar', () => {
+  const e = { id: 4, number: 'ECR-2026-001', title: 'Wand', status: 'OPEN', reason: 'Bruch <innen>', description: '',
+    created_by: 'Anna', created_at: '2026-10-20 10:00:00',
+    items: [{ item_id: 7, item_number: 'P1-prt-001', name: 'Halter', item_type: 'prt', note: '2.4 mm',
+      before: { rev: '1', status: 'REL' }, after: null,
+      impact: { parents: [{ id: 9, item_number: 'P1-asm-001' }], orders: [{ id: 3, number: 'AUF-2026-001' }], production: [], stock: 12 } }] };
+  const h = _ecrDetailHtml(e, true);
+  assert.match(h, /_ecrDecide\(4,true\)/);
+  for (const t of ['P1-asm-001', 'AUF-2026-001', 'Lagerbestand:</span> 12', 'Bruch &lt;innen&gt;']) assert.ok(h.includes(t), t);
+  const ohne = _ecrDetailHtml(e, false);
+  assert.ok(!ohne.includes('_ecrDecide('), 'ohne Recht nicht klickbar');
+  assert.match(ohne, /Genehmigen und Ablehnen dürfen Superuser und Admins/);
+  assert.match(_ecrDetailHtml({ ...e, status: 'APPROVED' }, true), /_ecrImplement\(4\)/);
+  const inArbeit = { ...e, status: 'IN_WORK', items: [{ ...e.items[0], after: { rev: '2', status: 'DFT' } }] };
+  assert.match(_ecrDetailHtml(inArbeit, true), /1 von 1 neuen Revisionen noch nicht freigegeben/);
+  assert.match(_ecrDetailHtml(inArbeit, true), /rev1<\/span> → <span[^>]*>rev2/);
+});
+
+test('Rückverfolgung: Position mit Charge und Prüfung, rückwärts nach Charge gruppiert', () => {
+  const t = { id: 5, material_consumed: true, unassigned_lots: [], positions: [
+    { id: 11, description: 'Clip', item_id: 7, item_number: 'P1-prt-001', item_type: 'prt', quantity: 50, unit: 'Stk',
+      revision: { rev: '2', status: 'REL', fixed: true }, lots: [{ material: 'PETG', lot_number: 'L-7', qty: 0.4, unit: 'kg' }],
+      inspection: { result: 'NOK', note: 'Grat <innen>', by: 'Anna', at: '2026-10-20 10:00:00' } },
+    { id: 12, description: 'Ohne', item_id: null, quantity: 1, unit: 'Stk', revision: null, lots: [], inspection: null }] };
+  const h = _deliveryTraceHtml(t);
+  for (const s of ['🔒 rev2', '>L-7</strong>', 'nicht in Ordnung', 'Grat &lt;innen&gt;', 'keine Charge erfasst', "_saveInspection(12,'OK',5)"])
+    assert.ok(h.includes(s), s);
+  const r = _rawMaterialTraceHtml([
+    { lot_number: 'L-7', qty: 0.4, delivery_id: 5, delivery_number: 'LS-2026-001', customer_name: 'Muster AG', description: 'Clip',
+      item_number: 'P1-prt-001', revision: { rev: '2' }, delivery_status: 'DELIVERED' },
+    { lot_number: 'L-7', qty: 0.2, delivery_id: 6, delivery_number: 'LS-2026-002', customer_name: 'Beta GmbH', description: 'Clip',
+      item_number: 'P1-prt-001', revision: { rev: '2' }, delivery_status: 'DRAFT' }]);
+  assert.match(r, /2 Verwendungen · 2 Kunden/);
+  assert.ok(r.includes('LS-2026-002') && r.includes('P1-prt-001 rev2'));
+  assert.match(_rawMaterialTraceHtml([]), /noch nichts für einen Produktionsauftrag/);
 });
 
 // ── Mindmap-Layout ────────────────────────────────────────────

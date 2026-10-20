@@ -92,6 +92,8 @@ async function renderDashboard() {
     section('Zur Freigabe', d.inReview, '', r => row(`gotoPlmItem(${r.id})`,
       _itemChip(r.item_type, 18), esc(r.name), `${esc(r.item_number)} · ${esc(r.project_number)}`,
       `<span class="status st-REV">rev${esc(r.rev)}</span>`)),
+    section('Änderungen', d.openEcrs || [], 'ecr', e => row(`gotoView('ecr').then(() => openEcrDetail(${e.id}))`,
+      ecrBadge(e.status), esc(e.title), `${esc(e.number)} · ${e.item_count} ${e.item_count === 1 ? 'Teil' : 'Teile'}`, '')),
     section('Lager nachbestellen', d.lowStock, 'inventory', i => {
       const col = i.stock_qty < i.min_qty ? 'var(--red)' : 'var(--amber)';
       return row(`gotoView('inventory');openInventoryDetail(${i.id})`,
@@ -116,7 +118,7 @@ async function renderDashboard() {
 let _changelogRows = [];
 const HISTORY_TYPE_LABEL = { item: 'Item', revision: 'Revision', project: 'Projekt', order: 'Auftrag',
   delivery: 'Produktionsauftrag', customer: 'Kunde', inventory: 'Lagerartikel', raw_material: 'Rohmaterial', settings: 'Einstellungen',
-  user: 'Person' };
+  user: 'Person', ecr: 'Änderungsantrag' };
 function exportChangelog() {
   if (!_changelogRows.length) { toast('Keine Daten zum Exportieren','warn'); return; }
   const header = ['Datum','Zeit','Person','Typ','Referenz','Bezeichnung','Aktion','Details'];
@@ -139,6 +141,7 @@ function _historyOpen(r) {
   if (r.entity_type === 'order') return `gotoView('orders').then(()=>openOrderDetail(${r.entity_id}))`;
   if (r.entity_type === 'delivery') return `gotoView('deliveries').then(()=>openDeliveryDetail(${r.entity_id}))`;
   if (r.entity_type === 'customer') return `gotoView('customers').then(()=>openCustomerDetail(${r.entity_id}))`;
+  if (r.entity_type === 'ecr') return `gotoView('ecr').then(()=>openEcrDetail(${r.entity_id}))`;
   return '';
 }
 async function renderChangelog() {
@@ -183,7 +186,7 @@ async function renderChangelog() {
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>${_clUser(r)}
-              ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${_historyOpen(r)}">${r.item_type ? itemTypeIcon(r.item_type) : ({ project: '📁', order: '📋', delivery: '🚚', customer: '👤' }[r.entity_type] || '')} ${esc(r.ref)}</span>` : ''}
+              ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${_historyOpen(r)}">${r.item_type ? itemTypeIcon(r.item_type) : ({ project: '📁', order: '📋', delivery: '🚚', customer: '👤', ecr: '🛠' }[r.entity_type] || '')} ${esc(r.ref)}</span>` : ''}
             </div>
             ${r.details ? `<div style="font-size:13px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${esc(r.details)}</div>` : ''}
             ${r.label ? `<div style="font-size:13px;color:var(--t2);margin-top:1px">${esc(r.label)}</div>` : ''}

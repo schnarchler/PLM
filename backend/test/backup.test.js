@@ -156,6 +156,28 @@ test('Ältere Sicherung: Füllmuster wird aus schon hochgeladenen 3MF nachgetrag
   assert.strictEqual(parseFloat(ps.layer_height), 0.2, 'übrige Werte unverändert');
 });
 
+test('Ältere Sicherung: Materialverbrauch wird dem Produktionsauftrag zugeordnet', async () => {
+  const rm = await api('/api/raw-materials', 'POST', { name: 'PLA Weiss', unit: 'kg' });
+  await api(`/api/raw-materials/${rm.id}/adjust`, 'POST', { type: 'in', qty: 1, lot_number: 'ALT-1' });
+  const d = await api('/api/deliveries', 'POST', { title: 'Altbestand Haken' });
+  const pos = await api(`/api/deliveries/${d.id}/items`, 'POST', { description: 'Haken', quantity: 3, raw_material_id: rm.id });
+  await api(`/api/deliveries/${d.id}/consume-material`, 'POST', { consumptions: [{ raw_material_id: rm.id, qty: 0.1, lot_number: 'ALT-1' }] });
+  const { name } = await api('/api/backups', 'POST');
+
+  // Stand vor der Rückverfolgung: keine Spalten, der Auftrag steht nur in der Notiz
+  const SQL = await require('sql.js')();
+  const old = new SQL.Database(fs.readFileSync(path.join(dataDir, 'backups', name)));
+  for (const sql of ['DROP INDEX IF EXISTS idx_rm_movements_del', 'DROP INDEX IF EXISTS idx_rm_movements_di',
+    'ALTER TABLE raw_material_movements DROP COLUMN delivery_item_id', 'ALTER TABLE raw_material_movements DROP COLUMN delivery_id',
+    "DELETE FROM applied_migrations WHERE key='trace-consumption-links-v1'"]) old.run(sql);
+  const buf = Buffer.from(old.export());
+  old.close();
+
+  assert.strictEqual((await uploadRestore('vor-rueckverfolgung.db', buf)).status, 200);
+  const t = await api(`/api/deliveries/${d.id}/trace`);
+  assert.deepStrictEqual(t.positions.find(p => p.id === pos.id).lots.map(l => l.lot_number), ['ALT-1']);
+});
+
 test('Sicherung löschen', async () => {
   const { name } = await api('/api/backups', 'POST');
   await api(`/api/backups/${encodeURIComponent(name)}`, 'DELETE');

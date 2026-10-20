@@ -353,5 +353,6 @@ async function gotoView(v) {
   else if (v === 'inventory') await renderInventory();
   else if (v === 'rawmaterials') await renderRawMaterials();
   else if (v === 'normteile') await renderNormteile();
+  else if (v === 'ecr') await renderEcrList();
   else if (v === 'purchasing') await renderPurchasing();
 }

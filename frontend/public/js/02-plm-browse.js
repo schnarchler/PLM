@@ -869,10 +869,18 @@ function renderItemSheet(item, activeRevId) {
 
   // -- QR-Code der Teilenummer: klein im Kopf, ein Klick zeigt ihn gross
   const qr = typeof qrSvg === 'function'
-    ? qrSvg(item.item_number, 48, { dark: '#0d0f14', light: '#f4f6f8' })
+    ? qrSvg(item.item_number, 64, { dark: '#0d0f14', light: '#f4f6f8' })
     : '';
 
+  // Offene Änderungsanträge zu diesem Teil
+  const ecrBanner = (item.ecrs || []).length ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;padding:8px 11px;margin-bottom:12px;background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm)">
+      <span style="color:var(--amber);font-weight:600">🛠 In Änderung</span>
+      ${item.ecrs.map(e => `<span style="cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="gotoView('ecr').then(() => openEcrDetail(${e.id}))">
+        <span style="font-family:var(--mono);color:var(--blue)">${esc(e.number)}</span>${esc(e.title)} ${ecrBadge(e.status)}</span>`).join('')}
+    </div>` : '';
+
   return `<div id="it-sheet">
+    ${ecrBanner}
     <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;flex-wrap:wrap">
       <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
@@ -885,6 +893,7 @@ function renderItemSheet(item, activeRevId) {
           <button class="btn btn-ghost btn-sm" onclick="openItemMindmap(${item.id})">⌗ Mindmap</button>
           <button class="btn btn-ghost btn-sm" onclick="window._docTemplateItem=state.item;generateItemTemplate('datenblatt')">&#128196; Als PDF</button>
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="openEcrForItem()" title="Eine Änderung an diesem Teil beantragen">🛠 Änderungsantrag</button>
         </div>
       </div>
       ${qr ? `<div onclick="showItemQr()" title="QR-Code vergrössern" style="flex-shrink:0;background:#f4f6f8;padding:3px;border-radius:var(--r-sm);line-height:0;cursor:zoom-in">${qr}</div>` : ''}

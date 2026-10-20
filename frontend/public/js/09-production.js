@@ -82,8 +82,10 @@ async function openDeliveryDetail(id) {
   document.getElementById('dp-title').innerHTML = `<strong>${d.number}</strong>&nbsp;${esc(d.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'dd-pos')">Positionen</button>
-    <button class="tab" onclick="switchTab(this,'dd-info')">Details</button>`;
+    <button class="tab" onclick="switchTab(this,'dd-info')">Details</button>
+    <button class="tab" onclick="switchTab(this,'dd-trace');loadDeliveryTrace(${id})">Rückverfolgung</button>`;
   document.getElementById('dp-body').innerHTML = `
+    <div id="dd-trace" style="display:none"></div>
     <div id="dd-pos">
       ${renderDeliveryItems(d.items||[], id, d.status === 'DELIVERED')}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${id})">+ Position</button>
@@ -703,7 +705,8 @@ async function _doConsumeMaterial(deliveryId) {
   const consumptions = qtyEls.map(el => {
     const i = parseInt(el.dataset.idx);
     const lot = lotEls.find(l => parseInt(l.dataset.idx) === i);
-    return { raw_material_id: rows[i].raw_material_id, qty: parseFloat(el.value) || 0, lot_number: lot ? lot.value : '' };
+    return { raw_material_id: rows[i].raw_material_id, delivery_item_id: rows[i].delivery_item_id,
+      qty: parseFloat(el.value) || 0, lot_number: lot ? lot.value : '' };
   }).filter(c => c.qty > 0);
 
   _hideDynModal();

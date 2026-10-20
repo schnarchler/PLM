@@ -273,6 +273,15 @@ Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werd
 
 Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin**.
 
+### Änderungsanträge (ECR)
+
+Navigation → **Änderungen** → **+ Änderungsantrag**, oder im Datenblatt eines Teils **🛠 Änderungsantrag**.
+
+- **Titel, Begründung** (warum) und **Was wird geändert**, dazu ein oder mehrere betroffene Teile mit eigener Notiz
+- **Auswirkung** je Teil: in welchen Baugruppen es verbaut ist (alle Ebenen), offene Aufträge und Angebote, offene Produktion, Lagerbestand
+- **Ablauf:** Offen → **Genehmigen** oder **Ablehnen** (wie Freigeben: nur Superuser und Admins) → **Umsetzen** legt je Teil die Revision an, in der geändert wird (freigegebene Teile per ECO, ein offener Entwurf wird weiterverwendet) → **Abschliessen**
+- Solange ein Antrag offen ist, zeigt das Datenblatt des Teils „In Änderung“; offene Anträge stehen auch im Dashboard
+
 ---
 
 ## 8. Checkout / Check-in
@@ -386,6 +395,12 @@ Jede Position mit PLM-Item zeigt neben der Item-Nummer ihre Revision:
 ### 11.4 Thermodrucker (Pipsta)
 
 Pro Position: **🖶** Kurzbeleg oder **🖶≡** Vollbeleg mit Druckparametern.
+
+### 11.5 Rückverfolgung
+
+Produktionsauftrag → Tab **Rückverfolgung**: je Position die Revision, die verbrauchte Material-Charge (aus **Material abbuchen**) und die Prüfung. Die Prüfung wird dort mit **✓ In Ordnung** oder **✗ Nicht in Ordnung** und einer Bemerkung erfasst — mit Name und Datum.
+
+Umgekehrt: Rohmaterial → Tab **Verwendet in** zeigt je Charge, in welchen Produktionsaufträgen, bei welchen Kunden und in welchen Teilen sie steckt — für einen Rückruf.
 
 ---
 
