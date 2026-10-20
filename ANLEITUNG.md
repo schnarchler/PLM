@@ -338,6 +338,7 @@ Status: `Angebot → Bestätigt → Geliefert → Fakturiert`, ohne vorheriges A
 - **Rechnung PDF** — Auftrag → **📄 Rechnung PDF**
 - **Produktionsauftrag anlegen** — Auftrag → **🔧 Produktionsauftrag anlegen**; bearbeitet wird er im Tab **Produktion** des Auftrags (mehrere Produktionsaufträge für Teillieferungen möglich)
 - **Lager abbuchen** — Auftragsposition → **📦** (nur wenn genügend Bestand)
+- **Zeit erfassen** — Tab **Zeiten** → **+ Eintrag**: Stunden direkt eingeben oder **Von** und **Bis** — dann rechnet PLM die Stunden selbst aus (auch über Mitternacht). Gleich im Tab **Zeiten** eines Items.
 
 Aufträge im Status Entwurf können direkt gelöscht werden. Andere Status nur über **Einstellungen → Admin**.
 

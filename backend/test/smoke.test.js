@@ -130,6 +130,18 @@ test('Auftrag löschen entfernt auch die Positionen', async () => {
   assert.equal(r.status, 404);
 });
 
+test('Zeiterfassung: Von–Bis wird gespeichert, nur Dauer löscht die Uhrzeiten', async () => {
+  const o = await api('/api/orders', 'POST', { title: 'Zeittest' });
+  const te = await api('/api/time-entries', 'POST',
+    { order_id: o.id, date: '2026-10-20', hours: 3.5, start_time: '08:00', end_time: '11:30', description: 'Montage' });
+  assert.deepStrictEqual([te.hours, te.start_time, te.end_time], [3.5, '08:00', '11:30']);
+  const upd = await api(`/api/time-entries/${te.id}`, 'PUT', { date: '2026-10-20', hours: 3, description: 'Montage' });
+  assert.deepStrictEqual([upd.hours, upd.start_time, upd.end_time], [3, null, null], 'nur Dauer: keine Uhrzeiten mehr');
+  const bad = await api('/api/time-entries', 'POST', { order_id: o.id, hours: 1, start_time: '8 Uhr', end_time: '09:00' });
+  assert.deepStrictEqual([bad.start_time, bad.end_time], [null, null], 'ungültige Uhrzeit wird nicht gespeichert');
+  assert.strictEqual((await api(`/api/time-entries?order_id=${o.id}`)).length, 2);
+});
+
 test('Datei-Upload hinterlegt den Original-Dateinamen als Notiz', async () => {
   const p = await api('/api/projects', 'POST', { name: 'Uploadprojekt' });
   const item = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Uploadteil', item_type: 'part' });

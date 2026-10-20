@@ -250,6 +250,45 @@ test('Stückliste: fixierte und veraltete Position wird markiert', () => {
   assert.ok(!_bomRevBadge(b, true, 3, 4).includes('openBomRevPicker('), 'gesperrt nicht klickbar');
 });
 
+// ── Zeiterfassung: Von / Bis / Stunden ────────────────────────
+const TE = evalPart('js/11-time-checkout.js', 'function _teHours(', 'function openTimeModal(',
+  '({ _teHours, _teTimeFields, _teFromRange, _teClearRange, _teTimeValues, _teRangeLine })');
+
+test('Zeiterfassung: Stunden aus Von–Bis, auch über Mitternacht', () => {
+  assert.strictEqual(TE._teHours('08:00', '11:30'), 3.5);
+  assert.strictEqual(TE._teHours('13:15', '17:00'), 3.75);
+  assert.strictEqual(TE._teHours('08:00', '08:10'), 0.17, 'auf zwei Stellen gerundet');
+  assert.strictEqual(TE._teHours('22:00', '01:30'), 3.5, 'über Mitternacht');
+  assert.strictEqual(TE._teHours('08:00', ''), null, 'erst wenn beide Zeiten stehen');
+});
+
+test('Zeiterfassung: entweder Dauer oder Von–Bis', () => {
+  const f = { 'te-start': { value: '' }, 'te-end': { value: '' }, 'te-hours': { value: '' } };
+  const prev = global.document;
+  global.document = { getElementById: id => f[id] };
+  try {
+    f['te-start'].value = '08:00'; TE._teFromRange('te');
+    assert.strictEqual(f['te-hours'].value, '', 'nur Von: Stunden bleiben');
+    f['te-end'].value = '11:30'; TE._teFromRange('te');
+    assert.strictEqual(String(f['te-hours'].value), '3.5');
+    assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 3.5, start_time: '08:00', end_time: '11:30' });
+    f['te-hours'].value = '3'; TE._teClearRange('te');
+    assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 3, start_time: null, end_time: null }, 'Stunden getippt: Von/Bis weg');
+    f['te-start'].value = '09:00';
+    assert.deepStrictEqual(TE._teTimeValues('te'), { hours: 3, start_time: null, end_time: null }, 'Von allein zählt nicht');
+  } finally { global.document = prev; }
+});
+
+test('Zeiterfassung: Dialog und Liste zeigen die Uhrzeiten', () => {
+  const h = TE._teTimeFields('ite', { start_time: '08:00', end_time: '11:30', hours: 3.5 });
+  assert.match(h, /id="ite-start" type="time"[^>]*value="08:00"/);
+  assert.match(h, /id="ite-end" type="time"[^>]*value="11:30"/);
+  assert.match(h, /id="ite-hours"[^>]*value="3.5"/);
+  assert.ok(!TE._teTimeFields('te', {}).includes('undefined'), 'neuer Eintrag: leere Felder');
+  assert.match(TE._teRangeLine({ start_time: '08:00', end_time: '11:30' }), />08:00–11:30</);
+  assert.strictEqual(TE._teRangeLine({ hours: 2 }), '', 'nur Dauer: keine Zeile');
+});
+
 // ── Mindmap-Layout ────────────────────────────────────────────
 const MM = (0, eval)(read('js/15-mindmap.js') + '; ({ _MM, _mmLayout, _mmNodeSvg, _mmEdgeSvg })');
 
