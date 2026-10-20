@@ -133,6 +133,36 @@ test('Import liest nur Dateien aus dem Checkout-Verzeichnis', { skip }, async ()
   assert.strictEqual(neu.status, 400);
 });
 
+test('Import: Dateien auf oberster Ebene — neues Item, dann an das Item anhängen', { skip }, async () => {
+  fs.mkdirSync(coDir, { recursive: true });
+  const stl = path.join(coDir, 'Halter.stl');
+  fs.writeFileSync(path.join(coDir, 'Halter.par'), 'par-inhalt');
+  fs.writeFileSync(stl, 'solid halter\nendsolid halter\n');
+  const neuName = async () => (await api('/api/checkout/scan')).root_files.map(f => f.name).filter(n => n.startsWith('Halter')).sort();
+  assert.deepStrictEqual(await neuName(), ['Halter.par', 'Halter.stl']);
+
+  const proj = await api('/api/projects', 'POST', { name: 'Oberste Ebene' });
+  const { item_number } = await api('/api/checkout/import', 'POST', { mode: 'new', new_item: { project_id: proj.id,
+    item_type: 'prt', name: 'Halter', file_path: path.join(coDir, 'Halter.par'), file_name: 'Halter.par', ds_type: 'CAD' } });
+  const item = (await api('/api/items-all?q=' + encodeURIComponent(item_number)))[0];
+  // So schickt es die Oberfläche: der Ordner der Datei, hier das Checkout-Verzeichnis selbst
+  const r = await api('/api/checkout/import', 'POST',
+    { mode: 'item', item_id: item.id, folder: coDir, files: [{ name: 'Halter.stl', ds_type: 'CAD' }] });
+  assert.strictEqual(r.count, 1, 'angehängt, obwohl es keinen Ordner für das Item gibt');
+  assert.strictEqual((await api(`/api/items/${item.id}`)).revisions[0].datasets.length, 2);
+  assert.ok(fs.existsSync(stl), 'Datei bleibt, wo sie war');
+  assert.ok(!fs.existsSync(path.join(coDir, '.checkout.json')), 'oberste Ebene wird kein Checkout');
+  assert.deepStrictEqual(await neuName(), [], 'schon im PLM: nicht mehr als neu gemeldet');
+
+  fs.writeFileSync(stl, 'solid HALTER\nendsolid halter\n');   // gleiche Grösse, anderer Inhalt
+  assert.deepStrictEqual(await neuName(), ['Halter.stl'], 'geändert: wieder neu');
+
+  const raus = await api('/api/checkout/import', 'POST',
+    { mode: 'item', item_id: item.id, folder: coDir, files: [{ name: '../../privat/geheim.txt' }] });
+  assert.ok(fs.existsSync(path.join(coDir, '../../privat/geheim.txt')), 'das Ziel gäbe es');
+  assert.strictEqual(raus.count, 0, 'von der obersten Ebene führt kein ../ hinaus');
+});
+
 test('Ordner öffnen: nur Checkout-Ordner, nur von diesem PC', { skip }, async () => {
   assert.strictEqual((await status('/api/checkout/open', 'POST', { folder: victim })).status, 400);
   assert.strictEqual(await foreignHost('/api/checkout/open', 'POST', { folder: coDir }), 403);
