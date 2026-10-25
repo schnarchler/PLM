@@ -1739,7 +1739,7 @@ const NO_CHANGE = [/^(POST|DELETE) \/api\/session$/, /^POST \/api\/shutdown$/, /
   /^POST \/api\/print-(receipt|receipt-delivery|label)$/, /^POST \/api\/launch-cad$/, /^POST \/api\/checkout\/open$/,
   /^POST \/api\/datasets\/\d+\/open-in-slicer$/];
 // Einstellungen, die jede Person für sich ändern darf
-const PERSONAL_SETTINGS = ['font_scale'];
+const PERSONAL_SETTINGS = ['font_scale', 'theme'];
 const ADMIN_ONLY = [
   /^PUT \/api\/settings$/,
   /^(POST|PUT) \/api\/users(\/\d+)?$/,
