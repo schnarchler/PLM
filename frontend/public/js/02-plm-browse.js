@@ -510,17 +510,14 @@ function renderItemDetail(item, activeRevId) {
           ? `<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
               BOM: <strong style="color:var(--teal);font-family:var(--mono)">${fmtChf(bomTotal)}</strong>
               ${!allPriced ? '<span style="color:var(--amber);font-size:13px">⚠ unvollständig</span>' : ''}
-              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:13px" onclick="document.getElementById(\'item-price-field\').value=${bomTotal.toFixed(2)};document.getElementById(\'item-price-field\').dispatchEvent(new Event(\'blur\'))">übernehmen</button>
+              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:13px" onclick="openPriceModal(${item.id},${bomTotal.toFixed(2)})">übernehmen</button>
              </span>`
           : (item.item_type === 'asm' && bom.length ? `<span style="font-size:13px;color:var(--amber)">BOM: ⚠ keine Preise</span>` : '');
         return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 10px;background:var(--bg2);border-radius:var(--r-sm);margin-bottom:10px">
           <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
             VP:
-            <input id="item-price-field" type="number" step="0.01" min="0" placeholder="—"
-              value="${item.default_price != null ? item.default_price : ''}"
-              style="width:84px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:13px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
-              class="no-spin" onblur="saveItemPrice(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
-            <span style="color:var(--t4)">CHF</span>
+            <span style="font-family:var(--mono);color:${item.default_price != null ? 'var(--t1)' : 'var(--t4)'}">${item.default_price != null ? fmtChf(item.default_price) : '—'}</span>
+            <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis ändern (ohne neue Revision)">✏</button>
           </span>
           <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
             ⚖
@@ -586,11 +583,12 @@ function _sheetCell(label, value, opts = {}) {
 
 // Bezeichnung und Wert auf einer Zeile, drei Spalten im Detailpanel —
 // „Allgemein“ und Druckparameter. rows: [label, wert, rawHtml]; leer → „—“
+// rows: [Bezeichnung, Wert, Wert ist HTML, HTML hinter dem Wert (z.B. ✏)]
 function _sheetKv(rows) {
-  return `<div class="ps-kv">${rows.map(([k, v, raw]) => {
+  return `<div class="ps-kv">${rows.map(([k, v, raw, after]) => {
     const empty = v === null || v === undefined || v === '';
     return `<div class="ps-kv-row"><span class="ps-kv-label">${esc(k)}</span>`
-      + `<span class="ps-kv-val"${empty ? ' style="color:var(--t3)"' : ''}>${empty ? '—' : raw ? v : esc(v)}</span></div>`;
+      + `<span class="ps-kv-val"${empty ? ' style="color:var(--t3)"' : ''}>${empty ? '—' : raw ? v : esc(v)}${after || ''}</span></div>`;
   }).join('')}</div>`;
 }
 
@@ -750,7 +748,9 @@ function renderItemSheet(item, activeRevId) {
     ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
     ['Gewicht', weightTxt],
     ...(item.item_type !== 'doc' ? [['Aussenmasse', dimsCell, true]] : []),
-    ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null],
+    // Preis ist nicht an die Revision gebunden — ✏ auch bei freigegebenen Teilen
+    ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null, false,
+      ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis ändern (ohne neue Revision)">✏</button>`],
     ['Entwicklungszeit', _fmtHours(item.dev_hours)],
     ['Erstellt', item.created_at ? fmtD(item.created_at) : null],
     ['Revisionen', revCount ? String(revCount) : null],

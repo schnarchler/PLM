@@ -696,25 +696,73 @@ async function confirmMoveItem(itemId) {
   }
 }
 
+// Einzelne Felder speichern: die übrigen Werte frisch vom Server übernehmen
+async function _putItemPatch(itemId, patch) {
+  const item = await api('/api/items/' + itemId);
+  return api('/api/items/' + itemId, 'PUT', {
+    name: item.name, description: item.description,
+    source_url: item.source_url || null,
+    default_price: item.default_price ?? null,
+    weight_g: item.weight_g ?? null,
+    classification: item.classification || null,
+    ...patch
+  });
+}
+
 async function _saveItemField(itemId, input, field) {
   const val = input.value.trim();
   const parsed = val === '' ? null : parseFloat(val);
   try {
-    const item = await api('/api/items/' + itemId);
-    await api('/api/items/' + itemId, 'PUT', {
-      name: item.name, description: item.description,
-      source_url: item.source_url || null,
-      default_price: field === 'default_price' ? parsed : (item.default_price ?? null),
-      weight_g: field === 'weight_g' ? parsed : (item.weight_g ?? null),
-      classification: item.classification || null
-    });
+    await _putItemPatch(itemId, { [field]: parsed });
     input.style.borderColor = 'var(--green)';
     setTimeout(() => { input.style.borderColor = ''; }, 1200);
   } catch(e) { input.style.borderColor = 'var(--red)'; toast('Fehler: ' + e, 'err'); }
 }
 
 async function saveItemWeight(itemId, input) { return _saveItemField(itemId, input, 'weight_g'); }
-async function saveItemPrice(itemId, input)  { return _saveItemField(itemId, input, 'default_price'); }
+
+// Einzige Stelle, an der der Verkaufspreis eines bestehenden Items geändert
+// wird — auch bei freigegebener Revision. Der Preis ist kaufmännisch: keine
+// neue Revision, dafür ein Protokolleintrag mit alt → neu und Grund.
+// preset: vorgeschlagener Preis (z.B. BOM-Summe), sonst der aktuelle.
+function openPriceModal(itemId, preset) {
+  const item = state.item;
+  if (!item || item.id !== itemId) return;
+  const price = preset != null ? preset : item.default_price;
+  _showDynModal(`<div class="modal" style="max-width:400px">
+    <div class="modal-head"><div class="modal-title">Verkaufspreis: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Verkaufspreis (CHF)</label><input class="fi" id="pm-price" type="number" step="0.01" min="0" placeholder="0.00"
+          value="${price != null ? price : ''}" onkeydown="if(event.key==='Enter')savePriceModal(${item.id})"></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label class="fl">Grund (optional)</label><input class="fi" id="pm-reason" placeholder="z.B. Zulieferer teurer"
+          value="${preset != null ? 'Aus BOM übernommen' : ''}" onkeydown="if(event.key==='Enter')savePriceModal(${item.id})"></div>
+      </div>
+      <div style="font-size:13px;color:var(--t3)">Braucht keine neue Revision. Die Änderung steht im Protokoll; bestehende Angebote und Aufträge behalten ihren Preis.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="savePriceModal(${item.id})">Speichern</button>
+    </div>
+  </div>`);
+  document.getElementById('pm-price')?.select();
+}
+
+async function savePriceModal(itemId) {
+  const val = V('pm-price').trim();
+  const price = val === '' ? null : parseFloat(val);
+  if (price != null && (isNaN(price) || price < 0)) return toast('Ungültiger Preis', 'err');
+  try {
+    await _putItemPatch(itemId, { default_price: price, price_reason: V('pm-reason').trim() });
+    _hideDynModal();
+    toast('Verkaufspreis gespeichert', 'ok');
+    const item = await api('/api/items/' + itemId);
+    state.item = item;
+    renderItemDetail(item, state.activeRevId);
+  } catch (e) { toast('Fehler: ' + e, 'err'); }
+}
 
 // ── ITEM CRUD ─────────────────────────────────────────────────
 async function openEditItemModal(id) {
@@ -723,7 +771,6 @@ async function openEditItemModal(id) {
   set('eim-name', item.name);
   set('eim-desc', item.description || '');
   set('eim-url', item.source_url || '');
-  set('eim-price', item.default_price != null ? item.default_price : '');
   set('eim-weight', item.weight_g != null ? item.weight_g : '');
   const clSel = document.getElementById('eim-classification');
   // Ein Wert, der nicht (mehr) in der Liste steht, bleibt wählbar — sonst ginge
@@ -742,9 +789,9 @@ async function saveEditItem() {
   const id = V('eim-id');
   const name = V('eim-name');
   if (!name) return toast('Name fehlt', 'err');
-  await api('/api/items/' + id, 'PUT', {
+  // Preis bleibt unberührt — der läuft über openPriceModal
+  await _putItemPatch(id, {
     name, description: V('eim-desc'), source_url: V('eim-url')||null,
-    default_price: V('eim-price') ? parseFloat(V('eim-price')) : null,
     weight_g: V('eim-weight') ? parseFloat(V('eim-weight')) : null,
     classification: document.getElementById('eim-classification').value || null
   });
@@ -822,8 +869,8 @@ const statusHints = {
 async function openStatusModal(revId, targetStatus) {
   // Check completeness before REL
   if (targetStatus === 'REL' && state.item) {
+    // Der Verkaufspreis gehört nicht zur Freigabe — er bleibt jederzeit änderbar
     const warnings = [];
-    if (state.item.default_price == null) warnings.push('Kein Verkaufspreis (VP) hinterlegt');
     if (state.item.weight_g == null)      warnings.push('Kein Gewicht hinterlegt');
     const rev = state.item.revisions?.find(r => r.id === revId);
     if (!rev?.datasets?.length)           warnings.push('Keine Dateien hochgeladen');

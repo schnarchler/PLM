@@ -900,8 +900,16 @@ test('Datenblatt: „Allgemein“ im selben kompakten Stil wie die Druckparamete
   assert.ok(!allg.includes('ps-cell'), 'keine Kacheln mehr');
   assert.match(allg, /<span class="ps-kv-label">Gewicht<\/span><span class="ps-kv-val">184\.0 g<\/span>/);
   assert.match(allg, /<span class="ps-kv-label">Klassifizierung<\/span><span class="ps-kv-val"><span class="chip">Bauteil<\/span><\/span>/, 'Chip als HTML');
-  assert.match(allg, /<span class="ps-kv-label">Verkaufspreis<\/span><span class="ps-kv-val" style="color:var\(--t3\)">—<\/span>/, 'fehlender Wert gedimmt');
+  assert.match(allg, /<span class="ps-kv-label">Verkaufspreis<\/span><span class="ps-kv-val" style="color:var\(--t3\)">— <button/, 'fehlender Wert gedimmt');
   assert.match(allg, /Entwicklungszeit<\/span><span class="ps-kv-val">1 h 30 min</);
+});
+
+test('Datenblatt: Verkaufspreis bleibt bei freigegebener Revision änderbar', () => {
+  const item = demoItem({ revisions: [{ id: 31, rev: '2', status: 'REL', description: 'Freigabe', datasets: [] }] });
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  assert.ok(!h.includes('Jetzt ergänzen') && !h.includes('openEditItemModal'), 'übrige Felder gesperrt');
+  assert.match(h, /CHF 59\.48 <button[^>]*onclick="openPriceModal\(7\)"/, '✏ direkt hinter dem Preis');
 });
 
 test('Version: Punkt blau bei Update, grün wenn aktuell, grau wenn der Stand unbekannt ist', () => {

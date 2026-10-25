@@ -192,6 +192,23 @@ test('Datei-Upload hinterlegt den Original-Dateinamen als Notiz', async () => {
   assert.notEqual(ds.original_name, 'Gehäuse-Deckel_v3.stl', 'Datei wurde auf Artikelnr_revX umbenannt');
 });
 
+test('Verkaufspreis: nach Freigabe änderbar, Protokoll mit alt → neu und Grund', async () => {
+  const p = await api('/api/projects', 'POST', { name: 'Preisprojekt' });
+  const item = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Zukaufteil', item_type: 'part', default_price: 12.5 });
+  const revId = (await api(`/api/items/${item.id}`)).revisions[0].id;
+  await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REV' });
+  await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REL' });
+  const base = { name: item.name, description: '', source_url: null, classification: item.classification, weight_g: null };
+  await api(`/api/items/${item.id}`, 'PUT', { ...base, default_price: 14.8, price_reason: 'Zulieferer teurer' });
+  const d = await api(`/api/items/${item.id}`);
+  assert.strictEqual(d.default_price, 14.8);
+  assert.strictEqual(d.revisions.length, 1, 'keine neue Revision');
+  assert.strictEqual(d.revisions[0].status, 'REL');
+  const pr = d.changelog.filter(c => c.action === 'Preis geändert');
+  assert.deepStrictEqual(pr.map(c => c.details), ['VP 12.50 → 14.80 CHF · Zulieferer teurer']);
+  assert.ok(!d.changelog.some(c => c.action === 'Geändert'), 'nur der Preis geändert → kein zusätzliches „Geändert“');
+});
+
 test('Automatisches Backup wurde beim Start angelegt', async () => {
   // Der Testserver startet mit leerer DB — Backup entsteht erst, wenn eine
   // plm.db existiert. Neustart-Szenario: zweiter Serverstart im selben DATA_DIR.
