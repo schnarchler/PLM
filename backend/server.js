@@ -4908,22 +4908,87 @@ app.post('/api/shutdown', (req, res) => {
 // jedem Commit von selbst hoch. Dazu Commit, Datum und ob nicht committete
 // Änderungen laufen. Ohne Git (Kopie ohne .git, Git nicht installiert)
 // bleibt die Nummer aus package.json.
+const REPO_DIR = process.env.PLM_REPO_DIR || path.join(__dirname, '..');   // Tests: eigenes Wegwerf-Repo
+const _versionOf = (pkg, count) => pkg.split('.').slice(0, 2).join('.') + '.' + count;
 const APP_VERSION = (() => {
   const pkg = require('./package.json').version || '0.0.0';
   const info = { version: pkg, commit: null, date: null, dirty: false };
   const git = args => require('child_process').execFileSync('git', args, {
-    cwd: path.join(__dirname, '..'), timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
+    cwd: REPO_DIR, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
   }).toString().trim();
   try {
     const count = git(['rev-list', '--count', 'HEAD']);
     const [commit, date] = git(['log', '-1', '--format=%h %cI']).split(' ');
-    Object.assign(info, { version: pkg.split('.').slice(0, 2).join('.') + '.' + count, commit, date });
+    Object.assign(info, { version: _versionOf(pkg, count), commit, date });
     info.dirty = git(['status', '--porcelain', '--untracked-files=no']) !== '';
   } catch {}
   return info;
 })();
 
 app.get('/api/version', (req, res) => res.json({ ...APP_VERSION, data_dir: DATA_DIR }));
+
+// ── UPDATE-PRÜFUNG ────────────────────────────────────────────
+// Gibt es auf dem Git-Remote neuere Commits als den laufenden Stand? git fetch
+// holt sie im Hintergrund, die Oberfläche meldet sie beim Öffnen — mit der
+// laufenden Version weiterarbeiten geht immer. Die Prüfung fragt nie nach:
+// kein Passwort, keine Passphrase, kein Anmeldefenster. Ist das Remote nicht
+// erreichbar, zählt der Stand vom letzten Abruf (fetched: false); ohne Git
+// oder Upstream bleibt sie still (available: false).
+const UPDATE_MAX_AGE = 30 * 60 * 1000;   // länger offenes PLM prüft beim nächsten Öffnen neu
+let _update = null;
+
+function _gitBg(args, env = {}) {
+  return new Promise((resolve, reject) => {
+    const child = require('child_process').execFile('git', args, {
+      cwd: REPO_DIR, timeout: 20000, windowsHide: true,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', ...env },
+    }, (err, out, errOut) => err
+      ? reject(new Error(err.killed ? 'Zeitüberschreitung' : String(errOut).trim().split('\n')[0] || err.message))
+      : resolve(String(out).trim()));
+    child.stdin?.end();
+  });
+}
+
+async function checkForUpdate() {
+  const res = { available: false, behind: 0, version: null, upstream: null, commits: [], fetched: false,
+    checked_at: new Date().toISOString(), error: null };
+  if (!APP_VERSION.commit) return { ...res, error: 'Kein Git-Stand' };
+  try {
+    res.upstream = await _gitBg(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+    // SSH im Batch-Modus, damit nichts nachfragt — ausser es ist schon ein
+    // eigener SSH-Befehl eingestellt (Umgebung oder Git-Konfiguration)
+    const ownSsh = process.env.GIT_SSH_COMMAND || process.env.GIT_SSH
+      || await _gitBg(['config', '--get', 'core.sshCommand']).catch(() => '');
+    try {
+      await _gitBg(['fetch', '--quiet'], ownSsh ? {} : { GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o ConnectTimeout=10' });
+      res.fetched = true;
+    } catch (e) { res.error = 'Remote nicht erreichbar: ' + e.message; }
+    // Ab dem laufenden Commit, nicht ab HEAD: nach einem Pull ohne Neustart
+    // läuft noch der alte Stand
+    const range = APP_VERSION.commit + '..@{u}';
+    res.behind = parseInt(await _gitBg(['rev-list', '--count', range]), 10) || 0;
+    if (!res.behind) return res;
+    const log = await _gitBg(['log', '-n', '20', '--format=%h%x1f%cI%x1f%s', range]);
+    res.commits = log.split('\n').filter(Boolean).map(l => {
+      const [commit, date, subject] = l.split('\x1f');
+      return { commit, date, subject };
+    });
+    // Versionsnummer wie oben, mit Major.Minor aus der neuen package.json
+    let pkg = require('./package.json').version || '0.0.0';
+    const pkgPath = path.relative(REPO_DIR, path.join(__dirname, 'package.json')).split(path.sep).join('/');
+    try { pkg = JSON.parse(await _gitBg(['show', '@{u}:' + pkgPath])).version || pkg; } catch {}
+    res.version = _versionOf(pkg, await _gitBg(['rev-list', '--count', '@{u}']));
+    res.available = true;
+  } catch (e) { res.error = e.message; }
+  return res;
+}
+
+function updateStatus() {
+  if (!_update || Date.now() - _update.at > UPDATE_MAX_AGE) _update = { at: Date.now(), promise: checkForUpdate() };
+  return _update.promise;
+}
+
+app.get('/api/update', async (req, res) => res.json(await updateStatus()));
 
 // Startbildschirm: öffnet PLM per window.open(), damit sich der Tab am Ende
 // über "Beenden" wieder schliessen lässt — window.close() wirkt nur bei
@@ -6859,6 +6924,12 @@ choosePort().then(p => { PORT = p; }).then(initDb).then(() => {
     console.log('  Datenpfad: ' + DATA_DIR);
     console.log('');
     openBrowser(PORT);
+    // Vom Startskript gestartet: gleich prüfen, damit die Antwort schon da
+    // ist, wenn der Browser fragt — sonst erst beim ersten Öffnen
+    if (process.env.PLM_OPEN_BROWSER === '1') updateStatus().then(u => {
+      if (u.available) console.log(`  Neue Version ${u.version} auf ${u.upstream} (${u.behind} Commit${u.behind === 1 ? '' : 's'})`
+        + ' - zum Aktualisieren: beenden, git pull, neu starten\n');
+    });
   });
   server.on('error', err => {
     console.error('\n  FEHLER: ' + (err.code === 'EADDRINUSE'

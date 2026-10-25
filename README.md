@@ -558,6 +558,14 @@ Welche Version läuft, steht oben links neben dem Logo und auf dem Startbildschi
 `2.0.282` = Major.Minor aus `backend/package.json`, dahinter die Anzahl Commits.
 „geändert“ heisst, es laufen Änderungen, die noch nicht committet sind.
 
+Beim Öffnen prüft PLM, ob auf dem Git-Remote neuere Commits liegen (`git fetch` im
+Hintergrund, ab dem laufenden Commit). Gibt es welche, zeigt ein Dialog die neue
+Versionsnummer und die Commits — mit der laufenden Version weiterarbeiten geht immer,
+oben neben der Version bleibt dann der Knopf „Update“. Die Prüfung fragt nie nach
+Passwort oder Passphrase: bei SSH-Remotes braucht es einen Schlüssel ohne Passphrase
+oder einen laufenden SSH-Agent. Ist das Remote nicht erreichbar, zählt der Stand vom
+letzten Abruf; ohne Git oder ohne Upstream-Branch bleibt es still.
+
 Schemaänderungen laufen beim Serverstart automatisch: `initDb()` legt **zuerst**
 eine Tageskopie unter `data/backups/` an, `applySchema()` ergänzt dann fehlende Tabellen
 und Spalten und schreibt die Datei zurück. Der Vorgang ist idempotent, ein zweiter
