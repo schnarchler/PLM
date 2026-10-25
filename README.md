@@ -296,7 +296,9 @@ Baugruppen, die es verwenden  ──►  [ Item ]  ──►  Teile, aus denen e
           (Verwendung)                                (Stückliste)
 ```
 
-- **Ziehen** verschiebt, **Mausrad** zoomt, **Klick** öffnet das Item
+- **Ziehen** verschiebt, **Mausrad** zoomt
+- **Klick** stellt die Mindmap auf das angeklickte Teil um — so navigiert man durch die
+  Struktur; **Doppelklick** öffnet das Item
 - Tiefe für beide Richtungen getrennt einstellbar (0–6 Ebenen)
 - Normteile erscheinen als Blätter, Mengen stehen an den Kanten
 - Fest fixierte Positionen zeigen die Revision in Amber; der Graph klappt dann

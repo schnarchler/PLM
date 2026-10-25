@@ -416,7 +416,7 @@ test('Rückverfolgung: Position mit Charge und Prüfung, rückwärts nach Charge
 });
 
 // ── Mindmap-Layout ────────────────────────────────────────────
-const MM = (0, eval)(read('js/15-mindmap.js') + '; ({ _MM, _mmLayout, _mmNodeSvg, _mmEdgeSvg })');
+const MM = (0, eval)(read('js/15-mindmap.js') + '; ({ _MM, _mmLayout, _mmNodeSvg, _mmEdgeSvg, _mmNodeClick })');
 
 function demoGraph() {
   return {
@@ -459,6 +459,35 @@ test('Mindmap: SVG nutzt CSS-Variablen nur in style-Attributen', () => {
   assert.match(svg, /<tspan[^>]*>rev1<\/tspan>/, 'fixierte Revision hervorgehoben');
   assert.ok(!/[\u{1F300}-\u{1FAFF}]/u.test(svg), 'kein Emoji im SVG');
   assert.ok(!svg.includes('undefined') && !svg.includes('NaN'));
+});
+
+test('Mindmap: Klick stellt auf das Teil um, Doppelklick öffnet es', async () => {
+  const calls = [];
+  global._mmRefocus = id => calls.push('umstellen ' + id);
+  global._mmOpen = id => calls.push('öffnen ' + id);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    MM._mmNodeClick({ detail: 1 }, 7);
+    assert.deepStrictEqual(calls, [], 'wartet erst, ob ein zweiter Klick folgt');
+    await wait(350);
+    assert.deepStrictEqual(calls, ['umstellen 7']);
+
+    calls.length = 0;
+    MM._mmNodeClick({ detail: 1 }, 8);
+    MM._mmNodeClick({ detail: 2 }, 8);
+    await wait(350);
+    assert.deepStrictEqual(calls, ['öffnen 8'], 'Doppelklick öffnet, ohne vorher umzustellen');
+
+    // Zweiter Klick erst nach dem Umstellen — unter der Maus liegt jetzt ein anderer Knoten
+    calls.length = 0;
+    MM._mmNodeClick({ detail: 1 }, 9);
+    await wait(350);
+    MM._mmNodeClick({ detail: 2 }, 42);
+    assert.deepStrictEqual(calls, ['umstellen 9', 'öffnen 9'], 'gemeint ist das Teil vom ersten Klick');
+  } finally {
+    delete global._mmRefocus;
+    delete global._mmOpen;
+  }
 });
 
 // ── Workflow-Umschaltung ──────────────────────────────────────
