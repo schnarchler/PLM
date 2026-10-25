@@ -164,7 +164,7 @@ async function renderChangelog() {
     if (/BOM|Stückliste/.test(a)) return '📋';
     if (a.includes('Druckparameter')) return '🖨';
     if (a.includes('Sicherung')) return '💾';
-    if (/Geändert|gespeichert|umbenannt|korrigiert/.test(a)) return '✏';
+    if (/Geändert|geändert|gespeichert|umbenannt|korrigiert/.test(a)) return '✏';
     return '·';
   };
   const typeColor = t => ({item:'var(--blue)',revision:'var(--teal)',project:'var(--amber)'}[t]||'var(--t3)');

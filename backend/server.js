@@ -2127,12 +2127,25 @@ app.put('/api/items/:id', (req, res) => {
   // notes nur schreiben, wenn das Feld im Request vorkommt — sonst wuerden
   // Aufrufe ohne notes (z.B. Preis-Inline-Edit) die Notizen leeren.
   const keepNotes = !Object.prototype.hasOwnProperty.call(req.body, 'notes');
+  const before = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   run(`UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=?,weight_g=?,
        notes=CASE WHEN ? THEN notes ELSE ? END WHERE id=?`,
     [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, canonicalClass(classification), weight_g != null ? parseFloat(weight_g) : null,
      keepNotes ? 1 : 0, notes || null, req.params.id]);
-  log('item', req.params.id, 'Geändert', name);
-  res.json(get('SELECT * FROM items WHERE id=?', [req.params.id]));
+  const after = get('SELECT * FROM items WHERE id=?', [req.params.id]);
+  // Der Verkaufspreis ist kaufmännisch und braucht keine neue Revision —
+  // nachvollziehbar bleibt er über einen eigenen Eintrag mit alt → neu und Grund.
+  const priceChanged = before && before.default_price !== after.default_price;
+  if (priceChanged) {
+    const chf = v => v == null ? '—' : v.toFixed(2);
+    const reason = String(req.body.price_reason || '').trim();
+    log('item', req.params.id, 'Preis geändert',
+      `VP ${chf(before.default_price)} → ${chf(after.default_price)} CHF` + (reason ? ' · ' + reason : ''));
+  }
+  const otherChanged = !before || ['name', 'description', 'source_url', 'classification', 'weight_g', 'notes']
+    .some(k => before[k] !== after[k]);
+  if (otherChanged || !priceChanged) log('item', req.params.id, 'Geändert', name);
+  res.json(after);
 });
 
 app.post('/api/items/:id/link-variant', (req, res) => {
