@@ -13,7 +13,8 @@ cd backend && npm install && node server.js
 ```
 
 **Windows:**  
-Doppelklick auf **`START-PLM.bat`**
+Doppelklick auf **`START-PLM.bat`**  
+Desktop-Verknüpfung mit Logo: einmal **`VERKNUEPFUNG-ERSTELLEN.bat`** ausführen
 
 → Browser öffnet sich von selbst, auf `http://localhost:3000` oder, wenn der Port belegt
 ist, auf dem nächsten freien (wird in `plm.config` als `port=` gemerkt)  
@@ -522,6 +523,8 @@ PLM/
 ├── plm.config             ← Konfiguration dieses PCs: data_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (wird auto-erstellt)
 ├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
+├── VERKNUEPFUNG-ERSTELLEN.bat ← legt die Desktop-Verknüpfung mit Logo an (Windows)
+├── PLM-ERP.ico            ← Logo als Windows-Symbol für die Verknüpfung
 └── README.md
 ```
 
