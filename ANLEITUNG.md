@@ -619,7 +619,7 @@ Einstellungen für den Pipsta-Thermodrucker.
 ### 3D-Druck
 Slicer, Drucker (mit CHF/h), Düsen und Materialprofile.
 
-**Slicer** — PrusaSlicer oder Bambu Studio für „Im Slicer öffnen“ (Datenblatt und Dateien einer Revision). Das Programm wird an den üblichen Orten gesucht; ist keiner installiert, bleibt der Knopf grau. Liegt es woanders: in `plm.config` `prusaslicer=…` bzw. `bambustudio=…` eintragen. Die Arbeitskopie landet als `<Kurzcode>_<Name>.stl` im Unterordner `Slicer` des Checkout-Verzeichnisses; eine im Slicer gespeicherte Kopie wird nicht überschrieben.
+**Slicer** — PrusaSlicer, Bambu Studio oder Creality Print für „Im Slicer öffnen“ (Datenblatt und Dateien einer Revision). Das Programm wird an den üblichen Orten gesucht; ist keiner installiert, bleibt der Knopf grau. Liegt es woanders: in `plm.config` `prusaslicer=…`, `bambustudio=…` bzw. `crealityprint=…` eintragen. Die Arbeitskopie landet als `<Kurzcode>_<Name>.stl` im Unterordner `Slicer` des Checkout-Verzeichnisses; eine im Slicer gespeicherte Kopie wird nicht überschrieben.
 
 > Druckparameter einer Revision kommen aus der hochgeladenen 3MF-Datei; in der Produktion lassen sie sich pro Position erfassen. Materialtemperaturen werden direkt im Rohmaterial hinterlegt.
 

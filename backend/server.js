@@ -3341,6 +3341,13 @@ const SLICERS = [
     commands: ['bambu-studio', 'BambuStudio', 'bambustudio'], flatpak: 'com.bambulab.BambuStudio',
     appImage: /bambu-?studio/i, win: ['Bambu Studio\\bambu-studio.exe'],
     mac: 'BambuStudio.app/Contents/MacOS/BambuStudio' },
+  // Creality legt die Version in den Ordnernamen (Creality\Creality Print 6.0\…),
+  // die Flatpak-ID ist nicht fest — daher Platzhalter bzw. Muster
+  { id: 'creality', name: 'Creality Print', configKey: 'crealityprint',
+    commands: ['CrealityPrint', 'crealityprint', 'creality-print'], flatpak: /creality.*print/i,
+    appImage: /creality-?print/i,
+    win: ['Creality*\\Creality*Print*\\Creality*Print.exe', 'Creality*Print*\\Creality*Print.exe'],
+    mac: 'CrealityPrint.app/Contents/MacOS/CrealityPrint' },
 ];
 const SLICER_EXTS = ['.stl', '.3mf', '.obj', '.step', '.stp', '.amf'];
 
@@ -3349,6 +3356,20 @@ function _onPath(cmd) {
   const exts = process.platform === 'win32' ? ['.exe', ''] : [''];
   for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean))
     for (const e of exts) { const p = path.join(dir, cmd + e); if (_isFile(p)) return p; }
+  return null;
+}
+// Pfadteile mit * werden im Ordner gesucht, bei mehreren Treffern zuerst die höchste Version
+const _byVersion = (a, b) => b.localeCompare(a, undefined, { numeric: true });
+function _globFile(dir, parts) {
+  if (!parts.length) return _isFile(dir) ? dir : null;
+  const [part, ...rest] = parts;
+  if (!part.includes('*')) return _globFile(path.join(dir, part), rest);
+  const re = new RegExp('^' + part.split('*').map(p => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i');
+  let names; try { names = fs.readdirSync(dir); } catch { return null; }
+  for (const n of names.filter(n => re.test(n)).sort(_byVersion)) {
+    const hit = _globFile(path.join(dir, n), rest);
+    if (hit) return hit;
+  }
   return null;
 }
 
@@ -3362,7 +3383,7 @@ function findSlicer(s) {
   const at = p => (_isFile(p) ? { cmd: p, args: [], where: p } : null);
   if (process.platform === 'win32') {
     const roots = [process.env.ProgramW6432, process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean);
-    for (const r of roots) for (const rel of s.win) { const hit = at(path.join(r, rel)); if (hit) return hit; }
+    for (const r of roots) for (const rel of s.win) { const hit = at(_globFile(r, rel.split('\\')) || ''); if (hit) return hit; }
     return null;
   }
   if (process.platform === 'darwin') {
@@ -3370,16 +3391,16 @@ function findSlicer(s) {
     return null;
   }
   const flatpak = _onPath('flatpak');
-  if (flatpak && ['/var/lib/flatpak', path.join(home, '.local/share/flatpak')]
-      .some(r => fs.existsSync(path.join(r, 'app', s.flatpak)))) {
-    return { cmd: flatpak, args: ['run', s.flatpak], where: 'Flatpak ' + s.flatpak };
-  }
+  const appId = flatpak && ['/var/lib/flatpak', path.join(home, '.local/share/flatpak')]
+    .flatMap(r => { try { return fs.readdirSync(path.join(r, 'app')); } catch { return []; } })
+    .find(n => (s.flatpak instanceof RegExp ? s.flatpak.test(n) : n === s.flatpak));
+  if (appId) return { cmd: flatpak, args: ['run', appId], where: 'Flatpak ' + appId };
   const dirs = ['Applications', 'AppImages', '.local/bin', 'Downloads', 'Desktop', 'Schreibtisch']
     .map(d => path.join(home, d)).concat('/opt');
   for (const dir of dirs) {
     let names; try { names = fs.readdirSync(dir); } catch { continue; }
     // Bei mehreren Versionen die mit dem höchsten Namen
-    const hit = names.filter(n => /\.appimage$/i.test(n) && s.appImage.test(n)).sort().pop();
+    const hit = names.filter(n => /\.appimage$/i.test(n) && s.appImage.test(n)).sort(_byVersion)[0];
     if (hit) return at(path.join(dir, hit));
   }
   return null;
