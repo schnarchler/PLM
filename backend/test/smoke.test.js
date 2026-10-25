@@ -209,19 +209,64 @@ test('Verkaufspreis: nach Freigabe änderbar, Protokoll mit alt → neu und Grun
   assert.ok(!d.changelog.some(c => c.action === 'Geändert'), 'nur der Preis geändert → kein zusätzliches „Geändert“');
 });
 
-test('Wichtiger Hinweis: setzen, bleibt bei anderen Änderungen, entfernen — alles im Protokoll', async () => {
+test('Hinweise: je Art speichern, bleiben bei anderen Änderungen, Lieferschein nur mit Kundenhinweis', async () => {
   const p = await api('/api/projects', 'POST', { name: 'Hinweisprojekt' });
   const item = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Halter', item_type: 'part' });
   const base = { name: 'Halter', description: '', source_url: null, classification: item.classification, weight_g: null, default_price: null };
-  await api(`/api/items/${item.id}`, 'PUT', { ...base, important_note: '  Nicht tragend  ' });
-  assert.strictEqual((await api(`/api/items/${item.id}`)).important_note, 'Nicht tragend');
+  await api(`/api/items/${item.id}`, 'PUT', { ...base, hint_design: '  Nicht tragend  ', hint_production: 'Nur PETG', hint_customer: 'Max. 60 °C' });
   await api(`/api/items/${item.id}`, 'PUT', { ...base, notes: 'egal' });
-  assert.strictEqual((await api(`/api/items/${item.id}`)).important_note, 'Nicht tragend', 'ohne Feld im Request unverändert');
-  await api(`/api/items/${item.id}`, 'PUT', { ...base, important_note: '' });
-  const d = await api(`/api/items/${item.id}`);
-  assert.strictEqual(d.important_note, null);
-  const log = d.changelog.filter(c => c.action.startsWith('Wichtiger Hinweis')).map(c => [c.action, c.details]).sort();
-  assert.deepStrictEqual(log, [['Wichtiger Hinweis entfernt', 'Nicht tragend'], ['Wichtiger Hinweis gesetzt', 'Nicht tragend']]);
+  let d = await api(`/api/items/${item.id}`);
+  assert.deepStrictEqual([d.hint_design, d.hint_production, d.hint_customer], ['Nicht tragend', 'Nur PETG', 'Max. 60 °C'],
+    'getrimmt und ohne Feld im Request unverändert');
+
+  const del = await api('/api/deliveries', 'POST', { title: 'Hinweis-Lieferung' });
+  await api(`/api/deliveries/${del.id}/items`, 'POST', { item_id: item.id, description: 'Halter', quantity: 1, unit: 'Stk' });
+  const pa = (await api(`/api/deliveries/${del.id}`)).items[0];
+  assert.deepStrictEqual([pa.hint_production, pa.hint_customer], ['Nur PETG', 'Max. 60 °C']);
+  assert.ok(!('hint_design' in pa), 'Konstruktionshinweis nicht im Produktionsauftrag');
+  const ls = (await api(`/api/deliveries/${del.id}/delivery-data`)).items[0];
+  assert.strictEqual(ls.hint_customer, 'Max. 60 °C');
+  assert.ok(!('hint_design' in ls) && !('hint_production' in ls), 'interne Hinweise gehen nicht auf den Lieferschein');
+
+  await api(`/api/items/${item.id}`, 'PUT', { ...base, hint_production: '' });
+  d = await api(`/api/items/${item.id}`);
+  assert.strictEqual(d.hint_production, null);
+  const log = d.changelog.filter(c => /hinweis/.test(c.action)).map(c => [c.action, c.details]).sort();
+  assert.deepStrictEqual(log, [
+    ['Fertigungshinweis entfernt', 'Nur PETG'], ['Fertigungshinweis gesetzt', 'Nur PETG'],
+    ['Konstruktionshinweis gesetzt', 'Nicht tragend'], ['Kundenhinweis gesetzt', 'Max. 60 °C']]);
+});
+
+// Eigener Port 3989 — die übrigen 399x gehören anderen Testdateien
+test('Datenbank: nicht mehr verwendete Spalte important_note wird beim Start entfernt', async () => {
+  const initSqlJs = require('sql.js');
+  const SQL = await initSqlJs();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-test-'));
+  // Bestehende Datenbank kopieren und die alte Spalte samt Wert hineinsetzen
+  for (let i = 0; i < 30 && !fs.existsSync(path.join(dataDir, 'plm.db')); i++) await new Promise(r => setTimeout(r, 100));
+  const old = new SQL.Database(fs.readFileSync(path.join(dataDir, 'plm.db')));
+  old.run('ALTER TABLE items ADD COLUMN important_note TEXT');
+  old.run("UPDATE items SET important_note='alt'");
+  fs.writeFileSync(path.join(dir, 'plm.db'), Buffer.from(old.export()));
+  const proc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
+    env: { ...process.env, PLM_DATA_DIR: dir, PLM_PORT: '3989' }, stdio: 'ignore' });
+  try {
+    for (let i = 0; i < 50; i++) {
+      try { await fetch('http://127.0.0.1:3989/api/stats'); break; }
+      catch { await new Promise(r => setTimeout(r, 200)); }
+    }
+    // Der Server speichert verzögert — beim Beenden schreibt er alles weg
+    const exited = new Promise(r => proc.once('exit', r));
+    proc.kill();
+    await exited;
+    const cols = new SQL.Database(fs.readFileSync(path.join(dir, 'plm.db')))
+      .exec('PRAGMA table_info(items)')[0].values.map(r => r[1]);
+    assert.ok(!cols.includes('important_note'), 'Spalte entfernt');
+    assert.ok(cols.includes('hint_customer'), 'neue Spalten da');
+  } finally {
+    proc.kill();
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
 });
 
 test('Automatisches Backup wurde beim Start angelegt', async () => {

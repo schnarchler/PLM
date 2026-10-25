@@ -215,8 +215,11 @@ function renderDeliveryItems(items, deliveryId, delivered = false) {
     const isFirst = idx===0, isLast = idx===items.length-1;
     return `
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
-      ${item.important_note ? `<div class="important-note" style="margin:0;border-radius:0;border-width:0 0 1px 4px">
-        <span class="important-note-icon">⚠</span><div class="important-note-text">${esc(item.important_note)}</div></div>` : ''}
+      ${itemHints(item).length ? `<div class="important-note" style="margin:0;border-radius:0;border-width:0 0 1px 4px">
+        <span class="important-note-icon">⚠</span>
+        <div style="display:flex;flex-direction:column;gap:3px;min-width:0">${itemHints(item).map(h =>
+          `<div class="important-note-text"><b style="color:var(--red)">${h.label}:</b> ${esc(h.text)}</div>`).join('')}</div>
+      </div>` : ''}
       <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:${item.print_settings?'1px solid var(--line)':'none'}">
         <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">
           <button class="btn btn-icon btn-ghost btn-sm" style="padding:0;height:13px;font-size:11px;opacity:${isFirst?0.2:1}" ${isFirst?'disabled':''} onclick="moveDeliveryItem(${item.id},${deliveryId},'up')">▲</button>

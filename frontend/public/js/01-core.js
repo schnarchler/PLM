@@ -12,6 +12,14 @@ const DELIVERY_ST_MAP   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
 const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
 // PLM-Status: das Kürzel steht im Badge, die Bezeichnung im Tooltip und im Detail
 const PLM_ST_LABEL = {DFT:'Entwurf',REV:'In Review',REL:'Freigegeben',ECO:'Änderung (ECO)',OBS:'Veraltet'};
+// Hinweise am Teil: [Feld, Bezeichnung, Platzhalter]. Konstruktion und
+// Fertigung sind intern — nur der Kundenhinweis steht auf dem Lieferschein.
+const HINT_KINDS = [
+  ['hint_design',     'Konstruktionshinweis', 'z.B. Nicht für tragende Anwendungen'],
+  ['hint_production', 'Fertigungshinweis',    'z.B. Nur mit PETG drucken, Stützstrukturen innen entfernen'],
+  ['hint_customer',   'Kundenhinweis',        'z.B. Max. 60 °C — nicht in der Spülmaschine reinigen'],
+];
+const itemHints = item => HINT_KINDS.filter(([k]) => item?.[k]).map(([k, label]) => ({ key: k, label, text: item[k] }));
 // Statusbadge aus den zentralen Tabellen oben — damit überall dieselben Wörter stehen
 function stBadge(type, status, style = '') {
   const m = type === 'order' ? ORDER_ST_MAP : type === 'quote' ? QUOTE_ST_MAP : DELIVERY_ST_MAP;

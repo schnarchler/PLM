@@ -448,17 +448,20 @@ async function openItemDetail(itemId, revId) {
   renderItemDetail(item, state.activeRevId);
   showDetail();
 }
-// Wichtiger Hinweis (z.B. sicherheitsrelevant): steht über allen Tabs, damit
-// ihn jeder sieht, der das Teil öffnet. Unabhängig von der Revision änderbar.
-function _importantNoteBanner(item) {
-  if (!item.important_note) return '';
+// Hinweise (Konstruktion, Fertigung, Kunde): stehen über allen Tabs, damit
+// sie jeder sieht, der das Teil öffnet. Unabhängig von der Revision änderbar.
+function _itemHintsBanner(item) {
+  const hints = itemHints(item);
+  if (!hints.length) return '';
   return `<div class="important-note">
     <span class="important-note-icon">⚠</span>
-    <div style="flex:1;min-width:0">
-      <div class="important-note-title">Wichtiger Hinweis</div>
-      <div class="important-note-text">${esc(item.important_note)}</div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+      ${hints.map(h => `<div>
+        <div class="important-note-title">${h.label}${h.key === 'hint_customer' ? ' <span class="important-note-sub">· auf dem Lieferschein</span>' : ''}</div>
+        <div class="important-note-text">${esc(h.text)}</div>
+      </div>`).join('')}
     </div>
-    <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px;flex-shrink:0" onclick="openImportantNoteModal(${item.id})" title="Hinweis ändern oder entfernen">✏</button>
+    <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px;flex-shrink:0" onclick="openItemHintsModal(${item.id})" title="Hinweise ändern oder entfernen">✏</button>
   </div>`;
 }
 
@@ -511,7 +514,7 @@ function renderItemDetail(item, activeRevId) {
   const rev = item.revisions?.find(r => r.id === activeRevId) || item.revisions?.[0];
 
   document.getElementById('dp-body').innerHTML = `
-    ${_importantNoteBanner(item)}
+    ${_itemHintsBanner(item)}
     ${renderItemSheet(item, activeRevId)}
     <div id="it-revs" style="display:none">
       ${(() => {
@@ -904,7 +907,7 @@ function renderItemSheet(item, activeRevId) {
       onblur="saveItemNotes(${item.id}, this)">${esc(item.notes || '')}</textarea>
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--t4);margin-top:4px">
       <span>Wird beim Verlassen des Feldes gespeichert.</span>
-      ${item.important_note ? '' : `<span style="color:var(--red);cursor:pointer;text-decoration:underline" onclick="openImportantNoteModal(${item.id})">⚠ Wichtigen Hinweis hinzufügen</span>`}
+      ${itemHints(item).length ? '' : `<span style="color:var(--red);cursor:pointer;text-decoration:underline" onclick="openItemHintsModal(${item.id})">⚠ Hinweis hinzufügen</span>`}
     </div>`;
 
   // -- Kurzcode zum Aufdrucken: folgt der gewählten Revision

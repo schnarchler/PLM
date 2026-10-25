@@ -750,35 +750,39 @@ function openPriceModal(itemId, preset) {
   document.getElementById('pm-price')?.select();
 }
 
-// Wichtiger Hinweis: eigenes Feld neben den Notizen, als Banner über dem
-// Teil. Leer speichern entfernt ihn. Jede Änderung steht im Protokoll.
-function openImportantNoteModal(itemId) {
+// Hinweise: je Art ein Feld neben den Notizen, als Banner über dem Teil.
+// Leer lassen entfernt einen Hinweis. Jede Änderung steht im Protokoll.
+const HINT_WHERE = {
+  hint_design: 'intern, nicht im Produktionsauftrag',
+  hint_production: 'intern, im Produktionsauftrag',
+  hint_customer: 'im Produktionsauftrag und auf dem Lieferschein',
+};
+function openItemHintsModal(itemId) {
   const item = state.item;
   if (!item || item.id !== itemId) return;
-  _showDynModal(`<div class="modal" style="max-width:440px">
-    <div class="modal-head"><div class="modal-title" style="color:var(--red)">⚠ Wichtiger Hinweis: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+  _showDynModal(`<div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title">⚠ Hinweise: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="fg"><textarea class="ft" id="inm-text" rows="4"
-          placeholder="z.B. Nicht für tragende Anwendungen — max. 60 °C">${esc(item.important_note || '')}</textarea></div>
-      </div>
-      <div style="font-size:13px;color:var(--t3)">Erscheint über allen Tabs des Teils und auf Datenblatt, Prüfprotokoll und Produktionsauftrag.</div>
+      ${HINT_KINDS.map(([k, label, ph]) => `<div class="form-row">
+        <div class="fg"><label class="fl">${label} <span style="text-transform:none;letter-spacing:0;color:${k === 'hint_customer' ? 'var(--amber)' : 'var(--t4)'}">· ${HINT_WHERE[k]}</span></label>
+          <textarea class="ft" id="ihm-${k}" rows="2" placeholder="${esc(ph)}">${esc(item[k] || '')}</textarea></div>
+      </div>`).join('')}
+      <div style="font-size:13px;color:var(--t3)">Alle Hinweise stehen über den Tabs des Teils, auf Datenblatt und Prüfprotokoll. Leer lassen entfernt einen Hinweis.</div>
     </div>
     <div class="modal-foot">
-      ${item.important_note ? `<button class="btn btn-ghost" style="margin-right:auto;color:var(--red)" onclick="saveImportantNote(${item.id},true)">Entfernen</button>` : ''}
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveImportantNote(${item.id})">Speichern</button>
+      <button class="btn btn-primary" onclick="saveItemHints(${item.id})">Speichern</button>
     </div>
   </div>`);
-  document.getElementById('inm-text')?.focus();
+  document.getElementById('ihm-hint_design')?.focus();
 }
 
-async function saveImportantNote(itemId, remove) {
-  const text = remove ? '' : V('inm-text').trim();
+async function saveItemHints(itemId) {
+  const patch = Object.fromEntries(HINT_KINDS.map(([k]) => [k, V('ihm-' + k).trim()]));
   try {
-    await _putItemPatch(itemId, { important_note: text });
+    await _putItemPatch(itemId, patch);
     _hideDynModal();
-    toast(text ? 'Hinweis gespeichert' : 'Hinweis entfernt', 'ok');
+    toast('Hinweise gespeichert', 'ok');
     const item = await api('/api/items/' + itemId);
     state.item = item;
     renderItemDetail(item, state.activeRevId);
