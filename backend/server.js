@@ -5040,6 +5040,14 @@ function _gitBg(args, env = {}) {
   });
 }
 
+// SSH im Batch-Modus, damit nichts nachfragt — ausser es ist schon ein
+// eigener SSH-Befehl eingestellt (Umgebung oder Git-Konfiguration)
+async function _gitFetch() {
+  const ownSsh = process.env.GIT_SSH_COMMAND || process.env.GIT_SSH
+    || await _gitBg(['config', '--get', 'core.sshCommand']).catch(() => '');
+  await _gitBg(['fetch', '--quiet'], ownSsh ? {} : { GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o ConnectTimeout=10' });
+}
+
 async function checkForUpdate() {
   const res = { available: false, behind: 0, version: null, upstream: null, commits: [], fetched: false,
     checked_at: new Date().toISOString(), error: null };
@@ -5047,12 +5055,8 @@ async function checkForUpdate() {
   if (!APP_VERSION.commit) return { ...res, error: 'Kein Git-Stand' };
   try {
     res.upstream = await _gitBg(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
-    // SSH im Batch-Modus, damit nichts nachfragt — ausser es ist schon ein
-    // eigener SSH-Befehl eingestellt (Umgebung oder Git-Konfiguration)
-    const ownSsh = process.env.GIT_SSH_COMMAND || process.env.GIT_SSH
-      || await _gitBg(['config', '--get', 'core.sshCommand']).catch(() => '');
     try {
-      await _gitBg(['fetch', '--quiet'], ownSsh ? {} : { GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o ConnectTimeout=10' });
+      await _gitFetch();
       res.fetched = true;
     } catch (e) { res.error = 'Remote nicht erreichbar: ' + e.message; }
     // Ab dem laufenden Commit, nicht ab HEAD: nach einem Pull ohne Neustart
@@ -5079,9 +5083,9 @@ async function checkForUpdate() {
 // Repository ist öffentlich. HEAD ist dort der Standard-Branch. Die Antwort hat
 // dieselbe Form wie bei Git, dazu der Link auf die neue ZIP.
 const GITHUB_API = process.env.PLM_GITHUB_API || 'https://api.github.com';   // Tests: Schein-GitHub
-async function _github(url) {
+async function _github(url, timeout = 10000) {
   const r = await fetch(GITHUB_API + url, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PLM-ERP' }, signal: AbortSignal.timeout(10000),
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PLM-ERP' }, signal: AbortSignal.timeout(timeout),
   }).catch(e => { throw new Error('GitHub nicht erreichbar: ' + (e.cause?.code || e.message)); });
   if (r.ok) return r;
   throw new Error(r.status === 404 ? 'Stand auf GitHub nicht gefunden'
@@ -5092,7 +5096,7 @@ async function checkGithubUpdate(res) {
   const m = String(require('./package.json').repository?.url || '').match(/github\.com[/:]([^/]+)\/(.+?)(?:\.git)?\/?$/);
   if (!m) return { ...res, error: 'Kein GitHub-Repository in package.json' };
   const repo = m[1] + '/' + m[2];
-  Object.assign(res, { upstream: 'github.com/' + repo, download: `https://github.com/${repo}/archive/HEAD.zip` });
+  Object.assign(res, { upstream: 'github.com/' + repo, download: `https://github.com/${repo}/archive/HEAD.zip`, repo });
   try {
     const cmp = await (await _github(`/repos/${repo}/compare/${APP_VERSION.sha}...HEAD`)).json();
     // Anzahl Commits des neusten Stands = letzte Seite bei einem Commit pro Seite
@@ -5126,7 +5130,100 @@ function updateStatus() {
   return _update.promise;
 }
 
-app.get('/api/update', async (req, res) => res.json(await updateStatus()));
+app.get('/api/update', async (req, res) => {
+  const u = await updateStatus();
+  // Installieren nur vom PC aus, und im Git-Checkout nur ohne eigene Änderungen
+  const local = _isLocalRequest(req);
+  res.json({ ...u, local, installable: !!u.available && local && (!!u.download || !APP_VERSION.dirty) });
+});
+
+// ── UPDATE INSTALLIEREN ───────────────────────────────────────
+// „Jetzt installieren" im Update-Dialog: neuen Stand holen (git merge
+// --ff-only bzw. ZIP von GitHub entpacken), bei geänderten Paketen
+// npm install, dann Neustart. Geht vorher etwas schief, läuft die bisherige
+// Version weiter. Daten und plm.config liegen nicht im Repository und
+// bleiben unberührt.
+const RESTART_EXIT_CODE = 75;   // START-PLM.bat und start-plm.sh starten dann neu
+let _installing = false;
+
+function _npmInstall() {
+  return new Promise((resolve, reject) => {
+    // npm ist unter Windows npm.cmd — das startet nur über die Shell
+    require('child_process').exec('npm install --omit=dev --no-audit --no-fund', {
+      cwd: path.join(REPO_DIR, 'backend'), timeout: 5 * 60 * 1000, windowsHide: true,
+    }, (err, out, errOut) => err
+      ? reject(new Error(String(errOut).trim().split('\n').pop() || err.message)) : resolve());
+  });
+}
+
+async function installGitUpdate() {
+  if (await _gitBg(['status', '--porcelain', '--untracked-files=no']))
+    throw new Error('Im PLM-Ordner gibt es eigene Änderungen — bitte selbst mit git pull aktualisieren');
+  await _gitFetch().catch(e => { throw new Error('Remote nicht erreichbar: ' + e.message); });
+  const before = await _gitBg(['rev-parse', 'HEAD']);
+  await _gitBg(['merge', '--ff-only', '--quiet', '@{u}'])
+    .catch(e => { throw new Error('Nachziehen nicht möglich (eigene Commits?): ' + e.message); });
+  const pkgChanged = await _gitBg(['diff', '--name-only', before, 'HEAD', '--', 'backend/package.json', 'backend/package-lock.json']);
+  if (pkgChanged) await _npmInstall().catch(async e => {
+    // Ohne passende Pakete startet der neue Stand nicht — zurück auf den alten
+    await _gitBg(['reset', '--keep', '--quiet', before]).catch(() => {});
+    throw new Error('Pakete liessen sich nicht installieren: ' + e.message);
+  });
+}
+
+// Neuster Stand als ZIP über die GitHub-API — wie der Download im Browser,
+// mit ausgefüllter version.json. Alles liegt in einem Ordner <repo>-<commit>/.
+async function installZipUpdate(u) {
+  const zip = new AdmZip(Buffer.from(await (await _github(`/repos/${u.repo}/zipball/HEAD`, 120000)).arrayBuffer()));
+  const root = path.resolve(REPO_DIR);
+  const files = zip.getEntries().filter(e => !e.isDirectory)
+    .map(e => ({ e, dest: path.resolve(root, e.entryName.split('/').slice(1).join('/')) }));
+  if (!files.some(f => f.dest === path.join(root, 'backend', 'server.js'))) throw new Error('Die ZIP enthält kein PLM');
+  if (files.some(f => !f.dest.startsWith(root + path.sep))) throw new Error('Die ZIP enthält ungültige Pfade');
+  const pkgFiles = ['package.json', 'package-lock.json'].map(n => path.join(root, 'backend', n));
+  const read = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
+  const pkgBefore = pkgFiles.map(read).join('\0');
+  // Nur Geändertes schreiben — START-PLM.bat läuft gerade
+  for (const f of files) {
+    const data = f.e.getData();
+    try { if (fs.readFileSync(f.dest).equals(data)) continue; } catch {}
+    fs.mkdirSync(path.dirname(f.dest), { recursive: true });
+    fs.writeFileSync(f.dest, data);
+  }
+  if (pkgFiles.map(read).join('\0') !== pkgBefore) await _npmInstall()
+    .catch(e => { throw new Error('Neue Version entpackt, aber die Pakete liessen sich nicht installieren: ' + e.message); });
+}
+
+// Aus einem Startskript: beenden, das Skript startet neu. Sonst startet der
+// neue Stand selbst — und löst diesen Prozess ab wie beim Start einer neueren
+// Version (choosePort). Klappt sein Start nicht, läuft dieser einfach weiter.
+function restartServer() {
+  setTimeout(() => {
+    if (process.env.PLM_START_SCRIPT === '1') return process.exit(RESTART_EXIT_CODE);
+    try { flushDb(); } catch {}
+    require('child_process').spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+      cwd: __dirname, detached: true, stdio: 'ignore', windowsHide: true,
+      env: { ...process.env, PLM_OPEN_BROWSER: '', PLM_TAKEOVER: '1' },
+    }).unref();
+  }, 300);
+}
+
+app.post('/api/update/install', async (req, res) => {
+  if (!_isLocalRequest(req)) return res.status(403).json({ error: 'Updates lassen sich nur auf dem PC installieren, auf dem das PLM läuft.' });
+  if (_installing) return res.status(409).json({ error: 'Das Update wird bereits installiert' });
+  _installing = true;
+  try {
+    const u = await updateStatus();
+    if (!u.available) throw new Error('Kein Update verfügbar');
+    if (u.download) await installZipUpdate(u); else await installGitUpdate();
+    console.log(`  Update auf ${u.version} installiert - PLM startet neu`);
+    res.json({ ok: true, version: u.version });
+    restartServer();
+  } catch (e) {
+    _installing = false;
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Startbildschirm: öffnet PLM per window.open(), damit sich der Tab am Ende
 // über "Beenden" wieder schliessen lässt — window.close() wirkt nur bei
@@ -7028,7 +7125,9 @@ async function choosePort() {
     const identical = other.version === APP_VERSION.version && other.commit === APP_VERSION.commit
       && !other.dirty && !APP_VERSION.dirty;
     const newer = other.version && _cmpVersion(other.version, APP_VERSION.version) > 0;
-    if (identical || newer) {
+    // PLM_TAKEOVER: Neustart nach einem Update — der alte Prozess geht immer.
+    // Eine ZIP-Kopie kennt ihre Nummer erst nach der Prüfung bei GitHub.
+    if ((identical || newer) && process.env.PLM_TAKEOVER !== '1') {
       console.log(`\n  PLM laeuft bereits (${label}${newer ? ', neuer als dieser Start' : ''}) auf http://localhost:${p}\n`);
       await openBrowser(p);
       process.exit(0);
@@ -7067,8 +7166,7 @@ choosePort().then(p => { PORT = p; }).then(initDb).then(() => {
     // ist, wenn der Browser fragt — sonst erst beim ersten Öffnen
     if (process.env.PLM_OPEN_BROWSER === '1') updateStatus().then(u => {
       if (u.available) console.log(`  Neue Version ${u.version} auf ${u.upstream} (${u.behind} Commit${u.behind === 1 ? '' : 's'})`
-        + (u.download ? ` - zum Aktualisieren: beenden, ${u.download} herunterladen, ueber den PLM-Ordner kopieren, neu starten\n`
-          : ' - zum Aktualisieren: beenden, git pull, neu starten\n'));
+        + ' - installieren in PLM: Klick auf die Version unten in der Navigation\n');
     });
   });
   server.on('error', err => {

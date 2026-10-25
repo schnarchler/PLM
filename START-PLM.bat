@@ -93,16 +93,30 @@ echo.
 cd /d "%PLM_DIR%"
 set "PLM_DATA_DIR=%PLM_DATA_DIR%"
 set "PLM_OPEN_BROWSER=1"
-node server.js
-set "PLM_EXIT=%errorlevel%"
+set "PLM_START_SCRIPT=1"
 
+:: Ab hier ein Block: cmd liest ihn ganz ein, bevor node startet. Ersetzt ein
+:: Update diese Datei, liest cmd danach nicht mitten in der neuen weiter -
+:: "goto run" springt an die Marke der neuen Fassung.
+:: Code 75 = Update installiert -> neu starten, ohne neuen Browser-Tab.
 :: Sauber beendet (auch per "Beenden" in der Oberflaeche) -> Fenster schliesst
 :: sich sofort. Nur bei einem Fehler stehen bleiben, damit die Meldung lesbar ist.
-if not "%PLM_EXIT%"=="0" (
-    echo.
-    echo  FEHLER: Server beendet sich mit Fehlercode %PLM_EXIT%
-    echo.
-    echo  Druecke eine Taste zum Schliessen...
-    pause >nul
+:run
+(
+    node server.js
+    if errorlevel 75 if not errorlevel 76 (
+        echo.
+        echo  Update installiert - PLM startet neu...
+        echo.
+        set "PLM_OPEN_BROWSER="
+        goto run
+    )
+    if errorlevel 1 (
+        echo.
+        call echo  FEHLER: Server beendet sich mit Fehlercode %%errorlevel%%
+        echo.
+        echo  Druecke eine Taste zum Schliessen...
+        pause >nul
+    )
+    exit
 )
-exit

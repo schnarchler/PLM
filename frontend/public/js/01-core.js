@@ -73,7 +73,7 @@ let state = { view: 'projects', projects: [], project: null, item: null, activeR
 async function loadVersion() {
   const el = document.getElementById('nav-ver');
   try {
-    const v = await api('/api/version');
+    const v = state.version = await api('/api/version');
     const ohneNummer = v.source === 'zip' && v.version.split('.').length < 3;
     el.textContent = 'v' + v.version + (ohneNummer ? ' · ' + v.commit : '') + (v.dirty ? ' · geändert' : '');
     el.classList.toggle('dirty', !!v.dirty);
@@ -127,20 +127,53 @@ function showUpdateDialog() {
         </div>`).join('')}
         ${more > 0 ? `<div style="color:var(--t4)">… und ${more} weitere</div>` : ''}
       </div>
-      <div style="color:var(--t3);line-height:1.6">${u.download
+      <div style="color:var(--t3);line-height:1.6">${u.installable
+        ? `„Jetzt installieren" lädt den neuen Stand herunter und startet PLM neu — das dauert meist nur ein paar Sekunden.
+          Daten und <code style="font-family:var(--mono)">plm.config</code> bleiben dabei erhalten.`
+        : u.download
         ? `Zum Aktualisieren PLM beenden, die <a href="${esc(u.download)}" target="_blank" rel="noopener noreferrer">neue Version als ZIP</a>
           herunterladen, den Inhalt des entpackten Ordners über den bisherigen PLM-Ordner kopieren (Dateien ersetzen)
           und neu starten. Daten und <code style="font-family:var(--mono)">plm.config</code> bleiben dabei erhalten.`
         : `Zum Aktualisieren PLM beenden, im PLM-Ordner
           <code style="font-family:var(--mono)">git pull</code> ausführen und neu starten.`}
         Bis dahin läuft die bisherige Version ganz normal weiter.</div>
+      ${!u.installable && !u.local ? '<div style="color:var(--t4)">Installieren geht nur auf dem PC, auf dem das PLM läuft.</div>' : ''}
       ${u.fetched ? '' : '<div style="color:var(--t4)">Das Remote war gerade nicht erreichbar — Stand vom letzten Abruf.</div>'}
+      <div id="upd-msg" style="display:none;line-height:1.6"></div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal();shutdownServer()">PLM beenden</button>
-      <button class="btn btn-primary" onclick="_hideDynModal()">Mit dieser Version weiterfahren</button>
+      <button class="btn ${u.installable ? 'btn-ghost' : 'btn-primary'}" onclick="_hideDynModal()">Mit dieser Version weiterfahren</button>
+      ${u.installable ? '<button class="btn btn-primary" id="upd-install" onclick="installUpdate()">Jetzt installieren</button>' : ''}
     </div>
   </div>`);
+}
+
+// Update installieren: Der Server holt den neuen Stand und startet neu. Die
+// Seite wartet, bis der neue Stand antwortet, und lädt sich dann neu.
+async function installUpdate() {
+  const msg = document.getElementById('upd-msg');
+  const show = (text, color) => { msg.style.display = ''; msg.style.color = color; msg.textContent = text; };
+  document.querySelectorAll('.modal-foot .btn').forEach(b => { b.disabled = true; });
+  show('Update wird heruntergeladen und installiert …', 'var(--blue)');
+  const old = state.version?.commit;
+  try {
+    await api('/api/update/install', 'POST', {});
+  } catch (e) {
+    show('Update fehlgeschlagen: ' + e.message + ' — die bisherige Version läuft weiter.', 'var(--red)');
+    document.querySelectorAll('.modal-foot .btn').forEach(b => { b.disabled = false; });
+    return;
+  }
+  show('Installiert — PLM startet neu …', 'var(--blue)');
+  for (let i = 0; i < 90; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const v = await (await fetch(API + '/api/version', { cache: 'no-store' })).json();
+      if (v.commit && v.commit !== old) return location.reload();
+    } catch {}   // während des Neustarts antwortet niemand
+  }
+  show('PLM hat nicht neu gestartet. Bitte beenden und von Hand starten — der neue Stand ist bereits installiert.', 'var(--amber)');
+  document.querySelectorAll('.modal-foot .btn').forEach(b => { b.disabled = false; });
 }
 
 // CAD-Knopf oben: sichtbar, sobald in plm.config ein Programm eingetragen ist

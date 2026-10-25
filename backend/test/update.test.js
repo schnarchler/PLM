@@ -54,8 +54,24 @@ async function startServer(repoDir, env = {}) {
   throw new Error('Server startet nicht');
 }
 const update = async base => (await fetch(base + '/api/update')).json();
+const install = async base => {
+  const r = await fetch(base + '/api/update/install', { method: 'POST' });
+  return { status: r.status, body: await r.json() };
+};
+// Nach „Jetzt installieren" löst ein neuer Prozess den alten ab — er gehört
+// nicht zu procs und wird am Ende über /api/shutdown beendet
+const restarted = [];
+async function waitForCommit(base, old) {
+  restarted.push(base);
+  for (let i = 0; i < 100; i++) {
+    try { const v = await (await fetch(base + '/api/version')).json(); if (v.commit !== old) return v; } catch {}
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error('Kein Neustart mit neuem Stand');
+}
 
 after(async () => {
+  for (const b of restarted) await fetch(b + '/api/shutdown', { method: 'POST' }).catch(() => {});
   for (const p of procs) p.kill();
   for (const s of fakes) s.close();
   await new Promise(r => setTimeout(r, 300));
@@ -125,7 +141,7 @@ function zipCopy(name, stand) {
 
 // Schein-GitHub: Vergleich mit HEAD, Anzahl Commits über den Link-Header
 // (ein Commit pro Seite), package.json des neusten Stands
-async function fakeGithub({ status, ahead = 0, total, commits = [], pkgVersion = '2.0.0' }) {
+async function fakeGithub({ status, ahead = 0, total, commits = [], pkgVersion = '2.0.0', zip = null }) {
   const seen = [];
   const srv = http.createServer((req, res) => {
     seen.push(req.url);
@@ -137,6 +153,10 @@ async function fakeGithub({ status, ahead = 0, total, commits = [], pkgVersion =
     if (/^\/repos\/[^/]+\/[^/]+\/commits$/.test(p)) {
       res.setHeader('Link', `<http://x${p}?sha=HEAD&per_page=1&page=2>; rel="next", <http://x${p}?sha=HEAD&per_page=1&page=${total}>; rel="last"`);
       return res.end('[{}]');
+    }
+    if (zip && /^\/repos\/[^/]+\/[^/]+\/zipball\/HEAD$/.test(p)) {
+      res.setHeader('Content-Type', 'application/zip');
+      return res.end(zip);
     }
     if (/\/contents\/backend\/package\.json$/.test(p)) {
       return res.end(JSON.stringify({ content: Buffer.from(JSON.stringify({ version: pkgVersion })).toString('base64') }));
@@ -195,4 +215,74 @@ test('Update: ZIP-Download offline — Commit statt Nummer, kein Punkt', async (
   const v = await (await fetch(base + '/api/version')).json();
   assert.strictEqual(v.commit, SHA.slice(0, 7));
   assert.match(v.version, /^\d+\.\d+$/, 'ohne GitHub keine Anzahl Commits');
+});
+
+test('Update installieren: Git zieht nach und startet mit dem neuen Stand neu', async () => {
+  const inst = path.join(tmp, 'inst');
+  git(tmp, 'clone', '-q', origin, inst);
+  git(inst, 'reset', '-q', '--hard', 'HEAD~1');
+  const old = git(inst, 'rev-parse', '--short', 'HEAD');
+  const base = await startServer(inst);
+  const u = await update(base);
+  assert.strictEqual(u.installable, true, u.error);
+
+  const r = await install(base);
+  assert.strictEqual(r.status, 200, r.body.error);
+  const v = await waitForCommit(base, old);
+  assert.strictEqual(v.commit, git(origin, 'rev-parse', '--short', 'main'));
+  assert.strictEqual(git(inst, 'rev-parse', 'HEAD'), git(origin, 'rev-parse', 'main'));
+});
+
+test('Update installieren: aus dem Startskript beendet sich PLM mit Code 75, das Skript startet neu', async () => {
+  const scr = path.join(tmp, 'skript');
+  git(tmp, 'clone', '-q', origin, scr);
+  git(scr, 'reset', '-q', '--hard', 'HEAD~1');
+  const base = await startServer(scr, { PLM_START_SCRIPT: '1' });
+  const proc = procs[procs.length - 1];
+  const exited = new Promise(r => proc.once('exit', code => r(code)));
+  const r = await install(base);
+  assert.strictEqual(r.status, 200, r.body.error);
+  assert.strictEqual(await exited, 75);
+  assert.strictEqual(git(scr, 'rev-parse', 'HEAD'), git(origin, 'rev-parse', 'main'));
+});
+
+test('Update installieren: eigene Änderungen im Git-Checkout bleiben, nichts wird installiert', async () => {
+  const own = path.join(tmp, 'eigen');
+  git(tmp, 'clone', '-q', origin, own);
+  git(own, 'reset', '-q', '--hard', 'HEAD~1');
+  fs.writeFileSync(path.join(own, 'datei.txt'), 'eigene Änderung\n');
+  const before = git(own, 'rev-parse', 'HEAD');
+  const base = await startServer(own);
+  const u = await update(base);
+  assert.strictEqual(u.available, true);
+  assert.strictEqual(u.installable, false);
+
+  const r = await install(base);
+  assert.strictEqual(r.status, 500);
+  assert.match(r.body.error, /eigene Änderungen/);
+  assert.strictEqual(git(own, 'rev-parse', 'HEAD'), before);
+  assert.strictEqual(fs.readFileSync(path.join(own, 'datei.txt'), 'utf8'), 'eigene Änderung\n');
+});
+
+test('Update installieren: ZIP von GitHub wird entpackt, version.json trägt den neuen Stand', async () => {
+  const NEW = 'b'.repeat(40);
+  const AdmZip = require('adm-zip');
+  const z = new AdmZip();
+  z.addFile(`schnarchler-PLM-${NEW.slice(0, 7)}/backend/server.js`, Buffer.from('// neu\n'));
+  z.addFile(`schnarchler-PLM-${NEW.slice(0, 7)}/backend/version.json`, Buffer.from(JSON.stringify({ commit: NEW })));
+  z.addFile(`schnarchler-PLM-${NEW.slice(0, 7)}/neu/datei.txt`, Buffer.from('neu\n'));
+  const gh = await fakeGithub({ status: 'ahead', ahead: 1, total: 313, zip: z.toBuffer(),
+    commits: [{ sha: NEW, commit: { message: 'Neu', committer: { date: '2026-10-26T08:00:00Z' } } }] });
+  const dir = zipCopy('zip-install', { commit: SHA });
+  fs.writeFileSync(path.join(dir, 'plm.config'), 'port=1\n');   // liegt nicht in der ZIP, bleibt
+  const base = await startServer(dir, { PLM_GITHUB_API: gh.url });
+  const u = await update(base);
+  assert.strictEqual(u.installable, true, u.error);
+
+  const r = await install(base);
+  assert.strictEqual(r.status, 200, r.body.error);
+  const v = await waitForCommit(base, SHA.slice(0, 7));
+  assert.strictEqual(v.commit, NEW.slice(0, 7));
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'neu', 'datei.txt'), 'utf8'), 'neu\n');
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'plm.config'), 'utf8'), 'port=1\n');
 });
