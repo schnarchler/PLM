@@ -142,6 +142,11 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
   assert.strictEqual((await ok(`/api/orders/${order.id}`, { cookie: ben })).body.changelog, undefined);
   assert.strictEqual((await ok(`/api/orders/${order.id}`, { cookie: cleo })).body.changelog, undefined);
   assert.strictEqual((await req('/api/erp-log', { cookie: ben })).status, 403);
+  // Ganze Datenbank, Sicherungen und Dateiablage nur für Admins
+  for (const url of ['/api/export', '/api/export-named', '/api/backups', '/api/file-index']) {
+    assert.strictEqual((await req(url, { cookie: cleo })).status, 403, url);
+    assert.strictEqual((await req(url, { cookie: anna })).status, 200, url);
+  }
   assert.strictEqual((await req('/api/erp-log')).status, 403, 'ohne Auswahl auch nicht');
   assert.strictEqual((await ok(`/api/orders/${order.id}`, { cookie: anna })).body.changelog[0].user_name, 'Ben');
   assert.ok((await ok('/api/erp-log', { cookie: anna })).body.some(e => e.entity_id === order.id && e.action === 'Erstellt'));
