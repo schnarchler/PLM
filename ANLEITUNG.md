@@ -649,7 +649,7 @@ Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Pas
 - **Allein:** Namen eintragen („Dein Name“). PLM fragt nie, wer dran ist; der Name steht in der Historie und bei Freigaben.
 - **Team (ab zwei Personen):** Beim Öffnen erscheint **Wer ist dran?** — ein Klick auf die eigene Kachel. Der Name steht oben rechts, ein Klick darauf wechselt die Person. Nach einer Pause (einstellbar, Standard 30 Minuten, 0 = nie) fragt PLM bei der nächsten Änderung einmal **Weiter als …?**; danach wird die Änderung ausgeführt.
 - **Rollen:** **User** ändert, gibt aber nicht frei. **Superuser** gibt zusätzlich frei (REL) und markiert als veraltet (OBS). **Admin** darf alles: Einstellungen, Personen, Stammdaten löschen, Sicherungen zurückspielen.
-- **PIN:** Admins können eine PIN setzen. Sie wird beim Wechsel zu diesem Admin abgefragt, nicht beim Weitermachen nach einer Pause.
+- **PIN:** Jede Person kann unter Einstellungen eine eigene PIN setzen, ändern oder entfernen (mit der bisherigen PIN). Sie wird beim Wechsel zu dieser Person abgefragt, nicht beim Weitermachen nach einer Pause. Admins können PINs aller Personen setzen oder entfernen, z. B. wenn jemand seine vergessen hat.
 - **Deaktivieren** statt löschen: Die Person bleibt in der Historie, steht aber nicht mehr zur Auswahl. Es braucht immer mindestens einen aktiven Admin.
 
 Hintergrund und Grenzen: [KONZEPT-BENUTZERVERWALTUNG.md](KONZEPT-BENUTZERVERWALTUNG.md).

@@ -1,5 +1,5 @@
 // Benutzer für die Nachvollziehbarkeit: allein ohne Auswahl, ab zwei Personen
-// „Wer ist dran?", Rollen User / Superuser / Admin, Admin-PIN, Nachfragen nach
+// „Wer ist dran?", Rollen User / Superuser / Admin, PIN, Nachfragen nach
 // einer Pause. Die Person steht in jedem Historien-Eintrag und bei der Freigabe.
 //
 // Ausführen:  npm test   (im backend/-Ordner)
@@ -161,7 +161,7 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
     'auch sich selbst nicht zum Admin machen');
 });
 
-test('Admin-PIN, mindestens ein Admin, Deaktivieren beendet die Auswahl', async () => {
+test('PIN, mindestens ein Admin, Deaktivieren beendet die Auswahl', async () => {
   const a = (await ok(`/api/users/${ids.anna}`, { method: 'PUT', body: { pin: '2468' }, cookie: anna })).body;
   assert.strictEqual(a.has_pin, true);
   const ohne = await req('/api/session', { method: 'POST', body: { user_id: ids.anna } });
@@ -172,8 +172,20 @@ test('Admin-PIN, mindestens ein Admin, Deaktivieren beendet die Auswahl', async 
   const letzte = await req(`/api/users/${ids.anna}`, { method: 'PUT', body: { role: 'superuser' }, cookie: anna });
   assert.strictEqual(letzte.status, 400);
   assert.match(letzte.body.error, /mindestens einen aktiven Admin/);
-  assert.strictEqual((await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { pin: '1234' }, cookie: anna })).body.has_pin, false,
-    'PIN gibt es nur für Admins');
+  // Admin setzt und entfernt die PIN einer anderen Person (z. B. vergessen)
+  assert.strictEqual((await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { pin: '1234' }, cookie: anna })).body.has_pin, true);
+  assert.strictEqual((await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { pin: null }, cookie: anna })).body.has_pin, false);
+
+  // Eigene PIN: auch als Superuser, ändern und entfernen nur mit der bisherigen
+  assert.strictEqual((await ok('/api/session/pin', { method: 'PUT', body: { pin: '1357' }, cookie: cleo })).body.has_pin, true);
+  assert.deepStrictEqual((await req('/api/session', { method: 'POST', body: { user_id: ids.cleo } })).body.pin_required, true,
+    'wer zu Cleo wechselt, braucht die PIN');
+  assert.strictEqual((await req('/api/session/pin', { method: 'PUT', body: { pin: '9999' }, cookie: cleo })).status, 403);
+  assert.strictEqual((await req('/api/session/pin', { method: 'PUT', body: { pin: '12', current_pin: '1357' }, cookie: cleo })).status, 400);
+  assert.strictEqual((await req('/api/session/pin', { method: 'PUT', body: { pin: '1357' } })).status, 401, 'ohne Auswahl nicht');
+  cleo = (await ok('/api/session', { method: 'POST', body: { user_id: ids.cleo, pin: '1357' } })).cookie;
+  assert.strictEqual((await ok('/api/session/pin', { method: 'PUT', body: { pin: null, current_pin: '1357' }, cookie: cleo })).body.has_pin, false);
+  assert.match((await log(e => e.entity_type === 'user' && e.entity_id === ids.cleo && /PIN entfernt/.test(e.details))).user_name, /Cleo/);
 
   await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { active: false }, cookie: anna });
   assert.strictEqual((await req('/api/projects', { method: 'POST', body: { name: 'Ben weg' }, cookie: ben })).status, 401);

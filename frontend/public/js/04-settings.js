@@ -48,6 +48,14 @@ function _renderPersonalSettings() {
       <div class="sep-label" style="margin-top:28px">Person</div>
       <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Arbeitet jemand anderes an diesem Gerät, hier oder oben über den Namen wechseln.</div>
       <button class="btn btn-ghost btn-sm" onclick="askWhoIsThere('switch')">Person wechseln</button>
+      <div class="sep-label" style="margin-top:28px">PIN</div>
+      <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">${u?.has_pin
+        ? 'Deine Kachel ist mit einer PIN geschützt. Wer zu dir wechseln will, muss sie eingeben.'
+        : 'Ohne PIN kann jede Person deine Kachel wählen und unter deinem Namen arbeiten. Mit einer PIN geht das nur, wenn man sie kennt.'}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="openOwnPinModal()">${u?.has_pin ? 'PIN ändern' : 'PIN setzen'}</button>
+        ${u?.has_pin ? '<button class="btn btn-ghost btn-sm" onclick="openOwnPinModal(true)">PIN entfernen</button>' : ''}
+      </div>
     </div>`);
 }
 

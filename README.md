@@ -540,7 +540,7 @@ Geräte herankommen, entscheidet die Firewall des PCs.
 - Paketlücken prüfen: `cd backend && npm audit --omit=dev`
 
 Die Benutzer (Einstellungen → Benutzer) dienen der Nachvollziehbarkeit, nicht als Schutz:
-gewählt wird ohne Passwort, nur Admins können eine PIN haben. Details und Grenzen in
+gewählt wird ohne Passwort; jede Person kann ihre Kachel mit einer PIN schützen. Details und Grenzen in
 [KONZEPT-BENUTZERVERWALTUNG.md](KONZEPT-BENUTZERVERWALTUNG.md).
 
 ---

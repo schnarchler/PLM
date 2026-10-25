@@ -1917,7 +1917,7 @@ app.post('/api/session', (req, res) => {
   if (userMode(users) !== 'team') return res.json(sessionInfo(resolveUser(req, users).user, users));
   const u = users.find(x => x.id === Number(req.body?.user_id));
   if (!u) return res.status(400).json({ error: 'Diese Person gibt es nicht mehr' });
-  // Die PIN schützt den Wechsel zu einem Admin — wer nach einer Pause nur weitermacht, braucht sie nicht
+  // Die PIN schützt den Wechsel zu dieser Person — wer nach einer Pause nur weitermacht, braucht sie nicht
   const continues = resolveUser(req, users).user?.id === u.id;
   if (u.pin_hash && !continues && !checkPin(String(req.body?.pin ?? ''), u.pin_hash)) {
     return res.status(403).json({ error: 'PIN stimmt nicht', pin_required: true });
@@ -1932,6 +1932,20 @@ app.delete('/api/session', (req, res) => {
   if (token) sessions.delete(token);
   res.setHeader('Set-Cookie', `${sessionCookie()}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
   res.json({ ok: true });
+});
+// Eigene PIN setzen, ändern oder entfernen — mit der bisherigen, falls es eine gibt
+app.put('/api/session/pin', (req, res) => {
+  const me = req.plmUser && get('SELECT * FROM users WHERE id=?', [req.plmUser.id]);
+  if (!me) return res.status(400).json({ error: 'Zuerst wählen, wer dran ist' });
+  const { pin, current_pin } = req.body || {};
+  if (me.pin_hash && !checkPin(String(current_pin ?? ''), me.pin_hash)) {
+    return res.status(403).json({ error: 'Die bisherige PIN stimmt nicht' });
+  }
+  if (pin && !validPin(pin)) return res.status(400).json({ error: 'Die PIN braucht 4 bis 12 Zeichen' });
+  const pinHash = pin ? hashPin(String(pin)) : null;
+  run('UPDATE users SET pin_hash=? WHERE id=?', [pinHash, me.id]);
+  log('user', me.id, 'Person geändert', `${me.name}: ${!pinHash ? 'PIN entfernt' : me.pin_hash ? 'PIN geändert' : 'PIN gesetzt'}`);
+  res.json(publicUser(get('SELECT * FROM users WHERE id=?', [me.id])));
 });
 
 app.get('/api/users', (req, res) => {
@@ -1952,7 +1966,7 @@ app.post('/api/users', (req, res) => {
   const pin = req.body?.pin ? String(req.body.pin) : '';
   if (pin && !validPin(pin)) return res.status(400).json({ error: 'Die PIN braucht 4 bis 12 Zeichen' });
   const id = runGetId('INSERT INTO users (name, role, pin_hash) VALUES (?,?,?)',
-    [name, role, role === 'admin' && pin ? hashPin(pin) : null]);
+    [name, role, pin ? hashPin(pin) : null]);
   log('user', id, 'Person angelegt', `${name} (${ROLE_LABEL[role]})`);
   // Aus „allein" wird „Team": Die bisherige Person bleibt an diesem Gerät gewählt
   if (before.length === 1 && !resolveUser(req).session) startSession(req, res, before[0].id);
@@ -1978,7 +1992,6 @@ app.put('/api/users/:id', (req, res) => {
     if (b.pin && !validPin(b.pin)) return res.status(400).json({ error: 'Die PIN braucht 4 bis 12 Zeichen' });
     pinHash = b.pin ? hashPin(String(b.pin)) : null;
   }
-  if (role !== 'admin') pinHash = null;   // PIN nur für Admins
   run('UPDATE users SET name=?, role=?, active=?, pin_hash=? WHERE id=?', [name, role, active, pinHash, u.id]);
   if (!active) endSessionsOf(u.id);
   const changes = [name !== u.name && `Name ${u.name} → ${name}`, role !== u.role && `Rolle ${ROLE_LABEL[role]}`,
