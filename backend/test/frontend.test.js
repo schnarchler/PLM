@@ -202,27 +202,29 @@ test('Datenblatt: ohne Quelle — bei freigegebenen Teilen ausgeblendet, sonst �
   assert.match(renderItemSheet(relSrc, 31), /href="https:\/\/www\.igus\.ch\/p\/1"/, 'vorhandene Quelle bleibt');
 });
 
-test('Wichtiger Hinweis: Banner nur wenn gesetzt, Text escaped, Link solange keiner da ist', () => {
-  const { _importantNoteBanner } = evalPart('js/02-plm-browse.js', 'function _importantNoteBanner(',
-    'function itemIsEditable(', '({ _importantNoteBanner })');
-  assert.strictEqual(_importantNoteBanner(demoItem()), '');
-  const b = _importantNoteBanner(demoItem({ important_note: 'Max. 60 °C <nicht tragend>' }));
+test('Hinweise: Banner nur mit Hinweisen, Text escaped, Link solange keiner da ist', () => {
+  const { _itemHintsBanner } = evalPart('js/02-plm-browse.js', 'function _itemHintsBanner(',
+    'function itemIsEditable(', '({ _itemHintsBanner })');
+  assert.strictEqual(_itemHintsBanner(demoItem()), '');
+  const b = _itemHintsBanner(demoItem({ hint_production: 'PETG <only>', hint_customer: 'Max. 60 °C' }));
   assert.match(b, /class="important-note"/);
-  assert.match(b, /Max\. 60 °C &lt;nicht tragend&gt;/);
-  assert.match(b, /onclick="openImportantNoteModal\(7\)"/);
+  assert.match(b, /Fertigungshinweis<\/div>\s*<div class="important-note-text">PETG &lt;only&gt;/);
+  assert.match(b, /Kundenhinweis <span class="important-note-sub">· auf dem Lieferschein<\/span>/);
+  assert.ok(!b.includes('Konstruktionshinweis'), 'leere Arten fallen weg');
+  assert.match(b, /onclick="openItemHintsModal\(7\)"/);
   const item = demoItem();
   global.state.item = item;
-  assert.match(renderItemSheet(item, 31), /Wichtigen Hinweis hinzufügen/);
-  const withNote = demoItem({ important_note: 'x' });
-  global.state.item = withNote;
-  assert.ok(!renderItemSheet(withNote, 31).includes('Wichtigen Hinweis hinzufügen'));
+  assert.match(renderItemSheet(item, 31), /⚠ Hinweis hinzufügen/);
+  const withHint = demoItem({ hint_design: 'x' });
+  global.state.item = withHint;
+  assert.ok(!renderItemSheet(withHint, 31).includes('Hinweis hinzufügen'));
 });
 
-test('Wichtiger Hinweis: steht rot auf dem Datenblatt-PDF', () => {
+test('Hinweise: alle Arten stehen rot auf dem Datenblatt-PDF', () => {
   global.state.settings = {};
   assert.ok(!pdfOf(demoItem(), 31).includes('class="warn"'));
-  const h = pdfOf(demoItem({ important_note: 'Schutzbrille <tragen>' }), 31);
-  assert.match(h, /<div class="warn"><b>⚠ Wichtiger Hinweis<\/b><br>Schutzbrille &lt;tragen&gt;<\/div>/);
+  const h = pdfOf(demoItem({ hint_design: 'Nicht tragend', hint_customer: 'Schutzbrille <tragen>' }), 31);
+  assert.match(h, /<div class="warn"><b>⚠ Konstruktionshinweis<\/b><br>Nicht tragend<\/div><div class="warn"><b>⚠ Kundenhinweis<\/b><br>Schutzbrille &lt;tragen&gt;<\/div>/);
 });
 
 test('Datenblatt: Kurzcode kompakt, die Anleitung steht nur im ?', () => {
@@ -553,7 +555,8 @@ test('Workflow: einfacher Modus bietet "Neue Revision" statt Review', () => {
 });
 
 // ── Gelieferter Stand und Revisionsvergleich ──────────────────
-evalPart('js/01-core.js', 'const PLM_ST_LABEL', '// Statusbadge', 'globalThis.PLM_ST_LABEL = PLM_ST_LABEL');
+evalPart('js/01-core.js', 'const PLM_ST_LABEL', '// Statusbadge',
+  'globalThis.PLM_ST_LABEL = PLM_ST_LABEL; globalThis.HINT_KINDS = HINT_KINDS; globalThis.itemHints = itemHints');
 evalPart('js/01-core.js', '// Druckparameter einer Revision', '// ── ITEM TYPE ICONS', 'globalThis.PRINT_PARAMS = PRINT_PARAMS');
 evalPart('js/01-core.js', '// ── ITEM TYPE ICONS', 'function _classColor', '0');
 evalPart('js/02-plm-browse.js', 'function _cleanDsName', 'function renderDatasets', '0');

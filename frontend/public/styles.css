@@ -379,6 +379,7 @@ body {
   border: 1px solid var(--red-line); border-left: 4px solid var(--red); border-radius: var(--r-sm); background: var(--red-soft); }
 .important-note-icon { color: var(--red); font-size: 16px; line-height: 1.3; flex-shrink: 0; }
 .important-note-title { font-size: 12px; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .5px; }
+.important-note-sub { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--t3); }
 .important-note-text { font-size: 13px; color: var(--t1); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ── HILFETEXT („?") ── */
