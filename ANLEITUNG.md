@@ -47,7 +47,9 @@ Die verwendeten Begriffe sind in der `README.md` unter **Begriffe** erklärt.
 cd PLM && bash start-plm.sh
 ```
 
-**Desktop-Icon:** Doppelklick auf `PLM-ERP`.
+**Windows:** Doppelklick auf `START-PLM.bat`.
+
+**Desktop-Icon:** Unter Windows einmal `VERKNUEPFUNG-ERSTELLEN.bat` ausführen — danach liegt auf dem Desktop die Verknüpfung **PLM & ERP** mit dem Logo. Nach dem Verschieben des PLM-Ordners nochmals ausführen. Unter Linux: Doppelklick auf `PLM-ERP`.
 
 **Server beenden:** Oben rechts → **■ Beenden**. Bei aktiven Checkouts wird gefragt ob zuerst eingecheckt werden soll.
 
