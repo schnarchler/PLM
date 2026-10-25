@@ -103,28 +103,34 @@
     if (title) el.title = title;
     return el;
   }
-  fetch('/api/version').then(function (r) { return r.json(); }).then(function (v) {
-    text('v-version', v.version);
-    var date = v.date ? new Date(v.date).toLocaleDateString('de-CH') : '';
-    text('v-build', [date, v.commit].filter(Boolean).join(' · ') || '—', v.date || '');
-    if (v.dirty) {
-      var w = document.createElement('span');
-      w.className = 'warn';
-      w.textContent = ' · geändert';
-      w.title = 'Es laufen Änderungen, die noch nicht committet sind';
-      document.getElementById('v-build').appendChild(w);
-    }
-    // Die letzten zwei Ordner zeigen, ob die richtigen Daten geladen sind
-    var parts = String(v.data_dir || '').split(/[\\/]/).filter(Boolean);
-    text('v-data', parts.slice(-2).join('/') || '—', v.data_dir || '');
-  }).catch(function () { text('v-version', '—'); text('v-build', '—'); text('v-data', '—'); });
+  function loadVersion() {
+    fetch('/api/version').then(function (r) { return r.json(); }).then(function (v) {
+      text('v-version', v.version);
+      var date = v.date ? new Date(v.date).toLocaleDateString('de-CH') : '';
+      text('v-build', [date, v.commit, v.source === 'zip' ? 'ZIP' : ''].filter(Boolean).join(' · ') || '—', v.date || '');
+      if (v.dirty) {
+        var w = document.createElement('span');
+        w.className = 'warn';
+        w.textContent = ' · geändert';
+        w.title = 'Es laufen Änderungen, die noch nicht committet sind';
+        document.getElementById('v-build').appendChild(w);
+      }
+      // Die letzten zwei Ordner zeigen, ob die richtigen Daten geladen sind
+      var parts = String(v.data_dir || '').split(/[\\/]/).filter(Boolean);
+      text('v-data', parts.slice(-2).join('/') || '—', v.data_dir || '');
+    }).catch(function () { text('v-version', '—'); text('v-build', '—'); text('v-data', '—'); });
+  }
+  loadVersion();
 
-  // Neuere Commits auf dem Git-Remote? Nur ein Hinweis — starten geht wie immer
+  // Neuere Commits auf dem Remote? Nur ein Hinweis — starten geht wie immer
   fetch('/api/update').then(function (r) { return r.json(); }).then(function (u) {
+    // ZIP-Download: erst die Prüfung bei GitHub kennt die Versionsnummer
+    if (u.download) loadVersion();
     if (!u.available) return;
     var n = u.behind === 1 ? '1 neuer Commit' : u.behind + ' neue Commits';
-    text('v-update', 'v' + u.version + ' verfügbar',
-      n + ' auf ' + u.upstream + ' — zum Aktualisieren beenden, git pull, neu starten');
+    text('v-update', 'v' + u.version + ' verfügbar', n + ' auf ' + u.upstream + (u.download
+      ? ' — zum Aktualisieren beenden, neue ZIP herunterladen, über den PLM-Ordner kopieren, neu starten'
+      : ' — zum Aktualisieren beenden, git pull, neu starten'));
     document.getElementById('r-update').hidden = false;
   }).catch(function () {});
 </script>

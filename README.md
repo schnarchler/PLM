@@ -558,6 +558,12 @@ Welche Version läuft, steht unten in der Navigation unter den Einstellungen und
 `2.0.282` = Major.Minor aus `backend/package.json`, dahinter die Anzahl Commits.
 „geändert“ heisst, es laufen Änderungen, die noch nicht committet sind.
 
+**Kopie aus dem ZIP-Download (ohne Git):** GitHub trägt beim Download Commit und Datum in
+`backend/version.json` ein (`export-subst` in `.gitattributes`). Damit fragt PLM bei GitHub nach,
+ob es Neueres gibt, und holt von dort auch die Versionsnummer — ohne Internet steht statt der
+Nummer der Commit da. Aktualisieren: PLM beenden, neue ZIP herunterladen, ihren Inhalt über den
+PLM-Ordner kopieren und neu starten. Daten und `plm.config` bleiben dabei erhalten.
+
 Beim Start prüft PLM, ob auf dem Git-Remote neuere Commits liegen (`git fetch` im
 Hintergrund, ab dem laufenden Commit). Gibt es welche, zeigt der Startbildschirm eine
 Zeile „Update“ mit der neuen Versionsnummer, und an der Version in der Navigation steht ein

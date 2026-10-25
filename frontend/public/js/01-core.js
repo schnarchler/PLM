@@ -68,14 +68,17 @@ async function setDocStatus(type, id, status, el) {
 }
 let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [], slicer: null, cad: null };
 
-// Laufende Version unten in der Navigation; „geändert", wenn nicht committete Änderungen laufen
+// Laufende Version unten in der Navigation; „geändert", wenn nicht committete Änderungen laufen.
+// ZIP-Download: die Nummer kennt erst GitHub — bis dahin zeigt der Commit den Stand
 async function loadVersion() {
   const el = document.getElementById('nav-ver');
   try {
     const v = await api('/api/version');
-    el.textContent = 'v' + v.version + (v.dirty ? ' · geändert' : '');
+    const ohneNummer = v.source === 'zip' && v.version.split('.').length < 3;
+    el.textContent = 'v' + v.version + (ohneNummer ? ' · ' + v.commit : '') + (v.dirty ? ' · geändert' : '');
     el.classList.toggle('dirty', !!v.dirty);
     el.dataset.title = [v.date ? 'Stand ' + new Date(v.date).toLocaleDateString('de-CH') : '', v.commit,
+      v.source === 'zip' ? 'ZIP-Download ohne Git' : '',
       v.dirty ? 'mit Änderungen, die noch nicht committet sind' : ''].filter(Boolean).join(' · ');
     _markUpdate();
   } catch {}
@@ -102,6 +105,8 @@ function _markUpdate() {
 const UPDATE_CHECK_MS = 30 * 60 * 1000;
 async function checkUpdate() {
   try { state.update = await api('/api/update'); } catch { return; }
+  // ZIP-Download: erst die Prüfung bei GitHub kennt die Versionsnummer
+  if (state.update.download) return loadVersion();
   _markUpdate();
 }
 
@@ -122,8 +127,12 @@ function showUpdateDialog() {
         </div>`).join('')}
         ${more > 0 ? `<div style="color:var(--t4)">… und ${more} weitere</div>` : ''}
       </div>
-      <div style="color:var(--t3);line-height:1.6">Zum Aktualisieren PLM beenden, im PLM-Ordner
-        <code style="font-family:var(--mono)">git pull</code> ausführen und neu starten.
+      <div style="color:var(--t3);line-height:1.6">${u.download
+        ? `Zum Aktualisieren PLM beenden, die <a href="${esc(u.download)}" target="_blank" rel="noopener noreferrer">neue Version als ZIP</a>
+          herunterladen, den Inhalt des entpackten Ordners über den bisherigen PLM-Ordner kopieren (Dateien ersetzen)
+          und neu starten. Daten und <code style="font-family:var(--mono)">plm.config</code> bleiben dabei erhalten.`
+        : `Zum Aktualisieren PLM beenden, im PLM-Ordner
+          <code style="font-family:var(--mono)">git pull</code> ausführen und neu starten.`}
         Bis dahin läuft die bisherige Version ganz normal weiter.</div>
       ${u.fetched ? '' : '<div style="color:var(--t4)">Das Remote war gerade nicht erreichbar — Stand vom letzten Abruf.</div>'}
     </div>
@@ -368,11 +377,24 @@ async function setFontScale(scale) {
   state.settings = await api('/api/settings');
 }
 
-// Design: '' = Standard, sonst Name eines :root[data-theme=…]-Blocks in styles.css
+// Ansichts-Einstellungen (Liste/Kacheln, Sortierung, Reiter …) liegen auf dem Server
+// wie die Schriftgrösse: Der Browser vergisst sie, sobald das PLM nach einem
+// Neustart einen anderen Port bekommt.
+const _pref = (key, def) => state.settings?.[key] || def;
+function _setPref(key, v) {
+  if (_pref(key) === v) return;
+  state.settings = { ...state.settings, [key]: v };
+  api('/api/settings', 'PUT', { [key]: v }).catch(() => {});
+}
+
+// Design: '' = Standard, sonst Name eines :root[data-theme=…]-Blocks in styles.css.
+// Massgebend ist der Server; die Kopie im Browser liest index.html schon vor dem
+// ersten Zeichnen, damit nicht kurz das Standard-Design aufblitzt.
 function _applyTheme(theme) {
   const t = theme ?? state.settings?.theme ?? '';
   if (t) document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('plm.theme', t); } catch {}
 }
 async function setTheme(theme) {
   _applyTheme(theme);

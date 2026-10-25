@@ -135,7 +135,7 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
 
   assert.strictEqual((await req('/api/settings', { method: 'PUT', body: { company_name: 'X' }, cookie: cleo })).status, 403);
   await ok('/api/settings', { method: 'PUT', body: { font_scale: '1.1' }, cookie: ben });
-  await ok('/api/settings', { method: 'PUT', body: { theme: 'angepasst', sort_projects: 'name', sort_items: 'name' }, cookie: ben });
+  await ok('/api/settings', { method: 'PUT', body: { theme: 'angepasst', sort_projects: 'name', sort_items: 'name', project_view: 'tiles', purchasing_tab: 'suppliers' }, cookie: ben });
   assert.strictEqual((await req(`/api/projects/${proj.id}`, { method: 'DELETE', cookie: cleo })).status, 403, 'Stammdaten löscht der Admin');
   const order = (await ok('/api/orders', { method: 'POST', body: { title: 'Weg damit' }, cookie: ben })).body;
   await ok(`/api/orders/${order.id}`, { method: 'DELETE', cookie: ben });
