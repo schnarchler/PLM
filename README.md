@@ -517,7 +517,7 @@ PLM/
 │       │   ├── 15-mindmap.js ← Abhängigkeitsgraph (SVG, Pan/Zoom)
 │       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
 │       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
-├── plm.config             ← Konfiguration dieses PCs: data_dir, port, cad_path, prusaslicer, bambustudio (wird auto-erstellt)
+├── plm.config             ← Konfiguration dieses PCs: data_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (wird auto-erstellt)
 ├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 └── README.md

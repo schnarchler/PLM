@@ -52,12 +52,17 @@ before(async () => {
   const fake = path.join(bin, 'prusa-slicer');
   fs.writeFileSync(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > '${logFile}'\n`);
   fs.chmodSync(fake, 0o755);
+  // Creality Print als AppImage in ~/Applications, zwei Versionen — die neuere zählt
+  const apps = path.join(tmp, 'home', 'Applications');
+  fs.mkdirSync(apps, { recursive: true });
+  for (const v of ['V5.1.7.10514', 'V6.0.4.1166'])
+    fs.writeFileSync(path.join(apps, `CrealityPrint-${v}-x86_64-Release.AppImage`), '');
   // Eigene Konfigdatei — die echte plm.config könnte auf einen echten Slicer zeigen
   cfgFile = path.join(tmp, 'plm.config');
   fs.writeFileSync(cfgFile, 'bambustudio=/gibt/es/nicht/bambu-studio\n');
   serverProc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT), PLM_CONFIG: cfgFile,
-      PATH: bin + path.delimiter + process.env.PATH },
+      HOME: path.join(tmp, 'home'), PATH: bin + path.delimiter + process.env.PATH },
     stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {
@@ -82,6 +87,9 @@ test('Slicer: installierter wird gefunden und ohne Wahl genommen', { skip }, asy
   const bambu = st.slicers.find(s => s.id === 'bambu');
   assert.strictEqual(bambu.found, false, 'falscher Pfad in plm.config');
   assert.match(bambu.error, /plm\.config/);
+  const creality = st.slicers.find(s => s.id === 'creality');
+  assert.strictEqual(creality.found, true);
+  assert.strictEqual(creality.where, path.join(tmp, 'home', 'Applications', 'CrealityPrint-V6.0.4.1166-x86_64-Release.AppImage'));
   assert.strictEqual(st.chosen, '');
   assert.strictEqual(st.active, 'prusa');
   assert.strictEqual(st.local, true);

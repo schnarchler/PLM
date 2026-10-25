@@ -627,7 +627,7 @@ async function _renderSlicerSettings() {
       ${st.slicers.map(s => `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--t2)">
         <input type="radio" name="st-slicer" value="${s.id}" ${st.active === s.id ? 'checked' : ''}
           onchange="saveSlicerChoice(this.value)" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
-        <span style="min-width:96px">${esc(s.name)}</span>
+        <span style="min-width:110px">${esc(s.name)}</span>
         ${s.found
           ? `<span class="chip" style="color:var(--green)">installiert</span>
              <span style="font-size:12px;color:var(--t4);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(s.where)}">${esc(s.where)}</span>`
@@ -640,8 +640,9 @@ async function _renderSlicerSettings() {
     </div>
     <div style="font-size:11px;color:var(--t4);margin-top:6px;line-height:1.5">
       Woanders installiert? In der Konfigdatei <code style="font-family:var(--mono)">plm.config</code>
-      <code style="font-family:var(--mono)">prusaslicer=/pfad/zum/programm</code> bzw.
-      <code style="font-family:var(--mono)">bambustudio=…</code> eintragen und neu suchen.
+      <code style="font-family:var(--mono)">prusaslicer=/pfad/zum/programm</code>,
+      <code style="font-family:var(--mono)">bambustudio=…</code> bzw.
+      <code style="font-family:var(--mono)">crealityprint=…</code> eintragen und neu suchen.
       Arbeitskopien landen im Unterordner <code style="font-family:var(--mono)">Slicer</code> des Checkout-Verzeichnisses.
     </div>`;
 }
