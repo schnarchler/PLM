@@ -5162,15 +5162,21 @@ async function checkGithubUpdate(res) {
   return res;
 }
 
-function updateStatus() {
-  // Ein Fehler in der Prüfung darf PLM nie mitreissen — dann eben keine Meldung
-  if (!_update || Date.now() - _update.at > UPDATE_MAX_AGE) _update = { at: Date.now(), promise: checkForUpdate()
-    .catch(e => ({ available: false, behind: 0, version: null, commits: [], fetched: false, error: e.message })) };
+// fresh: Klick auf die Version — sofort neu prüfen statt des gemerkten
+// Ergebnisses. Läuft gerade eine Prüfung, wird auf diese gewartet.
+function updateStatus(fresh = false) {
+  const stale = !_update || Date.now() - _update.at > UPDATE_MAX_AGE;
+  if (stale || (fresh && _update.done)) {
+    // Ein Fehler in der Prüfung darf PLM nie mitreissen — dann eben keine Meldung
+    const u = _update = { at: Date.now(), done: false, promise: checkForUpdate()
+      .catch(e => ({ available: false, behind: 0, version: null, commits: [], fetched: false, error: e.message })) };
+    u.promise.then(() => { u.done = true; });
+  }
   return _update.promise;
 }
 
 app.get('/api/update', async (req, res) => {
-  const u = await updateStatus();
+  const u = await updateStatus(req.query.fresh === '1');
   // Installieren nur vom PC aus, und im Git-Checkout nur ohne eigene Änderungen
   const local = _isLocalRequest(req);
   res.json({ ...u, local, installable: !!u.available && local && (!!u.download || !APP_VERSION.dirty) });
