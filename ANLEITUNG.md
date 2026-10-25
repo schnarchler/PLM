@@ -275,7 +275,7 @@ Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin*
 
 ### Änderungsanträge (ECR)
 
-Navigation → **Änderungen** → **+ Änderungsantrag**, oder im Datenblatt eines Teils **🛠 Änderungsantrag**.
+Navigation → **Änderungen** → **+ Änderungsantrag**.
 
 - **Titel, Begründung** (warum) und **Was wird geändert**, dazu ein oder mehrere betroffene Teile mit eigener Notiz
 - **Auswirkung** je Teil: in welchen Baugruppen es verbaut ist (alle Ebenen), offene Aufträge und Angebote, offene Produktion, Lagerbestand
