@@ -815,3 +815,46 @@ tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; 
 .no-spin::-webkit-inner-spin-button, .no-spin::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 a { color: inherit; text-decoration: none; }
+
+/* ── DESIGN „Angepasst" ──
+   Wählbar unter Einstellungen → Daten → Darstellung. Überschreibt nur die Farben,
+   Schriften und Abstände bleiben wie im Standard-Design. */
+:root[data-theme="angepasst"] {
+  --bg0: #3b3b3b;
+  --bg1: #3b3b3b;
+  --bg2: #545454;
+  --bg3: #1d2029;
+  --bg4: #252934;
+
+  --line:  #1d1f26;
+  --line2: #292c36;
+  --line3: #353945;
+
+  --t1: #ecedef;
+  --t2: #a4a9b4;
+  --t3: #6e7480;
+  --t4: #c9c9c9;
+
+  --blue:      #8ea3ff;
+  --blue2:     #6f86e6;
+  --blue-glow: rgba(142,163,255,.10);
+
+  --green:  #5bd38a;
+  --amber:  #efb14a;
+  --red:    #f17878;
+  --purple: #b48cff;
+  --teal:   #6ad0d6;
+
+  --green-soft:  rgba(91,211,138,.12);
+  --green-line:  rgba(91,211,138,.30);
+  --amber-soft:  rgba(239,177,74,.12);
+  --amber-line:  rgba(239,177,74,.30);
+  --red-soft:    rgba(241,120,120,.12);
+  --red-line:    rgba(241,120,120,.30);
+  --purple-soft: rgba(180,140,255,.12);
+  --purple-line: rgba(180,140,255,.30);
+  --teal-soft:   rgba(106,208,214,.12);
+  --teal-line:   rgba(106,208,214,.30);
+
+  --sh-pop: 0 14px 40px rgba(48,48,48,.55), 0 2px 8px rgba(0,0,0,.4);
+}

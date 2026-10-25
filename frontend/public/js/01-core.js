@@ -368,9 +368,26 @@ async function setFontScale(scale) {
   state.settings = await api('/api/settings');
 }
 
+// Design: '' = Standard, sonst Name eines :root[data-theme=…]-Blocks in styles.css
+function _applyTheme(theme) {
+  const t = theme ?? state.settings?.theme ?? '';
+  if (t) document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+}
+async function setTheme(theme) {
+  _applyTheme(theme);
+  document.querySelectorAll('.theme-preset-btn').forEach(b => {
+    b.classList.toggle('btn-primary', b.dataset.theme === theme);
+    b.classList.toggle('btn-ghost',   b.dataset.theme !== theme);
+  });
+  await api('/api/settings', 'PUT', { theme });
+  state.settings = await api('/api/settings');
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
   _applyFontScale();
+  _applyTheme();
   loadVersion();
   checkUpdate();
   setInterval(checkUpdate, UPDATE_CHECK_MS);

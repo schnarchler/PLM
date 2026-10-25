@@ -40,7 +40,7 @@ async function renderSettings() {
   // Im Team ändern nur Admins Einstellungen — der Server prüft es ohnehin
   const notAdmin = state.session?.mode === 'team' && !isAdmin()
     ? `<div class="st-notice">Einstellungen ändern dürfen nur Admins. Gewählt ist ${esc(state.session.user?.name || 'niemand')}
-        (${esc(ROLE_LABEL[state.session.user?.role] || '—')}) — Schriftgrösse und Personenwahl gehen trotzdem.</div>` : '';
+        (${esc(ROLE_LABEL[state.session.user?.role] || '—')}) — Schriftgrösse, Design und Personenwahl gehen trotzdem.</div>` : '';
   setLeftBody(`
     <div style="max-width:720px">
       ${notAdmin}
@@ -247,6 +247,13 @@ async function renderSettings() {
           ${[['0.8','Klein'],['0.9','Mittel-klein'],['1','Normal'],['1.1','Mittel-gross'],['1.2','Gross'],['1.35','Sehr gross']].map(([sc,l]) => {
             const active = (s.font_scale || '1') === sc ? ' btn-primary' : ' btn-ghost';
             return `<button class="btn btn-sm fs-preset-btn${active}" data-scale="${sc}" onclick="setFontScale('${sc}')">${l}</button>`;
+          }).join('')}
+        </div>
+        <div style="font-size:13px;color:var(--t3);margin:18px 0 10px">Farbdesign der Benutzeroberfläche.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${[['','Standard'],['angepasst','Angepasst']].map(([th,l]) => {
+            const active = (s.theme || '') === th ? ' btn-primary' : ' btn-ghost';
+            return `<button class="btn btn-sm theme-preset-btn${active}" data-theme="${th}" onclick="setTheme('${th}')">${l}</button>`;
           }).join('')}
         </div>
 
