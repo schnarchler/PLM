@@ -1,0 +1,5 @@
+{
+  "_hinweis": "GitHub setzt beim Download als ZIP Commit und Datum ein (export-subst, siehe .gitattributes). Im Git-Checkout bleiben die Platzhalter stehen, dann gilt der Stand aus Git.",
+  "commit": "$Format:%H$",
+  "date": "$Format:%cI$"
+}

@@ -1739,7 +1739,7 @@ const NO_CHANGE = [/^(POST|DELETE) \/api\/session$/, /^POST \/api\/shutdown$/, /
   /^POST \/api\/print-(receipt|receipt-delivery|label)$/, /^POST \/api\/launch-cad$/, /^POST \/api\/checkout\/open$/,
   /^POST \/api\/datasets\/\d+\/open-in-slicer$/];
 // Einstellungen, die jede Person für sich ändern darf
-const PERSONAL_SETTINGS = ['font_scale', 'theme'];
+const PERSONAL_SETTINGS = ['font_scale', 'theme', 'sort_projects', 'sort_items'];
 const ADMIN_ONLY = [
   /^PUT \/api\/settings$/,
   /^(POST|PUT) \/api\/users(\/\d+)?$/,
@@ -4957,22 +4957,40 @@ app.post('/api/shutdown', (req, res) => {
 // ── VERSION ───────────────────────────────────────────────────
 // Major.Minor aus package.json, dahinter die Anzahl Commits — zählt mit
 // jedem Commit von selbst hoch. Dazu Commit, Datum und ob nicht committete
-// Änderungen laufen. Ohne Git (Kopie ohne .git, Git nicht installiert)
-// bleibt die Nummer aus package.json.
+// Änderungen laufen. Ohne Git (ZIP-Download von GitHub, Git nicht installiert)
+// kommen Commit und Datum aus version.json, die Anzahl Commits liefert dann
+// erst die Update-Prüfung bei GitHub. Ohne beides bleibt die Nummer aus package.json.
 const REPO_DIR = process.env.PLM_REPO_DIR || path.join(__dirname, '..');   // Tests: eigenes Wegwerf-Repo
-const _versionOf = (pkg, count) => pkg.split('.').slice(0, 2).join('.') + '.' + count;
+const _majorMinor = pkg => pkg.split('.').slice(0, 2).join('.');
+const _versionOf = (pkg, count) => _majorMinor(pkg) + '.' + count;
+// GitHub setzt beim Download als ZIP Commit und Datum in version.json ein
+// (export-subst, siehe .gitattributes). Im Git-Checkout stehen dort nur die
+// Platzhalter — dann gibt es keinen Archiv-Stand.
+function _archiveStand() {
+  try {
+    const a = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'backend', 'version.json'), 'utf8'));
+    return /^[0-9a-f]{40}$/.test(a.commit) ? a : null;
+  } catch { return null; }
+}
 const APP_VERSION = (() => {
   const pkg = require('./package.json').version || '0.0.0';
-  const info = { version: pkg, commit: null, date: null, dirty: false };
+  const info = { version: pkg, commit: null, date: null, dirty: false, source: null };
   const git = args => require('child_process').execFileSync('git', args, {
     cwd: REPO_DIR, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
   }).toString().trim();
   try {
+    // Nur der eigene Checkout zählt — sonst antwortet ein Repo weiter oben,
+    // in das jemand die ZIP entpackt hat
+    if (!fs.existsSync(path.join(REPO_DIR, '.git'))) throw new Error('kein Git-Checkout');
     const count = git(['rev-list', '--count', 'HEAD']);
     const [commit, date] = git(['log', '-1', '--format=%h %cI']).split(' ');
-    Object.assign(info, { version: _versionOf(pkg, count), commit, date });
+    Object.assign(info, { version: _versionOf(pkg, count), commit, date, source: 'git' });
     info.dirty = git(['status', '--porcelain', '--untracked-files=no']) !== '';
-  } catch {}
+  } catch {
+    const a = _archiveStand();
+    if (a) Object.assign(info, { version: _majorMinor(pkg), commit: a.commit.slice(0, 7), sha: a.commit,
+      date: a.date || null, source: 'zip' });
+  }
   return info;
 })();
 
@@ -5003,6 +5021,7 @@ function _gitBg(args, env = {}) {
 async function checkForUpdate() {
   const res = { available: false, behind: 0, version: null, upstream: null, commits: [], fetched: false,
     checked_at: new Date().toISOString(), error: null };
+  if (APP_VERSION.source === 'zip') return checkGithubUpdate(res);
   if (!APP_VERSION.commit) return { ...res, error: 'Kein Git-Stand' };
   try {
     res.upstream = await _gitBg(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);

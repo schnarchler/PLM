@@ -1,0 +1,8 @@
+# GitHub-Download als ZIP: git archive setzt Commit und Datum in version.json
+# ein (export-subst). So kennt auch eine Kopie ohne Git ihren Stand und kann
+# bei GitHub nachfragen, ob es Neueres gibt — siehe server.js, VERSION.
+backend/version.json export-subst
+
+# Windows-Startskripte immer mit CRLF — cmd.exe liest reine LF-Zeilenenden
+# nicht zuverlässig. Gilt auch für den ZIP-Download.
+*.bat text eol=crlf
