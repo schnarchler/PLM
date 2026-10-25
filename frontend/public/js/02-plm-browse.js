@@ -707,12 +707,22 @@ function renderItemSheet(item, activeRevId) {
     ? fmtN(item.effective_weight_g, 1) + ' g' + (item.weight_g == null && item.item_type === 'asm' ? ' (aus BOM)' : '')
     : null;
 
+  // Aussenmasse der gewählten Revision. Mehrere STL mit verschiedenen Massen:
+  // die erste zeigen, alle im Tooltip.
+  const dims = revDims(rev);
+  const dimsN = new Set(dims.map(d => d.txt)).size;
+  const dimsCell = dims.length
+    ? `<span title="${esc(dims.map(d => d.name + ': ' + d.txt).join('\n'))}">${esc(dims[0].txt)}${
+        dimsN > 1 ? ` <span style="color:var(--t3)">+${dimsN - 1}</span>` : ''}</span>`
+    : null;
+
   // Erstellt nur mit Datum — mit Uhrzeit bräche die Zeile in der Spalte um
   const facts = _sheetKv([
     ['Typ', typeCode],
     ['Klassifizierung', item.classification ? _classChip(item.classification, 12) : null, true],
     ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
     ['Gewicht', weightTxt],
+    ...(item.item_type !== 'doc' ? [['Aussenmasse', dimsCell, true]] : []),
     ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null],
     ['Entwicklungszeit', _fmtHours(item.dev_hours)],
     ['Erstellt', item.created_at ? fmtD(item.created_at) : null],

@@ -765,6 +765,9 @@ function applySchema() {
   // Prüfsumme der gespeicherten Datei — wird beim ersten Vergleich berechnet
   // und dann nicht mehr neu gelesen (Checkout-Scan, Check-in, Revisionsvergleich)
   try { db.run('ALTER TABLE datasets ADD COLUMN sha1 TEXT DEFAULT NULL'); } catch {}
+  // Aussenmasse einer STL als JSON [x,y,z] in mm — ebenfalls beim ersten
+  // Abruf berechnet. NULL = noch nicht gerechnet, '' = nicht lesbar.
+  try { db.run('ALTER TABLE datasets ADD COLUMN dims TEXT DEFAULT NULL'); } catch {}
 
   // Rückverfolgung: welche Material-Charge in welcher Produktionsposition
   // steckt, und die Prüfung je Position (wer, wann, Ergebnis)
@@ -1399,8 +1402,8 @@ function copyRevisionContent(from, toRevId, toRevLabel) {
       const newFile = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + ext;
       fs.copyFileSync(path.join(FILES_DIR, ds.filename), path.join(FILES_DIR, newFile));
       const newName = (ds.original_name || '').replace(`_rev${from.rev}`, `_rev${toRevLabel}`);
-      runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes,sha1) VALUES (?,?,?,?,?,?,?,?)',
-        [toRevId, ds.ds_type, newFile, newName || ds.original_name, ds.file_size, ds.version, ds.notes, ds.sha1 ?? null]);
+      runGetId('INSERT INTO datasets (revision_id,ds_type,filename,original_name,file_size,version,notes,sha1,dims) VALUES (?,?,?,?,?,?,?,?,?)',
+        [toRevId, ds.ds_type, newFile, newName || ds.original_name, ds.file_size, ds.version, ds.notes, ds.sha1 ?? null, ds.dims ?? null]);
       files++;
     } catch (e) { console.error('Datei-Kopie fehlgeschlagen:', e.message); }
   }
@@ -1986,6 +1989,53 @@ app.delete('/api/projects/:id', (req, res) => {
 });
 
 // ==============================================================
+// AUSSENMASSE AUS STL
+// ==============================================================
+// Achsparallele Hülle über alle Eckpunkte, so wie das Teil in der Datei
+// liegt. STL kennt keine Einheit — Slicer und CAD rechnen in mm.
+function stlDimensions(buf) {
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  const add = (x, y, z) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+    if (z < z0) z0 = z; if (z > z1) z1 = z;
+  };
+  // Binär erkennen wie der Viewer (parseSTL): Grösse passt genau zur Dreieckzahl.
+  // Viele binäre Dateien beginnen trotzdem mit „solid" im Kopf.
+  const cnt = buf.length >= 84 ? buf.readUInt32LE(80) : -1;
+  if (cnt >= 0 && buf.length === 84 + cnt * 50) {
+    for (let i = 0; i < cnt; i++) {
+      for (let v = 0, o = 84 + i * 50 + 12; v < 3; v++, o += 12) {
+        add(buf.readFloatLE(o), buf.readFloatLE(o + 4), buf.readFloatLE(o + 8));
+      }
+    }
+  } else {
+    const re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
+    const txt = buf.toString('latin1');
+    let m;
+    while ((m = re.exec(txt)) !== null) add(+m[1], +m[2], +m[3]);
+  }
+  if (x1 < x0) return null;
+  const r = v => Math.round(v * 100) / 100;
+  return [r(x1 - x0), r(y1 - y0), r(z1 - z0)];
+}
+// Wie _fileHash: einmal gerechnet, dann aus der DB. Nur für STL-Dateien.
+function _datasetDims(ds) {
+  if (path.extname(ds.original_name || ds.filename || '').toLowerCase() !== '.stl') return null;
+  if (ds.dims === null || ds.dims === undefined) {
+    let d = null;
+    const p = path.join(FILES_DIR, ds.filename);
+    // Sehr grosse Dateien nicht lesen — gleiche Grenze wie die Prüfsumme
+    try { if (fs.statSync(p).size <= COMPARE_HASH_LIMIT) d = stlDimensions(fs.readFileSync(p)); }
+    catch (e) { console.error('STL-Masse nicht lesbar:', ds.filename, e.message); }
+    ds.dims = d ? JSON.stringify(d) : '';
+    if (ds.id) run('UPDATE datasets SET dims=? WHERE id=?', [ds.dims, ds.id]);
+  }
+  try { return ds.dims ? JSON.parse(ds.dims) : null; } catch { return null; }
+}
+
+// ==============================================================
 // ITEMS
 // ==============================================================
 app.get('/api/items/:id', (req, res) => {
@@ -1995,6 +2045,7 @@ app.get('/api/items/:id', (req, res) => {
   item.revisions = all('SELECT * FROM revisions WHERE item_id=? ORDER BY rowid DESC', [item.id]);
   item.revisions.forEach(rev => {
     rev.datasets = all('SELECT * FROM datasets WHERE revision_id=? ORDER BY ds_type, uploaded_at', [rev.id]);
+    rev.datasets.forEach(d => { d.dims = _datasetDims(d); });
     // Rohmaterial mit Namen — das PDF-Datenblatt zeigt sonst nur die ID
     rev.print_settings = get(`SELECT ps.*, rm.name AS raw_material_name FROM print_settings ps
       LEFT JOIN raw_materials rm ON rm.id=ps.raw_material_id WHERE ps.revision_id=?`, [rev.id]) || null;
