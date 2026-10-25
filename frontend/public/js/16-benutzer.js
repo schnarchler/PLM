@@ -180,7 +180,7 @@ function _usersPanel(users, s, admin) {
       ${_avatar(u.name, 30)}
       <input class="fi" style="flex:1;min-width:120px" value="${esc(u.name)}" onchange="_saveUser(${u.id}, { name: this.value })" aria-label="Name">
       ${mode === 'team' ? roleSelect(u) : roleChip(u)}
-      ${u.role === 'admin' && mode === 'team' ? (u.has_pin
+      ${mode === 'team' ? (u.has_pin
         ? `<button class="btn btn-ghost btn-sm" onclick="_setUserPin(${u.id})">PIN ändern</button>
            <button class="btn btn-ghost btn-sm" onclick="_saveUser(${u.id}, { pin: null })">PIN entfernen</button>`
         : `<button class="btn btn-ghost btn-sm" onclick="_setUserPin(${u.id})">PIN setzen</button>`) : ''}
@@ -231,6 +231,45 @@ async function _setUserPin(id) {
   if (pin === null) return;
   await _saveUser(id, { pin });
 }
+// Eigene PIN: neue zweimal eintippen, die bisherige zur Bestätigung
+function openOwnPinModal(remove = false) {
+  const has = !!state.session?.user?.has_pin;
+  const pw = (id, label) => `<div class="fg"><label class="fl" for="${id}">${label}</label>
+    <input class="fi" id="${id}" type="password" inputmode="numeric" autocomplete="off" maxlength="12"></div>`;
+  _showDynModal(`<div class="modal" style="max-width:380px;width:95vw">
+    <div class="modal-head"><div class="modal-title">${remove ? 'PIN entfernen' : has ? 'PIN ändern' : 'PIN setzen'}</div></div>
+    <form class="modal-body" id="own-pin-form" style="display:flex;flex-direction:column;gap:4px">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:8px;line-height:1.55">${remove
+        ? 'Ohne PIN kann jede Person an diesem Gerät deine Kachel wählen.'
+        : 'Die PIN wird abgefragt, wenn jemand zu dir wechselt — nicht, wenn du nach einer Pause weitermachst. 4 bis 12 Zeichen.'}</div>
+      ${has ? pw('own-pin-cur', 'Bisherige PIN') : ''}
+      ${remove ? '' : pw('own-pin-new', 'Neue PIN') + pw('own-pin-rep', 'Neue PIN wiederholen')}
+      <div id="own-pin-err" style="font-size:13px;color:var(--red);min-height:18px"></div>
+      <button type="submit" hidden></button>
+    </form>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn ${remove ? 'btn-red' : 'btn-primary'}" onclick="_saveOwnPin(${remove})">${remove ? 'Entfernen' : 'Speichern'}</button>
+    </div>
+  </div>`);
+  document.getElementById('own-pin-form').addEventListener('submit', e => { e.preventDefault(); _saveOwnPin(remove); });
+  document.querySelector('#own-pin-form input')?.focus();
+}
+async function _saveOwnPin(remove) {
+  const err = document.getElementById('own-pin-err');
+  const pin = remove ? null : V('own-pin-new');
+  if (!remove && pin !== V('own-pin-rep')) { err.textContent = 'Die beiden PINs stimmen nicht überein'; return; }
+  // Direkt mit fetch: Fehler gehören in den Dialog, nicht als Meldung unten
+  const r = await fetch(API + '/api/session/pin', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin, current_pin: document.getElementById('own-pin-cur')?.value }) });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { err.textContent = body.error || 'Speichern fehlgeschlagen'; return; }
+  _hideDynModal();
+  toast(remove ? 'PIN entfernt' : 'PIN gespeichert', 'ok');
+  await loadSession();
+  if (state.view === 'settings') renderSettings();
+}
+
 async function _addUser() {
   const name = V('st-user-new').trim();
   if (!name) return;
