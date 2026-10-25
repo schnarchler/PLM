@@ -10,11 +10,40 @@ function setProjectView(v) {
   renderProjectsList();
 }
 
+// Projekte und Items im Projekt nach Nummer (wie bisher) oder Name — getrennt wählbar.
+// Gespeichert auf dem Server wie die Schriftgrösse: Der Browser vergisst es, sobald
+// das PLM nach einem Neustart einen anderen Port bekommt.
+const _sortOf = key => state.settings?.[key] || 'number';
+async function setPlmSort(key, v, rerender) {
+  state.settings = { ...state.settings, [key]: v };
+  rerender();
+  await api('/api/settings', 'PUT', { [key]: v });
+}
+const _byName = (a, b) => a.name.localeCompare(b.name, 'de', { numeric: true, sensitivity: 'base' });
+// Der Server liefert Items nach Typ, dann Nummer absteigend — beim Namen bleibt die Gruppierung nach Typ
+const _sortItems = items => _sortOf('sort_items') === 'name' ? items.sort((a, b) => a.item_type.localeCompare(b.item_type) || _byName(a, b)) : items;
+function _sortBtns(key, rerender) {
+  const b = (v, label, title) => `<button class="btn btn-sm ${_sortOf(key) === v ? 'btn-primary' : 'btn-ghost'}" onclick="setPlmSort('${key}','${v}',${rerender})" title="${title}">${label}</button>`;
+  return b('number', 'Nr.', 'Nach Nummer sortieren') + b('name', 'A–Z', 'Nach Name sortieren');
+}
+// Baum und Struktur-Tab neu sortieren, der offene Tab bleibt offen
+function _resortProject() {
+  if (!state.project) return;
+  renderProjectTree(state.project);
+  if (!document.getElementById('pt-files')) return;
+  const tabs = [...document.querySelectorAll('#dp-tabs .tab')];
+  const active = tabs.findIndex(t => t.classList.contains('active'));
+  openProjectDetail(state.project);
+  if (active > 0) document.querySelectorAll('#dp-tabs .tab')[active]?.click();
+}
+
 async function renderProjectsList() {
   const viewBtn = (v, icon, title) => `<button class="btn btn-sm ${_projectView === v ? 'btn-primary' : 'btn-ghost'}" onclick="setProjectView('${v}')" title="${title}">${icon}</button>`;
-  setLeftHeader('Projekte', `<span style="display:inline-flex;gap:4px;align-items:center">${viewBtn('list', '☰', 'Als Liste')}${viewBtn('tiles', '▦', 'Als Kacheln')}
+  setLeftHeader('Projekte', `<span style="display:inline-flex;gap:4px;align-items:center">${_sortBtns('sort_projects', 'renderProjectsList')}<span style="width:6px"></span>${viewBtn('list', '☰', 'Als Liste')}${viewBtn('tiles', '▦', 'Als Kacheln')}
     <button class="btn btn-primary btn-sm" style="margin-left:6px" onclick="openNewProjectModal()">+ Projekt</button></span>`);
   const projects = await api('/api/projects');
+  // Der Server liefert angeheftete zuerst, dann nach Nummer absteigend
+  if (_sortOf('sort_projects') === 'name') projects.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || _byName(a, b));
   state.projects = projects;
   if (!projects.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">Noch keine Projekte</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openNewProjectModal()">Erstes Projekt anlegen</button></div></div>`);
@@ -152,6 +181,7 @@ function renderProjectTree(p) {
   const filterOn = state.filterBomChildren !== false;
   const rootItems = items.filter(i => i.parent_id === null);
   const visibleRoots = filterOn ? rootItems.filter(i => !bomChildIds.has(i.id)) : rootItems;
+  _sortItems(visibleRoots);
   const hiddenCount = rootItems.length - visibleRoots.length;
 
   setLeftBody(`
@@ -160,6 +190,7 @@ function renderProjectTree(p) {
       <button onclick="toggleBomFilter()" style="font-size:13px;padding:3px 9px;border-radius:var(--r-xs);cursor:pointer;font-family:var(--sans);border:1px solid ${filterOn?'rgba(157,180,255,.35)':'var(--line2)'};background:${filterOn?'rgba(157,180,255,.1)':'transparent'};color:${filterOn?'var(--blue)':'var(--t3)'}">
         BOM-Kinder ${filterOn?'ausgeblendet':'sichtbar'}${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
       </button>
+      <span style="margin-left:auto;display:inline-flex;gap:4px">${_sortBtns('sort_items', '_resortProject')}</span>
     </div>
     <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>`);
 
@@ -278,7 +309,7 @@ function openProjectDetail(p) {
     </div>`;
   }
 
-  const roots = allItems.filter(i => !i.parent_id);
+  const roots = _sortItems(allItems.filter(i => !i.parent_id));
   const filesHtml = roots.length
     ? roots.map(i => renderItemFiles(i, 0)).join('')
     : '<div style="color:var(--t3);font-size:13px;padding:8px 0">Keine Items im Projekt</div>';
