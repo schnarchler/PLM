@@ -113,10 +113,10 @@ body {
   border-radius: 999px; letter-spacing: 0; cursor: default; }
 .tb-logo .tb-ver:empty { display: none; }
 .tb-logo .tb-ver.dirty { color: var(--amber); border-color: var(--amber-line); }
-.tb-logo .tb-update { font: 600 10px var(--mono); color: var(--blue); padding: 2px 7px; border: 1px solid var(--blue2);
-  border-radius: 999px; letter-spacing: 0; background: var(--blue-glow); cursor: pointer; }
-.tb-logo .tb-update[hidden] { display: none; }
-.tb-logo .tb-update:hover { color: var(--t1); }
+.tb-logo .tb-ver.has-update { cursor: pointer; }
+.tb-logo .tb-ver.has-update::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px;
+  border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); vertical-align: 1px; }
+.tb-logo .tb-ver.has-update:hover { border-color: var(--blue2); }
 .tb-search {
   flex: 1;
   max-width: 420px;

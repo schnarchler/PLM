@@ -75,23 +75,36 @@ async function loadVersion() {
     const v = await api('/api/version');
     el.textContent = 'v' + v.version + (v.dirty ? ' · geändert' : '');
     el.classList.toggle('dirty', !!v.dirty);
-    el.title = [v.date ? 'Stand ' + new Date(v.date).toLocaleDateString('de-CH') : '', v.commit,
+    el.dataset.title = [v.date ? 'Stand ' + new Date(v.date).toLocaleDateString('de-CH') : '', v.commit,
       v.dirty ? 'mit Änderungen, die noch nicht committet sind' : ''].filter(Boolean).join(' · ');
+    _markUpdate();
   } catch {}
 }
 
+// Update verfügbar: blauer Punkt an der Version, Klick öffnet den Dialog —
+// so sieht man es auch, wenn die Meldung beim Öffnen verpasst wurde
+function _markUpdate() {
+  const el = document.getElementById('tb-ver'), u = state.update;
+  if (!el) return;
+  const on = !!u?.available;
+  el.classList.toggle('has-update', on);
+  el.title = [on ? `Update: Version ${u.version} verfügbar (${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'}) — klicken für Details` : '',
+    el.dataset.title || ''].filter(Boolean).join('\n');
+}
+
 // Neuere Commits auf dem Git-Remote: beim Öffnen einmal melden (pro Tab und
-// neuestem Commit), danach bleibt oben der Knopf „Update". Weiterarbeiten
-// mit der laufenden Version geht immer.
-async function checkUpdate() {
+// neuestem Commit), danach bleibt der Punkt an der Version. Im Betrieb prüft
+// checkUpdate(false) regelmässig nach, ohne Dialog. Weiterarbeiten mit der
+// laufenden Version geht immer.
+const UPDATE_CHECK_MS = 30 * 60 * 1000;
+async function checkUpdate(ask = true) {
   try { state.update = await api('/api/update'); } catch { return; }
-  const u = state.update, btn = document.getElementById('tb-update');
-  if (!u?.available || !btn) return;
-  btn.hidden = false;
-  btn.title = `Version ${u.version} verfügbar · ${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'} auf ${u.upstream}`;
+  _markUpdate();
+  const u = state.update;
+  if (!ask || !u?.available) return;
   let seen = null;
   try { seen = sessionStorage.getItem('plm_update_seen'); } catch {}
-  // Ist schon ein Dialog offen (git fetch kann dauern), bleibt es beim Knopf
+  // Ist schon ein Dialog offen (git fetch kann dauern), bleibt es beim Punkt
   if (seen !== u.commits[0]?.commit && !document.querySelector('.overlay.open')) showUpdateDialog();
 }
 
@@ -357,6 +370,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   _applyFontScale();
   loadVersion();
   checkUpdate();
+  setInterval(() => checkUpdate(false), UPDATE_CHECK_MS);
   loadCadStatus();
   history.replaceState({ view: 'dashboard' }, '');
   gotoView('dashboard');

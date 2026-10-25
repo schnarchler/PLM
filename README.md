@@ -561,7 +561,8 @@ Welche Version läuft, steht oben links neben dem Logo und auf dem Startbildschi
 Beim Öffnen prüft PLM, ob auf dem Git-Remote neuere Commits liegen (`git fetch` im
 Hintergrund, ab dem laufenden Commit). Gibt es welche, zeigt ein Dialog die neue
 Versionsnummer und die Commits — mit der laufenden Version weiterarbeiten geht immer,
-oben neben der Version bleibt dann der Knopf „Update“. Die Prüfung fragt nie nach
+an der Version oben links bleibt dann ein blauer Punkt (Klick öffnet den Dialog wieder);
+im Betrieb prüft die Oberfläche alle 30 Minuten nach. Die Prüfung fragt nie nach
 Passwort oder Passphrase: bei SSH-Remotes braucht es einen Schlüssel ohne Passphrase
 oder einen laufenden SSH-Agent. Ist das Remote nicht erreichbar, zählt der Stand vom
 letzten Abruf; ohne Git oder ohne Upstream-Branch bleibt es still.
