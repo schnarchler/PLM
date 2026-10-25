@@ -80,6 +80,51 @@ async function loadVersion() {
   } catch {}
 }
 
+// Neuere Commits auf dem Git-Remote: beim Öffnen einmal melden (pro Tab und
+// neuestem Commit), danach bleibt oben der Knopf „Update". Weiterarbeiten
+// mit der laufenden Version geht immer.
+async function checkUpdate() {
+  try { state.update = await api('/api/update'); } catch { return; }
+  const u = state.update, btn = document.getElementById('tb-update');
+  if (!u?.available || !btn) return;
+  btn.hidden = false;
+  btn.title = `Version ${u.version} verfügbar · ${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'} auf ${u.upstream}`;
+  let seen = null;
+  try { seen = sessionStorage.getItem('plm_update_seen'); } catch {}
+  // Ist schon ein Dialog offen (git fetch kann dauern), bleibt es beim Knopf
+  if (seen !== u.commits[0]?.commit && !document.querySelector('.overlay.open')) showUpdateDialog();
+}
+
+function showUpdateDialog() {
+  const u = state.update;
+  if (!u?.available) return;
+  try { sessionStorage.setItem('plm_update_seen', u.commits[0]?.commit || ''); } catch {}
+  const more = u.behind - u.commits.length;
+  _showDynModal(`<div class="modal" style="max-width:580px;width:95vw">
+    <div class="modal-head"><div class="modal-title" style="color:var(--blue)">Neue Version verfügbar: v${esc(u.version)}</div></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--t2)">
+      <div>Auf <span style="font-family:var(--mono)">${esc(u.upstream)}</span> gibt es
+        ${u.behind === 1 ? 'einen neuen Commit' : u.behind + ' neue Commits'} seit dem laufenden Stand:</div>
+      <div style="display:flex;flex-direction:column;gap:5px;max-height:240px;overflow-y:auto">
+        ${u.commits.map(c => `<div style="display:flex;gap:10px;align-items:baseline">
+          <span style="font-family:var(--mono);font-size:12px;color:var(--blue);flex-shrink:0">${esc(c.commit)}</span>
+          <span style="flex:1;min-width:0">${esc(c.subject)}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--t4);flex-shrink:0">${c.date ? new Date(c.date).toLocaleDateString('de-CH') : ''}</span>
+        </div>`).join('')}
+        ${more > 0 ? `<div style="color:var(--t4)">… und ${more} weitere</div>` : ''}
+      </div>
+      <div style="color:var(--t3);line-height:1.6">Zum Aktualisieren PLM beenden, im PLM-Ordner
+        <code style="font-family:var(--mono)">git pull</code> ausführen und neu starten.
+        Bis dahin läuft die bisherige Version ganz normal weiter.</div>
+      ${u.fetched ? '' : '<div style="color:var(--t4)">Das Remote war gerade nicht erreichbar — Stand vom letzten Abruf.</div>'}
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal();shutdownServer()">PLM beenden</button>
+      <button class="btn btn-primary" onclick="_hideDynModal()">Mit dieser Version weiterfahren</button>
+    </div>
+  </div>`);
+}
+
 // CAD-Knopf oben: sichtbar, sobald in plm.config ein Programm eingetragen ist
 async function loadCadStatus() {
   try { state.cad = await api('/api/cad'); } catch { state.cad = null; }
@@ -311,6 +356,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   state.settings = await api('/api/settings').catch(() => ({}));
   _applyFontScale();
   loadVersion();
+  checkUpdate();
   loadCadStatus();
   history.replaceState({ view: 'dashboard' }, '');
   gotoView('dashboard');

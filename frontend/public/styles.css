@@ -113,6 +113,10 @@ body {
   border-radius: 999px; letter-spacing: 0; cursor: default; }
 .tb-logo .tb-ver:empty { display: none; }
 .tb-logo .tb-ver.dirty { color: var(--amber); border-color: var(--amber-line); }
+.tb-logo .tb-update { font: 600 10px var(--mono); color: var(--blue); padding: 2px 7px; border: 1px solid var(--blue2);
+  border-radius: 999px; letter-spacing: 0; background: var(--blue-glow); cursor: pointer; }
+.tb-logo .tb-update[hidden] { display: none; }
+.tb-logo .tb-update:hover { color: var(--t1); }
 .tb-search {
   flex: 1;
   max-width: 420px;
