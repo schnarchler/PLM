@@ -1872,8 +1872,11 @@ const ADMIN_ONLY = [
   /^(POST|PUT|DELETE) \/api\/(printers|nozzles|material-presets)(\/\d+)?$/,
   /^DELETE \/api\/(projects|items|customers|suppliers)\/\d+$/,
 ];
+// Lesen nur für Admins: ganze Datenbank, Sicherungen, Dateiablage auf der Platte
+const ADMIN_READ = [/^GET \/api\/(export|export-named|backups|file-index)$/];
 function requiredRole(req) {
   const key = req.method + ' ' + req.path;
+  if (ADMIN_READ.some(r => r.test(key))) return 'admin';
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || NO_CHANGE.some(r => r.test(key))) return null;
   if (key === 'PUT /api/settings' && Object.keys(req.body || {}).every(k => PERSONAL_SETTINGS.includes(k))) return 'user';
   if (ADMIN_ONLY.some(r => r.test(key))) return 'admin';
