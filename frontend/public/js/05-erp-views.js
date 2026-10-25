@@ -246,28 +246,30 @@ const _telLink = phone => `<a href="tel:${esc(_telHref(phone))}" onclick="event.
 const _pill = (cls, text, title) => `<span class="partner-pill ${cls}" title="${esc(title)}">${text}</span>`;
 
 const _partner = {};   // je Art: { cfg, prefs, filter }
-function _registerPartnerKind(kind, cfg) {
+// Ansicht und Sortierung liegen als JSON in den Einstellungen (cfg.prefsKey)
+function _partnerPrefs(cfg) {
   const prefs = { view: 'cards', sort: 'name' };
   try {
-    const saved = JSON.parse(localStorage.getItem(cfg.prefsKey) || '{}');
+    const saved = JSON.parse(_pref(cfg.prefsKey, '{}'));
     if (saved.view) prefs.view = saved.view;
     if (saved.sortChosen && saved.sort) Object.assign(prefs, { sort: saved.sort, sortChosen: true });
   } catch {}
-  _partner[kind] = { cfg, prefs, filter: { text: '', show: '' } };
+  return prefs;
 }
-function _savePartnerPrefs(kind) {
+function _registerPartnerKind(kind, cfg) {
+  _partner[kind] = { cfg, get prefs() { return _partnerPrefs(cfg); }, filter: { text: '', show: '' } };
+}
+function _savePartnerPrefs(kind, change) {
   const p = _partner[kind];
-  try { localStorage.setItem(p.cfg.prefsKey, JSON.stringify(p.prefs)); } catch {}
+  _setPref(p.cfg.prefsKey, JSON.stringify({ ...p.prefs, ...change }));
 }
 function _partnerSetView(kind, view) {
-  _partner[kind].prefs.view = view;
-  _savePartnerPrefs(kind);
+  _savePartnerPrefs(kind, { view });
   _partner[kind].cfg.header();
   _renderPartnerRows(kind);
 }
 function _partnerSetSort(kind, sort) {
-  Object.assign(_partner[kind].prefs, { sort, sortChosen: true });
-  _savePartnerPrefs(kind);
+  _savePartnerPrefs(kind, { sort, sortChosen: true });
   _renderPartnerRows(kind);
 }
 function _partnerSetFilter(kind, key, value) { _partner[kind].filter[key] = value; _renderPartnerRows(kind); }
@@ -437,7 +439,7 @@ const _partnerAddressText = p => [p.name, ..._addrLines(p)].join('\n');
 
 // ── CUSTOMERS ─────────────────────────────────────────────────
 _registerPartnerKind('customer', {
-  prefsKey: 'plm_customer_view',
+  prefsKey: 'customer_view',
   noun: ['Kunde', 'Kunden'],
   rows: () => state.customers || [],
   detailId: () => state.customerDetailId,

@@ -377,21 +377,19 @@ async function generatePoDoc(id) {
 const PO_ST = { DRAFT:'Entwurf', ORDERED:'Bestellt', RECEIVED:'Erhalten', CANCELLED:'Storniert' };
 const PO_ST_CLS = { DRAFT:'st-DFT', ORDERED:'st-REV', RECEIVED:'st-REL', CANCELLED:'st-OBS' };
 
-// Einkauf hat zwei Reiter: Bestellungen und Lieferanten. Der Browser merkt sich den letzten.
-let _purchasingTab = 'orders';
-try { if (localStorage.getItem('plm_purchasing_tab') === 'suppliers') _purchasingTab = 'suppliers'; } catch {}
+// Einkauf hat zwei Reiter: Bestellungen und Lieferanten. Der letzte bleibt gewählt.
+const _purchasingTab = () => _pref('purchasing_tab', 'orders');
 function _setPurchasingTab(tab, render = true) {
-  _purchasingTab = tab;
-  try { localStorage.setItem('plm_purchasing_tab', tab); } catch {}
+  _setPref('purchasing_tab', tab);
   if (render) { closeDetail(); renderPurchasing(); }
 }
 function _purchasingTitle() {
   const seg = (key, label) =>
-    `<button class="${_purchasingTab === key ? 'active' : ''}" onclick="_setPurchasingTab('${key}')">${label}</button>`;
+    `<button class="${_purchasingTab() === key ? 'active' : ''}" onclick="_setPurchasingTab('${key}')">${label}</button>`;
   return `<strong>Einkauf</strong><div class="partner-seg" style="margin-left:6px">${seg('orders', 'Bestellungen')}${seg('suppliers', 'Lieferanten')}</div>`;
 }
 function _purchasingActions() {
-  return _purchasingTab === 'suppliers'
+  return _purchasingTab() === 'suppliers'
     ? `<div style="display:flex;gap:8px;align-items:center">${_partnerViewToggle('supplier')}
         <button class="btn btn-primary btn-sm" onclick="openSupplierModal()">+ Lieferant</button></div>`
     : `<button class="btn btn-primary btn-sm" onclick="openPoModal()">+ Bestellung</button>`;
@@ -402,7 +400,7 @@ async function renderPurchasing() {
   const [pos, suppliers] = await Promise.all([api('/api/purchase-orders'), api('/api/suppliers')]);
   state._poSuppliers = suppliers;
   state.suppliers = suppliers;
-  if (_purchasingTab === 'suppliers') return _renderSupplierTab();
+  if (_purchasingTab() === 'suppliers') return _renderSupplierTab();
 
   const poRows = pos.map(po => {
     const total = po.total > 0 ? `<span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${fmtCHF(po.total)}</span>` : '';
@@ -732,7 +730,7 @@ const _PO_GROUPS = [
 const _PO_OPEN_STATUSES = ['DRAFT', 'ORDERED'];
 
 _registerPartnerKind('supplier', {
-  prefsKey: 'plm_supplier_view',
+  prefsKey: 'supplier_view',
   noun: ['Lieferant', 'Lieferanten'],
   rows: () => state.suppliers || [],
   detailId: () => state.supplierDetailId,

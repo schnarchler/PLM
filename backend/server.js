@@ -1739,7 +1739,8 @@ const NO_CHANGE = [/^(POST|DELETE) \/api\/session$/, /^POST \/api\/shutdown$/, /
   /^POST \/api\/print-(receipt|receipt-delivery|label)$/, /^POST \/api\/launch-cad$/, /^POST \/api\/checkout\/open$/,
   /^POST \/api\/datasets\/\d+\/open-in-slicer$/];
 // Einstellungen, die jede Person für sich ändern darf
-const PERSONAL_SETTINGS = ['font_scale', 'theme', 'sort_projects', 'sort_items'];
+const PERSONAL_SETTINGS = ['font_scale', 'theme', 'sort_projects', 'sort_items', 'project_view',
+  'customer_view', 'supplier_view', 'purchasing_tab'];
 const ADMIN_ONLY = [
   /^PUT \/api\/settings$/,
   /^(POST|PUT) \/api\/users(\/\d+)?$/,
@@ -5053,8 +5054,54 @@ async function checkForUpdate() {
   return res;
 }
 
+// ZIP-Download ohne Git: GitHub über HTTPS fragen — ohne Anmeldung, das
+// Repository ist öffentlich. HEAD ist dort der Standard-Branch. Die Antwort hat
+// dieselbe Form wie bei Git, dazu der Link auf die neue ZIP.
+const GITHUB_API = process.env.PLM_GITHUB_API || 'https://api.github.com';   // Tests: Schein-GitHub
+async function _github(url) {
+  const r = await fetch(GITHUB_API + url, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'PLM-ERP' }, signal: AbortSignal.timeout(10000),
+  }).catch(e => { throw new Error('GitHub nicht erreichbar: ' + (e.cause?.code || e.message)); });
+  if (r.ok) return r;
+  throw new Error(r.status === 404 ? 'Stand auf GitHub nicht gefunden'
+    : r.status === 403 || r.status === 429 ? 'GitHub-Abfragelimit erreicht, später erneut' : 'GitHub antwortet mit ' + r.status);
+}
+
+async function checkGithubUpdate(res) {
+  const m = String(require('./package.json').repository?.url || '').match(/github\.com[/:]([^/]+)\/(.+?)(?:\.git)?\/?$/);
+  if (!m) return { ...res, error: 'Kein GitHub-Repository in package.json' };
+  const repo = m[1] + '/' + m[2];
+  Object.assign(res, { upstream: 'github.com/' + repo, download: `https://github.com/${repo}/archive/HEAD.zip` });
+  try {
+    const cmp = await (await _github(`/repos/${repo}/compare/${APP_VERSION.sha}...HEAD`)).json();
+    // Anzahl Commits des neusten Stands = letzte Seite bei einem Commit pro Seite
+    const link = (await _github(`/repos/${repo}/commits?sha=HEAD&per_page=1`)).headers.get('link') || '';
+    const total = parseInt((link.match(/[?&]page=(\d+)>; rel="last"/) || [])[1], 10) || 1;
+    res.fetched = true;
+    res.behind = cmp.ahead_by || 0;   // HEAD ist „ahead“ = so viele neue Commits für diese Kopie
+    // Die eigene Nummer: neuster Stand minus die neuen Commits
+    const pkg = require('./package.json').version || '0.0.0';
+    if (cmp.status === 'identical' || cmp.status === 'ahead') APP_VERSION.version = _versionOf(pkg, total - res.behind);
+    if (!res.behind) return res;
+    res.commits = (cmp.commits || []).slice(-20).reverse().map(c => ({
+      commit: c.sha.slice(0, 7), date: c.commit?.committer?.date || null, subject: String(c.commit?.message || '').split('\n')[0],
+    }));
+    // Versionsnummer wie oben, mit Major.Minor aus der neuen package.json
+    let next = pkg;
+    try {
+      const f = await (await _github(`/repos/${repo}/contents/backend/package.json?ref=HEAD`)).json();
+      next = JSON.parse(Buffer.from(f.content, 'base64').toString()).version || pkg;
+    } catch {}
+    res.version = _versionOf(next, total);
+    res.available = true;
+  } catch (e) { res.error = e.message; }
+  return res;
+}
+
 function updateStatus() {
-  if (!_update || Date.now() - _update.at > UPDATE_MAX_AGE) _update = { at: Date.now(), promise: checkForUpdate() };
+  // Ein Fehler in der Prüfung darf PLM nie mitreissen — dann eben keine Meldung
+  if (!_update || Date.now() - _update.at > UPDATE_MAX_AGE) _update = { at: Date.now(), promise: checkForUpdate()
+    .catch(e => ({ available: false, behind: 0, version: null, commits: [], fetched: false, error: e.message })) };
   return _update.promise;
 }
 
@@ -6989,7 +7036,8 @@ choosePort().then(p => { PORT = p; }).then(initDb).then(() => {
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('  PLM & ERP ' + APP_VERSION.version + (APP_VERSION.commit ? ' (' + APP_VERSION.commit
-      + (APP_VERSION.dirty ? ', nicht committete Aenderungen' : '') + ')' : ''));
+      + (APP_VERSION.dirty ? ', nicht committete Aenderungen' : '')
+      + (APP_VERSION.source === 'zip' ? ', ZIP-Download' : '') + ')' : ''));
     console.log('  laeuft auf http://localhost:' + PORT);
     console.log('  Datenpfad: ' + DATA_DIR);
     console.log('');
@@ -6998,7 +7046,8 @@ choosePort().then(p => { PORT = p; }).then(initDb).then(() => {
     // ist, wenn der Browser fragt — sonst erst beim ersten Öffnen
     if (process.env.PLM_OPEN_BROWSER === '1') updateStatus().then(u => {
       if (u.available) console.log(`  Neue Version ${u.version} auf ${u.upstream} (${u.behind} Commit${u.behind === 1 ? '' : 's'})`
-        + ' - zum Aktualisieren: beenden, git pull, neu starten\n');
+        + (u.download ? ` - zum Aktualisieren: beenden, ${u.download} herunterladen, ueber den PLM-Ordner kopieren, neu starten\n`
+          : ' - zum Aktualisieren: beenden, git pull, neu starten\n'));
     });
   });
   server.on('error', err => {

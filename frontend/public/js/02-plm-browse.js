@@ -2,22 +2,18 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── PROJECTS LIST ─────────────────────────────────────────────
-// Projekte als Liste oder Kacheln — die Wahl merkt sich der Browser
-let _projectView = (() => { try { return localStorage.getItem('plm.projectView') || 'list'; } catch { return 'list'; } })();
+// Projekte als Liste oder Kacheln
+const _projectView = () => _pref('project_view', 'list');
 function setProjectView(v) {
-  _projectView = v;
-  try { localStorage.setItem('plm.projectView', v); } catch {}
+  _setPref('project_view', v);
   renderProjectsList();
 }
 
-// Projekte und Items im Projekt nach Nummer (wie bisher) oder Name — getrennt wählbar.
-// Gespeichert auf dem Server wie die Schriftgrösse: Der Browser vergisst es, sobald
-// das PLM nach einem Neustart einen anderen Port bekommt.
-const _sortOf = key => state.settings?.[key] || 'number';
-async function setPlmSort(key, v, rerender) {
-  state.settings = { ...state.settings, [key]: v };
+// Projekte und Items im Projekt nach Nummer (wie bisher) oder Name — getrennt wählbar
+const _sortOf = key => _pref(key, 'number');
+function setPlmSort(key, v, rerender) {
+  _setPref(key, v);
   rerender();
-  await api('/api/settings', 'PUT', { [key]: v });
 }
 const _byName = (a, b) => a.name.localeCompare(b.name, 'de', { numeric: true, sensitivity: 'base' });
 // Der Server liefert Items nach Typ, dann Nummer absteigend — beim Namen bleibt die Gruppierung nach Typ
@@ -38,7 +34,7 @@ function _resortProject() {
 }
 
 async function renderProjectsList() {
-  const viewBtn = (v, icon, title) => `<button class="btn btn-sm ${_projectView === v ? 'btn-primary' : 'btn-ghost'}" onclick="setProjectView('${v}')" title="${title}">${icon}</button>`;
+  const viewBtn = (v, icon, title) => `<button class="btn btn-sm ${_projectView() === v ? 'btn-primary' : 'btn-ghost'}" onclick="setProjectView('${v}')" title="${title}">${icon}</button>`;
   setLeftHeader('Projekte', `<span style="display:inline-flex;gap:4px;align-items:center">${_sortBtns('sort_projects', 'renderProjectsList')}<span style="width:6px"></span>${viewBtn('list', '☰', 'Als Liste')}${viewBtn('tiles', '▦', 'Als Kacheln')}
     <button class="btn btn-primary btn-sm" style="margin-left:6px" onclick="openNewProjectModal()">+ Projekt</button></span>`);
   const projects = await api('/api/projects');
@@ -69,7 +65,7 @@ async function renderProjectsList() {
         </button>`;
   const hover = `onmouseover="this.style.borderColor='var(--line3)';this.style.background='var(--bg3)'" onmouseout="this.style.borderColor='var(--line)';this.style.background='var(--bg2)'"`;
 
-  if (_projectView === 'tiles') {
+  if (_projectView() === 'tiles') {
     setLeftBody(`<div class="card-grid">${projects.map(p => `
       <div onclick="openProject(${p.id})" style="display:flex;flex-direction:column;gap:10px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s;position:relative;overflow:hidden" ${hover}>
         ${p.color ? `<span style="position:absolute;left:0;right:0;top:0;height:3px;background:${esc(p.color)}"></span>` : ''}

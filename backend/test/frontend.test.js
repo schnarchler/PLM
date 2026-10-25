@@ -559,6 +559,7 @@ test('Revisionsvergleich: Änderungen werden markiert, Gleiches lässt sich ausb
 
 // Kunden und Lieferanten teilen sich die Darstellung (GESCHÄFTSPARTNER).
 // Die Helfer sind im Browser globale Konstanten; hier aus dem Ausschnitt holen.
+Object.assign(global, evalPart('js/01-core.js', 'const _pref =', 'function _setPref', '({ _pref })'));
 const PARTNER = evalPart('js/05-erp-views.js', '// ── GESCHÄFTSPARTNER', '// Auftragsphasen',
   '({ _visiblePartners, _partnerCard, _partnerTable, _partner, _mailLink, _telLink, _pill })');
 Object.assign(global, { _mailLink: PARTNER._mailLink, _telLink: PARTNER._telLink, _pill: PARTNER._pill });
@@ -574,8 +575,10 @@ test('Kunden: alphabetisch als Standard, Suche mit mehreren Wörtern, Filter und
     { id: 3, number: 'KD010', name: 'Alpha SA', city: 'Genf', order_count: 1,
       open_order_count: 0, open_quote_count: 1, revenue: 900, last_activity: '2026-07-15' },
   ];
-  const { filter, prefs } = PARTNER._partner.customer;
-  assert.strictEqual(prefs.sort, 'name', 'ohne eigene Wahl nach Name');
+  const { filter } = PARTNER._partner.customer;
+  // Die Wahl kommt aus den Einstellungen, wie sie _partnerSetSort speichert
+  const sortBy = sort => { global.state.settings.customer_view = JSON.stringify({ view: 'cards', sort, sortChosen: true }); };
+  assert.strictEqual(PARTNER._partner.customer.prefs.sort, 'name', 'ohne eigene Wahl nach Name');
   assert.deepStrictEqual(ids('customer'), [3, 1, 2], 'Gross-/Kleinschreibung spielt keine Rolle');
   Object.assign(filter, { text: 'muster zürich', show: '' });
   assert.deepStrictEqual(ids('customer'), [1], 'alle Wörter müssen passen');
@@ -584,13 +587,13 @@ test('Kunden: alphabetisch als Standard, Suche mit mehreren Wörtern, Filter und
   Object.assign(filter, { text: '', show: 'none' });
   assert.deepStrictEqual(ids('customer'), [2]);
   Object.assign(filter, { text: '', show: '' });
-  prefs.sort = 'recent';
+  sortBy('recent');
   assert.deepStrictEqual(ids('customer'), [2, 1, 3], 'neuer Kunde ohne Auftrag zählt mit Anlagedatum');
-  prefs.sort = 'value';
+  sortBy('value');
   assert.deepStrictEqual(ids('customer'), [3, 1, 2]);
-  prefs.sort = 'number';
+  sortBy('number');
   assert.deepStrictEqual(ids('customer'), [3, 2, 1], 'KD010 vor KD002');
-  prefs.sort = 'name';
+  delete global.state.settings.customer_view;
 });
 
 test('Kunden: Karte zeigt Kontakt, offene Vorgänge und Umsatz, Namen werden escaped', () => {
