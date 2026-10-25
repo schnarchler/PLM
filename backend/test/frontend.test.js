@@ -208,8 +208,9 @@ test('Hinweise: Banner nur mit Hinweisen, Text escaped, Link solange keiner da i
   assert.strictEqual(_itemHintsBanner(demoItem()), '');
   const b = _itemHintsBanner(demoItem({ hint_production: 'PETG <only>', hint_customer: 'Max. 60 °C' }));
   assert.match(b, /class="important-note"/);
-  assert.match(b, /Fertigungshinweis<\/div>\s*<div class="important-note-text">PETG &lt;only&gt;/);
-  assert.match(b, /Kundenhinweis <span class="important-note-sub">· auf dem Lieferschein<\/span>/);
+  // Alle Arten gleich: Bezeichnung + Ort in derselben Auszeichnung
+  assert.match(b, /<div class="important-note-title">Fertigungshinweis <span class="important-note-sub">· intern, im Produktionsauftrag<\/span><\/div>\s*<div class="important-note-text">PETG &lt;only&gt;/);
+  assert.match(b, /<div class="important-note-title">Kundenhinweis <span class="important-note-sub">· im Produktionsauftrag und auf dem Lieferschein<\/span><\/div>/);
   assert.ok(!b.includes('Konstruktionshinweis'), 'leere Arten fallen weg');
   assert.match(b, /onclick="openItemHintsModal\(7\)"/);
   const item = demoItem();
@@ -556,7 +557,7 @@ test('Workflow: einfacher Modus bietet "Neue Revision" statt Review', () => {
 
 // ── Gelieferter Stand und Revisionsvergleich ──────────────────
 evalPart('js/01-core.js', 'const PLM_ST_LABEL', '// Statusbadge',
-  'globalThis.PLM_ST_LABEL = PLM_ST_LABEL; globalThis.HINT_KINDS = HINT_KINDS; globalThis.itemHints = itemHints');
+  'globalThis.PLM_ST_LABEL = PLM_ST_LABEL; globalThis.HINT_KINDS = HINT_KINDS; globalThis.itemHints = itemHints; globalThis._hintHtml = _hintHtml');
 evalPart('js/01-core.js', '// Druckparameter einer Revision', '// ── ITEM TYPE ICONS', 'globalThis.PRINT_PARAMS = PRINT_PARAMS');
 evalPart('js/01-core.js', '// ── ITEM TYPE ICONS', 'function _classColor', '0');
 evalPart('js/02-plm-browse.js', 'function _cleanDsName', 'function renderDatasets', '0');

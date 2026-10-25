@@ -456,10 +456,7 @@ function _itemHintsBanner(item) {
   return `<div class="important-note">
     <span class="important-note-icon">⚠</span>
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
-      ${hints.map(h => `<div>
-        <div class="important-note-title">${h.label}${h.key === 'hint_customer' ? ' <span class="important-note-sub">· auf dem Lieferschein</span>' : ''}</div>
-        <div class="important-note-text">${esc(h.text)}</div>
-      </div>`).join('')}
+      ${hints.map(_hintHtml).join('')}
     </div>
     <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px;flex-shrink:0" onclick="openItemHintsModal(${item.id})" title="Hinweise ändern oder entfernen">✏</button>
   </div>`;

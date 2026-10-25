@@ -752,19 +752,14 @@ function openPriceModal(itemId, preset) {
 
 // Hinweise: je Art ein Feld neben den Notizen, als Banner über dem Teil.
 // Leer lassen entfernt einen Hinweis. Jede Änderung steht im Protokoll.
-const HINT_WHERE = {
-  hint_design: 'intern, nicht im Produktionsauftrag',
-  hint_production: 'intern, im Produktionsauftrag',
-  hint_customer: 'im Produktionsauftrag und auf dem Lieferschein',
-};
 function openItemHintsModal(itemId) {
   const item = state.item;
   if (!item || item.id !== itemId) return;
   _showDynModal(`<div class="modal" style="max-width:480px">
     <div class="modal-head"><div class="modal-title">⚠ Hinweise: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
-      ${HINT_KINDS.map(([k, label, ph]) => `<div class="form-row">
-        <div class="fg"><label class="fl">${label} <span style="text-transform:none;letter-spacing:0;color:${k === 'hint_customer' ? 'var(--amber)' : 'var(--t4)'}">· ${HINT_WHERE[k]}</span></label>
+      ${HINT_KINDS.map(([k, label, where, ph]) => `<div class="form-row">
+        <div class="fg"><label class="fl" style="color:var(--red)">${label} <span class="important-note-sub">· ${where}</span></label>
           <textarea class="ft" id="ihm-${k}" rows="2" placeholder="${esc(ph)}">${esc(item[k] || '')}</textarea></div>
       </div>`).join('')}
       <div style="font-size:13px;color:var(--t3)">Alle Hinweise stehen über den Tabs des Teils, auf Datenblatt und Prüfprotokoll. Leer lassen entfernt einen Hinweis.</div>
