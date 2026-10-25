@@ -7,10 +7,11 @@ const _MM = {
   NODE_W: 174, NODE_H: 44,
   GAP_X: 96, GAP_Y: 14,
   data: null, scale: 1, tx: 0, ty: 0,
-  up: 3, down: 3, rootId: null,
+  up: 3, down: 3, rootId: null, seq: 0,
 };
 
 let _mmDragMove = null, _mmDragUp = null;
+let _mmClickTimer = null, _mmClickId = null;   // Einzel- oder Doppelklick auf einen Knoten
 const _mmKey = e => { if (e.key === 'Escape') _mmClose(); };
 
 function _mmTypeColor(n) {
@@ -92,8 +93,8 @@ function _mmNodeSvg(n) {
   const num = n.item_number && n.item_number.length > 22 ? '…' + n.item_number.slice(-21) : (n.item_number || '');
   const clickable = n.kind === 'item';
   // CSS-Variablen funktionieren nur in style, nicht in Praesentationsattributen.
-  return `<g class="mm-node" data-key="${esc(n.key)}"${clickable ? ` onclick="_mmOpen(${n.id})"` : ''}
-      style="${clickable ? 'cursor:pointer' : ''}">
+  return `<g class="mm-node" data-key="${esc(n.key)}"${clickable ? ` onclick="_mmNodeClick(event, ${n.id})"` : ''}
+      style="${clickable ? 'cursor:pointer;user-select:none' : ''}">
     <rect x="${n._x}" y="${n._y}" width="${_MM.NODE_W}" height="${_MM.NODE_H}" rx="7"
       style="fill:var(--bg2);stroke:${isRoot ? col : 'var(--line2)'};stroke-width:${isRoot ? 2 : 1}"/>
     <rect x="${n._x}" y="${n._y}" width="3" height="${_MM.NODE_H}" rx="1.5" style="fill:${col}"/>
@@ -271,6 +272,21 @@ function _mmWire() {
   });
 }
 
+// Klick stellt die Mindmap auf dieses Teil um — so navigiert man durch die
+// Struktur. Doppelklick öffnet das Teil. Der Einzelklick wartet kurz, ob ein
+// zweiter folgt; der zweite meint das Teil vom ersten Klick, auch wenn die
+// Mindmap inzwischen umgestellt hat und darunter ein anderer Knoten liegt.
+function _mmNodeClick(e, itemId) {
+  clearTimeout(_mmClickTimer);
+  if (e.detail >= 2) return _mmOpen(_mmClickId ?? itemId);
+  _mmClickId = itemId;
+  _mmClickTimer = setTimeout(() => _mmRefocus(itemId), 280);
+}
+function _mmRefocus(itemId) {
+  if (itemId === _MM.rootId) return;
+  _MM.rootId = itemId;
+  _mmLoad();
+}
 function _mmOpen(itemId) {
   _mmClose();
   openItemDetail(itemId);
@@ -281,6 +297,7 @@ function _mmUnwire() {
   _mmDragMove = null; _mmDragUp = null;
 }
 function _mmClose() {
+  clearTimeout(_mmClickTimer);
   _mmUnwire();
   document.removeEventListener('keydown', _mmKey);
   document.getElementById('mindmapOverlay')?.remove();
@@ -289,12 +306,22 @@ function _mmClose() {
 async function _mmLoad() {
   const host = document.getElementById('mm-canvas');
   if (host) host.innerHTML = '<div class="empty"><div class="empty-text">Wird geladen…</div></div>';
+  // Nur die letzte Anfrage zählt — beim schnellen Weiterklicken können
+  // Antworten in anderer Reihenfolge zurückkommen
+  const seq = ++_MM.seq;
+  let data;
   try {
-    _MM.data = await api(`/api/items/${_MM.rootId}/graph?up=${_MM.up}&down=${_MM.down}`);
+    data = await api(`/api/items/${_MM.rootId}/graph?up=${_MM.up}&down=${_MM.down}`);
   } catch (e) {
-    if (host) host.innerHTML = '<div class="empty"><div class="empty-text">Graph konnte nicht geladen werden</div></div>';
+    if (host && seq === _MM.seq) host.innerHTML = '<div class="empty"><div class="empty-text">Graph konnte nicht geladen werden</div></div>';
     return;
   }
+  if (seq !== _MM.seq) return;
+  _MM.data = data;
+  // Titel folgt dem Teil in der Mitte, auch nach dem Umstellen per Klick
+  const root = data.nodes.find(n => n.is_root);
+  const title = document.getElementById('mm-title');
+  if (title && root) title.textContent = `${root.item_number} · ${root.name}`;
   _mmRender();
   _mmFit();
   _mmInfo();
@@ -341,7 +368,7 @@ function openItemMindmap(itemId) {
     <div class="modal-head" style="gap:12px;flex-wrap:wrap">
       <div class="modal-title" style="display:flex;align-items:center;gap:9px;min-width:0">
         <span>⌗ Mindmap</span>
-        <span style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</span>
+        <span id="mm-title" style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap">
         <span style="font-size:11px;font-family:var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:.8px">Verwendung</span>
@@ -370,7 +397,7 @@ function openItemMindmap(itemId) {
         <span style="color:var(--line2)">│</span>
         <span style="display:inline-flex;align-items:center;gap:5px"><span style="font-family:var(--mono);color:var(--amber)">rev1</span> feste Revision</span>
         <span style="color:var(--line2)">│</span>
-        <span>Ziehen zum Verschieben · Rad zum Zoomen · Klick öffnet das Teil</span>
+        <span>Ziehen zum Verschieben · Rad zum Zoomen · Klick: Mindmap dieses Teils · Doppelklick: Teil öffnen</span>
       </div>
     </div>
   </div>`;
