@@ -58,6 +58,10 @@
   .row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--t2); font: 500 12px var(--mono); }
   .row b.ver { padding: 2px 9px; border-radius: 999px; color: var(--blue); font-weight: 600;
     background: rgba(157,180,255,.12); border: 1px solid rgba(157,180,255,.32); }
+  .row[hidden] { display: none; }
+  .row b.upd { color: var(--blue); font-weight: 600; }
+  .row b.upd::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%;
+    background: var(--blue); box-shadow: 0 0 0 3px rgba(157,180,255,.14); vertical-align: 1px; }
   .warn { color: var(--amber); }
 </style>
 </head>
@@ -72,6 +76,7 @@
     lässt sich der Tab am Ende per „Beenden“ wieder schliessen.</p>
   <div class="meta">
     <div class="row"><span>Version</span><b class="ver" id="v-version">…</b></div>
+    <div class="row" id="r-update" hidden><span>Update</span><b class="upd" id="v-update"></b></div>
     <div class="row"><span>Stand</span><b id="v-build">…</b></div>
     <div class="row"><span>Daten</span><b id="v-data">…</b></div>
   </div>
@@ -113,6 +118,15 @@
     var parts = String(v.data_dir || '').split(/[\\/]/).filter(Boolean);
     text('v-data', parts.slice(-2).join('/') || '—', v.data_dir || '');
   }).catch(function () { text('v-version', '—'); text('v-build', '—'); text('v-data', '—'); });
+
+  // Neuere Commits auf dem Git-Remote? Nur ein Hinweis — starten geht wie immer
+  fetch('/api/update').then(function (r) { return r.json(); }).then(function (u) {
+    if (!u.available) return;
+    var n = u.behind === 1 ? '1 neuer Commit' : u.behind + ' neue Commits';
+    text('v-update', 'v' + u.version + ' verfügbar',
+      n + ' auf ' + u.upstream + ' — zum Aktualisieren beenden, git pull, neu starten');
+    document.getElementById('r-update').hidden = false;
+  }).catch(function () {});
 </script>
 </body>
 </html>

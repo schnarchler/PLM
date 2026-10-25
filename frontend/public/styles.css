@@ -96,6 +96,7 @@ body {
   z-index: 50;
 }
 .tb-logo {
+  width: 208px;              /* = #nav, damit die Trennlinien bündig sind */
   padding: 0 14px 0 16px;
   font-size: 15px;
   font-weight: 600;
@@ -109,14 +110,16 @@ body {
   flex-shrink: 0;
 }
 .tb-logo span { color: var(--t3); font-weight: 400; }
-.tb-logo .tb-ver { font: 500 10px var(--mono); color: var(--t4); padding: 2px 7px; border: 1px solid var(--line);
+/* Laufende Version, unten in der Navigation unter den Einstellungen */
+.nav-ver { padding: 6px 10px 2px; }
+.ver-pill { font: 500 10px var(--mono); color: var(--t4); padding: 2px 7px; border: 1px solid var(--line);
   border-radius: 999px; letter-spacing: 0; cursor: default; }
-.tb-logo .tb-ver:empty { display: none; }
-.tb-logo .tb-ver.dirty { color: var(--amber); border-color: var(--amber-line); }
-.tb-logo .tb-ver.has-update { cursor: pointer; }
-.tb-logo .tb-ver.has-update::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px;
+.ver-pill:empty { display: none; }
+.ver-pill.dirty { color: var(--amber); border-color: var(--amber-line); }
+.ver-pill.has-update { cursor: pointer; }
+.ver-pill.has-update::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px;
   border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); vertical-align: 1px; }
-.tb-logo .tb-ver.has-update:hover { border-color: var(--blue2); }
+.ver-pill.has-update:hover { border-color: var(--blue2); }
 .tb-search {
   flex: 1;
   max-width: 420px;
