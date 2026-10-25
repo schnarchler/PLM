@@ -81,14 +81,18 @@ async function loadVersion() {
   } catch {}
 }
 
-// Update verfügbar: blauer Punkt an der Version, Klick öffnet den Dialog —
-// so sieht man es auch, wenn die Meldung beim Öffnen verpasst wurde
+// Punkt an der Version: blau = Update verfügbar (Klick öffnet den Dialog),
+// grün = aktuell. Grün nur, wenn das Remote wirklich erreicht wurde — sonst
+// (offline, kein Git) kein Punkt
 function _markUpdate() {
   const el = document.getElementById('nav-ver'), u = state.update;
   if (!el) return;
-  const on = !!u?.available;
+  const on = !!u?.available, current = !on && !!u?.fetched;
   el.classList.toggle('has-update', on);
-  el.title = [on ? `Update: Version ${u.version} verfügbar (${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'}) — klicken für Details` : '',
+  el.classList.toggle('up-to-date', current);
+  el.title = [on ? `Update: Version ${u.version} verfügbar (${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'}) — klicken für Details`
+    : current ? `Aktuelle Version — nichts Neueres auf ${u.upstream}`
+    : u?.error ? `Update-Prüfung nicht möglich: ${u.error}` : '',
     el.dataset.title || ''].filter(Boolean).join('\n');
 }
 

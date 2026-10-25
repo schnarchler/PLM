@@ -109,17 +109,18 @@ body {
   border-right: 1px solid var(--line);
   flex-shrink: 0;
 }
-.tb-logo span { color: var(--t3); font-weight: 400; }
+.tb-logo .tb-sep { color: var(--t3); font-weight: 400; }
 /* Laufende Version, unten in der Navigation unter den Einstellungen */
 .nav-ver { padding: 1px 6px 0; }
 .ver-pill { display: inline-flex; align-items: center; max-width: 100%; white-space: nowrap;
-  font: 500 12px var(--mono); color: var(--t4); padding: 3px 9px; border: 1px solid var(--line);
+  font: 500 13px var(--mono); color: var(--t4); padding: 3px 9px; border: 1px solid var(--line);
   border-radius: 999px; letter-spacing: 0; cursor: default; }
 .ver-pill:empty { display: none; }
 .ver-pill.dirty { color: var(--amber); border-color: var(--amber-line); }
 .ver-pill.has-update { cursor: pointer; }
-.ver-pill.has-update::after { content: ''; flex-shrink: 0; width: 7px; height: 7px; margin-left: 7px;
+.ver-pill.has-update::after, .ver-pill.up-to-date::after { content: ''; flex-shrink: 0; width: 7px; height: 7px; margin-left: 7px;
   border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); }
+.ver-pill.up-to-date::after { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .ver-pill.has-update:hover { border-color: var(--blue2); }
 .tb-search {
   flex: 1;

@@ -22,3 +22,7 @@ plm.config
 
 # Screenshots aus Claude-Sitzungen (nur lokal)
 screenshots/
+
+# Python
+__pycache__/
+*.pyc
