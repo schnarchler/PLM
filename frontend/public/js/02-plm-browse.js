@@ -448,6 +448,20 @@ async function openItemDetail(itemId, revId) {
   renderItemDetail(item, state.activeRevId);
   showDetail();
 }
+// Wichtiger Hinweis (z.B. sicherheitsrelevant): steht über allen Tabs, damit
+// ihn jeder sieht, der das Teil öffnet. Unabhängig von der Revision änderbar.
+function _importantNoteBanner(item) {
+  if (!item.important_note) return '';
+  return `<div class="important-note">
+    <span class="important-note-icon">⚠</span>
+    <div style="flex:1;min-width:0">
+      <div class="important-note-title">Wichtiger Hinweis</div>
+      <div class="important-note-text">${esc(item.important_note)}</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px;flex-shrink:0" onclick="openImportantNoteModal(${item.id})" title="Hinweis ändern oder entfernen">✏</button>
+  </div>`;
+}
+
 function itemIsEditable(item) {
   return !(item.revisions||[]).some(r => r.status === 'REL' || r.status === 'OBS' || r.status === 'ECO');
 }
@@ -497,6 +511,7 @@ function renderItemDetail(item, activeRevId) {
   const rev = item.revisions?.find(r => r.id === activeRevId) || item.revisions?.[0];
 
   document.getElementById('dp-body').innerHTML = `
+    ${_importantNoteBanner(item)}
     ${renderItemSheet(item, activeRevId)}
     <div id="it-revs" style="display:none">
       ${(() => {
@@ -887,7 +902,10 @@ function renderItemSheet(item, activeRevId) {
       placeholder="Freie Notizen zu diesem Teil — Bezugsquellen, Erfahrungen, offene Punkte…"
       style="min-height:62px"
       onblur="saveItemNotes(${item.id}, this)">${esc(item.notes || '')}</textarea>
-    <div style="font-size:11px;color:var(--t4);margin-top:4px">Wird beim Verlassen des Feldes gespeichert.</div>`;
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--t4);margin-top:4px">
+      <span>Wird beim Verlassen des Feldes gespeichert.</span>
+      ${item.important_note ? '' : `<span style="color:var(--red);cursor:pointer;text-decoration:underline" onclick="openImportantNoteModal(${item.id})">⚠ Wichtigen Hinweis hinzufügen</span>`}
+    </div>`;
 
   // -- Kurzcode zum Aufdrucken: folgt der gewählten Revision
   const pcode = item.short_code && item.item_type !== 'doc' ? item.short_code + (rev ? '-' + rev.rev : '') : '';
@@ -941,8 +959,8 @@ function renderItemSheet(item, activeRevId) {
     <div class="sep-label"${stlBlock ? '' : ' style="margin-top:0"'}>Beschreibung</div>
     ${descBlock}
 
-    <div class="sep-label">Quelle</div>
-    ${srcBlock}
+    ${item.source_url || editable ? `<div class="sep-label">Quelle</div>
+    ${srcBlock}` : ''}
 
     <div class="sep-label">Allgemein</div>
     ${facts}

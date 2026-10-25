@@ -209,6 +209,21 @@ test('Verkaufspreis: nach Freigabe änderbar, Protokoll mit alt → neu und Grun
   assert.ok(!d.changelog.some(c => c.action === 'Geändert'), 'nur der Preis geändert → kein zusätzliches „Geändert“');
 });
 
+test('Wichtiger Hinweis: setzen, bleibt bei anderen Änderungen, entfernen — alles im Protokoll', async () => {
+  const p = await api('/api/projects', 'POST', { name: 'Hinweisprojekt' });
+  const item = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Halter', item_type: 'part' });
+  const base = { name: 'Halter', description: '', source_url: null, classification: item.classification, weight_g: null, default_price: null };
+  await api(`/api/items/${item.id}`, 'PUT', { ...base, important_note: '  Nicht tragend  ' });
+  assert.strictEqual((await api(`/api/items/${item.id}`)).important_note, 'Nicht tragend');
+  await api(`/api/items/${item.id}`, 'PUT', { ...base, notes: 'egal' });
+  assert.strictEqual((await api(`/api/items/${item.id}`)).important_note, 'Nicht tragend', 'ohne Feld im Request unverändert');
+  await api(`/api/items/${item.id}`, 'PUT', { ...base, important_note: '' });
+  const d = await api(`/api/items/${item.id}`);
+  assert.strictEqual(d.important_note, null);
+  const log = d.changelog.filter(c => c.action.startsWith('Wichtiger Hinweis')).map(c => [c.action, c.details]).sort();
+  assert.deepStrictEqual(log, [['Wichtiger Hinweis entfernt', 'Nicht tragend'], ['Wichtiger Hinweis gesetzt', 'Nicht tragend']]);
+});
+
 test('Automatisches Backup wurde beim Start angelegt', async () => {
   // Der Testserver startet mit leerer DB — Backup entsteht erst, wenn eine
   // plm.db existiert. Neustart-Szenario: zweiter Serverstart im selben DATA_DIR.

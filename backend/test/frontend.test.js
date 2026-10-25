@@ -190,6 +190,41 @@ test('Datenblatt: freigegebene Teile sind nicht bearbeitbar', () => {
   assert.ok(!renderItemSheet(item, 31).includes('✏ Bearbeiten'));
 });
 
+test('Datenblatt: ohne Quelle — bei freigegebenen Teilen ausgeblendet, sonst „Jetzt ergänzen“', () => {
+  const dft = demoItem({ source_url: null });
+  global.state.item = dft;
+  assert.match(renderItemSheet(dft, 31), />Quelle<\/div>\s*<div[^>]*>Keine Quelle hinterlegt\. <span[^>]*>Jetzt ergänzen/);
+  const rel = demoItem({ source_url: null, revisions: [{ id: 31, rev: '2', status: 'REL', datasets: [] }] });
+  global.state.item = rel;
+  assert.ok(!renderItemSheet(rel, 31).includes('>Quelle<'), 'kein leerer Abschnitt');
+  const relSrc = demoItem({ revisions: [{ id: 31, rev: '2', status: 'REL', datasets: [] }] });
+  global.state.item = relSrc;
+  assert.match(renderItemSheet(relSrc, 31), /href="https:\/\/www\.igus\.ch\/p\/1"/, 'vorhandene Quelle bleibt');
+});
+
+test('Wichtiger Hinweis: Banner nur wenn gesetzt, Text escaped, Link solange keiner da ist', () => {
+  const { _importantNoteBanner } = evalPart('js/02-plm-browse.js', 'function _importantNoteBanner(',
+    'function itemIsEditable(', '({ _importantNoteBanner })');
+  assert.strictEqual(_importantNoteBanner(demoItem()), '');
+  const b = _importantNoteBanner(demoItem({ important_note: 'Max. 60 °C <nicht tragend>' }));
+  assert.match(b, /class="important-note"/);
+  assert.match(b, /Max\. 60 °C &lt;nicht tragend&gt;/);
+  assert.match(b, /onclick="openImportantNoteModal\(7\)"/);
+  const item = demoItem();
+  global.state.item = item;
+  assert.match(renderItemSheet(item, 31), /Wichtigen Hinweis hinzufügen/);
+  const withNote = demoItem({ important_note: 'x' });
+  global.state.item = withNote;
+  assert.ok(!renderItemSheet(withNote, 31).includes('Wichtigen Hinweis hinzufügen'));
+});
+
+test('Wichtiger Hinweis: steht rot auf dem Datenblatt-PDF', () => {
+  global.state.settings = {};
+  assert.ok(!pdfOf(demoItem(), 31).includes('class="warn"'));
+  const h = pdfOf(demoItem({ important_note: 'Schutzbrille <tragen>' }), 31);
+  assert.match(h, /<div class="warn"><b>⚠ Wichtiger Hinweis<\/b><br>Schutzbrille &lt;tragen&gt;<\/div>/);
+});
+
 test('Datenblatt: Kurzcode kompakt, die Anleitung steht nur im ?', () => {
   const item = demoItem({ short_code: 'K7M' });
   global.state.item = item;

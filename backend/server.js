@@ -723,6 +723,7 @@ function applySchema() {
   try { db.run('ALTER TABLE items ADD COLUMN weight_g REAL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN notes TEXT DEFAULT NULL'); } catch {}
+  try { db.run('ALTER TABLE items ADD COLUMN important_note TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN short_code TEXT DEFAULT NULL'); } catch {}
   // Jeder je vergebene Kurzcode bleibt hier reserviert — auch nach dem
   // Löschen des Teils, damit ein alter Aufdruck nie auf ein neues Teil zeigt.
@@ -2127,11 +2128,15 @@ app.put('/api/items/:id', (req, res) => {
   // notes nur schreiben, wenn das Feld im Request vorkommt — sonst wuerden
   // Aufrufe ohne notes (z.B. Preis-Inline-Edit) die Notizen leeren.
   const keepNotes = !Object.prototype.hasOwnProperty.call(req.body, 'notes');
+  // Wichtiger Hinweis genauso: nur schreiben, wenn er mitgeschickt wird
+  const keepImportant = !Object.prototype.hasOwnProperty.call(req.body, 'important_note');
+  const important = String(req.body.important_note || '').trim() || null;
   const before = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   run(`UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=?,weight_g=?,
-       notes=CASE WHEN ? THEN notes ELSE ? END WHERE id=?`,
+       notes=CASE WHEN ? THEN notes ELSE ? END,
+       important_note=CASE WHEN ? THEN important_note ELSE ? END WHERE id=?`,
     [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, canonicalClass(classification), weight_g != null ? parseFloat(weight_g) : null,
-     keepNotes ? 1 : 0, notes || null, req.params.id]);
+     keepNotes ? 1 : 0, notes || null, keepImportant ? 1 : 0, important, req.params.id]);
   const after = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   // Der Verkaufspreis ist kaufmännisch und braucht keine neue Revision —
   // nachvollziehbar bleibt er über einen eigenen Eintrag mit alt → neu und Grund.
@@ -2142,9 +2147,15 @@ app.put('/api/items/:id', (req, res) => {
     log('item', req.params.id, 'Preis geändert',
       `VP ${chf(before.default_price)} → ${chf(after.default_price)} CHF` + (reason ? ' · ' + reason : ''));
   }
+  // Sicherheitsrelevant — darum mit vollem Wortlaut im Protokoll
+  const importantChanged = before && before.important_note !== after.important_note;
+  if (importantChanged) {
+    log('item', req.params.id, after.important_note ? 'Wichtiger Hinweis gesetzt' : 'Wichtiger Hinweis entfernt',
+      after.important_note || before.important_note);
+  }
   const otherChanged = !before || ['name', 'description', 'source_url', 'classification', 'weight_g', 'notes']
     .some(k => before[k] !== after[k]);
-  if (otherChanged || !priceChanged) log('item', req.params.id, 'Geändert', name);
+  if (otherChanged || !(priceChanged || importantChanged)) log('item', req.params.id, 'Geändert', name);
   res.json(after);
 });
 
@@ -5403,7 +5414,7 @@ app.get('/api/deliveries/:id', (req, res) => {
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
-  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,i.short_code,
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,i.short_code,i.important_note,
     rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
     LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id
@@ -5705,7 +5716,7 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
     LEFT JOIN orders o ON d.order_id=o.id
     WHERE d.id=?`, [req.params.id]);
   if (!d) return res.status(404).json({ error: 'Nicht gefunden' });
-  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,i.short_code,
+  d.items = all(`SELECT di.*,i.item_number,i.item_type,i.name as item_name,i.short_code,i.important_note,
     rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color
     FROM delivery_items di LEFT JOIN items i ON di.item_id=i.id
     LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id

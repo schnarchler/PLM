@@ -376,7 +376,8 @@ function generateItemTemplate(type, opts = {}) {
     <div style="margin-bottom:22px">
       <div style="font-size:20px;font-weight:700;color:#111827">${escHtml(item.name)}</div>
       ${item.description ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">${escHtml(item.description)}</div>` : ''}
-    </div>`;
+    </div>
+    ${item.important_note ? `<div class="warn"><b>⚠ Wichtiger Hinweis</b><br>${escHtml(item.important_note)}</div>` : ''}`;
 
   const css = `body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:28px}
     table{width:100%;border-collapse:collapse;margin-bottom:16px}
@@ -386,6 +387,7 @@ function generateItemTemplate(type, opts = {}) {
     .txt{font-size:13px;line-height:1.6;color:#374151;margin-bottom:16px}
     .sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:18px 0 6px}
     .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600}
+    .warn{margin:-8px 0 20px;padding:9px 12px;border:2px solid #dc2626;border-radius:6px;background:#fef2f2;color:#7f1d1d;font-size:13px;line-height:1.5;white-space:pre-wrap;break-inside:avoid}
     @media print{body{padding:14px}.sec{break-after:avoid}tr{break-inside:avoid}}`;
 
   // Bezeichnung/Wert-Paare, zwei je Zeile. Leere Werte fallen weg; ein
@@ -1094,6 +1096,7 @@ async function generateDeliveryDoc(id) {
         <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${item.unit}</span>
       </div>
       ${item.rm_name?`<div style="padding:6px 14px;background:#f0f9ff;font-size:13px;color:#0369a1;border-bottom:1px solid #bae6fd">🧵 Rohmaterial: <strong>${escHtml(item.rm_name)}</strong>${item.rm_type?' · '+escHtml(item.rm_type):''}${item.rm_color?' · '+escHtml(item.rm_color):''}</div>`:''}
+      ${item.important_note?`<div style="padding:8px 14px;background:#fef2f2;font-size:13px;color:#7f1d1d;border-bottom:2px solid #dc2626;white-space:pre-wrap"><b>⚠ Wichtiger Hinweis:</b> ${escHtml(item.important_note)}</div>`:''}
       ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:13px;color:#374151;border-bottom:1px solid #dbeafe">Notiz: ${escHtml(item.notes)}</div>`:''}
       <div style="padding:12px 14px">
         ${hasSettings ? renderSettingsTablePdf(item.print_settings) : '<p style="color:#9ca3af;font-size:13px;margin:0">Keine 3MF-Druckeinstellungen hinterlegt.</p>'}
