@@ -951,6 +951,41 @@ test('Datenblatt: Verkaufspreis bleibt bei freigegebener Revision änderbar', ()
   assert.match(h, /CHF 59\.48 <button[^>]*onclick="openPriceModal\(7\)"/, '✏ direkt hinter dem Preis');
 });
 
+test('Version: Klick sucht jedes Mal frisch nach Updates — Dialog oder Meldung', async () => {
+  const F = evalPart('js/01-core.js', 'const UPDATE_CHECK_MS', 'function showUpdateDialog(',
+    '({ checkUpdateNow })');
+  const cls = new Set();
+  const el = { classList: { add: c => cls.add(c), remove: c => cls.delete(c) } };
+  const calls = [], toasts = [];
+  let dialog = 0, answer;
+  global.document = { getElementById: () => el };
+  global.api = async url => { calls.push(url); assert.ok(cls.has('update-checking'), 'Punkt pulsiert während der Prüfung'); return answer(); };
+  global.toast = (msg, type) => toasts.push([type, msg]);
+  global._markUpdate = () => {};
+  global.showUpdateDialog = () => { dialog++; };
+  global.state.version = { version: '2.0.321' };
+  try {
+    answer = () => ({ available: true, fetched: true });
+    await F.checkUpdateNow();
+    assert.deepStrictEqual(calls, ['/api/update?fresh=1'], 'am Server vorbei am gemerkten Ergebnis');
+    assert.strictEqual(dialog, 1, 'Update → Dialog');
+    assert.ok(!cls.has('update-checking'));
+    answer = () => ({ available: false, fetched: true });
+    await F.checkUpdateNow();
+    assert.deepStrictEqual(toasts.pop(), ['ok', 'Aktuell — v2.0.321 ist die neuste Version']);
+    answer = () => ({ available: false, fetched: false, error: 'Remote nicht erreichbar: offline' });
+    await F.checkUpdateNow();
+    assert.deepStrictEqual(toasts.pop(), ['warn', 'Update-Prüfung nicht möglich: Remote nicht erreichbar: offline']);
+    answer = () => { throw new Error('weg'); };
+    await F.checkUpdateNow();
+    assert.strictEqual(toasts.pop()[0], 'err');
+    assert.strictEqual(calls.length, 4, 'jeder Klick fragt neu');
+  } finally {
+    for (const k of ['document', 'api', 'toast', '_markUpdate', 'showUpdateDialog']) delete global[k];
+    delete global.state.update; delete global.state.version;
+  }
+});
+
 test('Version: Punkt blau bei Update, grün wenn aktuell, grau wenn der Stand unbekannt ist', () => {
   const { _markUpdate } = evalPart('js/01-core.js', 'function _markUpdate(', 'const UPDATE_CHECK_MS', '({ _markUpdate })');
   const cls = new Set();

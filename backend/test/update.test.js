@@ -103,6 +103,21 @@ test('Update: neue Commits auf dem Remote werden mit Version und Liste gemeldet'
   assert.strictEqual(v.version.split('.').pop(), '1', 'es läuft weiter der alte Stand');
 });
 
+test('Update: Klick auf die Version (fresh=1) prüft sofort neu statt des gemerkten Ergebnisses', async () => {
+  const fresh = path.join(tmp, 'fresh');
+  git(tmp, 'clone', '-q', origin, fresh);
+  const base = await startServer(fresh);
+  assert.strictEqual((await update(base)).available, false);
+  commit(dev, 'Ganz neu');
+  git(dev, 'push', '-q', 'origin', 'HEAD:main');
+  assert.strictEqual((await update(base)).available, false, 'ohne fresh: gemerktes Ergebnis');
+  const u = await (await fetch(base + '/api/update?fresh=1')).json();
+  assert.strictEqual(u.fetched, true, u.error);
+  assert.strictEqual(u.available, true);
+  assert.deepStrictEqual(u.commits.map(c => c.subject), ['Ganz neu']);
+  assert.strictEqual((await update(base)).available, true, 'danach gilt das neue Ergebnis');
+});
+
 test('Update: Remote nicht erreichbar — es zählt der Stand vom letzten Abruf', async () => {
   const stale = path.join(tmp, 'stale');
   git(tmp, 'clone', '-q', origin, stale);

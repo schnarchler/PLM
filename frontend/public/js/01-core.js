@@ -114,21 +114,40 @@ function _markUpdate() {
   el.classList.toggle('has-update', on);
   el.classList.toggle('up-to-date', current);
   el.classList.toggle('update-unknown', unknown);
-  el.title = [on ? `Update: Version ${u.version} verfügbar (${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'}) — klicken für Details`
+  el.title = [on ? `Update: Version ${u.version} verfügbar (${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'})`
     : current ? `Aktuelle Version — nichts Neueres auf ${u.upstream}`
     : u?.error ? `Update-Prüfung nicht möglich: ${u.error}` : '',
-    el.dataset.title || ''].filter(Boolean).join('\n');
+    el.dataset.title || '', 'Klicken: jetzt nach Updates suchen'].filter(Boolean).join('\n');
 }
 
 // Neuere Commits auf dem Git-Remote: kein Dialog beim Öffnen, nur der Punkt
 // an der Version (und die Zeile im Launcher). Im Betrieb wird regelmässig
 // nachgeprüft. Weiterarbeiten mit der laufenden Version geht immer.
 const UPDATE_CHECK_MS = 30 * 60 * 1000;
-async function checkUpdate() {
-  try { state.update = await api('/api/update'); } catch { return; }
+async function checkUpdate(fresh = false) {
+  try { state.update = await api('/api/update' + (fresh ? '?fresh=1' : '')); } catch { return false; }
   // ZIP-Download: erst die Prüfung bei GitHub kennt die Versionsnummer
-  if (state.update.download) return loadVersion();
-  _markUpdate();
+  if (state.update.download) await loadVersion();
+  else _markUpdate();
+  return true;
+}
+
+// Klick auf die Version: jedes Mal frisch beim Remote nachfragen. Mit Update
+// öffnet sich der Dialog, sonst sagt eine Meldung, wie es steht.
+let _updateChecking = false;
+async function checkUpdateNow() {
+  const el = document.getElementById('nav-ver');
+  if (_updateChecking) return;
+  _updateChecking = true;
+  el?.classList.add('update-checking');
+  let ok;
+  try { ok = await checkUpdate(true); }
+  finally { _updateChecking = false; el?.classList.remove('update-checking'); }
+  const u = state.update;
+  if (!ok || !u) return toast('Update-Prüfung fehlgeschlagen — PLM nicht erreichbar', 'err');
+  if (u.available) return showUpdateDialog();
+  if (u.fetched) return toast(`Aktuell — v${state.version?.version || ''} ist die neuste Version`, 'ok');
+  toast('Update-Prüfung nicht möglich' + (u.error ? ': ' + u.error : ''), 'warn');
 }
 
 function showUpdateDialog() {
