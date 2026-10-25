@@ -25,4 +25,15 @@ if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ]
 fi
 # Den Port waehlt der Server selbst (3000, sonst der naechste freie) und
 # oeffnet dann den Browser - nur er weiss, welchen Port er bekommen hat.
-PLM_DATA_DIR="$PLM_DATA_DIR" PLM_OPEN_BROWSER=1 node server.js
+# Code 75 = Update installiert: neu starten, ohne neuen Browser-Tab. Die
+# Schleife ist ein Befehl — bash liest sie ganz ein, ein Update dieser Datei
+# stört sie nicht.
+export PLM_DATA_DIR PLM_START_SCRIPT=1
+open_browser=1
+while :; do
+  PLM_OPEN_BROWSER=$open_browser node server.js
+  rc=$?
+  [ "$rc" -eq 75 ] || exit "$rc"
+  echo "Update installiert - PLM startet neu..."
+  open_browser=
+done

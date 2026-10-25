@@ -545,6 +545,16 @@ gewählt wird ohne Passwort, nur Admins können eine PIN haben. Details und Gren
 
 ## Update einspielen
 
+Am einfachsten in PLM selbst: Klick auf die Version unten in der Navigation (blauer Punkt)
+→ **Jetzt installieren**. PLM holt den neuen Stand (`git merge --ff-only` bzw. die ZIP von
+GitHub), führt bei geänderten Paketen `npm install` aus und startet neu; die Seite lädt
+sich danach selbst neu. Das geht nur am PC, auf dem PLM läuft, und im Git-Checkout nur ohne
+eigene, nicht committete Änderungen. Schlägt etwas fehl, läuft die bisherige Version weiter.
+Gestartet über `START-PLM.bat` oder `start-plm.sh`, startet das Skript PLM neu (Exit-Code 75);
+sonst startet PLM sich selbst und löst den alten Prozess ab.
+
+Von Hand:
+
 ```bash
 git pull
 cd backend && npm install     # nur nötig wenn Pakete dazugekommen sind
@@ -561,13 +571,14 @@ Welche Version läuft, steht unten in der Navigation unter den Einstellungen und
 **Kopie aus dem ZIP-Download (ohne Git):** GitHub trägt beim Download Commit und Datum in
 `backend/version.json` ein (`export-subst` in `.gitattributes`). Damit fragt PLM bei GitHub nach,
 ob es Neueres gibt, und holt von dort auch die Versionsnummer — ohne Internet steht statt der
-Nummer der Commit da. Aktualisieren: PLM beenden, neue ZIP herunterladen, ihren Inhalt über den
-PLM-Ordner kopieren und neu starten. Daten und `plm.config` bleiben dabei erhalten.
+Nummer der Commit da. Aktualisieren: „Jetzt installieren“ wie oben — oder von Hand PLM beenden, neue ZIP
+herunterladen, ihren Inhalt über den PLM-Ordner kopieren und neu starten. Daten und `plm.config` bleiben dabei erhalten.
 
 Beim Start prüft PLM, ob auf dem Git-Remote neuere Commits liegen (`git fetch` im
 Hintergrund, ab dem laufenden Commit). Gibt es welche, zeigt der Startbildschirm eine
 Zeile „Update“ mit der neuen Versionsnummer, und an der Version in der Navigation steht ein
-blauer Punkt (Klick zeigt die neuen Commits). Es ist nur ein Hinweis — PLM läuft mit
+blauer Punkt (Klick zeigt die neuen Commits und „Jetzt installieren“). Installiert wird
+nur auf Klick — PLM läuft mit
 dem bisherigen Stand ganz normal weiter; im Betrieb prüft die Oberfläche alle 30 Minuten
 nach. Die Prüfung fragt nie nach Passwort oder Passphrase: bei SSH-Remotes braucht es
 einen Schlüssel ohne Passphrase oder einen laufenden SSH-Agent. Ist das Remote nicht

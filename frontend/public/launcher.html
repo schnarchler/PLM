@@ -128,8 +128,9 @@
     if (u.download) loadVersion();
     if (!u.available) return;
     var n = u.behind === 1 ? '1 neuer Commit' : u.behind + ' neue Commits';
-    text('v-update', 'v' + u.version + ' verfügbar', n + ' auf ' + u.upstream + (u.download
-      ? ' — zum Aktualisieren beenden, neue ZIP herunterladen, über den PLM-Ordner kopieren, neu starten'
+    text('v-update', 'v' + u.version + ' verfügbar', n + ' auf ' + u.upstream + (u.installable
+      ? ' — installieren in PLM über die Version unten in der Navigation'
+      : u.download ? ' — zum Aktualisieren beenden, neue ZIP herunterladen, über den PLM-Ordner kopieren, neu starten'
       : ' — zum Aktualisieren beenden, git pull, neu starten'));
     document.getElementById('r-update').hidden = false;
   }).catch(function () {});
