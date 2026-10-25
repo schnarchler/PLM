@@ -566,7 +566,9 @@ Datenbank und `plm.config` liegen ausserhalb des Repositories und stehen in der
 
 Welche Version läuft, steht unten in der Navigation unter den Einstellungen und auf dem Startbildschirm:
 `2.0.282` = Major.Minor aus `backend/package.json`, dahinter die Anzahl Commits.
-„geändert“ heisst, es laufen Änderungen, die noch nicht committet sind.
+Der Punkt an der Version: blau = Update verfügbar, grün = aktuell, grau = Stand unbekannt
+(offline oder GitHub nicht erreichbar — der Grund steht im Tooltip). „geändert“ (Startbildschirm, Dashboard, Tooltip der Version) heisst,
+PLM wurde mit Änderungen gestartet, die noch nicht committet sind — dann geht „Jetzt installieren“ nicht.
 
 **Kopie aus dem ZIP-Download (ohne Git):** GitHub trägt beim Download Commit und Datum in
 `backend/version.json` ein (`export-subst` in `.gitattributes`). Damit fragt PLM bei GitHub nach,

@@ -116,11 +116,11 @@ body {
   font: 500 13px var(--mono); color: var(--t4); padding: 3px 9px; border: 1px solid var(--line);
   border-radius: 999px; letter-spacing: 0; cursor: default; }
 .ver-pill:empty { display: none; }
-.ver-pill.dirty { color: var(--amber); border-color: var(--amber-line); }
 .ver-pill.has-update { cursor: pointer; }
-.ver-pill.has-update::after, .ver-pill.up-to-date::after { content: ''; flex-shrink: 0; width: 7px; height: 7px; margin-left: 7px;
-  border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); }
+.ver-pill.has-update::after, .ver-pill.up-to-date::after, .ver-pill.update-unknown::after { content: ''; flex-shrink: 0;
+  width: 7px; height: 7px; margin-left: 7px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); }
 .ver-pill.up-to-date::after { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.ver-pill.update-unknown::after { background: var(--t4); box-shadow: 0 0 0 3px var(--grey-soft); }
 .ver-pill.has-update:hover { border-color: var(--blue2); }
 .tb-search {
   flex: 1;

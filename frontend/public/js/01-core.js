@@ -68,15 +68,15 @@ async function setDocStatus(type, id, status, el) {
 }
 let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [], slicer: null, cad: null };
 
-// Laufende Version unten in der Navigation; „geändert", wenn nicht committete Änderungen laufen.
+// Laufende Version unten in der Navigation. Den Zustand zeigt allein der Punkt
+// (_markUpdate); nicht committete Änderungen stehen nur im Tooltip.
 // ZIP-Download: die Nummer kennt erst GitHub — bis dahin zeigt der Commit den Stand
 async function loadVersion() {
   const el = document.getElementById('nav-ver');
   try {
     const v = state.version = await api('/api/version');
     const ohneNummer = v.source === 'zip' && v.version.split('.').length < 3;
-    el.textContent = 'v' + v.version + (ohneNummer ? ' · ' + v.commit : '') + (v.dirty ? ' · geändert' : '');
-    el.classList.toggle('dirty', !!v.dirty);
+    el.textContent = 'v' + v.version + (ohneNummer ? ' · ' + v.commit : '');
     el.dataset.title = [v.date ? 'Stand ' + new Date(v.date).toLocaleDateString('de-CH') : '', v.commit,
       v.source === 'zip' ? 'ZIP-Download ohne Git' : '',
       v.dirty ? 'mit Änderungen, die noch nicht committet sind' : ''].filter(Boolean).join(' · ');
@@ -85,14 +85,16 @@ async function loadVersion() {
 }
 
 // Punkt an der Version: blau = Update verfügbar (Klick öffnet den Dialog),
-// grün = aktuell. Grün nur, wenn das Remote wirklich erreicht wurde — sonst
-// (offline, kein Git) kein Punkt
+// grün = aktuell, grau = Stand unbekannt (offline, Remote nicht erreichbar,
+// Prüfung nicht möglich — der Grund steht im Tooltip). Grün nur, wenn das
+// Remote wirklich erreicht wurde. Vor der ersten Prüfung kein Punkt.
 function _markUpdate() {
   const el = document.getElementById('nav-ver'), u = state.update;
   if (!el) return;
-  const on = !!u?.available, current = !on && !!u?.fetched;
+  const on = !!u?.available, current = !on && !!u?.fetched, unknown = !!u && !on && !current;
   el.classList.toggle('has-update', on);
   el.classList.toggle('up-to-date', current);
+  el.classList.toggle('update-unknown', unknown);
   el.title = [on ? `Update: Version ${u.version} verfügbar (${u.behind} neue${u.behind === 1 ? 'r Commit' : ' Commits'}) — klicken für Details`
     : current ? `Aktuelle Version — nichts Neueres auf ${u.upstream}`
     : u?.error ? `Update-Prüfung nicht möglich: ${u.error}` : '',
