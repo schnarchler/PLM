@@ -251,7 +251,7 @@ async function renderSettings() {
         </div>
         <div style="font-size:13px;color:var(--t3);margin:18px 0 10px">Farbdesign der Benutzeroberfläche.</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[['','Standard'],['angepasst','Angepasst']].map(([th,l]) => {
+          ${[['','Standard'],['angepasst','Helleres Design']].map(([th,l]) => {
             const active = (s.theme || '') === th ? ' btn-primary' : ' btn-ghost';
             return `<button class="btn btn-sm theme-preset-btn${active}" data-theme="${th}" onclick="setTheme('${th}')">${l}</button>`;
           }).join('')}
