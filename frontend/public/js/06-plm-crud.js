@@ -750,6 +750,41 @@ function openPriceModal(itemId, preset) {
   document.getElementById('pm-price')?.select();
 }
 
+// Wichtiger Hinweis: eigenes Feld neben den Notizen, als Banner über dem
+// Teil. Leer speichern entfernt ihn. Jede Änderung steht im Protokoll.
+function openImportantNoteModal(itemId) {
+  const item = state.item;
+  if (!item || item.id !== itemId) return;
+  _showDynModal(`<div class="modal" style="max-width:440px">
+    <div class="modal-head"><div class="modal-title" style="color:var(--red)">⚠ Wichtiger Hinweis: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><textarea class="ft" id="inm-text" rows="4"
+          placeholder="z.B. Nicht für tragende Anwendungen — max. 60 °C">${esc(item.important_note || '')}</textarea></div>
+      </div>
+      <div style="font-size:13px;color:var(--t3)">Erscheint über allen Tabs des Teils und auf Datenblatt, Prüfprotokoll und Produktionsauftrag.</div>
+    </div>
+    <div class="modal-foot">
+      ${item.important_note ? `<button class="btn btn-ghost" style="margin-right:auto;color:var(--red)" onclick="saveImportantNote(${item.id},true)">Entfernen</button>` : ''}
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveImportantNote(${item.id})">Speichern</button>
+    </div>
+  </div>`);
+  document.getElementById('inm-text')?.focus();
+}
+
+async function saveImportantNote(itemId, remove) {
+  const text = remove ? '' : V('inm-text').trim();
+  try {
+    await _putItemPatch(itemId, { important_note: text });
+    _hideDynModal();
+    toast(text ? 'Hinweis gespeichert' : 'Hinweis entfernt', 'ok');
+    const item = await api('/api/items/' + itemId);
+    state.item = item;
+    renderItemDetail(item, state.activeRevId);
+  } catch (e) { toast('Fehler: ' + e, 'err'); }
+}
+
 async function savePriceModal(itemId) {
   const val = V('pm-price').trim();
   const price = val === '' ? null : parseFloat(val);

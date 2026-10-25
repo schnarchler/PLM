@@ -159,6 +159,7 @@ async function renderChangelog() {
     if (/hinzugefügt|angelegt|Erstellt|hochgeladen|Neue Revision/.test(a)) return '✚';
     if (/gelöscht|entfernt/i.test(a)) return '✕';
     if (a.includes('Status')) return '⇄';
+    if (a.includes('Wichtiger Hinweis')) return '⚠';
     if (a.includes('ECO')) return '⚡';
     if (/Stand|fixiert/.test(a)) return '🔒';
     if (/BOM|Stückliste/.test(a)) return '📋';
