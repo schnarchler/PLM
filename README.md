@@ -554,18 +554,18 @@ node server.js
 Datenbank und `plm.config` liegen ausserhalb des Repositories und stehen in der
 `.gitignore` — ein Pull fasst sie nicht an.
 
-Welche Version läuft, steht oben links neben dem Logo und auf dem Startbildschirm:
+Welche Version läuft, steht unten in der Navigation unter den Einstellungen und auf dem Startbildschirm:
 `2.0.282` = Major.Minor aus `backend/package.json`, dahinter die Anzahl Commits.
 „geändert“ heisst, es laufen Änderungen, die noch nicht committet sind.
 
-Beim Öffnen prüft PLM, ob auf dem Git-Remote neuere Commits liegen (`git fetch` im
-Hintergrund, ab dem laufenden Commit). Gibt es welche, zeigt ein Dialog die neue
-Versionsnummer und die Commits — mit der laufenden Version weiterarbeiten geht immer,
-an der Version oben links bleibt dann ein blauer Punkt (Klick öffnet den Dialog wieder);
-im Betrieb prüft die Oberfläche alle 30 Minuten nach. Die Prüfung fragt nie nach
-Passwort oder Passphrase: bei SSH-Remotes braucht es einen Schlüssel ohne Passphrase
-oder einen laufenden SSH-Agent. Ist das Remote nicht erreichbar, zählt der Stand vom
-letzten Abruf; ohne Git oder ohne Upstream-Branch bleibt es still.
+Beim Start prüft PLM, ob auf dem Git-Remote neuere Commits liegen (`git fetch` im
+Hintergrund, ab dem laufenden Commit). Gibt es welche, zeigt der Startbildschirm eine
+Zeile „Update“ mit der neuen Versionsnummer, und an der Version in der Navigation steht ein
+blauer Punkt (Klick zeigt die neuen Commits). Es ist nur ein Hinweis — PLM läuft mit
+dem bisherigen Stand ganz normal weiter; im Betrieb prüft die Oberfläche alle 30 Minuten
+nach. Die Prüfung fragt nie nach Passwort oder Passphrase: bei SSH-Remotes braucht es
+einen Schlüssel ohne Passphrase oder einen laufenden SSH-Agent. Ist das Remote nicht
+erreichbar, zählt der Stand vom letzten Abruf; ohne Git oder ohne Upstream-Branch bleibt es still.
 
 Schemaänderungen laufen beim Serverstart automatisch: `initDb()` legt **zuerst**
 eine Tageskopie unter `data/backups/` an, `applySchema()` ergänzt dann fehlende Tabellen

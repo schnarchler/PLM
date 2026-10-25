@@ -68,9 +68,9 @@ async function setDocStatus(type, id, status, el) {
 }
 let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [], slicer: null, cad: null };
 
-// Laufende Version neben dem Logo; „geändert", wenn nicht committete Änderungen laufen
+// Laufende Version unten in der Navigation; „geändert", wenn nicht committete Änderungen laufen
 async function loadVersion() {
-  const el = document.getElementById('tb-ver');
+  const el = document.getElementById('nav-ver');
   try {
     const v = await api('/api/version');
     el.textContent = 'v' + v.version + (v.dirty ? ' · geändert' : '');
@@ -84,7 +84,7 @@ async function loadVersion() {
 // Update verfügbar: blauer Punkt an der Version, Klick öffnet den Dialog —
 // so sieht man es auch, wenn die Meldung beim Öffnen verpasst wurde
 function _markUpdate() {
-  const el = document.getElementById('tb-ver'), u = state.update;
+  const el = document.getElementById('nav-ver'), u = state.update;
   if (!el) return;
   const on = !!u?.available;
   el.classList.toggle('has-update', on);
@@ -92,26 +92,18 @@ function _markUpdate() {
     el.dataset.title || ''].filter(Boolean).join('\n');
 }
 
-// Neuere Commits auf dem Git-Remote: beim Öffnen einmal melden (pro Tab und
-// neuestem Commit), danach bleibt der Punkt an der Version. Im Betrieb prüft
-// checkUpdate(false) regelmässig nach, ohne Dialog. Weiterarbeiten mit der
-// laufenden Version geht immer.
+// Neuere Commits auf dem Git-Remote: kein Dialog beim Öffnen, nur der Punkt
+// an der Version (und die Zeile im Launcher). Im Betrieb wird regelmässig
+// nachgeprüft. Weiterarbeiten mit der laufenden Version geht immer.
 const UPDATE_CHECK_MS = 30 * 60 * 1000;
-async function checkUpdate(ask = true) {
+async function checkUpdate() {
   try { state.update = await api('/api/update'); } catch { return; }
   _markUpdate();
-  const u = state.update;
-  if (!ask || !u?.available) return;
-  let seen = null;
-  try { seen = sessionStorage.getItem('plm_update_seen'); } catch {}
-  // Ist schon ein Dialog offen (git fetch kann dauern), bleibt es beim Punkt
-  if (seen !== u.commits[0]?.commit && !document.querySelector('.overlay.open')) showUpdateDialog();
 }
 
 function showUpdateDialog() {
   const u = state.update;
   if (!u?.available) return;
-  try { sessionStorage.setItem('plm_update_seen', u.commits[0]?.commit || ''); } catch {}
   const more = u.behind - u.commits.length;
   _showDynModal(`<div class="modal" style="max-width:580px;width:95vw">
     <div class="modal-head"><div class="modal-title" style="color:var(--blue)">Neue Version verfügbar: v${esc(u.version)}</div></div>
@@ -370,7 +362,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   _applyFontScale();
   loadVersion();
   checkUpdate();
-  setInterval(() => checkUpdate(false), UPDATE_CHECK_MS);
+  setInterval(checkUpdate, UPDATE_CHECK_MS);
   loadCadStatus();
   history.replaceState({ view: 'dashboard' }, '');
   gotoView('dashboard');
