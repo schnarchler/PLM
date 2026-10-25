@@ -227,6 +227,13 @@ const PRINT_PARAMS = [
   ['notes',                 'Notizen'],
 ];
 function printParamLabel(key) { return PRINT_PARAMS.find(p => p[0] === key)?.[1] || key; }
+// Aussenmasse einer STL, vom Server als [x, y, z] in mm → "42.0 × 42.0 × 6.5 mm"
+function fmtDims(d) { return Array.isArray(d) ? d.map(v => fmtN(v, 1)).join(' × ') + ' mm' : null; }
+// STL-Dateien einer Revision mit Aussenmassen, Reihenfolge wie die 3D-Vorschau
+function revDims(rev) {
+  return (rev?.datasets || []).filter(d => Array.isArray(d.dims))
+    .map(d => ({ name: d.original_name, txt: fmtDims(d.dims) }));
+}
 function fmtPrintParam(key, v) {
   if (v === null || v === undefined || v === '') return null;
   const f = PRINT_PARAMS.find(p => p[0] === key)?.[2];

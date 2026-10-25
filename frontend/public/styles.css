@@ -109,7 +109,7 @@ body {
   border-right: 1px solid var(--line);
   flex-shrink: 0;
 }
-.tb-logo .tb-sep { color: var(--t3); font-weight: 400; }
+.tb-logo .tb-sep { color: var(--t3); }
 /* Laufende Version, unten in der Navigation unter den Einstellungen */
 .nav-ver { padding: 1px 6px 0; }
 .ver-pill { display: inline-flex; align-items: center; max-width: 100%; white-space: nowrap;

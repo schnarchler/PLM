@@ -412,12 +412,16 @@ function generateItemTemplate(type, opts = {}) {
 
   // Gleiche Abschnitte wie das Datenblatt am Bildschirm (renderItemSheet)
   if (type === 'datenblatt') {
+    // Aussenmasse der Revision; bei mehreren STL mit verschiedenen Massen alle mit Dateinamen
+    const dims = revDims(rev);
+    const dimsOne = new Set(dims.map(d => d.txt)).size === 1;
     body += `<div class="sec">Allgemein</div>` + kvTable([
       ['Typ', item.item_type.toUpperCase()],
       ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
       ['Klassifizierung', item.classification],
       ['Gewicht', item.effective_weight_g != null
         ? fmtN(item.effective_weight_g, 1) + ' g' + (item.weight_g == null && item.item_type === 'asm' ? ' (aus BOM)' : '') : null],
+      ['Aussenmasse', !dims.length ? null : dimsOne ? dims[0].txt : dims.map(d => d.name + ': ' + d.txt).join(' · '), !dimsOne],
       ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null],
       ['Entwicklungszeit', _fmtHours(item.dev_hours)],
       ['Erstellt', fmtD(item.created_at, null)],
