@@ -108,12 +108,12 @@ function _ecrDetailHtml(e, mayDecide) {
 // ── Anlegen und bearbeiten ────────────────────────────────────
 let _ecrDraft = null;   // { id, items: [{ item_id, item_number, name, item_type, note }] }
 
-async function openEcrModal(id = null, preset = []) {
+async function openEcrModal(id = null) {
   let e = null;
   if (id) { try { e = await api(`/api/ecrs/${id}`); } catch { return; } }
   _ecrDraft = { id, items: e
     ? e.items.map(x => ({ item_id: x.item_id, item_number: x.item_number, name: x.name, item_type: x.item_type, note: x.note || '' }))
-    : preset.map(x => ({ note: '', ...x })) };
+    : [] };
   _showDynModal(`<div class="modal" style="max-width:620px;width:95vw">
     <div class="modal-head"><div class="modal-title">${e ? 'Änderungsantrag bearbeiten' : 'Neuer Änderungsantrag'}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
@@ -138,12 +138,6 @@ async function openEcrModal(id = null, preset = []) {
     </div>
   </div>`);
   _renderEcrItems();
-}
-
-// Aus dem Datenblatt: Antrag für das offene Teil
-function openEcrForItem() {
-  const i = state.item;
-  if (i) openEcrModal(null, [{ item_id: i.id, item_number: i.item_number, name: i.name, item_type: i.item_type }]);
 }
 
 function _renderEcrItems() {

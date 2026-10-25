@@ -943,7 +943,6 @@ function renderItemSheet(item, activeRevId) {
           <button class="btn btn-ghost btn-sm" onclick="openItemMindmap(${item.id})">⌗ Mindmap</button>
           <button class="btn btn-ghost btn-sm" onclick="window._docTemplateItem=state.item;generateItemTemplate('datenblatt')">&#128196; Als PDF</button>
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
-          <button class="btn btn-ghost btn-sm" onclick="openEcrForItem()" title="Eine Änderung an diesem Teil beantragen">🛠 Änderungsantrag</button>
         </div>
       </div>
       ${qr ? `<div onclick="showItemQr()" title="QR-Code vergrössern" style="flex-shrink:0;background:#f4f6f8;padding:3px;border-radius:var(--r-sm);line-height:0;cursor:zoom-in">${qr}</div>` : ''}
