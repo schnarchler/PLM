@@ -484,16 +484,22 @@ window.addEventListener('DOMContentLoaded', async () => {
   _applyFontScale();
   _applyTheme();
   loadVersion();
-  checkUpdate();
+  // Aus dem Launcher über „Update installieren“ geöffnet (/?update)
+  const updateFromLauncher = new URLSearchParams(location.search).has('update');
+  const updateChecked = checkUpdate();
   setInterval(checkUpdate, UPDATE_CHECK_MS);
   loadCadStatus();
-  history.replaceState({ view: 'dashboard' }, '');
+  history.replaceState({ view: 'dashboard' }, '', location.pathname);
   gotoView('dashboard');
   loadStats();
   loadCheckouts();
   loadSlicerStatus();
   // Ab zwei Personen: beim Öffnen fragen, wer dran ist
-  loadSession().then(s => { if (s?.mode === 'team' && !s.user) askWhoIsThere('select'); });
+  // Den Update-Dialog erst danach, sonst läge er unter der Auswahl
+  loadSession().then(async s => {
+    if (s?.mode === 'team' && !s.user) await askWhoIsThere('select');
+    if (updateFromLauncher && await updateChecked) showUpdateDialog();
+  });
   _renderRecent();
   setupUploadDrag();
   api('/api/data-path').then(d => { if (!d.configured) _showFirstRunModal('', d.config_file); }).catch(() => {});
@@ -521,6 +527,7 @@ async function gotoView(v) {
   else if (v === 'orders') await renderOrders();
   else if (v === 'deliveries') await renderDeliveries();
   else if (v === 'changelog') await renderChangelog();
+  else if (v === 'erplog') await renderChangelog('erp');
   else if (v === 'settings') await renderSettings();
   else if (v === 'fileindex') await renderFileIndex();
   else if (v === 'search') renderSearchView();

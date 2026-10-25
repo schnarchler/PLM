@@ -83,9 +83,11 @@ async function openDeliveryDetail(id) {
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'dd-pos')">Positionen</button>
     <button class="tab" onclick="switchTab(this,'dd-info')">Details</button>
-    <button class="tab" onclick="switchTab(this,'dd-trace');loadDeliveryTrace(${id})">Rückverfolgung</button>`;
+    <button class="tab" onclick="switchTab(this,'dd-trace');loadDeliveryTrace(${id})">Rückverfolgung</button>
+    ${d.changelog ? `<button class="tab" onclick="switchTab(this,'dd-log')">Verlauf</button>` : ''}`;
   document.getElementById('dp-body').innerHTML = `
     <div id="dd-trace" style="display:none"></div>
+    <div id="dd-log" style="display:none">${renderChangelogList(d.changelog)}</div>
     <div id="dd-pos">
       ${renderDeliveryItems(d.items||[], id, d.status === 'DELIVERED')}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${id})">+ Position</button>

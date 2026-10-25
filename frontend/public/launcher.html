@@ -50,6 +50,10 @@
   button:hover { background: #b6c7ff; }
   button:active { transform: translateY(1px); }
   button:focus-visible { outline: 2px solid var(--t1); outline-offset: 3px; }
+  button.upd-btn { margin-top: 10px; background: rgba(157,180,255,.12); color: var(--blue);
+    border: 1px solid rgba(157,180,255,.32); font-weight: 600; }
+  button.upd-btn:hover { background: rgba(157,180,255,.2); }
+  button[hidden] { display: none; }
   .kbd { font: 600 11px var(--mono); padding: 2px 6px; border-radius: 5px; background: rgba(16,19,26,.14); }
   .hint { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--t4); }
   .meta { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 7px; font-size: 12px; text-align: left; }
@@ -72,6 +76,7 @@
   <p class="tag">Bauteile, Revisionen, Aufträge und Lager</p>
   <div class="status"><span class="dot"></span>Server läuft</div>
   <button type="button" id="openbtn" autofocus>PLM &amp; ERP öffnen <span class="kbd">Enter</span></button>
+  <button type="button" class="upd-btn" id="updbtn" hidden></button>
   <p class="hint" id="hint" hidden>Der Browser hat das automatische Öffnen blockiert. Über diesen Knopf geöffnet,
     lässt sich der Tab am Ende per „Beenden“ wieder schliessen.</p>
   <div class="meta">
@@ -84,8 +89,8 @@
 <script>
   // Ohne Feature-Liste (width/height/left/top) öffnet der Browser einen Tab —
   // sobald auch nur ein Feature gesetzt ist, ein Popup-Fenster.
-  function openApp() {
-    var w = window.open('/', '_blank');
+  function openApp(url) {
+    var w = window.open(url || '/', '_blank');
     if (w) { window.close(); return true; }
     return false;
   }
@@ -95,6 +100,10 @@
   if (!openApp()) document.getElementById('hint').hidden = false;
   document.getElementById('openbtn').addEventListener('click', function () {
     if (!openApp()) window.location.href = '/';
+  });
+  // Mit ?update zeigt PLM gleich nach dem Öffnen den Update-Dialog
+  document.getElementById('updbtn').addEventListener('click', function () {
+    if (!openApp('/?update')) window.location.href = '/?update';
   });
 
   function text(id, value, title) {
@@ -129,10 +138,13 @@
     if (!u.available) return;
     var n = u.behind === 1 ? '1 neuer Commit' : u.behind + ' neue Commits';
     text('v-update', 'v' + u.version + ' verfügbar', n + ' auf ' + u.upstream + (u.installable
-      ? ' — installieren in PLM über die Version unten in der Navigation'
+      ? ' — „Update installieren“ öffnet PLM mit dem Update-Dialog'
       : u.download ? ' — zum Aktualisieren beenden, neue ZIP herunterladen, über den PLM-Ordner kopieren, neu starten'
       : ' — zum Aktualisieren beenden, git pull, neu starten'));
     document.getElementById('r-update').hidden = false;
+    var btn = document.getElementById('updbtn');
+    btn.textContent = u.installable ? 'Update auf v' + u.version + ' installieren' : 'Update auf v' + u.version + ' — Anleitung';
+    btn.hidden = false;
   }).catch(function () {});
 </script>
 </body>

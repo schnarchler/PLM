@@ -115,10 +115,10 @@ async function renderDashboard() {
 }
 
 // ── HISTORIE ──────────────────────────────────────────────────
-let _changelogRows = [];
+let _changelogRows = [], _changelogKind = 'plm';
 const HISTORY_TYPE_LABEL = { item: 'Item', revision: 'Revision', project: 'Projekt', order: 'Auftrag',
   delivery: 'Produktionsauftrag', customer: 'Kunde', inventory: 'Lagerartikel', raw_material: 'Rohmaterial', settings: 'Einstellungen',
-  user: 'Person', ecr: 'Änderungsantrag' };
+  user: 'Person', ecr: 'Änderungsantrag', supplier: 'Lieferant', purchase_order: 'Bestellung' };
 function exportChangelog() {
   if (!_changelogRows.length) { toast('Keine Daten zum Exportieren','warn'); return; }
   const header = ['Datum','Zeit','Person','Typ','Referenz','Bezeichnung','Aktion','Details'];
@@ -131,7 +131,7 @@ function exportChangelog() {
   const csv = [header, ...csvRows].map(row => row.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
-  a.download = 'historie-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = (_changelogKind === 'erp' ? 'erp-verlauf-' : 'historie-') + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
 }
 // Klick auf die Referenz öffnet den Datensatz, um den es geht
@@ -142,15 +142,20 @@ function _historyOpen(r) {
   if (r.entity_type === 'delivery') return `gotoView('deliveries').then(()=>openDeliveryDetail(${r.entity_id}))`;
   if (r.entity_type === 'customer') return `gotoView('customers').then(()=>openCustomerDetail(${r.entity_id}))`;
   if (r.entity_type === 'ecr') return `gotoView('ecr').then(()=>openEcrDetail(${r.entity_id}))`;
+  if (r.entity_type === 'supplier') return `gotoView('purchasing').then(()=>openSupplierDetail(${r.entity_id}))`;
+  if (r.entity_type === 'purchase_order') return `gotoView('purchasing').then(()=>openPoDetail(${r.entity_id}))`;
   return '';
 }
-async function renderChangelog() {
-  setLeftHeader('Historie', `
-    <button class="btn btn-ghost btn-sm" onclick="renderChangelog()">↺ Aktualisieren</button>
+// kind 'plm': Historie (Projekte, Items, Revisionen …); 'erp': ERP-Verlauf, nur für Admins
+async function renderChangelog(kind = 'plm') {
+  const erp = kind === 'erp';
+  setLeftHeader(erp ? 'ERP-Verlauf' : 'Historie', `
+    <button class="btn btn-ghost btn-sm" onclick="renderChangelog('${kind}')">↺ Aktualisieren</button>
     <button class="btn btn-ghost btn-sm" onclick="exportChangelog()">&#x2B07; CSV</button>`);
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
-  const rows = await api('/api/changelog?limit=2000');
+  const rows = await api((erp ? '/api/erp-log' : '/api/changelog') + '?limit=2000');
   _changelogRows = rows;
+  _changelogKind = kind;
   if (!rows.length) {
     setLeftBody(`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Noch keine Einträge</div></div>`);
     return;
@@ -187,9 +192,9 @@ async function renderChangelog() {
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>${_clUser(r)}
-              ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${_historyOpen(r)}">${r.item_type ? itemTypeIcon(r.item_type) : ({ project: '📁', order: '📋', delivery: '🚚', customer: '👤', ecr: '🛠' }[r.entity_type] || '')} ${esc(r.ref)}</span>` : ''}
+              ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${_historyOpen(r)}">${r.item_type ? itemTypeIcon(r.item_type) : ({ project: '📁', order: '📋', delivery: '🚚', customer: '👤', ecr: '🛠', supplier: '🏭', purchase_order: '🛒' }[r.entity_type] || '')} ${esc(r.ref)}</span>` : ''}
             </div>
-            ${r.details ? `<div style="font-size:13px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${esc(r.details)}</div>` : ''}
+            ${r.details ? `<div style="font-size:13px;color:var(--t3);margin-top:2px;${erp ? 'line-height:1.5' : 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px'}">${esc(r.details)}</div>` : ''}
             ${r.label ? `<div style="font-size:13px;color:var(--t2);margin-top:1px">${esc(r.label)}</div>` : ''}
           </div>
           <div style="font-family:var(--mono);font-size:11px;color:var(--t3);flex-shrink:0;white-space:nowrap;margin-top:2px">${r.created_at ? parseDbDate(r.created_at).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'}) : ''}</div>

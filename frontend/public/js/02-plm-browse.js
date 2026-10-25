@@ -563,12 +563,7 @@ function renderItemDetail(item, activeRevId) {
       </div>
       ${rev ? renderRevDetail(rev, item) : '<div style="color:var(--t3)">Keine Revision</div>'}
     </div>
-    <div id="it-log" style="display:none">
-      ${(item.changelog||[]).map(cl => `
-        <div class="cl-row"><div class="cl-dot"></div>
-        <div><div class="cl-action">${esc(cl.action)}${_clUser(cl)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
-        <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>'}
-    </div>
+    <div id="it-log" style="display:none">${renderChangelogList(item.changelog)}</div>
     ${!isDOC ? `<div id="it-time" style="display:none">
       <div id="item-time-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
     </div>` : ''}

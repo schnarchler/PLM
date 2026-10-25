@@ -355,6 +355,18 @@ function applySchema() {
   // Wer hat's getan — der Name als Kopie, damit die Historie lesbar bleibt
   try { db.run('ALTER TABLE changelog ADD COLUMN user_id INTEGER'); } catch {}
   try { db.run('ALTER TABLE changelog ADD COLUMN user_name TEXT'); } catch {}
+  // ERP-Verlauf getrennt von der PLM-Historie: Aufträge, Produktion, Kunden,
+  // Lieferanten, Einkauf, Lager. Sehen dürfen ihn nur Admins.
+  db.run(`CREATE TABLE IF NOT EXISTS erp_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL,
+    entity_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT,
+    user_id INTEGER,
+    user_name TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
 
   // Personen für die Nachvollziehbarkeit (siehe BENUTZER). Nie gelöscht, nur deaktiviert.
   db.run(`CREATE TABLE IF NOT EXISTS users (
@@ -911,6 +923,8 @@ function applySchema() {
     'CREATE INDEX IF NOT EXISTS idx_bom_std_part         ON bom_std_parts(std_part_id)',
     'CREATE INDEX IF NOT EXISTS idx_changelog_entity     ON changelog(entity_type, entity_id)',
     'CREATE INDEX IF NOT EXISTS idx_changelog_created    ON changelog(created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_erp_log_entity       ON erp_log(entity_type, entity_id)',
+    'CREATE INDEX IF NOT EXISTS idx_erp_log_created      ON erp_log(created_at)',
     'CREATE INDEX IF NOT EXISTS idx_order_items_order    ON order_items(order_id)',
     'CREATE INDEX IF NOT EXISTS idx_order_items_item     ON order_items(item_id)',
     'CREATE INDEX IF NOT EXISTS idx_quote_items_quote    ON quote_items(quote_id)',
@@ -1498,12 +1512,105 @@ function calcItemCost(itemId, _visited) {
   return { filament, machine, total: filament + machine, from_bom: true };
 }
 
+// ERP-Typen landen im ERP-Verlauf (erp_log), alles andere in der PLM-Historie
+const ERP_LOG_TYPES = new Set(['order', 'delivery', 'customer', 'supplier', 'purchase_order', 'inventory', 'raw_material']);
 function log(type, id, action, details) {
   const u = userContext.getStore();
-  db.run('INSERT INTO changelog (entity_type,entity_id,action,details,user_id,user_name) VALUES (?,?,?,?,?,?)',
+  db.run(`INSERT INTO ${ERP_LOG_TYPES.has(type) ? 'erp_log' : 'changelog'} (entity_type,entity_id,action,details,user_id,user_name) VALUES (?,?,?,?,?,?)`,
     [type, id, action, details || '', u?.id ?? null, u?.name ?? null]);
   saveDb();
 }
+
+// ── ERP-HISTORIE: WAS HAT SICH GEÄNDERT ───────────────────────
+// Eine Zeile pro Speichern, nur mit den geänderten Feldern:
+// „Lieferdatum: 12.11.2026 → 19.11.2026 · Rabatt: 0 % → 5 %". Lange Texte
+// werden gekürzt, Druckparameter nur als „geändert" vermerkt — die Historie
+// bleibt so klein. Felder: [Spalte, Bezeichnung, Art, Statusnamen].
+const ORDER_ST_LABEL    = { QUOTE: 'Angebot', DRAFT: 'Entwurf', CONFIRMED: 'Bestätigt', DELIVERED: 'Geliefert',
+  INVOICED: 'Fakturiert', DECLINED: 'Abgelehnt', CANCELLED: 'Storniert' };
+const DELIVERY_ST_LABEL = { DRAFT: 'Entwurf', READY: 'Bereit', DELIVERED: 'Geliefert' };
+const PO_ST_LABEL       = { DRAFT: 'Entwurf', ORDERED: 'Bestellt', RECEIVED: 'Erhalten', CANCELLED: 'Storniert' };
+const _histNum = v => String(+(+v).toFixed(4));
+const _histRef = (sql, prefix = '#') => id => get(sql, [id])?.n || prefix + id;
+const HIST_FMT = {
+  text:     v => { const t = String(v).replace(/\s+/g, ' ').trim(); return t.length > 60 ? t.slice(0, 59) + '…' : t; },
+  date:     v => { const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : String(v); },
+  num:      _histNum,
+  pct:      v => _histNum(v) + ' %',
+  money:    v => (+v).toFixed(2),
+  bool:     v => v ? 'ja' : 'nein',
+  customer: _histRef('SELECT name as n FROM customers WHERE id=?'),
+  supplier: _histRef('SELECT name as n FROM suppliers WHERE id=?'),
+  order:    _histRef('SELECT number as n FROM orders WHERE id=?'),
+  item:     _histRef('SELECT item_number as n FROM items WHERE id=?'),
+  material: _histRef('SELECT name as n FROM raw_materials WHERE id=?'),
+};
+const HIST_NUMERIC = new Set(['num', 'pct', 'money', 'customer', 'supplier', 'order', 'item', 'material']);
+function histDiff(before, after, fields) {
+  const parts = [];
+  for (const [key, label, kind = 'text', names] of fields) {
+    const norm = v => kind === 'bool' ? !!+v
+      : v == null || v === '' ? null
+      : HIST_NUMERIC.has(kind) && Number.isFinite(+v) ? +v : String(v).trim() || null;
+    const a = norm(before?.[key]), b = norm(after?.[key]);
+    if (a === b) continue;
+    if (kind === 'blob') { parts.push(label + ' geändert'); continue; }
+    const show = v => v == null ? '—' : names ? names[v] || v : HIST_FMT[kind](v);
+    parts.push(`${label}: ${show(a)} → ${show(b)}`);
+  }
+  return parts.join(' · ');
+}
+// Nur protokollieren, wenn sich wirklich etwas geändert hat
+function logChanges(type, id, before, after, fields, action = 'Geändert', prefix = '') {
+  const d = histDiff(before, after, fields);
+  if (d) log(type, id, action, prefix + d);
+}
+const _histPos = r => `„${HIST_FMT.text(r?.description || '')}"`;
+const _histDoc = r => [r.number, r.title || r.name].filter(Boolean).join(' – ');
+const ORDER_HIST = [
+  ['title', 'Bezeichnung'], ['status', 'Status', 'text', ORDER_ST_LABEL],
+  ['customer_id', 'Kunde', 'customer'], ['customer_name_free', 'Kunde (Freitext)'],
+  ['order_date', 'Datum', 'date'], ['delivery_date', 'Lieferdatum', 'date'], ['valid_until', 'Gültig bis', 'date'],
+  ['tax_rate', 'MwSt.', 'pct'], ['include_tax', 'MwSt. ausweisen', 'bool'], ['discount_pct', 'Rabatt', 'pct'],
+  ['payment_terms', 'Zahlungsbedingungen'], ['estimated_hours', 'Arbeitszeit (h)', 'num'],
+  ['include_hours', 'Arbeitszeit eingerechnet', 'bool'], ['notes', 'Notizen'],
+];
+const ORDER_ITEM_HIST = [
+  ['description', 'Beschreibung'], ['item_id', 'Item', 'item'], ['quantity', 'Menge', 'num'], ['unit', 'Einheit'],
+  ['unit_price', 'Preis', 'money'], ['discount_pct', 'Rabatt', 'pct'], ['raw_material_id', 'Material', 'material'],
+  ['estimated_hours', 'Arbeitszeit (h)', 'num'], ['printer_name', 'Drucker'],
+  ['estimated_print_hours', 'Druckzeit (h)', 'num'], ['notes', 'Notizen'],
+];
+const DELIVERY_HIST = [
+  ['title', 'Bezeichnung'], ['status', 'Status', 'text', DELIVERY_ST_LABEL], ['order_id', 'Auftrag', 'order'],
+  ['customer_id', 'Kunde', 'customer'], ['customer_name_free', 'Kunde (Freitext)'],
+  ['manufacture_date', 'Fertigungsdatum', 'date'], ['delivery_date', 'Lieferdatum', 'date'], ['notes', 'Notizen'],
+];
+const DELIVERY_ITEM_HIST = [
+  ['description', 'Beschreibung'], ['item_id', 'Item', 'item'], ['quantity', 'Menge', 'num'], ['unit', 'Einheit'],
+  ['unit_price', 'Preis', 'money'], ['raw_material_id', 'Material', 'material'],
+  ['print_settings_json', 'Druckparameter', 'blob'], ['notes', 'Notizen'],
+];
+const ADDRESS_HIST = [
+  ['email', 'E-Mail'], ['phone', 'Telefon'], ['street', 'Strasse'], ['postal_code', 'PLZ'],
+  ['city', 'Ort'], ['country', 'Land'], ['notes', 'Notizen'],
+];
+const CUSTOMER_HIST = [['name', 'Name'], ...ADDRESS_HIST];
+const SUPPLIER_HIST = [['name', 'Name'], ['contact_person', 'Kontaktperson'], ...ADDRESS_HIST];
+const PO_HIST = [
+  ['status', 'Status', 'text', PO_ST_LABEL], ['supplier_id', 'Lieferant', 'supplier'],
+  ['supplier_name_free', 'Lieferant (Freitext)'], ['order_date', 'Bestelldatum', 'date'],
+  ['expected_date', 'Erwartet', 'date'], ['notes', 'Notizen'],
+];
+const PO_ITEM_HIST = [
+  ['description', 'Beschreibung'], ['quantity', 'Menge', 'num'], ['unit', 'Einheit'],
+  ['unit_price', 'Preis', 'money'], ['notes', 'Notizen'],
+];
+// Verlauf-Tab eines Belegs — nur für Admins (allein oder ohne Personen: alle)
+const erpLogAllowed = req => req.plmMode !== 'team' || req.plmUser?.role === 'admin';
+const erpLog = (req, type, id) => erpLogAllowed(req)
+  ? all('SELECT * FROM erp_log WHERE entity_type=? AND entity_id=? ORDER BY created_at DESC, id DESC LIMIT 200', [type, id])
+  : undefined;
 
 // 'full'   = DFT → REV → REL → ECO → OBS (Standard)
 // 'simple' = ohne Freigabe: Revisionen bleiben DFT, neue Revision direkt anlegbar
@@ -1781,6 +1888,7 @@ app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   const { mode, user, session } = resolveUser(req);
   req.plmUser = user;
+  req.plmMode = mode;
   const need = requiredRole(req);
   if (need && mode === 'team') {
     if (!user) return res.status(401).json({ error: 'Bitte zuerst wählen, wer dran ist', need_user: true });
@@ -3618,6 +3726,7 @@ app.post('/api/customers', (req, res) => {
   const number = nextCustomerNumber();
   const id = runGetId('INSERT INTO customers (number,name,email,phone,street,postal_code,city,country,notes) VALUES (?,?,?,?,?,?,?,?,?)',
     [number, name, email||'', phone||'', street||'', postal_code||'', city||'', country||'Deutschland', notes||'']);
+  log('customer', id, 'Erstellt', `${number} – ${name}`);
   res.json(get('SELECT * FROM customers WHERE id=?', [id]));
 });
 
@@ -3642,15 +3751,19 @@ app.get('/api/customers/:id', (req, res) => {
     LEFT JOIN delivery_items di ON di.delivery_id = d.id
     LEFT JOIN orders o ON d.order_id = o.id
     WHERE d.customer_id=? GROUP BY d.id ORDER BY d.id DESC`, [c.id]);
+  c.changelog = erpLog(req, 'customer', c.id);
 
   res.json(c);
 });
 
 app.put('/api/customers/:id', (req, res) => {
   const { name, email, phone, street, postal_code, city, country, notes } = req.body;
+  const before = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
   run('UPDATE customers SET name=?,email=?,phone=?,street=?,postal_code=?,city=?,country=?,notes=? WHERE id=?',
     [name, email, phone, street, postal_code, city, country||'Deutschland', notes, req.params.id]);
-  res.json(get('SELECT * FROM customers WHERE id=?', [req.params.id]));
+  const after = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
+  if (before) logChanges('customer', before.id, before, after, CUSTOMER_HIST);
+  res.json(after);
 });
 
 app.delete('/api/customers/:id', (req, res) => {
@@ -3696,6 +3809,7 @@ app.post('/api/orders', (req, res) => {
   const number = nextOrderNumber();
   const id = runGetId('INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,delivery_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [number, customer_id||null, customer_name_free||null, title, notes||'', order_date||null, delivery_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
+  log('order', id, status === 'QUOTE' ? 'Angebot erstellt' : 'Erstellt', `${number} – ${title}`);
   res.json(get('SELECT * FROM orders WHERE id=?', [id]));
 });
 
@@ -3711,23 +3825,33 @@ app.get('/api/orders/:id', (req, res) => {
   // auskommt und man nicht in die Produktionsliste wechseln muss.
   o.deliveries = all(`SELECT d.*, (SELECT COUNT(*) FROM delivery_items di WHERE di.delivery_id=d.id) as item_count
     FROM deliveries d WHERE d.order_id=? ORDER BY d.id`, [o.id]);
+  o.changelog = erpLog(req, 'order', o.id);
   res.json(o);
 });
 
 app.put('/api/orders/:id', (req, res) => {
   const { customer_id, customer_name_free, title, status, notes, order_date, delivery_date, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, valid_until } = req.body;
+  const before = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
   run(`UPDATE orders SET customer_id=?,customer_name_free=?,title=?,status=?,notes=?,order_date=?,delivery_date=?,
     valid_until=?,tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,estimated_hours=?,include_hours=?,updated_at=datetime('now') WHERE id=?`,
     [customer_id||null, customer_name_free||null, title, status, notes, order_date, delivery_date,
      valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, req.params.id]);
-  res.json(get('SELECT * FROM orders WHERE id=?', [req.params.id]));
+  const after = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
+  if (before) logChanges('order', before.id, before, after, ORDER_HIST);
+  res.json(after);
 });
+
+function logStatus(type, id, labels, from, to, details = '') {
+  if (!from || from === to) return;
+  log(type, id, 'Status → ' + (labels[to] || to), ['von ' + (labels[from] || from), details].filter(Boolean).join(' · '));
+}
 
 app.put('/api/orders/:id/status', (req, res) => {
   const { status } = req.body;
+  const prev = get('SELECT status, delivery_date FROM orders WHERE id=?', [req.params.id]);
+  logStatus('order', req.params.id, ORDER_ST_LABEL, prev?.status, status);
   if (status === 'DELIVERED') {
-    const existing = get('SELECT delivery_date FROM orders WHERE id=?', [req.params.id]);
-    if (!existing?.delivery_date) {
+    if (!prev?.delivery_date) {
       run(`UPDATE orders SET status=?,delivery_date=date('now'),updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
       return res.json({ success: true, delivery_date: new Date().toISOString().slice(0, 10) });
     }
@@ -3736,7 +3860,10 @@ app.put('/api/orders/:id/status', (req, res) => {
   res.json({ success: true });
 });
 
+// Gelöschte Belege: Nummer und Titel in die Details, der Datensatz ist danach weg
 app.delete('/api/orders/:id', (req, res) => {
+  const o = get('SELECT * FROM orders WHERE id=?', [req.params.id]);
+  if (o) log('order', o.id, 'Gelöscht', _histDoc(o));
   tx(() => {
     run('DELETE FROM order_items WHERE order_id=?', [req.params.id]);
     run('DELETE FROM orders WHERE id=?', [req.params.id]);
@@ -3748,7 +3875,9 @@ app.post('/api/orders/:id/items', (req, res) => {
   const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
   const id = runGetId('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
     [req.params.id, item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null]);
-  res.json(get('SELECT * FROM order_items WHERE id=?', [id]));
+  const row = get('SELECT * FROM order_items WHERE id=?', [id]);
+  log('order', row.order_id, 'Position hinzugefügt', `${_histPos(row)} · ${_histNum(row.quantity)} ${row.unit} à ${HIST_FMT.money(row.unit_price || 0)}`);
+  res.json(row);
 });
 
 // ── Preis-Sync Auftrag ↔ Produktion ───────────────────────────
@@ -3776,15 +3905,19 @@ function syncPriceFromOrderItem(orderItemId) {
 
 app.put('/api/order-items/:id', (req, res) => {
   const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
+  const before = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
   run('UPDATE order_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
     [item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
   const priceSynced = syncPriceFromOrderItem(req.params.id);
   const row = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
+  if (before && row) logChanges('order', row.order_id, before, row, ORDER_ITEM_HIST, 'Position geändert', _histPos(before) + ': ');
   if (row) row.price_synced = priceSynced;
   res.json(row);
 });
 
 app.delete('/api/order-items/:id', (req, res) => {
+  const oi = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
+  if (oi) log('order', oi.order_id, 'Position entfernt', `${_histPos(oi)} · ${_histNum(oi.quantity)} ${oi.unit}`);
   run('DELETE FROM order_items WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
@@ -4236,7 +4369,7 @@ app.get('/api/dashboard', (req, res) => {
     files_bytes: n('SELECT COALESCE(SUM(file_size),0) n FROM datasets'),
     db_bytes:   dbBytes,
     last_backup: lastBackup,
-    since:      get('SELECT MIN(created_at) n FROM changelog')?.n || null,   // erster Eintrag der Historie
+    since:      get('SELECT MIN(n) n FROM (SELECT MIN(created_at) n FROM changelog UNION ALL SELECT MIN(created_at) FROM erp_log)')?.n || null,   // erster Eintrag der Historie
     version:    APP_VERSION,
   };
 
@@ -4453,9 +4586,8 @@ app.post('/api/classifications/rename', (req, res) => {
   res.json({ renamed: result.reduce((s, r) => s + r.items, 0), renames: result });
 });
 
-app.get('/api/changelog', (req, res) => {
-  const limit = parseInt(req.query.limit) || 150;
-  const rows = all('SELECT * FROM changelog ORDER BY created_at DESC, id DESC LIMIT ?', [limit]);
+// Nummer und Bezeichnung zum Eintrag, damit die Historie verlinken kann
+function withLogRefs(rows) {
   rows.forEach(r => {
     if (r.entity_type === 'item') {
       const item = get('SELECT item_number, name, project_id, item_type FROM items WHERE id=?', [r.entity_id]);
@@ -4472,15 +4604,30 @@ app.get('/api/changelog', (req, res) => {
     } else if (r.entity_type === 'order' || r.entity_type === 'delivery') {
       const row = get(`SELECT number, title FROM ${r.entity_type === 'order' ? 'orders' : 'deliveries'} WHERE id=?`, [r.entity_id]);
       if (row) { r.ref = row.number; r.label = row.title; }
-    } else if (r.entity_type === 'customer') {
-      const c = get('SELECT number, name FROM customers WHERE id=?', [r.entity_id]);
+    } else if (r.entity_type === 'customer' || r.entity_type === 'supplier') {
+      const c = get(`SELECT number, name FROM ${r.entity_type === 'customer' ? 'customers' : 'suppliers'} WHERE id=?`, [r.entity_id]);
       if (c) { r.ref = c.number; r.label = c.name; }
+    } else if (r.entity_type === 'purchase_order') {
+      const po = get('SELECT po.number, COALESCE(s.name, po.supplier_name_free) as name FROM purchase_orders po LEFT JOIN suppliers s ON s.id=po.supplier_id WHERE po.id=?', [r.entity_id]);
+      if (po) { r.ref = po.number; r.label = po.name; }
+    } else if (r.entity_type === 'inventory' || r.entity_type === 'raw_material') {
+      const m = get(`SELECT name FROM ${r.entity_type === 'inventory' ? 'inventory_items' : 'raw_materials'} WHERE id=?`, [r.entity_id]);
+      if (m) r.label = m.name;
     } else if (r.entity_type === 'ecr') {
       const e = get('SELECT number, title FROM ecrs WHERE id=?', [r.entity_id]);
       if (e) { r.ref = e.number; r.label = e.title; }
     }
   });
-  res.json(rows);
+  return rows;
+}
+app.get('/api/changelog', (req, res) => {
+  const limit = parseInt(req.query.limit) || 150;
+  res.json(withLogRefs(all('SELECT * FROM changelog ORDER BY created_at DESC, id DESC LIMIT ?', [limit])));
+});
+app.get('/api/erp-log', (req, res) => {
+  if (!erpLogAllowed(req)) return res.status(403).json({ error: 'Den ERP-Verlauf sehen nur Admins.' });
+  const limit = parseInt(req.query.limit) || 150;
+  res.json(withLogRefs(all('SELECT * FROM erp_log ORDER BY created_at DESC, id DESC LIMIT ?', [limit])));
 });
 
 app.get('/api/items-released', (req, res) => {
@@ -5422,6 +5569,7 @@ app.post('/api/deliveries', (req, res) => {
   const id = runGetId(`INSERT INTO deliveries (number,title,order_id,customer_id,customer_name_free,status,delivery_date,manufacture_date,notes)
     VALUES (?,?,?,?,?,?,?,?,?)`,
     [number, title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, manufacture_date||null, notes||'']);
+  log('delivery', id, 'Erstellt', `${number} – ${title}`);
   res.json(get('SELECT * FROM deliveries WHERE id=?', [id]));
 });
 
@@ -5449,6 +5597,7 @@ app.get('/api/deliveries/:id', (req, res) => {
     }
     attachDeliveredRevision(item, d.status === 'DELIVERED');
   });
+  d.changelog = erpLog(req, 'delivery', d.id);
   res.json(d);
 });
 
@@ -5476,15 +5625,17 @@ function attachDeliveredRevision(di, delivered) {
 
 app.put('/api/deliveries/:id', (req, res) => {
   const { title, order_id, customer_id, customer_name_free, status, delivery_date, manufacture_date, notes } = req.body;
-  const prev = get('SELECT status FROM deliveries WHERE id=?', [req.params.id]);
+  const prev = get('SELECT * FROM deliveries WHERE id=?', [req.params.id]);
   if (!prev) return res.status(404).json({ error: 'Nicht gefunden' });
   tx(() => {
     run(`UPDATE deliveries SET title=?,order_id=?,customer_id=?,customer_name_free=?,status=?,delivery_date=?,manufacture_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
       [title, order_id||null, customer_id||null, customer_name_free||null, status||'DRAFT', delivery_date||null, manufacture_date||null, notes||'', req.params.id]);
     onDeliveryStatusChange(req.params.id, prev.status, status || 'DRAFT');
   });
+  const after = get('SELECT * FROM deliveries WHERE id=?', [req.params.id]);
+  logChanges('delivery', prev.id, prev, after, DELIVERY_HIST);
   if (status === 'DELIVERED') autoDeliverOrder(req.params.id);
-  res.json(get('SELECT * FROM deliveries WHERE id=?', [req.params.id]));
+  res.json(after);
 });
 
 function autoDeliverOrder(deliveryId) {
@@ -5494,6 +5645,7 @@ function autoDeliverOrder(deliveryId) {
   if (!order || order.status === 'DELIVERED' || order.status === 'INVOICED' || order.status === 'CANCELLED') return;
   const counts = get(`SELECT COUNT(*) as total, SUM(CASE WHEN status='DELIVERED' THEN 1 ELSE 0 END) as done FROM deliveries WHERE order_id=?`, [d.order_id]);
   if (counts.total > 0 && counts.total === counts.done) {
+    logStatus('order', d.order_id, ORDER_ST_LABEL, order.status, 'DELIVERED', 'automatisch, alle Produktionsaufträge geliefert');
     run(`UPDATE orders SET status='DELIVERED', delivery_date=COALESCE(delivery_date,date('now')), updated_at=datetime('now') WHERE id=?`, [d.order_id]);
   }
 }
@@ -5614,6 +5766,7 @@ app.put('/api/deliveries/:id/status', (req, res) => {
   const existing = get('SELECT status, delivery_date FROM deliveries WHERE id=?', [req.params.id]);
   if (!existing) return res.status(404).json({ error: 'Nicht gefunden' });
   let deliveryDate = null;
+  logStatus('delivery', req.params.id, DELIVERY_ST_LABEL, existing.status, status);
   tx(() => {
     if (status === 'DELIVERED' && !existing.delivery_date) {
       deliveryDate = new Date().toISOString().slice(0, 10);
@@ -5629,6 +5782,8 @@ app.put('/api/deliveries/:id/status', (req, res) => {
 });
 
 app.delete('/api/deliveries/:id', (req, res) => {
+  const d = get('SELECT * FROM deliveries WHERE id=?', [req.params.id]);
+  if (d) log('delivery', d.id, 'Gelöscht', _histDoc(d));
   tx(() => {
     run('DELETE FROM delivery_structure WHERE delivery_item_id IN (SELECT id FROM delivery_items WHERE delivery_id=?)', [req.params.id]);
     run('DELETE FROM delivery_items WHERE delivery_id=?', [req.params.id]);
@@ -5649,12 +5804,13 @@ app.post('/api/deliveries/:id/items', (req, res) => {
   if (get("SELECT 1 as y FROM deliveries WHERE id=? AND status='DELIVERED'", [req.params.id])) {
     freezeDeliveryItem(get('SELECT * FROM delivery_items WHERE id=?', [id]), 'delivery');
   }
+  log('delivery', req.params.id, 'Position hinzugefügt', `„${HIST_FMT.text(description)}" · ${_histNum(quantity || 1)} ${unit || 'Stk'}`);
   res.json(get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [id]));
 });
 
 app.put('/api/delivery-items/:id', (req, res) => {
   const { item_id, description, quantity, unit, unit_price, print_settings_json, notes, position, raw_material_id } = req.body;
-  const before = get(`SELECT di.item_id, d.status as delivery_status FROM delivery_items di
+  const before = get(`SELECT di.*, d.status as delivery_status FROM delivery_items di
     JOIN deliveries d ON d.id=di.delivery_id WHERE di.id=?`, [req.params.id]);
   if (!before) return res.status(404).json({ error: 'Position nicht gefunden' });
   run(`UPDATE delivery_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=?,raw_material_id=? WHERE id=?`,
@@ -5686,11 +5842,14 @@ app.put('/api/delivery-items/:id', (req, res) => {
     }
   }
   const row = get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [req.params.id]);
+  if (row) logChanges('delivery', before.delivery_id, before, row, DELIVERY_ITEM_HIST, 'Position geändert', _histPos(before) + ': ');
   if (row) row.price_synced = priceSynced;
   res.json(row);
 });
 
 app.delete('/api/delivery-items/:id', (req, res) => {
+  const di = get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]);
+  if (di) log('delivery', di.delivery_id, 'Position entfernt', `${_histPos(di)} · ${_histNum(di.quantity)} ${di.unit}`);
   run('DELETE FROM delivery_structure WHERE delivery_item_id=?', [req.params.id]);
   run('DELETE FROM delivery_items WHERE id=?', [req.params.id]);
   res.json({ success: true });
@@ -6019,6 +6178,8 @@ app.post('/api/orders/:id/to-delivery', (req, res) => {
     });
     // Wer einen Produktionsauftrag erzeugt, hat den Auftrag faktisch bestaetigt.
     // Den Status dafuer von Hand nachzuziehen ist eine Fehlerquelle.
+    log('order', o.id, 'Produktionsauftrag erzeugt', number);
+    log('delivery', id, 'Erstellt', `${number} – ${o.title} · aus Auftrag ${o.number}`);
     if (o.status === 'DRAFT') {
       run("UPDATE orders SET status='CONFIRMED',updated_at=datetime('now') WHERE id=?", [o.id]);
       log('order', o.id, 'Bestätigt', 'automatisch beim Erzeugen von ' + number);
@@ -6254,13 +6415,15 @@ function databaseStats(buf) {
   const tmp = new SQL.Database(buf);
   try {
     const one = sql => { try { return tmp.exec(sql)[0]?.values?.[0]?.[0] ?? null; } catch { return null; } };
-    const stats = { ok: one('PRAGMA integrity_check') === 'ok', last_change: one('SELECT MAX(created_at) FROM changelog') };
+    // Ältere Sicherungen haben noch keinen ERP-Verlauf
+    const last = [one('SELECT MAX(created_at) FROM changelog'), one('SELECT MAX(created_at) FROM erp_log')].filter(Boolean).sort().pop() || null;
+    const stats = { ok: one('PRAGMA integrity_check') === 'ok', last_change: last };
     STAT_TABLES.forEach(t => { stats[t] = one(`SELECT COUNT(*) FROM ${t}`); });
     return stats;
   } finally { tmp.close(); }
 }
 function currentStats() {
-  const stats = { last_change: get('SELECT MAX(created_at) as m FROM changelog')?.m || null };
+  const stats = { last_change: get('SELECT MAX(m) as m FROM (SELECT MAX(created_at) m FROM changelog UNION ALL SELECT MAX(created_at) FROM erp_log)')?.m || null };
   STAT_TABLES.forEach(t => { stats[t] = count(`SELECT COUNT(*) as c FROM ${t}`); });
   return stats;
 }
@@ -6458,6 +6621,7 @@ app.post('/api/suppliers', (req, res) => {
   const id = runGetId(`INSERT INTO suppliers (number,name,contact_person,email,phone,address,street,postal_code,city,country,notes)
     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     [number, name, contact_person||'', email||'', phone||'', a.address, a.street, a.postal_code, a.city, a.country, notes||'']);
+  log('supplier', id, 'Erstellt', `${number} – ${name}`);
   res.json(get('SELECT * FROM suppliers WHERE id=?', [id]));
 });
 
@@ -6470,6 +6634,7 @@ app.get('/api/suppliers/:id', (req, res) => {
     FROM purchase_orders po LEFT JOIN purchase_order_items poi ON poi.po_id = po.id
     WHERE po.supplier_id=? GROUP BY po.id ORDER BY COALESCE(po.order_date, po.created_at) DESC, po.id DESC`, [s.id]);
   s.volume = s.purchase_orders.filter(p => PO_VOLUME_STATUSES.includes(p.status)).reduce((a, p) => a + p.total, 0);
+  s.changelog = erpLog(req, 'supplier', s.id);
   res.json(s);
 });
 
@@ -6481,7 +6646,9 @@ app.put('/api/suppliers/:id', (req, res) => {
   const a = supplierAddressFields(req.body, cur);
   run(`UPDATE suppliers SET name=?,contact_person=?,email=?,phone=?,address=?,street=?,postal_code=?,city=?,country=?,notes=? WHERE id=?`,
     [name, contact_person||'', email||'', phone||'', a.address, a.street, a.postal_code, a.city, a.country, notes||'', cur.id]);
-  res.json(get('SELECT * FROM suppliers WHERE id=?', [cur.id]));
+  const after = get('SELECT * FROM suppliers WHERE id=?', [cur.id]);
+  logChanges('supplier', cur.id, cur, after, SUPPLIER_HIST);
+  res.json(after);
 });
 
 app.delete('/api/suppliers/:id', (req, res) => {
@@ -6494,6 +6661,7 @@ app.delete('/api/suppliers/:id', (req, res) => {
     run('UPDATE inventory_items SET supplier_id=NULL WHERE supplier_id=?', [s.id]);
     run('DELETE FROM suppliers WHERE id=?', [s.id]);
   });
+  log('supplier', s.id, 'Gelöscht', _histDoc(s));
   res.json({ success: true });
 });
 
@@ -6527,6 +6695,7 @@ app.post('/api/purchase-orders', (req, res) => {
   const number = nextPoNumber();
   const id = runGetId('INSERT INTO purchase_orders (number,supplier_id,supplier_name_free,order_date,expected_date,notes) VALUES (?,?,?,?,?,?)',
     [number, supplier_id||null, supplier_name_free||'', order_date||null, expected_date||null, notes||'']);
+  log('purchase_order', id, 'Erstellt', number);
   res.json(poWithItems(get('SELECT * FROM purchase_orders WHERE id=?', [id])));
 });
 
@@ -6534,14 +6703,17 @@ app.get('/api/purchase-orders/:id', (req, res) => {
   const po = get(`SELECT po.*, COALESCE(s.name, po.supplier_name_free) as supplier_name, s.email as supplier_email, s.phone as supplier_phone, s.address as supplier_address
     FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=?`, [req.params.id]);
   if (!po) return res.status(404).json({ error: 'Nicht gefunden' });
+  po.changelog = erpLog(req, 'purchase_order', po.id);
   res.json(poWithItems(po));
 });
 
 app.put('/api/purchase-orders/:id', (req, res) => {
   const { supplier_id, supplier_name_free, order_date, expected_date, notes } = req.body;
+  const before = get('SELECT * FROM purchase_orders WHERE id=?', [req.params.id]);
   run(`UPDATE purchase_orders SET supplier_id=?,supplier_name_free=?,order_date=?,expected_date=?,notes=?,updated_at=datetime('now') WHERE id=?`,
     [supplier_id||null, supplier_name_free||'', order_date||null, expected_date||null, notes||'', req.params.id]);
   const po = get(`SELECT po.*, COALESCE(s.name, po.supplier_name_free) as supplier_name FROM purchase_orders po LEFT JOIN suppliers s ON po.supplier_id=s.id WHERE po.id=?`, [req.params.id]);
+  if (before && po) logChanges('purchase_order', before.id, before, po, PO_HIST);
   res.json(poWithItems(po));
 });
 
@@ -6549,6 +6721,9 @@ app.put('/api/purchase-orders/:id/status', (req, res) => {
   const { status, lot_numbers } = req.body;
   const valid = ['DRAFT','ORDERED','RECEIVED','CANCELLED'];
   if (!valid.includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
+  const prevPo = get('SELECT status FROM purchase_orders WHERE id=?', [req.params.id]);
+  logStatus('purchase_order', req.params.id, PO_ST_LABEL, prevPo?.status, status,
+    status === 'RECEIVED' ? 'Wareneingang gebucht' : '');
   run(`UPDATE purchase_orders SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
   if (status === 'RECEIVED') {
     const items = all('SELECT * FROM purchase_order_items WHERE po_id=?', [req.params.id]);
@@ -6608,6 +6783,8 @@ app.put('/api/purchase-orders/:id/status', (req, res) => {
 });
 
 app.delete('/api/purchase-orders/:id', (req, res) => {
+  const po = get('SELECT * FROM purchase_orders WHERE id=?', [req.params.id]);
+  if (po) log('purchase_order', po.id, 'Gelöscht', po.number);
   run('DELETE FROM purchase_order_items WHERE po_id=?', [req.params.id]);
   run('DELETE FROM purchase_orders WHERE id=?', [req.params.id]);
   res.json({ ok: true });
@@ -6619,18 +6796,25 @@ app.post('/api/purchase-orders/:id/items', (req, res) => {
   const pos = (get('SELECT MAX(position) as m FROM purchase_order_items WHERE po_id=?', [req.params.id])?.m || 0) + 1;
   const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,raw_material_id,std_part_id,notes,position) VALUES (?,?,?,?,?,?,?,?,?,?)',
     [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, raw_material_id||null, std_part_id||null, notes||'', pos]);
-  res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [iid]));
+  const row = get('SELECT * FROM purchase_order_items WHERE id=?', [iid]);
+  log('purchase_order', req.params.id, 'Position hinzugefügt', `${_histPos(row)} · ${_histNum(row.quantity)} ${row.unit}`);
+  res.json(row);
 });
 
 app.put('/api/purchase-orders/:id/items/:itemId', (req, res) => {
   const { description, quantity, unit, unit_price, notes } = req.body;
   if (!description) return res.status(400).json({ error: 'Beschreibung fehlt' });
+  const before = get('SELECT * FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
   run(`UPDATE purchase_order_items SET description=?,quantity=?,unit=?,unit_price=?,notes=? WHERE id=? AND po_id=?`,
     [description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, notes||'', req.params.itemId, req.params.id]);
-  res.json(get('SELECT * FROM purchase_order_items WHERE id=?', [req.params.itemId]));
+  const row = get('SELECT * FROM purchase_order_items WHERE id=?', [req.params.itemId]);
+  if (before && row) logChanges('purchase_order', before.po_id, before, row, PO_ITEM_HIST, 'Position geändert', _histPos(before) + ': ');
+  res.json(row);
 });
 
 app.delete('/api/purchase-orders/:id/items/:itemId', (req, res) => {
+  const poi = get('SELECT * FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
+  if (poi) log('purchase_order', poi.po_id, 'Position entfernt', `${_histPos(poi)} · ${_histNum(poi.quantity)} ${poi.unit}`);
   run('DELETE FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
   res.json({ ok: true });
 });
@@ -7102,6 +7286,7 @@ app.post('/api/orders/:id/clone', (req, res) => {
     run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,position) VALUES (?,?,?,?,?,?,?,?,?)',
       [newId, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk', oi.unit_price||0, oi.discount_pct||0, oi.notes||'', idx+1]);
   });
+  log('order', newId, 'Erstellt', `${number} – ${o.title} · Kopie von ${o.number}`);
   saveDb();
   res.json(get('SELECT * FROM orders WHERE id=?', [newId]));
 });

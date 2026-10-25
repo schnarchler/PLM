@@ -569,3 +569,32 @@ test('Kunde löschen lässt die Belege druckbar', async () => {
   assert.strictEqual(inv.customer_name || inv.customer_name_free, 'Muster AG', 'Rechnung bleibt vollständig');
   assert.ok(!(await api('/api/customers')).some(c => c.id === k.id));
 });
+
+test('ERP-Historie hält fest, was sich geändert hat', async () => {
+  const k = await api('/api/customers', 'POST', { name: 'Historie AG' });
+  const o = await api('/api/orders', 'POST', { title: 'Gehäuse', customer_id: k.id, delivery_date: '2026-11-12' });
+  // Speichern ohne Änderung: kein Eintrag
+  await api(`/api/orders/${o.id}`, 'PUT', o);
+  await api(`/api/orders/${o.id}`, 'PUT', { ...o, delivery_date: '2026-11-19', discount_pct: 5 });
+  await api(`/api/orders/${o.id}/status`, 'PUT', { status: 'CONFIRMED' });
+  const pos = await api(`/api/orders/${o.id}/items`, 'POST', { description: 'Deckel', quantity: 2, unit_price: 10 });
+  await api(`/api/order-items/${pos.id}`, 'PUT', { ...pos, quantity: 3 });
+  await api(`/api/order-items/${pos.id}`, 'DELETE');
+  const log = (await api(`/api/orders/${o.id}`)).changelog.reverse().map(c => `${c.action} | ${c.details}`);
+  assert.deepStrictEqual(log, [
+    `Erstellt | ${o.number} – Gehäuse`,
+    'Geändert | Lieferdatum: 12.11.2026 → 19.11.2026 · Rabatt: 0 % → 5 %',
+    'Status → Bestätigt | von Entwurf',
+    'Position hinzugefügt | „Deckel" · 2 pcs à 10.00',
+    'Position geändert | „Deckel": Menge: 2 → 3',
+    'Position entfernt | „Deckel" · 3 pcs',
+  ]);
+  await api(`/api/customers/${k.id}`, 'PUT', { ...k, city: 'Bern' });
+  assert.strictEqual((await api(`/api/customers/${k.id}`)).changelog[0].details, 'Ort: — → Bern');
+  // Gelöscht: Nummer und Titel bleiben in der Historie lesbar
+  await api(`/api/orders/${o.id}`, 'DELETE');
+  const erp = await api('/api/erp-log?limit=50');
+  assert.ok(erp.some(r => r.entity_type === 'order' && r.entity_id === o.id && r.action === 'Gelöscht' && r.details === `${o.number} – Gehäuse`));
+  assert.ok(!(await api('/api/changelog?limit=500')).some(r => ['order', 'customer'].includes(r.entity_type)),
+    'ERP und PLM getrennt');
+});
