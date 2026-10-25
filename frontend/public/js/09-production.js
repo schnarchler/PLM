@@ -217,8 +217,7 @@ function renderDeliveryItems(items, deliveryId, delivered = false) {
     <div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;overflow:hidden">
       ${itemHints(item).length ? `<div class="important-note" style="margin:0;border-radius:0;border-width:0 0 1px 4px">
         <span class="important-note-icon">⚠</span>
-        <div style="display:flex;flex-direction:column;gap:3px;min-width:0">${itemHints(item).map(h =>
-          `<div class="important-note-text"><b style="color:var(--red)">${h.label}:</b> ${esc(h.text)}</div>`).join('')}</div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">${itemHints(item).map(_hintHtml).join('')}</div>
       </div>` : ''}
       <div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:${item.print_settings?'1px solid var(--line)':'none'}">
         <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">
