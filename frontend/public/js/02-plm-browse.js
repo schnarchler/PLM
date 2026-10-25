@@ -184,7 +184,7 @@ function renderProjectTree(p) {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)">
       <span style="font-size:13px;color:var(--t4);font-family:var(--mono)">${items.length} Items</span>
       <button onclick="toggleBomFilter()" style="font-size:13px;padding:3px 9px;border-radius:var(--r-xs);cursor:pointer;font-family:var(--sans);border:1px solid ${filterOn?'rgba(157,180,255,.35)':'var(--line2)'};background:${filterOn?'rgba(157,180,255,.1)':'transparent'};color:${filterOn?'var(--blue)':'var(--t3)'}">
-        BOM-Kinder ${filterOn?'ausgeblendet':'sichtbar'}${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
+        BOM ${filterOn?'ausgeblendet':'sichtbar'}${filterOn && hiddenCount ? ` (${hiddenCount})` : ''}
       </button>
       <span style="margin-left:auto;display:inline-flex;gap:4px">${_sortBtns('sort_items', '_resortProject')}</span>
     </div>

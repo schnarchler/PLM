@@ -874,3 +874,25 @@ test('Datenblatt: „Allgemein“ im selben kompakten Stil wie die Druckparamete
   assert.match(allg, /<span class="ps-kv-label">Verkaufspreis<\/span><span class="ps-kv-val" style="color:var\(--t3\)">—<\/span>/, 'fehlender Wert gedimmt');
   assert.match(allg, /Entwicklungszeit<\/span><span class="ps-kv-val">1 h 30 min</);
 });
+
+test('Version: Punkt blau bei Update, grün wenn aktuell, grau wenn der Stand unbekannt ist', () => {
+  const { _markUpdate } = evalPart('js/01-core.js', 'function _markUpdate(', 'const UPDATE_CHECK_MS', '({ _markUpdate })');
+  const cls = new Set();
+  const el = { dataset: { title: 'Stand 25.10.2026 · 077524c' }, title: '',
+    classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)) } };
+  global.document = { getElementById: () => el };
+  const dot = update => { global.state.update = update; _markUpdate(); return [...cls].join(' '); };
+  try {
+    assert.strictEqual(dot(undefined), '', 'vor der ersten Prüfung kein Punkt');
+    assert.strictEqual(dot({ available: true, fetched: true, version: '2.0.315', behind: 1 }), 'has-update');
+    assert.strictEqual(dot({ available: false, fetched: true, upstream: 'origin/main' }), 'up-to-date');
+    assert.strictEqual(dot({ available: false, fetched: false, error: 'Remote nicht erreichbar: offline' }), 'update-unknown');
+    assert.match(el.title, /Update-Prüfung nicht möglich: Remote nicht erreichbar/);
+    assert.match(el.title, /077524c/, 'Stand bleibt im Tooltip');
+    // Offline, aber vom letzten Abruf ist ein Update bekannt: weiter blau
+    assert.strictEqual(dot({ available: true, fetched: false, version: '2.0.315', behind: 1 }), 'has-update');
+  } finally {
+    delete global.document;
+    delete global.state.update;
+  }
+});
