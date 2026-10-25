@@ -447,7 +447,9 @@ tbody tr:last-child { border-bottom: none; }
 
 /* ── DETAIL PANEL ── */
 #detail-panel {
-  width: 620px;
+  position: relative;
+  width: var(--detail-w, 620px);
+  max-width: calc(100% - 280px);
   flex-shrink: 0;
   border-left: 1px solid var(--line);
   background: var(--bg1);
@@ -457,6 +459,18 @@ tbody tr:last-child { border-bottom: none; }
   transition: width .2s var(--ease);
 }
 #detail-panel.hidden { width: 0; border: none; }
+#detail-panel.resizing { transition: none; }
+/* Griff am linken Rand: Breite ziehen, Doppelklick setzt zurück */
+#dp-resize {
+  position: absolute;
+  left: -3px; top: 0; bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+#dp-resize:hover, #detail-panel.resizing #dp-resize { background: var(--blue); opacity: .5; }
+#detail-panel.hidden #dp-resize { display: none; }
+body.col-resizing { cursor: col-resize; user-select: none; }
 
 /* ── ACTIVE ROW ── */
 tr.row-active td { background: rgba(157,180,255,.10); }

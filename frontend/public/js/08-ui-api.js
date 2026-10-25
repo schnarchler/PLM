@@ -4,6 +4,39 @@
 // ── DETAIL PANEL ──────────────────────────────────────────────
 function showDetail() { document.getElementById('detail-panel').classList.remove('hidden'); }
 function closeDetail() { document.getElementById('detail-panel').classList.add('hidden'); }
+// Breite des Detail-Panels am linken Rand ziehen; bleibt pro Browser gespeichert.
+(function initDetailResize() {
+  const panel = document.getElementById('detail-panel');
+  const grip = document.getElementById('dp-resize');
+  if (!panel || !grip) return;
+  const MIN = 380;
+  const clamp = w => Math.round(Math.max(MIN, Math.min(w, window.innerWidth - 280)));
+  const apply = w => panel.style.setProperty('--detail-w', w + 'px');
+  try { const w = +localStorage.getItem('plm.detailWidth'); if (w) apply(clamp(w)); } catch {}
+  grip.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const startX = e.clientX, startW = panel.offsetWidth;
+    panel.classList.add('resizing');
+    document.body.classList.add('col-resizing');
+    const move = ev => apply(clamp(startW + startX - ev.clientX));
+    const up = () => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointercancel', up);
+      panel.classList.remove('resizing');
+      document.body.classList.remove('col-resizing');
+      try { localStorage.setItem('plm.detailWidth', panel.offsetWidth); } catch {}
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
+  });
+  grip.addEventListener('dblclick', () => {
+    panel.style.removeProperty('--detail-w');
+    try { localStorage.removeItem('plm.detailWidth'); } catch {}
+  });
+})();
 function _markActiveRow(id) {
   document.querySelectorAll('#left-body .row-active').forEach(r => r.classList.remove('row-active'));
   if (id != null) {
