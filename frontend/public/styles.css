@@ -111,14 +111,15 @@ body {
 }
 .tb-logo span { color: var(--t3); font-weight: 400; }
 /* Laufende Version, unten in der Navigation unter den Einstellungen */
-.nav-ver { padding: 6px 10px 2px; }
-.ver-pill { font: 500 10px var(--mono); color: var(--t4); padding: 2px 7px; border: 1px solid var(--line);
+.nav-ver { padding: 1px 6px 0; }
+.ver-pill { display: inline-flex; align-items: center; max-width: 100%; white-space: nowrap;
+  font: 500 12px var(--mono); color: var(--t4); padding: 3px 9px; border: 1px solid var(--line);
   border-radius: 999px; letter-spacing: 0; cursor: default; }
 .ver-pill:empty { display: none; }
 .ver-pill.dirty { color: var(--amber); border-color: var(--amber-line); }
 .ver-pill.has-update { cursor: pointer; }
-.ver-pill.has-update::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px;
-  border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); vertical-align: 1px; }
+.ver-pill.has-update::after { content: ''; flex-shrink: 0; width: 7px; height: 7px; margin-left: 7px;
+  border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); }
 .ver-pill.has-update:hover { border-color: var(--blue2); }
 .tb-search {
   flex: 1;

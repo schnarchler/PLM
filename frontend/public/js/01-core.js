@@ -282,7 +282,7 @@ function _renderRecent() {
   if (!el) return;
   if (!_recentItems.length) { el.style.display = 'none'; return; }
   el.style.display = '';
-  el.innerHTML = _recentItems.map(r => {
+  document.getElementById('nav-recent-list').innerHTML = _recentItems.map(r => {
     const icon = r.type === 'order' ? '📋' : r.type === 'quote' ? '📄' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : r.itemType ? _itemSvg(r.itemType) : '🔩';
     return `<button class="nav-item" style="font-size:13px;padding:4px 12px 4px 16px;gap:6px" onclick="_openRecent(${JSON.stringify(r).replace(/"/g,'&quot;')})">
       <span style="font-size:13px;flex-shrink:0">${icon}</span>
