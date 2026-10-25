@@ -542,9 +542,11 @@ async function openCustomerDetail(id) {
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'cd-overview')">Übersicht</button>
     <button class="tab" onclick="switchTab(this,'cd-orders')">Aufträge${_partnerTabCount(c.orders.length)}</button>
-    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Produktion${_partnerTabCount(c.deliveries.length)}</button>`;
+    <button class="tab" onclick="switchTab(this,'cd-deliveries')">Produktion${_partnerTabCount(c.deliveries.length)}</button>
+    ${c.changelog ? `<button class="tab" onclick="switchTab(this,'cd-log')">Verlauf</button>` : ''}`;
 
   document.getElementById('dp-body').innerHTML = `
+    <div id="cd-log" style="display:none">${renderChangelogList(c.changelog)}</div>
     <div id="cd-overview">
       <div class="partner-actions">
         <button class="btn btn-primary btn-sm" onclick="openOrderModal(null,{customerId:${c.id}})">+ Auftrag</button>
@@ -711,7 +713,8 @@ async function openOrderDetail(id) {
     <button class="tab" onclick="switchTab(this,'od-fert');loadOrderProduction(${id})">Produktion${
       (o.deliveries||[]).length ? ` <span class="chip" style="margin-left:5px">${o.deliveries.length}</span>` : ''}</button>
     <button class="tab" onclick="switchTab(this,'od-info')">Details</button>
-    <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>`;
+    <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>
+    ${o.changelog ? `<button class="tab" onclick="switchTab(this,'od-log')">Verlauf</button>` : ''}`;
   const items = o.items || [];
   const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
   const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
@@ -741,6 +744,7 @@ async function openOrderDetail(id) {
     </div>`;
   })() : '';
   document.getElementById('dp-body').innerHTML = `
+    <div id="od-log" style="display:none">${renderChangelogList(o.changelog)}</div>
     <div id="od-pos">
       ${renderLineItems(items, 'order', id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
       ${orderHoursSection}

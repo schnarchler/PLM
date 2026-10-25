@@ -66,6 +66,13 @@ function helpTip(text) {
 function _clUser(entry) {
   return entry?.user_name ? ` <span class="cl-user">${esc(entry.user_name)}</span>` : '';
 }
+// Verlauf-Tab: Datenblatt, Auftrag, Produktionsauftrag, Kunde, Lieferant, Bestellung
+function renderChangelogList(entries) {
+  return (entries || []).map(cl => `
+    <div class="cl-row"><div class="cl-dot"></div>
+    <div><div class="cl-action">${esc(cl.action)}${_clUser(cl)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
+    <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>';
+}
 function setLeftHeader(title, actionsHtml) {
   if (typeof title === 'string' && !title.includes('<')) {
     document.getElementById('left-title').innerHTML = `<strong>${title}</strong>`;

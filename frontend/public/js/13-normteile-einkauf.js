@@ -450,8 +450,12 @@ async function openPoDetail(id) {
     + `<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(po.number)}</span>`
     + `<strong>${esc(po.supplier_name||'Kein Lieferant')}</strong>`;
 
-  document.getElementById('dp-tabs').innerHTML = '';
+  document.getElementById('dp-tabs').innerHTML = `
+    <button class="tab active" onclick="switchTab(this,'po-main')">Bestellung</button>
+    ${po.changelog ? `<button class="tab" onclick="switchTab(this,'po-log')">Verlauf</button>` : ''}`;
   document.getElementById('dp-body').innerHTML = `
+    <div id="po-log" style="display:none">${renderChangelogList(po.changelog)}</div>
+    <div id="po-main">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoModal(${po.id})">✏ Bearbeiten</button>` : ''}
       ${canOrder ? `<button class="btn btn-primary btn-sm" onclick="setPoStatus(${po.id},'ORDERED')">Bestellen →</button>` : ''}
@@ -483,7 +487,8 @@ async function openPoDetail(id) {
         <td colspan="2" style="border:1px solid var(--line)"></td>
       </tr></tfoot>` : ''}
     </table>
-    ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoItemModal(${po.id})">+ Position</button>` : ''}`;
+    ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoItemModal(${po.id})">+ Position</button>` : ''}
+    </div>`;
 
   showDetail();
 }
@@ -818,9 +823,11 @@ async function openSupplierDetail(id) {
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'sd-overview')">Übersicht</button>
     <button class="tab" onclick="switchTab(this,'sd-orders')">Bestellungen${_partnerTabCount(pos.length)}</button>
-    <button class="tab" onclick="switchTab(this,'sd-inventory')">Lagerartikel${_partnerTabCount(inv.length)}</button>`;
+    <button class="tab" onclick="switchTab(this,'sd-inventory')">Lagerartikel${_partnerTabCount(inv.length)}</button>
+    ${s.changelog ? `<button class="tab" onclick="switchTab(this,'sd-log')">Verlauf</button>` : ''}`;
 
   document.getElementById('dp-body').innerHTML = `
+    <div id="sd-log" style="display:none">${renderChangelogList(s.changelog)}</div>
     <div id="sd-overview">
       <div class="partner-actions">
         <button class="btn btn-primary btn-sm" onclick="openPoModal(null,{supplierId:${s.id}})">+ Bestellung</button>

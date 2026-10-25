@@ -138,6 +138,14 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
   await ok('/api/settings', { method: 'PUT', body: { theme: 'angepasst', sort_projects: 'name', sort_items: 'name', project_view: 'tiles', purchasing_tab: 'suppliers' }, cookie: ben });
   assert.strictEqual((await req(`/api/projects/${proj.id}`, { method: 'DELETE', cookie: cleo })).status, 403, 'Stammdaten löscht der Admin');
   const order = (await ok('/api/orders', { method: 'POST', body: { title: 'Weg damit' }, cookie: ben })).body;
+  // ERP-Verlauf: nur Admins sehen ihn, getrennt von der PLM-Historie
+  assert.strictEqual((await ok(`/api/orders/${order.id}`, { cookie: ben })).body.changelog, undefined);
+  assert.strictEqual((await ok(`/api/orders/${order.id}`, { cookie: cleo })).body.changelog, undefined);
+  assert.strictEqual((await req('/api/erp-log', { cookie: ben })).status, 403);
+  assert.strictEqual((await req('/api/erp-log')).status, 403, 'ohne Auswahl auch nicht');
+  assert.strictEqual((await ok(`/api/orders/${order.id}`, { cookie: anna })).body.changelog[0].user_name, 'Ben');
+  assert.ok((await ok('/api/erp-log', { cookie: anna })).body.some(e => e.entity_id === order.id && e.action === 'Erstellt'));
+  assert.ok(!(await log(e => e.entity_type === 'order')), 'nicht in der PLM-Historie');
   await ok(`/api/orders/${order.id}`, { method: 'DELETE', cookie: ben });
   assert.strictEqual((await req('/api/users', { method: 'POST', body: { name: 'Dora' }, cookie: cleo })).status, 403);
   for (const body of [{ active: false }, { name: 'Umbenannt' }, { role: 'admin' }]) {
