@@ -66,7 +66,7 @@ document.addEventListener('mouseover', e => {
       document.body.appendChild(_thumbImg);
     }
     _thumbImg.src = `${API}/api/datasets/${row.dataset.thumb}/thumb`;
-  }, 350);
+  }, 700);
 });
 document.addEventListener('mousemove', e => { _thumbXY = [e.clientX, e.clientY]; _thumbPlace(); });
 document.addEventListener('mousedown', _thumbHide);

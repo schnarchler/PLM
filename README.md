@@ -114,8 +114,9 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
 - **Eigenschaften je Klassifizierung** – z. B. Werkstoff, Oberfläche, Hersteller; im Datenblatt,
   auf der PDF und in der Suche, optional Pflicht für die Freigabe
-- **Vorschaubilder** – aus der 3MF des Slicers (oder einem Bild der Revision): im Datenblatt,
-  in Projektbaum, Stückliste und Suche beim Überfahren einer Zeile mit der Maus
+- **Vorschaubilder** – in Projektbaum, Stückliste und Suche beim Überfahren einer Zeile mit der
+  Maus: die STL der neusten Revision isometrisch gezeichnet (sonst das Bild aus der 3MF oder ein
+  hochgeladenes Bild), einmal berechnet und unter `thumbs/` im Datenordner zwischengespeichert
 - **Datenblatt-Tab** – Beschreibung, Quelle, Kennzahlen, Druckparameter, Stücklisten-Kurzfassung,
   Lagerbestand, freie Notizen, QR-Code der Item-Nummer und letzte Änderung auf einen Blick
 - **Mindmap** – Abhängigkeiten als Graph: links die Baugruppen, die das Item verwenden,

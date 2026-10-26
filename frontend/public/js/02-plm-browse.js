@@ -961,8 +961,6 @@ function renderItemSheet(item, activeRevId) {
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
         </div>
       </div>
-      ${item.thumb_id ? `<img class="item-thumb item-thumb-lg" src="${API}/api/datasets/${item.thumb_id}/thumb" alt="Vorschau"
-        title="Vorschau vergrössern" onclick="window.open(this.src,'_blank')" onerror="this.remove()">` : ''}
       ${qr ? `<div onclick="showItemQr()" title="QR-Code vergrössern" style="flex-shrink:0;background:#f4f6f8;padding:3px;border-radius:var(--r-sm);line-height:0;cursor:zoom-in">${qr}</div>` : ''}
     </div>
 

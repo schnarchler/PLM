@@ -139,7 +139,7 @@ Lieferanten:       LF-0001
 
 **Weitere Tabs:** Datenblatt, Historie, Zeiten, Verwendung, Aufträge, Varianten
 
-**Vorschaubilder:** Enthält die neuste Revision eine 3MF aus dem Slicer, zeigt PLM deren Vorschaubild gross im Datenblatt (Klick vergrössert). In Projektbaum, Stückliste und Suche erscheint es, wenn man kurz mit der Maus auf der Zeile verweilt. Ohne 3MF dient ein hochgeladenes Bild (PNG, JPG) der Revision als Vorschau.
+**Vorschaubilder:** In Projektbaum, Stückliste und Suche erscheint ein Vorschaubild, wenn man kurz mit der Maus auf der Zeile verweilt. PLM zeichnet dafür die STL der neusten Revision isometrisch, wie die 3D-Vorschau. Ohne STL dient das Bild aus einer Slicer-3MF oder ein hochgeladenes Bild (PNG, JPG) als Vorschau.
 
 **Schaltflächen im Titel:**
 - **↪** — Item in ein anderes Projekt verschieben

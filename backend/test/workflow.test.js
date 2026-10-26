@@ -672,6 +672,17 @@ test('Vorschaubild aus der 3MF für Listen, Stückliste und Suche', async () => 
   assert.strictEqual((await api(`/api/items/${teil.id}`)).thumb_id, dsId);
   assert.strictEqual((await api('/api/search?q=Kappe')).items.find(i => i.id === teil.id).thumb_id, dsId);
 
+  // STL geht vor: wird gezeichnet, als PNG 240×240 zwischengespeichert
+  const stl = 'solid t\n' + [[[0,0,0],[10,0,0],[0,10,0]], [[0,0,0],[0,10,0],[0,0,10]], [[0,0,0],[0,0,10],[10,0,0]], [[10,0,0],[0,0,10],[0,10,0]]]
+    .map(t => 'facet normal 0 0 0\nouter loop\n' + t.map(v => `vertex ${v.join(' ')}\n`).join('') + 'endloop\nendfacet\n').join('') + 'endsolid t\n';
+  const form = new FormData();
+  form.append('file', new Blob([stl]), 'kappe.stl');
+  const stlId = (await (await fetch(`${BASE}/api/revisions/${await firstRev(teil.id)}/datasets`, { method: 'POST', body: form })).json()).id;
+  assert.strictEqual((await api(`/api/items/${teil.id}`)).thumb_id, stlId, 'STL vor 3MF');
+  const stlPng = Buffer.from(await (await fetch(`${BASE}/api/datasets/${stlId}/thumb`)).arrayBuffer());
+  assert.strictEqual(stlPng.subarray(1, 4).toString(), 'PNG');
+  assert.deepStrictEqual([stlPng.readUInt32BE(16), stlPng.readUInt32BE(20)], [240, 240]);
+
   // 3MF ohne Bild: einmal 404, danach nicht mehr angeboten
   const leer = items.find(i => i.id === ohne.id).thumb_id;
   assert.strictEqual((await fetch(`${BASE}/api/datasets/${leer}/thumb`)).status, 404);
