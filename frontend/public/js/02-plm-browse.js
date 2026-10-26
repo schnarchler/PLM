@@ -232,7 +232,7 @@ function _renderTreeNode(item, map, isRoot) {
     return ci ? _renderTreeNode(ci, map, false) : '';
   }).join('') : '';
   return `<div class="tree-node">
-    <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}
+    <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}${_thumbAttr(item.thumb_id)}
       style="${co ? 'background:rgba(121,221,227,.07);box-shadow:inset 2px 0 0 var(--teal);' : ''}">
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 20)}
@@ -286,7 +286,7 @@ function openProjectDetail(p) {
       return renderItemFiles(ci, depth + 1) + (qtyBadge ? `<div style="padding:0 0 2px ${28 + depth*16}px">${qtyBadge}</div>` : '');
     }).join('') : '';
     return `<div>
-      <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s;${co?'background:rgba(121,221,227,.07);box-shadow:inset 2px 0 0 var(--teal);':''}" onclick="openItemDetail(${item.id})" onmouseover="this.style.background='${co?'rgba(121,221,227,.12)':'var(--bg3)'}'" onmouseout="this.style.background='${co?'rgba(121,221,227,.07)':''}'" >
+      <div style="display:flex;align-items:center;gap:7px;padding:5px ${depth>0?'6px':'4px'};border-radius:var(--r-xs);cursor:pointer;transition:background .1s;${co?'background:rgba(121,221,227,.07);box-shadow:inset 2px 0 0 var(--teal);':''}" onclick="openItemDetail(${item.id})"${_thumbAttr(item.thumb_id)} onmouseover="this.style.background='${co?'rgba(121,221,227,.12)':'var(--bg3)'}'" onmouseout="this.style.background='${co?'rgba(121,221,227,.07)':''}'" >
         ${hasKids ? `<span onclick="event.stopPropagation();const e=document.getElementById('${nid}');const open=e.style.display!=='none';e.style.display=open?'none':'';this.style.transform=open?'':'rotate(90deg)'" style="color:var(--t4);font-size:11px;transition:transform .15s;flex-shrink:0;cursor:pointer">▶</span>` : '<span style="width:11px;flex-shrink:0"></span>'}
         ${_itemChip(item.item_type, 18)}
         <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${item.item_number}</span>
@@ -579,6 +579,14 @@ function renderItemDetail(item, activeRevId) {
 }
 
 // ── DATENBLATT-TAB ────────────────────────────────────────────
+// Was für die Freigabe noch fehlt (Einstellungen → PLM → Prüfung vor der Freigabe)
+function _releaseMissingBox(rev) {
+  const m = rev?.release_missing || [];
+  if (!m.length) return '';
+  return `<div style="font-size:13px;padding:8px 11px;margin-bottom:12px;background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);color:var(--t2)">
+    <span style="color:var(--amber);font-weight:600">Für die Freigabe von rev${esc(rev.rev)} fehlt noch:</span> ${m.map(esc).join(', ')}</div>`;
+}
+
 // Liest ausschliesslich Felder, die /api/items/:id schon mitliefert —
 // kein zusaetzlicher Request. Die angezeigte Revision folgt der Auswahl
 // im Revisionen-Tab.
@@ -929,8 +937,16 @@ function renderItemSheet(item, activeRevId) {
         <span style="font-family:var(--mono);color:var(--blue)">${esc(e.number)}</span>${esc(e.title)} ${ecrBadge(e.status)}</span>`).join('')}
     </div>` : '';
 
+  // Eigenschaften der Klassifizierung (Einstellungen → PLM)
+  const fields = classFieldsOf(item.classification);
+  const attrs = item.attributes || {};
+  const attrBlock = fields.length ? `<div class="sep-label">Eigenschaften <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">${esc(item.classification)}</span></div>
+    ${_sheetKv(fields.map(f => [f.label, attrs[f.id] ? esc(attrs[f.id])
+      : f.required ? '<span style="color:var(--amber)" title="Pflicht für die Freigabe">fehlt (Pflicht)</span>' : '', true]))}` : '';
+
   return `<div id="it-sheet">
     ${ecrBanner}
+    ${_releaseMissingBox(item.revisions?.[0])}
     <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;flex-wrap:wrap">
       <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
@@ -945,6 +961,8 @@ function renderItemSheet(item, activeRevId) {
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
         </div>
       </div>
+      ${item.thumb_id ? `<img class="item-thumb item-thumb-lg" src="${API}/api/datasets/${item.thumb_id}/thumb" alt="Vorschau"
+        title="Vorschau vergrössern" onclick="window.open(this.src,'_blank')" onerror="this.remove()">` : ''}
       ${qr ? `<div onclick="showItemQr()" title="QR-Code vergrössern" style="flex-shrink:0;background:#f4f6f8;padding:3px;border-radius:var(--r-sm);line-height:0;cursor:zoom-in">${qr}</div>` : ''}
     </div>
 
@@ -958,6 +976,7 @@ function renderItemSheet(item, activeRevId) {
 
     <div class="sep-label">Allgemein</div>
     ${facts}
+    ${attrBlock}
 
     <div class="sep-label">Notizen</div>
     ${notesBlock}
@@ -1333,7 +1352,7 @@ function renderBomList(rev, item, locked) {
   const totalDevHours = plmRows.reduce((s, b) => s + (b.dev_hours || 0), 0);
 
   const plmHtml = plmRows.map((b, idx) => `
-    <div class="bom-row${locked ? '' : ' bom-draggable'}" data-bom-id="${b.id}" data-rev-id="${rev.id}"
+    <div class="bom-row${locked ? '' : ' bom-draggable'}" data-bom-id="${b.id}" data-rev-id="${rev.id}"${_thumbAttr(b.thumb_id)}
       ${locked ? '' : 'draggable="true" ondragstart="_bomDragStart(event)" ondragover="_bomDragOver(event)" ondrop="_bomDrop(event,'+rev.id+')" ondragend="_bomDragEnd()"'}>
       ${locked ? '' : '<span style="color:var(--t4);cursor:grab;padding:0 4px;font-size:13px;flex-shrink:0">⠿</span>'}
       <span style="color:var(--t4);font-size:12px;width:20px;text-align:right;flex-shrink:0">${idx+1}</span>
@@ -1506,8 +1525,11 @@ function renderRevDetail(rev, item) {
     actions.unshift({ s: '_NEWREV', label: '＋ Neue Revision', cls: 'btn-green' });
   }
   // Freigeben und Veralten dürfen Superuser und Admins (allein: man selbst)
+  const missing = rev.release_missing || [];
   const wfBtns = actions.map(b => b.s === '_NEWREV'
     ? `<button class="btn btn-sm ${b.cls}" onclick="createNextRevision(${item.id})">${b.label}</button>`
+    : b.s === 'REL' && missing.length
+      ? `<span title="Für die Freigabe fehlt: ${esc(missing.join(', '))}" style="display:inline-flex"><button class="btn btn-sm ${b.cls}" disabled>${b.label}</button></span>`
     : (['REL', 'OBS'].includes(b.s) && !canRelease()
       ? `<span title="Freigeben dürfen nur Superuser und Admins" style="display:inline-flex"><button class="btn btn-sm ${b.cls}" disabled>${b.label}</button></span>`
       : `<button class="btn btn-sm ${b.cls}" onclick="openStatusModal(${rev.id},'${b.s}')">${b.label}</button>`)).join('');
@@ -1524,6 +1546,7 @@ function renderRevDetail(rev, item) {
       ${rev.description ? `<div style="grid-column:span 2"><div class="ps-label">Beschreibung</div>${esc(rev.description)}</div>` : ''}
       ${rev.eco_reason ? `<div style="grid-column:span 2"><div class="ps-label">ECO-Grund</div><span style="color:var(--purple)">${esc(rev.eco_reason)}</span></div>` : ''}
     </div>
+    ${_releaseMissingBox(rev)}
 
     ${isASM ? `
     <!-- BOM -->

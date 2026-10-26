@@ -749,7 +749,7 @@
       </div>
       <div class="form-row">
         <div class="fg"><label class="fl">Klassifizierung</label>
-          <select class="fs" id="eim-classification">
+          <select class="fs" id="eim-classification" onchange="_renderEditAttrs()">
             <option value="">— keine —</option>
             <option value="Eigenteil">Eigenteil</option>
             <option value="Kaufteil">Kaufteil</option>
@@ -759,6 +759,7 @@
           </select>
         </div>
       </div>
+      <div id="eim-attrs"></div>
       <input type="hidden" id="eim-id">
     </div>
     <div class="modal-foot">

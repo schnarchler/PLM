@@ -445,6 +445,13 @@ tbody tr:last-child { border-bottom: none; }
 .tree-tog { width: 14px; flex-shrink: 0; text-align: center; font-size: 11px; color: var(--t4); cursor: pointer; line-height: 1; transition: color .12s; }
 .tree-tog:hover { color: var(--t1); }
 
+/* ── VORSCHAUBILD EINES ITEMS ── */
+.item-thumb { object-fit: contain; background: #f4f6f8; border-radius: 3px; flex-shrink: 0; display: block; }
+.item-thumb-lg { width: 96px; height: 96px; border-radius: var(--r-sm); cursor: zoom-in; }
+/* Beim Überfahren einer Zeile neben der Maus */
+.thumb-pop { position: fixed; z-index: 3000; width: 180px; height: 180px; object-fit: contain; pointer-events: none;
+  background: #f4f6f8; border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+
 /* ── DETAIL PANEL ── */
 #detail-panel {
   position: relative;

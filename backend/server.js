@@ -751,6 +751,8 @@ function applySchema() {
     if (itemCols.includes(col)) db.run(`ALTER TABLE items DROP COLUMN ${col}`);
   }
   try { db.run('ALTER TABLE items ADD COLUMN short_code TEXT DEFAULT NULL'); } catch {}
+  // Eigenschaften je Klassifizierung (Werkstoff, Hersteller …) als JSON { Feld-ID: Wert }
+  try { db.run('ALTER TABLE items ADD COLUMN attributes TEXT DEFAULT NULL'); } catch {}
   // Jeder je vergebene Kurzcode bleibt hier reserviert — auch nach dem
   // Löschen des Teils, damit ein alter Aufdruck nie auf ein neues Teil zeigt.
   db.run(`CREATE TABLE IF NOT EXISTS short_codes (
@@ -792,6 +794,8 @@ function applySchema() {
   // Prüfsumme der gespeicherten Datei — wird beim ersten Vergleich berechnet
   // und dann nicht mehr neu gelesen (Checkout-Scan, Check-in, Revisionsvergleich)
   try { db.run('ALTER TABLE datasets ADD COLUMN sha1 TEXT DEFAULT NULL'); } catch {}
+  // Vorschaubild in der 3MF: NULL = noch nicht geprüft, 1 = vorhanden, 0 = keins
+  try { db.run('ALTER TABLE datasets ADD COLUMN thumb INTEGER DEFAULT NULL'); } catch {}
   // Aussenmasse einer STL als JSON [x,y,z] in mm — ebenfalls beim ersten
   // Abruf berechnet. NULL = noch nicht gerechnet, '' = nicht lesbar.
   try { db.run('ALTER TABLE datasets ADD COLUMN dims TEXT DEFAULT NULL'); } catch {}
@@ -996,6 +1000,13 @@ function applySchema() {
     for (const [from, to] of Object.entries(map)) db.run('UPDATE changelog SET action=? WHERE action=?', [to, from]);
   });
 
+  // ECO-Revisionen, deren Nachfolger schon freigegeben ist, sind veraltet —
+  // früher blieben sie beim Freigeben der neuen Revision auf ECO stehen
+  migrateOnce('eco-to-obs-v1', () => {
+    db.run(`UPDATE revisions SET status='OBS', updated_at=datetime('now') WHERE status='ECO'
+      AND EXISTS (SELECT 1 FROM revisions n WHERE n.item_id=revisions.item_id AND n.status='REL' AND n.id>revisions.id)`);
+  });
+
   // Lieferanten-Adressen aus dem Freitext in Strasse/PLZ/Ort/Land übernehmen.
   // Was sich nicht eindeutig zerlegen lässt, bleibt als Freitext stehen.
   migrateOnce('supplier-address-split-v1', () => {
@@ -1102,6 +1113,31 @@ function canonicalClass(value) {
   const v = String(value ?? '').trim();
   if (!v) return null;
   return classificationList().find(n => n.trim().toLowerCase() === v.toLowerCase()) || v;
+}
+// Eigenschaften der Klassifizierung: [{ id, label, required }]. Die ID bleibt
+// beim Umbenennen des Feldes gleich, die Werte am Item hängen an ihr.
+function classFields(name) {
+  const c = canonicalClass(name);
+  if (!c) return [];
+  try {
+    const list = JSON.parse(getSetting('item_classifications', '') || '[]');
+    const entry = Array.isArray(list) && list.find(x => x && typeof x === 'object' && x.name === c);
+    return Array.isArray(entry?.fields) ? entry.fields.filter(f => f?.id && f?.label) : [];
+  } catch { return []; }
+}
+function parseAttrs(raw) {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch { return {}; }
+}
+// Nur Felder der Klassifizierung behalten, leere Werte weglassen
+function cleanAttrs(values, fields) {
+  values = parseAttrs(values);
+  const out = {};
+  for (const f of fields) {
+    const v = String(values?.[f.id] ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (v) out[f.id] = v;
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : null;
 }
 function normalizeAllClassifications() {
   let n = 0;
@@ -2071,7 +2107,7 @@ app.post('/api/projects', (req, res) => {
 app.get('/api/projects/:id', (req, res) => {
   const p = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
   if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
-  p.items = all('SELECT * FROM items WHERE project_id=? ORDER BY item_type, item_number DESC', [p.id]);
+  p.items = all(`SELECT i.*, ${thumbIdSql('i.id')} AS thumb_id FROM items i WHERE i.project_id=? ORDER BY i.item_type, i.item_number DESC`, [p.id]);
   p.items.forEach(item => {
     item.latest_revision = getLatestRevision(item.id);
     if (item.latest_revision && item.item_type === 'asm') {
@@ -2192,7 +2228,8 @@ app.get('/api/items/:id', (req, res) => {
     // Gelieferte Revisionen sind fixiert (siehe GELIEFERTER STAND)
     rev.delivered = deliveriesOfRevision(rev.id);
     if (item.item_type === 'asm') {
-      rev.bom = all('SELECT b.*, i.item_number, i.name, i.item_type, i.default_price FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position', [rev.id]);
+      rev.bom = all(`SELECT b.*, i.item_number, i.name, i.item_type, i.default_price, ${thumbIdSql('i.id')} AS thumb_id
+        FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.parent_rev_id=? ORDER BY b.position`, [rev.id]);
       rev.bom.forEach(b => {
         b.child_active_rev = getActiveRevision(b.child_item_id);
         // child_rev_id ist normalerweise NULL: dann folgt die Position automatisch
@@ -2208,6 +2245,12 @@ app.get('/api/items/:id', (req, res) => {
     }
   });
   item.changelog = all("SELECT * FROM changelog WHERE entity_type='item' AND entity_id=? ORDER BY created_at DESC", [item.id]);
+  // Was für die Freigabe noch fehlt — als Hinweis, bevor jemand freigeben will
+  if (workflowMode() === 'full') item.revisions.forEach(rev => {
+    if (['DFT', 'REV'].includes(rev.status)) rev.release_missing = releaseMissing(item, rev);
+  });
+  item.attributes = parseAttrs(item.attributes);
+  item.thumb_id = get(`SELECT ${thumbIdSql('?')} AS t`, [item.id])?.t ?? null;
   item.children = all('SELECT * FROM items WHERE parent_id=?', [item.id]);
   item.effective_weight_g = getEffectiveWeight(item.id);
   item.variants = item.variant_group_id
@@ -2253,8 +2296,9 @@ app.post('/api/projects/:projectId/items', (req, res) => {
   const derivedClass = canonicalClass(req.body.classification
     || getSetting(source_url ? 'default_class_bought' : 'default_class_own', ''));
 
-  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price,classification) VALUES (?,?,?,?,?,?,?,?,?)',
-    [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null, derivedClass]);
+  const itemId = runGetId('INSERT INTO items (project_id,parent_id,item_type,item_number,name,description,source_url,default_price,classification,attributes) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null, derivedClass,
+     cleanAttrs(req.body.attributes, classFields(derivedClass))]);
   assignShortCode(itemId);
   run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Erste Revision']);
   log('item', itemId, 'Erstellt', item_type + ' ' + item_number + ' rev' + firstRevLabel());
@@ -2271,6 +2315,11 @@ app.put('/api/items/:id', (req, res) => {
        notes=CASE WHEN ? THEN notes ELSE ? END WHERE id=?`,
     [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, canonicalClass(classification), weight_g != null ? parseFloat(weight_g) : null,
      keepNotes ? 1 : 0, notes || null, req.params.id]);
+  // Eigenschaften: mitgeschickt → übernehmen; sonst nur auf die Felder der
+  // (evtl. neuen) Klassifizierung kürzen, damit keine verwaisten Werte bleiben
+  const fields = classFields(classification);
+  const attrs = cleanAttrs(Object.prototype.hasOwnProperty.call(req.body, 'attributes') ? req.body.attributes : parseAttrs(before?.attributes), fields);
+  run('UPDATE items SET attributes=? WHERE id=?', [attrs, req.params.id]);
   // Hinweise genauso: nur die schreiben, die mitgeschickt werden
   for (const k of Object.keys(HINT_LABEL)) {
     if (Object.prototype.hasOwnProperty.call(req.body, k)) {
@@ -2292,9 +2341,15 @@ app.put('/api/items/:id', (req, res) => {
   for (const k of hintsChanged) {
     log('item', req.params.id, `${HINT_LABEL[k]} ${after[k] ? 'gesetzt' : 'entfernt'}`, after[k] || before[k]);
   }
+  // Eigenschaften mit alt → neu, Namen der Felder aus beiden Klassifizierungen
+  const oldA = parseAttrs(before?.attributes), newA = parseAttrs(after.attributes);
+  const labels = Object.fromEntries([...classFields(before?.classification), ...fields].map(f => [f.id, f.label]));
+  const attrDiff = [...new Set([...Object.keys(oldA), ...Object.keys(newA)])].filter(k => oldA[k] !== newA[k] && labels[k])
+    .map(k => `${labels[k]}: ${oldA[k] || '—'} → ${newA[k] || '—'}`);
+  if (attrDiff.length) log('item', req.params.id, 'Eigenschaften geändert', attrDiff.join(' · '));
   const otherChanged = !before || ['name', 'description', 'source_url', 'classification', 'weight_g', 'notes']
     .some(k => before[k] !== after[k]);
-  if (otherChanged || !(priceChanged || hintsChanged.length)) log('item', req.params.id, 'Geändert', name);
+  if (otherChanged || !(priceChanged || hintsChanged.length || attrDiff.length)) log('item', req.params.id, 'Geändert', name);
   res.json(after);
 });
 
@@ -2766,6 +2821,26 @@ function startEco(rev, reason) {
   return get('SELECT * FROM revisions WHERE id=?', [newRevId]);
 }
 
+// ── PRÜFUNG VOR DER FREIGABE ──────────────────────────────────
+// Welche Punkte Pflicht sind, steht in settings.release_checks (kommagetrennt).
+// Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung.
+// Dokumente brauchen keine CAD-Datei und kein Gewicht.
+const RELEASE_CHECKS = {
+  cad:            { label: 'CAD-Datei',      ok: (item, rev) => item.item_type === 'doc' || !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='CAD' LIMIT 1", [rev.id]) },
+  drawing:        { label: 'Zeichnung (PDF)', ok: (item, rev) => !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='PDF' LIMIT 1", [rev.id]) },
+  description:    { label: 'Beschreibung',   ok: item => !!String(item.description || '').trim() },
+  classification: { label: 'Klassifizierung', ok: item => !!String(item.classification || '').trim() },
+  weight:         { label: 'Gewicht',        ok: item => item.item_type !== 'prt' || item.weight_g > 0 },
+};
+function releaseMissing(item, rev) {
+  const on = getSetting('release_checks', '').split(',').map(x => x.trim()).filter(k => RELEASE_CHECKS[k]);
+  const attrs = parseAttrs(item.attributes);
+  return [
+    ...on.filter(k => !RELEASE_CHECKS[k].ok(item, rev)).map(k => RELEASE_CHECKS[k].label),
+    ...classFields(item.classification).filter(f => f.required && !attrs[f.id]).map(f => f.label),
+  ];
+}
+
 app.put('/api/revisions/:id/status', (req, res) => {
   const { status, description, eco_reason } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
@@ -2794,9 +2869,12 @@ app.put('/api/revisions/:id/status', (req, res) => {
         return res.status(400).json({ error: 'Nicht alle Unterteile sind freigegeben: ' + unreleasedNames.join(', ') });
       }
     }
+    const missing = item ? releaseMissing(item, rev) : [];
+    if (missing.length) return res.status(400).json({ error: 'Für die Freigabe fehlt: ' + missing.join(', '), missing });
     run("UPDATE revisions SET status=?,released_at=datetime('now'),released_by=?,description=COALESCE(?,description),updated_at=datetime('now') WHERE id=?",
       [status, userContext.getStore()?.name || null, description || null, rev.id]);
-    run("UPDATE revisions SET status='OBS',updated_at=datetime('now') WHERE item_id=? AND status='REL' AND id!=?",
+    // Die bisher gültige Revision — freigegeben oder im ECO — ist damit veraltet
+    run("UPDATE revisions SET status='OBS',updated_at=datetime('now') WHERE item_id=? AND status IN ('REL','ECO') AND id!=?",
       [rev.item_id, rev.id]);
   } else if (status === 'ECO') {
     startEco(rev, eco_reason);
@@ -3665,6 +3743,46 @@ app.post('/api/datasets/:id/open-in-slicer', async (req, res) => {
   res.json({ ok: true, slicer: sl.name, file: dest, kept });
 });
 
+// ── VORSCHAUBILDER ────────────────────────────────────────────
+// Slicer legen in die 3MF ein Vorschaubild. Beim ersten Abruf wird es aus dem
+// ZIP geholt und unter DATA_DIR/thumbs abgelegt — benannt nach der Datei, die
+// sich nie ändert. Hochgeladene Bilder einer Revision zeigen sich selbst.
+// Pro Item gilt die neuste Revision, dort die 3MF vor dem Bild.
+const THUMB_IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+const thumbIdSql = itemCol => `(SELECT d.id FROM datasets d JOIN revisions r ON r.id=d.revision_id
+  WHERE r.item_id=${itemCol} AND ((LOWER(d.filename) LIKE '%.3mf' AND COALESCE(d.thumb,1)=1)
+    OR ${THUMB_IMAGE_EXT.map(e => `LOWER(d.filename) LIKE '%${e}'`).join(' OR ')})
+  ORDER BY r.id DESC, LOWER(d.filename) LIKE '%.3mf' DESC, d.id DESC LIMIT 1)`;
+const thumbPath = ds => path.join(DATA_DIR, 'thumbs', ds.filename + '.png');
+// Bambu/Orca legen zusätzlich Masken (pick_*) und Draufsichten (top_*) ab
+function extractThumb(ds) {
+  const out = thumbPath(ds);
+  if (fs.existsSync(out)) return out;
+  try {
+    const entries = new AdmZip(path.join(FILES_DIR, ds.filename)).getEntries()
+      .filter(e => !e.isDirectory && /^Metadata\/[^/]+\.png$/i.test(e.entryName) && !/\/(pick|top)_/i.test(e.entryName));
+    const pick = [/\/thumbnail\.png$/i, /\/plate_1\.png$/i, /./].map(re => entries.find(e => re.test(e.entryName))).find(Boolean);
+    if (!pick) return null;
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, pick.getData());
+    return out;
+  } catch (e) { console.error('Vorschaubild nicht lesbar:', ds.filename, e.message); return null; }
+}
+app.get('/api/datasets/:id/thumb', (req, res) => {
+  const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
+  if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
+  const ext = path.extname(ds.filename).toLowerCase();
+  let fp = null;
+  if (THUMB_IMAGE_EXT.includes(ext)) fp = path.join(FILES_DIR, ds.filename);
+  else if (ext === '.3mf') {
+    fp = extractThumb(ds);
+    if (ds.thumb !== (fp ? 1 : 0)) run('UPDATE datasets SET thumb=? WHERE id=?', [fp ? 1 : 0, ds.id]);
+  }
+  if (!fp || !fs.existsSync(fp)) return res.status(404).json({ error: 'Kein Vorschaubild' });
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.sendFile(fp);
+});
+
 app.get('/api/datasets/:id/download', (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
   if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
@@ -3697,6 +3815,7 @@ app.delete('/api/datasets/:id', (req, res) => {
   if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
   if (rejectIfDelivered(res, ds.revision_id)) return;
   trashFile(ds.filename);
+  try { fs.unlinkSync(thumbPath(ds)); } catch {}   // aus dem Papierkorb zurück: wird neu geholt
   run('DELETE FROM datasets WHERE id=?', [ds.id]);
   log('revision', ds.revision_id, 'Datei gelöscht', ds.original_name);
   res.json({ success: true });
@@ -4499,7 +4618,7 @@ app.get('/api/search', (req, res) => {
   const cls = String(req.query.class || '').trim();
   const empty = { items: [], items_total: 0, projects: [], datasets: [], orders: [], customers: [], deliveries: [], rawMaterials: [] };
 
-  const wi = likeAll(tokens, ['i.item_number', 'i.short_code', 'i.name', 'i.description', 'i.classification', 'i.notes']);
+  const wi = likeAll(tokens, ['i.item_number', 'i.short_code', 'i.name', 'i.description', 'i.classification', 'i.notes', 'i.attributes']);
   const class_counts = all(`SELECT TRIM(COALESCE(i.classification,'')) as name, COUNT(*) as count
     FROM items i WHERE ${wi.sql} GROUP BY LOWER(TRIM(COALESCE(i.classification,'')))`, wi.params);
   if (!tokens.length && !cls) return res.json({ ...empty, class_counts, class: '' });
@@ -4509,7 +4628,8 @@ app.get('/api/search', (req, res) => {
   else if (cls) { clsSql = ' AND LOWER(TRIM(i.classification))=LOWER(?)'; clsParams = [cls]; }
 
   const keep = cls ? 300 : 40;
-  const items = all(`SELECT i.*, p.name as project_name, p.number as project_number, p.color as project_color
+  const items = all(`SELECT i.*, p.name as project_name, p.number as project_number, p.color as project_color,
+    ${thumbIdSql('i.id')} AS thumb_id
     FROM items i JOIN projects p ON i.project_id=p.id
     WHERE ${wi.sql}${clsSql} ORDER BY i.id DESC LIMIT 500`, [...wi.params, ...clsParams]);
   items.forEach(i => { i.score = itemScore(i, tokens, req.query.q); });
@@ -4922,6 +5042,13 @@ app.put('/api/settings', (req, res) => {
   Object.entries(req.body).filter(([k]) => !LOGO_KEYS.includes(k)).forEach(([k, v]) => {
     db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, String(v??'')]);
   });
+  // Entfernte Eigenschaften: ihre Werte an den Items gleich mit löschen
+  if ('item_classifications' in req.body) {
+    for (const it of all('SELECT id, classification, attributes FROM items WHERE attributes IS NOT NULL')) {
+      const kept = cleanAttrs(it.attributes, classFields(it.classification));
+      if (kept !== it.attributes) db.run('UPDATE items SET attributes=? WHERE id=?', [kept, it.id]);
+    }
+  }
   saveDb();
   res.json(_publicSettings());
 });

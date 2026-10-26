@@ -342,6 +342,9 @@ const _SVG_ASM = '📦';
 const _SVG_PRT = '🔩';
 const _SVG_DOC = '📄';
 function _itemSvg(t)   { return t==="asm" ? _SVG_ASM : t==="doc" ? _SVG_DOC : _SVG_PRT; }
+// Zeilen mit Vorschaubild beim Überfahren (siehe 08-ui-api.js): thumb_id vom
+// Server — Bild aus der 3MF oder hochgeladenes Bild der neusten Revision
+const _thumbAttr = thumbId => thumbId ? ` data-thumb="${Number(thumbId)}"` : '';
 function _itemChip(t, sz=20) { return `<span style="font-size:${Math.round(sz*0.75)}px;line-height:1;flex-shrink:0">${_itemSvg(t)}</span>`; }
 
 function _classColor(cls) {

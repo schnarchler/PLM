@@ -171,6 +171,13 @@ const DEFAULT_CLASSIFICATIONS = [
   {name:'Rohmaterial',color:'#9aa3b2'},
 ];
 
+// Eigenschaften einer Klassifizierung: [{ id, label, required }]
+function classFieldsOf(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (!n) return [];
+  return getClassifications().find(c => c.name.toLowerCase() === n)?.fields || [];
+}
+
 function getClassifications() {
   try {
     const raw = state.settings?.item_classifications;
@@ -265,13 +272,28 @@ function _loadPlmPrefs() {
   if (bought) bought.innerHTML = opts(s.default_class_bought || '');
   window._wfPick = s.workflow_mode === 'simple' ? 'simple' : 'full';
   _renderWorkflowOptions(window._wfPick);
+  const on = String(s.release_checks || '').split(',');
+  const box = document.getElementById('st-release-checks');
+  if (box) box.innerHTML = RELEASE_CHECKS.map(([k, label, hint]) => `<label style="display:flex;align-items:baseline;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)">
+      <input type="checkbox" data-check="${k}" ${on.includes(k) ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue);position:relative;top:2px">
+      <span>${esc(label)}${hint ? ` <span style="color:var(--t4)">· ${esc(hint)}</span>` : ''}</span></label>`).join('');
 }
+
+// Prüfung vor der Freigabe: [Schlüssel wie im Server, Bezeichnung, für wen]
+const RELEASE_CHECKS = [
+  ['cad', 'CAD-Datei vorhanden', 'Parts und Baugruppen'],
+  ['drawing', 'Zeichnung als PDF vorhanden', ''],
+  ['description', 'Beschreibung ausgefüllt', ''],
+  ['classification', 'Klassifizierung gesetzt', ''],
+  ['weight', 'Gewicht eingetragen', 'Parts'],
+];
 
 async function _savePlmPrefs() {
   await api('/api/settings', 'PUT', {
     default_class_own:    document.getElementById('st-class-own')?.value || '',
     default_class_bought: document.getElementById('st-class-bought')?.value || '',
     workflow_mode:        window._wfPick || 'full',
+    release_checks: [...document.querySelectorAll('#st-release-checks [data-check]:checked')].map(c => c.dataset.check).join(','),
   });
   state.settings = await api('/api/settings');
   const msg = document.getElementById('st-plmprefs-msg');
@@ -295,7 +317,8 @@ function _renderClassList(list) {
     const bg = col + '20'; // hex with 12% alpha approximation
     const used = c.orig ? _classCount(c.orig) : 0;
     const renamed = c.orig && c.orig !== c.name;
-    return `<div class="cls-row" data-idx="${i}" data-orig="${esc(c.orig || '')}" draggable="true"
+    const nFields = (c.fields || []).length;
+    return `<div class="cls-row" data-idx="${i}" data-orig="${esc(c.orig || '')}" data-fields="${esc(JSON.stringify(c.fields || []))}" draggable="true"
       style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);transition:opacity .15s">
       <span class="cls-handle" style="cursor:grab;color:var(--t4);font-size:16px;line-height:1;flex-shrink:0">⠿</span>
       <input type="color" class="cls-color" value="${col}" title="Farbe wählen"
@@ -305,6 +328,7 @@ function _renderClassList(list) {
       <input class="fi cls-name" value="${esc(c.name)}" style="flex:1;font-size:13px;padding:3px 7px;height:28px" oninput="_onClassNameInput(this)">
       <span class="cls-used" style="font-size:12px;color:var(--t4);white-space:nowrap;flex-shrink:0" title="Items mit dieser Klassifizierung">${used ? used + ' Item' + (used === 1 ? '' : 's') : 'unbenutzt'}</span>
       <span class="cls-renamed" style="font-size:12px;color:var(--amber);white-space:nowrap;flex-shrink:0;${renamed ? '' : 'display:none'}">war „${esc(c.orig || '')}"</span>
+      <button class="btn btn-ghost btn-sm" onclick="_editClassFields(this.closest('.cls-row'))" title="Felder wie Werkstoff, Oberfläche, Hersteller">Eigenschaften${nFields ? ` (${nFields})` : ''}</button>
       <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})" title="Aus der Liste entfernen">✕</button>
     </div>`;
   }).join('');
@@ -359,7 +383,74 @@ function _getCurrentClassList() {
     name:  row.querySelector('.cls-name')?.value.trim() || '',
     color: row.querySelector('.cls-color')?.value || '#9aa3b2',
     orig:  row.dataset.orig || '',
+    fields: (() => { try { return JSON.parse(row.dataset.fields || '[]'); } catch { return []; } })(),
   })).filter(c => c.name);
+}
+
+// ── EIGENSCHAFTEN EINER KLASSIFIZIERUNG ───────────────────────
+// Felder bearbeiten; übernommen wird in die Zeile, gespeichert mit „Speichern"
+// unter den Klassifizierungen. Die ID bleibt beim Umbenennen gleich.
+let _cfDraft = null;
+function _editClassFields(row) {
+  if (!row) return;
+  let fields = [];
+  try { fields = JSON.parse(row.dataset.fields || '[]'); } catch {}
+  _cfDraft = { row, fields: fields.map(f => ({ ...f })) };
+  const name = row.querySelector('.cls-name')?.value.trim() || '';
+  _showDynModal(`<div class="modal" style="max-width:520px;width:95vw">
+    <div class="modal-head"><div class="modal-title">Eigenschaften: ${esc(name)}</div>
+      <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">Felder, die Items mit dieser Klassifizierung
+        bekommen — z. B. Werkstoff, Oberfläche oder Hersteller. Sie stehen im Datenblatt, auf der PDF und sind durchsuchbar.
+        <b>Pflicht</b> heisst: Ohne Wert lässt sich keine Revision freigeben.</div>
+      <div id="cf-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input class="fi" id="cf-new" placeholder="Neues Feld, z. B. Werkstoff" onkeydown="if(event.key==='Enter')_cfAdd()">
+        <button class="btn btn-ghost btn-sm" onclick="_cfAdd()">+ Feld</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="_cfApply()">Übernehmen</button>
+    </div>
+  </div>`);
+  _cfRender();
+  document.getElementById('cf-new')?.focus();
+}
+function _cfRender() {
+  const el = document.getElementById('cf-list');
+  if (!el) return;
+  const f = _cfDraft.fields;
+  el.innerHTML = f.map((x, i) => `<div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="_cfMove(${i},-1)" ${i ? '' : 'disabled'} title="Nach oben">↑</button>
+      <input class="fi" style="flex:1" value="${esc(x.label)}" maxlength="40" oninput="_cfDraft.fields[${i}].label=this.value">
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);white-space:nowrap;cursor:pointer">
+        <input type="checkbox" ${x.required ? 'checked' : ''} onchange="_cfDraft.fields[${i}].required=this.checked"
+          style="width:15px;height:15px;accent-color:var(--blue)"> Pflicht</label>
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="_cfDraft.fields.splice(${i},1);_cfRender()" title="Entfernen — die Werte an den Items werden beim Speichern gelöscht">✕</button>
+    </div>`).join('') || '<div style="font-size:13px;color:var(--t3)">Noch keine Felder</div>';
+}
+function _cfMove(i, d) {
+  const f = _cfDraft.fields;
+  [f[i], f[i + d]] = [f[i + d], f[i]];
+  _cfRender();
+}
+function _cfAdd() {
+  const label = V('cf-new').trim();
+  if (!label) return;
+  if (_cfDraft.fields.some(f => f.label.trim().toLowerCase() === label.toLowerCase())) return toast('Feld gibt es schon', 'err');
+  _cfDraft.fields.push({ id: 'a_' + Math.random().toString(36).slice(2, 10), label, required: false });
+  set('cf-new', '');
+  _cfRender();
+  document.getElementById('cf-new')?.focus();
+}
+function _cfApply() {
+  const fields = _cfDraft.fields.map(f => ({ id: f.id, label: f.label.trim(), required: !!f.required })).filter(f => f.label);
+  _cfDraft.row.dataset.fields = JSON.stringify(fields);
+  _hideDynModal();
+  _renderClassList(_getCurrentClassList());
+  toast('Übernommen — mit „Speichern" unter den Klassifizierungen sichern', 'ok');
 }
 
 function _addClass() {
@@ -417,7 +508,7 @@ async function _saveClassifications() {
     try { moved = (await api('/api/classifications/rename', 'POST', { renames })).renamed || 0; }
     catch { return; }
   }
-  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color }) => ({ name, color }))) });
+  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color, fields }) => ({ name, color, fields }))) });
   state.settings = await api('/api/settings');
   const msg = document.getElementById('st-class-msg');
   const text = moved ? `Gespeichert · ${moved} Item${moved === 1 ? '' : 's'} angepasst` : 'Gespeichert';
@@ -483,9 +574,9 @@ function resetDesignColors() {
 
 async function _doResetDesignColors() {
   _hideDynModal();
-  const list = _classListForReset().map((c, i) => ({ name: c.name, color: _defaultColorFor(c.name, i), orig: c.orig || c.name }));
+  const list = _classListForReset().map((c, i) => ({ name: c.name, color: _defaultColorFor(c.name, i), orig: c.orig || c.name, fields: c.fields }));
 
-  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color }) => ({ name, color }))) });
+  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color, fields }) => ({ name, color, fields }))) });
   state.settings = await api('/api/settings');
   _renderClassList(list);
 
@@ -815,19 +906,39 @@ async function openEditItemModal(id) {
     + classNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
     + (orphan ? `<option value="${esc(item.classification)}">${esc(item.classification)} (nicht in der Liste)</option>` : '');
   clSel.value = item.classification || '';
+  _eimAttrs = { ...(item.attributes || {}) };
+  document.getElementById('eim-attrs').innerHTML = '';
+  _renderEditAttrs();
   document.getElementById('eim-title').textContent = 'Bearbeiten: ' + item.item_number;
   openModal('editItemModal');
+}
+
+// Eigenschaften der gewählten Klassifizierung. Beim Wechsel bleiben getippte
+// Werte erhalten, falls man zurückwechselt.
+let _eimAttrs = {};
+function _renderEditAttrs() {
+  const box = document.getElementById('eim-attrs');
+  if (!box) return;
+  box.querySelectorAll('[data-attr]').forEach(i => { _eimAttrs[i.dataset.attr] = i.value; });
+  const fields = classFieldsOf(document.getElementById('eim-classification').value);
+  box.innerHTML = fields.length ? `<div class="form-row cols2">${fields.map(f => `<div class="fg">
+      <label class="fl">${esc(f.label)}${f.required ? ' <span style="color:var(--amber)" title="Pflicht für die Freigabe">*</span>' : ''}</label>
+      <input class="fi" data-attr="${esc(f.id)}" value="${esc(_eimAttrs[f.id] || '')}" maxlength="200"></div>`).join('')}</div>
+    ${fields.some(f => f.required) ? '<div style="font-size:12px;color:var(--t4);margin-top:-4px">* Pflicht für die Freigabe</div>' : ''}` : '';
 }
 
 async function saveEditItem() {
   const id = V('eim-id');
   const name = V('eim-name');
   if (!name) return toast('Name fehlt', 'err');
+  const attributes = {};
+  document.querySelectorAll('#eim-attrs [data-attr]').forEach(i => { attributes[i.dataset.attr] = i.value; });
   // Preis bleibt unberührt — der läuft über openPriceModal
   await _putItemPatch(id, {
     name, description: V('eim-desc'), source_url: V('eim-url')||null,
     weight_g: V('eim-weight') ? parseFloat(V('eim-weight')) : null,
-    classification: document.getElementById('eim-classification').value || null
+    classification: document.getElementById('eim-classification').value || null,
+    attributes
   });
   toast('Name gespeichert', 'ok');
   closeModal('editItemModal');

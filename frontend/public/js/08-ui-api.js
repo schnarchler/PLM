@@ -37,6 +37,41 @@ function closeDetail() { document.getElementById('detail-panel').classList.add('
     try { localStorage.removeItem('plm.detailWidth'); } catch {}
   });
 })();
+// ── VORSCHAUBILD BEIM ÜBERFAHREN ──────────────────────────────
+// Zeilen in Projektbaum, Stückliste und Suche tragen data-thumb (_thumbAttr).
+// Nach kurzem Verweilen erscheint das Bild neben der Maus; fehlt es doch,
+// bleibt die Vorschau einfach weg.
+let _thumbRow = null, _thumbTimer = null, _thumbImg = null, _thumbXY = [0, 0];
+function _thumbPlace() {
+  if (!_thumbImg || _thumbImg.hidden) return;
+  const [x, y] = _thumbXY, w = _thumbImg.offsetWidth, h = _thumbImg.offsetHeight;
+  _thumbImg.style.left = (x + 18 + w > innerWidth ? x - 18 - w : x + 18) + 'px';
+  _thumbImg.style.top = Math.max(8, Math.min(y + 18, innerHeight - h - 8)) + 'px';
+}
+function _thumbHide() {
+  clearTimeout(_thumbTimer);
+  _thumbRow = null;
+  if (_thumbImg) { _thumbImg.hidden = true; _thumbImg.removeAttribute('src'); }
+}
+document.addEventListener('mouseover', e => {
+  const row = e.target.closest?.('[data-thumb]');
+  if (row === _thumbRow) return;
+  _thumbHide();
+  if (!row) return;
+  _thumbRow = row;
+  _thumbTimer = setTimeout(() => {
+    if (!_thumbImg) {
+      _thumbImg = Object.assign(document.createElement('img'), { className: 'thumb-pop', alt: '', hidden: true });
+      _thumbImg.onload = () => { if (_thumbRow) { _thumbImg.hidden = false; _thumbPlace(); } };
+      document.body.appendChild(_thumbImg);
+    }
+    _thumbImg.src = `${API}/api/datasets/${row.dataset.thumb}/thumb`;
+  }, 350);
+});
+document.addEventListener('mousemove', e => { _thumbXY = [e.clientX, e.clientY]; _thumbPlace(); });
+document.addEventListener('mousedown', _thumbHide);
+document.addEventListener('scroll', _thumbHide, true);
+
 function _markActiveRow(id) {
   document.querySelectorAll('#left-body .row-active').forEach(r => r.classList.remove('row-active'));
   if (id != null) {
