@@ -1,5 +1,6 @@
 const express  = require('express');
 const AdmZip   = require('adm-zip');
+const zlib     = require('zlib');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
@@ -3744,15 +3745,133 @@ app.post('/api/datasets/:id/open-in-slicer', async (req, res) => {
 });
 
 // ── VORSCHAUBILDER ────────────────────────────────────────────
-// Slicer legen in die 3MF ein Vorschaubild. Beim ersten Abruf wird es aus dem
-// ZIP geholt und unter DATA_DIR/thumbs abgelegt — benannt nach der Datei, die
-// sich nie ändert. Hochgeladene Bilder einer Revision zeigen sich selbst.
-// Pro Item gilt die neuste Revision, dort die 3MF vor dem Bild.
+// Eine STL wird beim ersten Abruf isometrisch gezeichnet (wie die 3D-Vorschau),
+// aus einer 3MF das Bild des Slicers geholt; beides liegt danach unter
+// DATA_DIR/thumbs — benannt nach der Datei, die sich nie ändert. Hochgeladene
+// Bilder zeigen sich selbst. Pro Item gilt die neuste Revision, dort STL vor
+// 3MF vor Bild. datasets.thumb = 0: kein Bild möglich, wird nicht mehr angeboten.
 const THUMB_IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+const THUMB_STL_LIMIT = 64 * 1024 * 1024;
 const thumbIdSql = itemCol => `(SELECT d.id FROM datasets d JOIN revisions r ON r.id=d.revision_id
-  WHERE r.item_id=${itemCol} AND ((LOWER(d.filename) LIKE '%.3mf' AND COALESCE(d.thumb,1)=1)
+  WHERE r.item_id=${itemCol} AND (((LOWER(d.filename) LIKE '%.stl' OR LOWER(d.filename) LIKE '%.3mf') AND COALESCE(d.thumb,1)=1)
     OR ${THUMB_IMAGE_EXT.map(e => `LOWER(d.filename) LIKE '%${e}'`).join(' OR ')})
-  ORDER BY r.id DESC, LOWER(d.filename) LIKE '%.3mf' DESC, d.id DESC LIMIT 1)`;
+  ORDER BY r.id DESC, CASE WHEN LOWER(d.filename) LIKE '%.stl' THEN 0 WHEN LOWER(d.filename) LIKE '%.3mf' THEN 1 ELSE 2 END, d.id DESC LIMIT 1)`;
+
+// Dreiecke einer STL als [x,y,z, x,y,z, x,y,z, …]. Binär erkennen wie stlDimensions.
+function stlPositions(buf) {
+  const cnt = buf.length >= 84 ? buf.readUInt32LE(80) : -1;
+  if (cnt >= 0 && buf.length === 84 + cnt * 50) {
+    const pos = new Float32Array(cnt * 9);
+    for (let i = 0; i < cnt; i++) {
+      for (let k = 0, o = 84 + i * 50 + 12; k < 9; k++, o += 4) pos[i * 9 + k] = buf.readFloatLE(o);
+    }
+    return pos;
+  }
+  const re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g, txt = buf.toString('latin1'), out = [];
+  let m;
+  while ((m = re.exec(txt)) !== null) out.push(+m[1], +m[2], +m[3]);
+  out.length -= out.length % 9;   // nur ganze Dreiecke
+  return new Float32Array(out);
+}
+
+// Zeichnet die STL wie die 3D-Vorschau im Datenblatt: Z nach oben, isometrisch,
+// Licht von rechts oben vorne, blaue Flächen. Doppelt so gross gerechnet und
+// verkleinert, damit die Kanten weich werden. Hintergrund durchsichtig.
+function renderStlPng(buf, size = 240) {
+  const pos = stlPositions(buf);
+  const n = pos.length / 9;
+  if (!n) return null;
+  const S = size * 2;
+  const ce = Math.cos(Math.atan(Math.SQRT1_2)), se = Math.sin(Math.atan(Math.SQRT1_2));
+  const ca = Math.cos(-Math.PI / 4), sa = Math.sin(-Math.PI / 4);
+  // Z hoch (−90° um X), um die Hochachse drehen, dann neigen — wie _stlRotation
+  const view = new Float32Array(pos.length);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 2], z = -pos[i + 1];
+    const x2 = ca * x + sa * z, z2 = -sa * x + ca * z;
+    const y3 = ce * y - se * z2, z3 = se * y + ce * z2;
+    if (!Number.isFinite(x2 + y3 + z3)) continue;
+    view[i] = x2; view[i + 1] = y3; view[i + 2] = z3;
+    if (x2 < x0) x0 = x2; if (x2 > x1) x1 = x2;
+    if (y3 < y0) y0 = y3; if (y3 > y1) y1 = y3;
+  }
+  if (!(x1 > x0 || y1 > y0)) return null;
+  const k = S * 0.9 / Math.max(x1 - x0, y1 - y0);
+  const ox = (S - (x1 - x0) * k) / 2, oy = (S - (y1 - y0) * k) / 2;
+  const zbuf = new Float32Array(S * S).fill(-Infinity), col = new Uint8Array(S * S * 3), hit = new Uint8Array(S * S);
+  const L = [0.2, 0.6, 1], ll = Math.hypot(...L);
+  for (let t = 0; t < n; t++) {
+    const o = t * 9;
+    const ax = view[o], ay = view[o + 1], az = view[o + 2], bx = view[o + 3], by = view[o + 4], bz = view[o + 5];
+    const cx = view[o + 6], cy = view[o + 7], cz = view[o + 8];
+    // Flächennormale im Blickraum, Licht wie im Viewer: 30 % Grundhelligkeit
+    let nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay), ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az), nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }   // Rückseite wie Vorderseite beleuchten
+    const d = Math.max(0, (nx * L[0] + ny * L[1] + nz * L[2]) / nl / ll) * 0.7 + 0.3;
+    const r = Math.round(255 * 0.3 * d), g = Math.round(255 * 0.55 * d), b = Math.round(255 * 0.9 * d);
+    const px = [(ax - x0) * k + ox, (bx - x0) * k + ox, (cx - x0) * k + ox];
+    const py = [S - ((ay - y0) * k + oy), S - ((by - y0) * k + oy), S - ((cy - y0) * k + oy)];
+    const area = (px[1] - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (py[1] - py[0]);
+    if (!area) continue;
+    const minX = Math.max(0, Math.floor(Math.min(...px))), maxX = Math.min(S - 1, Math.ceil(Math.max(...px)));
+    const minY = Math.max(0, Math.floor(Math.min(...py))), maxY = Math.min(S - 1, Math.ceil(Math.max(...py)));
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const sx = x + 0.5, sy = y + 0.5;
+        const w0 = ((px[1] - sx) * (py[2] - sy) - (px[2] - sx) * (py[1] - sy)) / area;
+        const w1 = ((px[2] - sx) * (py[0] - sy) - (px[0] - sx) * (py[2] - sy)) / area;
+        const w2 = 1 - w0 - w1;
+        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+        const z = w0 * az + w1 * bz + w2 * cz, p = y * S + x;
+        if (z <= zbuf[p]) continue;
+        zbuf[p] = z; hit[p] = 1; col[p * 3] = r; col[p * 3 + 1] = g; col[p * 3 + 2] = b;
+      }
+    }
+  }
+  // 2×2 zusammenfassen: Farbe nach Deckung gewichtet, Deckung als Transparenz
+  const rgba = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let r = 0, g = 0, b = 0, a = 0;
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const p = (y * 2 + dy) * S + x * 2 + dx;
+      if (hit[p]) { r += col[p * 3]; g += col[p * 3 + 1]; b += col[p * 3 + 2]; a++; }
+    }
+    const q = (y * size + x) * 4;
+    if (a) { rgba[q] = r / a; rgba[q + 1] = g / a; rgba[q + 2] = b / a; rgba[q + 3] = a * 255 / 4; }
+  }
+  return encodePng(size, size, rgba);
+}
+
+function encodePng(w, h, rgba) {
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(zlib.crc32(td));
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6;   // 8 Bit RGBA
+  const raw = Buffer.alloc((w * 4 + 1) * h);
+  for (let y = 0; y < h; y++) rgba.copy(raw, y * (w * 4 + 1) + 1, y * w * 4, (y + 1) * w * 4);
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+function stlThumb(ds) {
+  const out = thumbPath(ds);
+  if (fs.existsSync(out)) return out;
+  try {
+    const src = path.join(FILES_DIR, ds.filename);
+    if (fs.statSync(src).size > THUMB_STL_LIMIT) return null;
+    const png = renderStlPng(fs.readFileSync(src));
+    if (!png) return null;
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, png);
+    return out;
+  } catch (e) { console.error('STL-Vorschau nicht möglich:', ds.filename, e.message); return null; }
+}
 const thumbPath = ds => path.join(DATA_DIR, 'thumbs', ds.filename + '.png');
 // Bambu/Orca legen zusätzlich Masken (pick_*) und Draufsichten (top_*) ab
 function extractThumb(ds) {
@@ -3774,8 +3893,8 @@ app.get('/api/datasets/:id/thumb', (req, res) => {
   const ext = path.extname(ds.filename).toLowerCase();
   let fp = null;
   if (THUMB_IMAGE_EXT.includes(ext)) fp = path.join(FILES_DIR, ds.filename);
-  else if (ext === '.3mf') {
-    fp = extractThumb(ds);
+  else if (ext === '.3mf' || ext === '.stl') {
+    fp = ext === '.stl' ? stlThumb(ds) : extractThumb(ds);
     if (ds.thumb !== (fp ? 1 : 0)) run('UPDATE datasets SET thumb=? WHERE id=?', [fp ? 1 : 0, ds.id]);
   }
   if (!fp || !fs.existsSync(fp)) return res.status(404).json({ error: 'Kein Vorschaubild' });

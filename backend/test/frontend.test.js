@@ -1020,7 +1020,7 @@ test('Datenblatt: Eigenschaften der Klassifizierung, fehlende Pflicht und Hinwei
   assert.match(eig, /Werkstoff<\/span><span class="ps-kv-val"><span style="color:var\(--amber\)"[^>]*>fehlt \(Pflicht\)/);
   assert.match(eig, /Oberfläche<\/span><span class="ps-kv-val">&lt;eloxiert&gt;</, 'escaped');
   assert.match(h, /Für die Freigabe von rev1 fehlt noch:<\/span> CAD-Datei, Werkstoff/);
-  assert.match(h, /src="\/api\/datasets\/77\/thumb"/, 'Vorschaubild im Kopf');
+  assert.ok(!h.includes('/thumb'), 'Vorschaubild nur beim Überfahren der Listen, nicht im Datenblatt');
   global._classFields = {};
   assert.ok(!renderItemSheet(demoItem(), 31).includes('>Eigenschaften'), 'ohne Felder kein Abschnitt');
 });
