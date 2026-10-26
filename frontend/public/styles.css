@@ -447,7 +447,7 @@ tbody tr:last-child { border-bottom: none; }
 
 /* ── VORSCHAUBILD: beim Überfahren einer Zeile neben der Maus ── */
 .thumb-pop { position: fixed; z-index: 3000; width: 120px; height: 120px; object-fit: contain; pointer-events: none;
-  background: #f4f6f8; border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+  background: #1c1f24; border: 1px solid var(--line2); border-radius: var(--r-sm); box-shadow: 0 12px 32px rgba(0,0,0,.45); }
 
 /* ── DETAIL PANEL ── */
 #detail-panel {
