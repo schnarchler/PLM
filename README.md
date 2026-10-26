@@ -21,6 +21,23 @@ ist, auf dem nächsten freien (wird in `plm.config` als `port=` gemerkt)
 Beim ersten Start werden alle Node-Pakete automatisch installiert.  
 `plm.config` wird automatisch erstellt wenn sie fehlt.
 
+### Windows-Sicherheitswarnung vermeiden
+
+Windows markiert alles, was aus dem Internet heruntergeladen wurde, und fragt beim Starten
+einer `.bat`-Datei nach („Der Herausgeber konnte nicht verifiziert werden“). Die Dateiendung
+spielt keine Rolle — `.cmd` oder `.exe` warnen genauso. Abhilfe: die ZIP-Datei **vor dem
+Entpacken** freigeben, dann trägt keine der entpackten Dateien die Markierung.
+
+1. Heruntergeladene ZIP-Datei mit der rechten Maustaste anklicken → **Eigenschaften**
+2. Im Reiter **Allgemein** ganz unten bei *Sicherheit: Die Datei stammt von einem anderen
+   Computer …* das Häkchen **Zulassen** setzen
+3. **OK** klicken, erst dann die ZIP-Datei entpacken
+
+Wurde schon entpackt, ohne freizugeben: Die Warnung einmal mit **Ausführen** bestätigen.
+`START-PLM.bat` entfernt die Markierung danach bei sich selbst, sie warnt nicht mehr.
+Ohne Warnung von Anfang an geht es auch mit `git clone` statt ZIP-Download — Git markiert
+keine Dateien.
+
 ---
 
 ## Nummernschema
@@ -58,12 +75,17 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 | DFT | Entwurf – in Bearbeitung |
 | REV | In Prüfung |
 | REL | Freigegeben – produktiv |
-| ECO | Änderung (Engineering Change) – Revision gesperrt, neue DFT wird angelegt |
-| OBS | Veraltet – abgelöst, archiviert |
+| ECO | Änderung (Engineering Change Order) – Revision bleibt gültig und gesperrt, geändert wird in einer neuen DFT |
+| OBS | Veraltet (Obsolete) – abgelöst, archiviert |
 
 Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in
 die neue DFT-Revision übernommen — genau wie bei „＋ Neue Revision“.  
-Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
+Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.  
+Wird die neue Revision freigegeben, geht die bisherige (REL oder ECO) auf OBS.
+
+**Prüfung vor der Freigabe** (Einstellungen → PLM): wählbare Pflichtpunkte — CAD-Datei,
+Zeichnung (PDF), Beschreibung, Klassifizierung, Gewicht — plus die als Pflicht markierten
+Eigenschaften der Klassifizierung. Fehlt etwas, nennt PLM es und sperrt „Freigeben“.
 
 **Ohne Freigabe arbeiten:** Unter **Einstellungen → PLM → Freigabe-Workflow** lässt sich
 auf den einfachen Modus umstellen. Dann bleiben alle Revisionen im Status DFT und
@@ -90,6 +112,10 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
 - Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar
 - **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
+- **Eigenschaften je Klassifizierung** – z. B. Werkstoff, Oberfläche, Hersteller; im Datenblatt,
+  auf der PDF und in der Suche, optional Pflicht für die Freigabe
+- **Vorschaubilder** – aus der 3MF des Slicers (oder einem Bild der Revision): im Datenblatt,
+  in Projektbaum, Stückliste und Suche beim Überfahren einer Zeile mit der Maus
 - **Datenblatt-Tab** – Beschreibung, Quelle, Kennzahlen, Druckparameter, Stücklisten-Kurzfassung,
   Lagerbestand, freie Notizen, QR-Code der Item-Nummer und letzte Änderung auf einen Blick
 - **Mindmap** – Abhängigkeiten als Graph: links die Baugruppen, die das Item verwenden,

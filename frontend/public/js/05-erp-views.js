@@ -1071,7 +1071,7 @@ function _renderSearchResults(r, q) {
     ${_searchClass ? `<div style="font-size:13px;color:var(--t3);margin-bottom:4px">Gefiltert nach ${filterLabel}${q ? ` · Suchwort „${esc(q)}"` : ''}</div>` : ''}
     ${items.length ? section('Items', items.length, r.items_total) + `<div class="tbl-wrap"><table>
       <thead><tr><th>Nummer</th><th>Name</th><th>Typ</th><th>Klassifizierung</th><th>Projekt</th><th>Revision</th><th>Status</th></tr></thead>
-      <tbody>${items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})">
+      <tbody>${items.map(i=>`<tr style="cursor:pointer" onclick="openProjectAndItem(${i.project_id},${i.id})"${_thumbAttr(i.thumb_id)}>
         <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}${i.short_code && i.item_type !== 'doc' ? ` <span class="chip" title="Kurzcode">${esc(i.short_code)}</span>` : ''}</td>
         <td>${esc(i.name)}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${(i.item_type||'—').toUpperCase()}</td>

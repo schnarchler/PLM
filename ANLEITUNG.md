@@ -139,6 +139,8 @@ Lieferanten:       LF-0001
 
 **Weitere Tabs:** Datenblatt, Historie, Zeiten, Verwendung, Aufträge, Varianten
 
+**Vorschaubilder:** Enthält die neuste Revision eine 3MF aus dem Slicer, zeigt PLM deren Vorschaubild gross im Datenblatt (Klick vergrössert). In Projektbaum, Stückliste und Suche erscheint es, wenn man kurz mit der Maus auf der Zeile verweilt. Ohne 3MF dient ein hochgeladenes Bild (PNG, JPG) der Revision als Vorschau.
+
 **Schaltflächen im Titel:**
 - **↪** — Item in ein anderes Projekt verschieben
 - **📄** — Dokument erstellen (Datenblatt, Stückliste, Prüfprotokoll)
@@ -194,7 +196,7 @@ Items, die in mehreren Ausführungen existieren (z.B. `Halterung M3`, `Halterung
 
 | Vorlage | Inhalt |
 |---------|--------|
-| **Datenblatt** | Item-Metadaten, aktive Revision, Klassifizierung, Gewicht, Verkaufspreis |
+| **Datenblatt** | Item-Metadaten, Vorschaubild, aktive Revision, Klassifizierung mit Eigenschaften, Gewicht, Verkaufspreis |
 | **Stückliste** | BOM der aktiven Revision mit Menge und Einheit |
 | **Prüfprotokoll** | Formular mit Prüfpunkten, Unterschriftsfeldern und Datum |
 
@@ -266,12 +268,14 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 | **DFT** | Blau | Entwurf |
 | **REV** | Amber | In Prüfung |
 | **REL** | Grün | Freigegeben |
-| **ECO** | Lila | Änderung (Engineering Change) — Revision gesperrt, neue DFT wird angelegt |
-| **OBS** | Grau | Veraltet (abgelöst) |
+| **ECO** | Lila | Änderung (Engineering Change Order) — die Revision bleibt gültig und gesperrt, in einer neuen DFT wird geändert |
+| **OBS** | Grau | Veraltet (Obsolete) — abgelöst, wird nicht mehr gefertigt, bleibt zur Nachverfolgung erhalten |
 
 Die Knöpfe heissen **→ In Review**, **✓ Freigeben**, **⚡ ECO starten** und **Als veraltet markieren (OBS)**.
 
-Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in die neue DFT-Revision übernommen. Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.
+Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in die neue DFT-Revision übernommen. Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück. Wird die neue Revision freigegeben, wird die bisherige (REL oder ECO) automatisch **OBS** — gültig ist immer genau eine Revision.
+
+**Prüfung vor der Freigabe:** Unter **Einstellungen → PLM → Prüfung vor der Freigabe** wählbar, was eine Revision mitbringen muss: CAD-Datei, Zeichnung als PDF, Beschreibung, Klassifizierung, Gewicht (Parts). Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Fehlt etwas, steht im Datenblatt und in der Revision „Für die Freigabe fehlt noch: …“, und **✓ Freigeben** ist gesperrt.
 
 Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin**.
 
@@ -633,7 +637,9 @@ Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren.
 - **Entfernen** eines benutzten Eintrags fragt, ob die Items ihn behalten oder verlieren.
 - Werte, die an Items stehen, aber in der Liste fehlen, erscheinen darunter — **＋ übernehmen** holt sie zurück.
 
-Dazu: Standard-Klassifizierung für neue Items (mit/ohne Quelle) und der Freigabe-Workflow.
+- **Eigenschaften** je Klassifizierung — Felder wie Werkstoff, Oberfläche oder Hersteller, optional als **Pflicht** für die Freigabe. Die Werte trägt man unter **✏ Bearbeiten** am Item ein; sie stehen im Datenblatt (auch als PDF) und sind durchsuchbar. Ein entferntes Feld löscht beim Speichern auch seine Werte an den Items.
+
+Dazu: Standard-Klassifizierung für neue Items (mit/ohne Quelle), der Freigabe-Workflow und die Prüfung vor der Freigabe (siehe 7).
 
 ### Daten
 - **Darstellung** — Schriftgrösse (wird serverseitig gespeichert)

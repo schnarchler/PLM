@@ -259,7 +259,7 @@ test('Check-in freigegeben: unverändert ohne Rückfrage, bearbeitet → neue Re
   edit(co.file, 'solid lager v3\nendsolid lager\n');
   r = await checkin(co.folder, 'discard');
   assert.deepStrictEqual([r.discarded, fs.existsSync(co.folder)], [1, false]);
-  assert.deepStrictEqual(await revStates(teil.id), ['1:ECO', '2:REL'], 'keine neue Revision');
+  assert.deepStrictEqual(await revStates(teil.id), ['1:OBS', '2:REL'], 'keine neue Revision, rev1 mit der Freigabe von rev2 veraltet');
 });
 
 test('Check-in freigegebene Baugruppe: geändertes Unterteil bekommt seine eigene Revision', async () => {
@@ -597,4 +597,83 @@ test('ERP-Historie hält fest, was sich geändert hat', async () => {
   assert.ok(erp.some(r => r.entity_type === 'order' && r.entity_id === o.id && r.action === 'Gelöscht' && r.details === `${o.number} – Gehäuse`));
   assert.ok(!(await api('/api/changelog?limit=500')).some(r => ['order', 'customer'].includes(r.entity_type)),
     'ERP und PLM getrennt');
+});
+
+test('ECO wird mit der Freigabe der neuen Revision veraltet', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'ECO-Abschluss' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Hebel', item_type: 'prt' });
+  await release(await firstRev(teil.id));
+  await api(`/api/revisions/${await firstRev(teil.id)}/status`, 'PUT', { status: 'ECO', eco_reason: 'Länger' });
+  assert.deepStrictEqual(await revStates(teil.id), ['1:ECO', '2:DFT'], 'rev1 bleibt gültig, solange rev2 Entwurf ist');
+  await release(await firstRev(teil.id));
+  assert.deepStrictEqual(await revStates(teil.id), ['1:OBS', '2:REL']);
+});
+
+test('Eigenschaften je Klassifizierung und Prüfung vor der Freigabe', async () => {
+  const fields = [{ id: 'a_werk', label: 'Werkstoff', required: true }, { id: 'a_ober', label: 'Oberfläche' }];
+  await api('/api/settings', 'PUT', { item_classifications: JSON.stringify([
+    { name: 'Eigenteil', color: '#9db4ff', fields }, { name: 'Kaufteil', color: '#79dde3', fields: [{ id: 'a_herst', label: 'Hersteller' }] }]) });
+  const proj = await api('/api/projects', 'POST', { name: 'Eigenschaften' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST',
+    { name: 'Lagerbock', item_type: 'prt', classification: 'Eigenteil', attributes: { a_ober: ' eloxiert ', a_fremd: 'x' } });
+  let detail = await api(`/api/items/${teil.id}`);
+  assert.deepStrictEqual(detail.attributes, { a_ober: 'eloxiert' }, 'getrimmt, fremde Felder verworfen');
+  assert.deepStrictEqual(detail.revisions[0].release_missing, ['Werkstoff'], 'Pflichtfeld fehlt');
+
+  // Pflichtpunkte aus den Einstellungen dazu
+  await api('/api/settings', 'PUT', { release_checks: 'cad,drawing,weight' });
+  const revId = detail.revisions[0].id;
+  await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REV' });
+  const blocked = await apiFails(`/api/revisions/${revId}/status`, 'PUT', { status: 'REL' });
+  assert.strictEqual(blocked.status, 400);
+  assert.deepStrictEqual(JSON.parse(blocked.text).missing, ['CAD-Datei', 'Zeichnung (PDF)', 'Gewicht', 'Werkstoff']);
+
+  const base = { name: 'Lagerbock', description: '', classification: 'Eigenteil', weight_g: 12 };
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, attributes: { a_werk: 'PA12', a_ober: 'eloxiert' } });
+  const hist = (await api(`/api/items/${teil.id}`)).changelog.find(c => c.action === 'Eigenschaften geändert');
+  assert.strictEqual(hist.details, 'Werkstoff: — → PA12');
+  const f3mf = path.join(dataDir, 'lagerbock.3mf');
+  make3mf(f3mf);
+  await upload3mf(revId, f3mf);
+  const form = new FormData();
+  form.append('file', new Blob(['%PDF-1.4']), 'zeichnung.pdf');
+  assert.ok((await fetch(`${BASE}/api/revisions/${revId}/datasets`, { method: 'POST', body: form })).ok);
+  await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REL' });
+
+  // Wechsel der Klassifizierung: Werte der alten Felder fallen weg
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, classification: 'Kaufteil' });
+  assert.deepStrictEqual((await api(`/api/items/${teil.id}`)).attributes, {});
+  // Eigenschaften sind durchsuchbar
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, classification: 'Kaufteil', attributes: { a_herst: 'Igus' } });
+  assert.ok((await api('/api/search?q=igus')).items.some(i => i.id === teil.id));
+  await api('/api/settings', 'PUT', { release_checks: '', item_classifications: '' });
+});
+
+test('Vorschaubild aus der 3MF für Listen, Stückliste und Suche', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Vorschau' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Kappe mit Bild', item_type: 'prt' });
+  const ohne = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Kappe ohne Bild', item_type: 'prt' });
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const zipWith = new (require('adm-zip'))();
+  zipWith.addFile('Metadata/pick_1.png', Buffer.from('maske'));
+  zipWith.addFile('Metadata/thumbnail.png', png);
+  const f1 = path.join(dataDir, 'mit-bild.3mf');
+  fs.writeFileSync(f1, zipWith.toBuffer());
+  const dsId = (await upload3mf(await firstRev(teil.id), f1)).id;
+  const f2 = path.join(dataDir, 'ohne-bild.3mf');
+  make3mf(f2);
+  await upload3mf(await firstRev(ohne.id), f2);
+
+  const items = (await api(`/api/projects/${proj.id}`)).items;
+  assert.strictEqual(items.find(i => i.id === teil.id).thumb_id, dsId);
+  const r = await fetch(`${BASE}/api/datasets/${dsId}/thumb`);
+  assert.deepStrictEqual(Buffer.from(await r.arrayBuffer()), png, 'thumbnail.png, nicht die Maske');
+  assert.ok(fs.existsSync(path.join(dataDir, 'thumbs')), 'zwischengespeichert');
+  assert.strictEqual((await api(`/api/items/${teil.id}`)).thumb_id, dsId);
+  assert.strictEqual((await api('/api/search?q=Kappe')).items.find(i => i.id === teil.id).thumb_id, dsId);
+
+  // 3MF ohne Bild: einmal 404, danach nicht mehr angeboten
+  const leer = items.find(i => i.id === ohne.id).thumb_id;
+  assert.strictEqual((await fetch(`${BASE}/api/datasets/${leer}/thumb`)).status, 404);
+  assert.strictEqual((await api(`/api/projects/${proj.id}`)).items.find(i => i.id === ohne.id).thumb_id, null);
 });

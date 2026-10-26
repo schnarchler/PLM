@@ -430,6 +430,11 @@ function generateItemTemplate(type, opts = {}) {
       ['Quelle', item.source_url, true],
     ]);
 
+    // Eigenschaften der Klassifizierung (Werkstoff, Hersteller …)
+    const attrs = item.attributes || {};
+    const attrTable = kvTable(classFieldsOf(item.classification).map(f => [f.label, attrs[f.id] || null]));
+    if (attrTable) body += `<div class="sec">Eigenschaften</div>` + attrTable;
+
     if (item.notes) body += `<div class="sec">Notizen</div><div class="txt">${escHtml(item.notes)}</div>`;
 
     if (rev) {

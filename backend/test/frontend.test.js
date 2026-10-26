@@ -38,6 +38,8 @@ function installGlobals() {
   global.dtClass = (n, t) => 'dt-' + t;
   global.itemIsEditable = i => !(i.revisions || []).some(r => ['REL', 'OBS', 'ECO'].includes(r.status));
   global.state = { checkouts: [], item: null, settings: {} };
+  global._classFields = {};   // Eigenschaften je Klassifizierung, pro Test gesetzt
+  global.classFieldsOf = name => global._classFields[name] || [];
   global.TextEncoder = require('node:util').TextEncoder;
 }
 installGlobals();
@@ -1006,4 +1008,19 @@ test('Version: Punkt blau bei Update, grün wenn aktuell, grau wenn der Stand un
     delete global.document;
     delete global.state.update;
   }
+});
+
+test('Datenblatt: Eigenschaften der Klassifizierung, fehlende Pflicht und Hinweis zur Freigabe', () => {
+  global._classFields = { Bauteil: [{ id: 'a_w', label: 'Werkstoff', required: true }, { id: 'a_o', label: 'Oberfläche' }] };
+  const item = demoItem({ attributes: { a_o: '<eloxiert>' }, thumb_id: 77,
+    revisions: [{ id: 31, rev: '1', status: 'DFT', datasets: [], release_missing: ['CAD-Datei', 'Werkstoff'] }] });
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  const eig = h.slice(h.indexOf('>Eigenschaften'), h.indexOf('>Notizen<'));
+  assert.match(eig, /Werkstoff<\/span><span class="ps-kv-val"><span style="color:var\(--amber\)"[^>]*>fehlt \(Pflicht\)/);
+  assert.match(eig, /Oberfläche<\/span><span class="ps-kv-val">&lt;eloxiert&gt;</, 'escaped');
+  assert.match(h, /Für die Freigabe von rev1 fehlt noch:<\/span> CAD-Datei, Werkstoff/);
+  assert.match(h, /src="\/api\/datasets\/77\/thumb"/, 'Vorschaubild im Kopf');
+  global._classFields = {};
+  assert.ok(!renderItemSheet(demoItem(), 31).includes('>Eigenschaften'), 'ohne Felder kein Abschnitt');
 });

@@ -267,6 +267,13 @@ async function renderSettings() {
         </div>
         <div id="st-wf-options" style="display:flex;flex-direction:column;gap:6px;max-width:560px"></div>
 
+        <div class="sep-label" style="margin-top:28px">Prüfung vor der Freigabe</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
+          Was eine Revision mitbringen muss, bevor sie freigegeben werden kann. Fehlt etwas, nennt PLM es im Datenblatt
+          und sperrt „Freigeben“. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Gilt nur mit Freigabe-Workflow.
+        </div>
+        <div id="st-release-checks" style="display:flex;flex-direction:column;gap:7px"></div>
+
         <div style="margin-top:16px">
           <button class="btn btn-primary btn-sm" onclick="_savePlmPrefs()">Speichern</button>
           <span id="st-plmprefs-msg" style="font-size:13px;color:var(--t3);margin-left:8px"></span>
