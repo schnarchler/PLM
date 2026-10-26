@@ -42,11 +42,17 @@ function closeDetail() { document.getElementById('detail-panel').classList.add('
 // Nach kurzem Verweilen erscheint das Bild neben der Maus; fehlt es doch,
 // bleibt die Vorschau einfach weg.
 let _thumbRow = null, _thumbTimer = null, _thumbImg = null, _thumbXY = [0, 0];
+// Die Schriftgrösse zoomt die ganze Seite (zoom am <html>): Mausposition und
+// Fenstergrösse kommen ungezoomt, left/top wirken gezoomt. Der Massstab steckt
+// im Verhältnis von sichtbarer zu eigener Breite des Bildes.
 function _thumbPlace() {
   if (!_thumbImg || _thumbImg.hidden) return;
-  const [x, y] = _thumbXY, w = _thumbImg.offsetWidth, h = _thumbImg.offsetHeight;
-  _thumbImg.style.left = (x + 18 + w > innerWidth ? x - 18 - w : x + 18) + 'px';
-  _thumbImg.style.top = Math.max(8, Math.min(y + 18, innerHeight - h - 8)) + 'px';
+  const [x, y] = _thumbXY, r = _thumbImg.getBoundingClientRect();
+  const k = r.width / (_thumbImg.offsetWidth || r.width) || 1;
+  const left = x + 18 + r.width > innerWidth ? x - 18 - r.width : x + 18;
+  const top = Math.max(8, Math.min(y + 18, innerHeight - r.height - 8));
+  _thumbImg.style.left = left / k + 'px';
+  _thumbImg.style.top = top / k + 'px';
 }
 function _thumbHide() {
   clearTimeout(_thumbTimer);
