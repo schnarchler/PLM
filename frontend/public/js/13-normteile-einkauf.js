@@ -63,6 +63,7 @@ async function openNormteilDetail(id) {
         ${p.size     ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Grösse</div><span style="font-family:var(--mono)">${esc(p.size)}</span></div>` : ''}
         ${p.material ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Material</div>${esc(p.material)}</div>` : ''}
         ${p.unit_price!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Stückpreis</div><span style="font-family:var(--mono)">${fmtChf(p.unit_price)}</span></div>` : ''}
+        ${p.weight_g!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Gewicht</div><span style="font-family:var(--mono)">${fmtN(p.weight_g, 2)} g</span></div>` : ''}
       </div>
       ${p.name  ? `<div style="font-size:13px;color:var(--t3);margin-bottom:6px">${esc(p.name)}</div>` : ''}
       ${p.notes ? `<div style="font-size:13px;color:var(--t3)">${esc(p.notes)}</div>` : ''}
@@ -152,9 +153,13 @@ async function _loadNormteilForm(id) {
         <input class="fi" id="nt-desig" value="${esc(p.designation||'')}" placeholder="z.B. DIN 912 Zylinderschraube M4x12 A2-70">
       </div>
     </div>
-    <div class="form-row cols2">
+    <div class="form-row cols3">
       <div class="fg"><label class="fl">Stückpreis (CHF)</label>
         <input class="fi" type="number" id="nt-price" value="${p.unit_price??''}" placeholder="0.00" min="0" step="0.01">
+      </div>
+      <div class="fg"><label class="fl">Gewicht pro Stück (g)</label>
+        <input class="fi" type="number" id="nt-weight" value="${p.weight_g??''}" placeholder="—" min="0" step="0.01"
+          title="Zählt in das Gewicht jeder Baugruppe, die dieses Normteil verwendet">
       </div>
       <div class="fg"><label class="fl">Notizen</label>
         <input class="fi" id="nt-notes" value="${esc(p.notes||'')}">
@@ -185,6 +190,7 @@ async function saveNormteil(id) {
     size:       document.getElementById('nt-size')?.value.trim(),
     material:   document.getElementById('nt-mat')?.value.trim(),
     unit_price: parseFloat(document.getElementById('nt-price')?.value) || null,
+    weight_g:   parseFloat(document.getElementById('nt-weight')?.value) || null,
     notes:      document.getElementById('nt-notes')?.value.trim(),
   };
   if (id) await api(`/api/standard-parts/${id}`, 'PUT', body);

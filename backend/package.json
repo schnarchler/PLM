@@ -15,6 +15,7 @@
     "adm-zip": "^0.6.1",
     "express": "^4.22.3",
     "multer": "^2.4.0",
+    "occt-import-js": "^0.0.23",
     "sql.js": "^1.12.0"
   },
   "devDependencies": {

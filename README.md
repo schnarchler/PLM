@@ -110,13 +110,17 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - Normteile in BOM einsetzbar
 - Dateien pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
-- Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar
+- Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar; Baugruppen ohne
+  eigenes Gewicht summieren Teile und Normteile der Stückliste
 - **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
 - **Eigenschaften je Klassifizierung** – z. B. Werkstoff, Oberfläche, Hersteller; im Datenblatt,
   auf der PDF und in der Suche, optional Pflicht für die Freigabe
 - **Vorschaubilder** – in Projektbaum, Stückliste und Suche beim Überfahren einer Zeile mit der
-  Maus: die STL der neusten Revision isometrisch gezeichnet (sonst das Bild aus der 3MF oder ein
-  hochgeladenes Bild), einmal berechnet und unter `thumbs/` im Datenordner zwischengespeichert
+  Maus: die STL oder STEP der neusten Revision isometrisch gezeichnet (bei Baugruppen die STEP
+  zuerst, sonst das Bild aus der 3MF oder ein hochgeladenes Bild), einmal berechnet und unter
+  `thumbs/` im Datenordner zwischengespeichert
+- **3D-Vorschau für STL und STEP** – STEP wird mit OpenCascade (`occt-import-js`, offline)
+  einmal vernetzt und ebenfalls unter `thumbs/` abgelegt
 - **Datenblatt-Tab** – Beschreibung, Quelle, Kennzahlen, Druckparameter, Stücklisten-Kurzfassung,
   Lagerbestand, freie Notizen, QR-Code der Item-Nummer und letzte Änderung auf einen Blick
 - **Mindmap** – Abhängigkeiten als Graph: links die Baugruppen, die das Item verwenden,
@@ -189,6 +193,7 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 ### Normteile
 - Katalog für genormte Bauteile (DIN, ISO, EN, …)
 - Auto-Bezeichnung aus Norm + Nummer + Grösse + Material
+- Gewicht pro Stück — zählt ins Gewicht der Baugruppe
 - Dateien (STEP, PDF, …) pro Normteil hinterlegbar
 - Als BOM-Positionen in Baugruppen einsetzbar
 - **⬇ Auschecken** – alle Normteil-Dateien in festen `normteile/`-Ordner kopieren

@@ -411,6 +411,34 @@ test('Normteil bestellen legt beim Wareneingang einen Lagerartikel an', async ()
   assert.strictEqual(linked[0].stock_qty, 350);
 });
 
+test('Gewicht der Baugruppe: Summe aus Teilen und Normteilen mit Gewicht', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Gewichte' });
+  const mk = (name, item_type) => api(`/api/projects/${proj.id}/items`, 'POST', { name, item_type });
+  const bg = await mk('Halterung', 'asm');
+  const platte = await mk('Platte', 'prt'), deckel = await mk('Deckel', 'prt');
+  const base = item => ({ name: item.name, description: '', classification: null });
+  await api(`/api/items/${platte.id}`, 'PUT', { ...base(platte), weight_g: 40 });
+  const sp = await api('/api/standard-parts', 'POST', { designation: 'ISO 4762 M4x10', weight_g: 1.5 });
+  assert.strictEqual(sp.weight_g, 1.5, 'Normteil speichert sein Gewicht');
+  const revId = (await api(`/api/items/${bg.id}`)).revisions[0].id;
+  await api(`/api/revisions/${revId}/bom`, 'POST', { child_item_id: platte.id, quantity: 2 });
+  await api(`/api/revisions/${revId}/bom`, 'POST', { child_item_id: deckel.id, quantity: 1 });
+  await api(`/api/revisions/${revId}/bom-std`, 'POST', { std_part_id: sp.id, quantity: 4 });
+
+  let d = await api(`/api/items/${bg.id}`);
+  assert.strictEqual(d.effective_weight_g, 86, '2 × 40 g + 4 × 1,5 g, der Deckel ohne Gewicht zählt nicht');
+  assert.deepStrictEqual(d.revisions[0].bom_weight, { total_g: 86, missing: 1 });
+  assert.strictEqual(d.revisions[0].bom.find(b => b.child_item_id === platte.id).weight_g, 40);
+  assert.strictEqual(d.revisions[0].bom_std[0].weight_g, 1.5);
+
+  await api(`/api/items/${deckel.id}`, 'PUT', { ...base(deckel), weight_g: 14 });
+  d = await api(`/api/items/${bg.id}`);
+  assert.deepStrictEqual(d.revisions[0].bom_weight, { total_g: 100, missing: 0 });
+  // Eigenes Gewicht der Baugruppe geht vor
+  await api(`/api/items/${bg.id}`, 'PUT', { ...base(bg), weight_g: 120 });
+  assert.strictEqual((await api(`/api/items/${bg.id}`)).effective_weight_g, 120);
+});
+
 test('Auftrag: Status läuft beim Fertigen mit, Material wird abgebucht', async () => {
   const proj = await api('/api/projects', 'POST', { name: 'Fertigung' });
   const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Deckel', item_type: 'prt' });
@@ -687,4 +715,93 @@ test('Vorschaubild aus der 3MF für Listen, Stückliste und Suche', async () => 
   const leer = items.find(i => i.id === ohne.id).thumb_id;
   assert.strictEqual((await fetch(`${BASE}/api/datasets/${leer}/thumb`)).status, 404);
   assert.strictEqual((await api(`/api/projects/${proj.id}`)).items.find(i => i.id === ohne.id).thumb_id, null);
+});
+
+// Minimale AP214-STEP: Quader dx × dy × dz mm als Volumenkörper mit sechs ebenen Flächen
+function stepBox(dx, dy, dz) {
+  const e = [];
+  const add = s => (e.push(s), `#${e.length}`);
+  const pt = p => add(`CARTESIAN_POINT('',(${p.map(v => v.toFixed(1)).join(',')}))`);
+  const dir = d => add(`DIRECTION('',(${d.map(v => v.toFixed(1)).join(',')}))`);
+  const app = add("APPLICATION_CONTEXT('automotive design')");
+  add(`APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2000,${app})`);
+  const prod = add(`PRODUCT('Quader','Quader','',(${add(`PRODUCT_CONTEXT('',${app},'mechanical')`)}))`);
+  const pd = add(`PRODUCT_DEFINITION('design','',${add(`PRODUCT_DEFINITION_FORMATION('','',${prod})`)},${add(`PRODUCT_DEFINITION_CONTEXT('part definition',${app},'design')`)})`);
+  const pds = add(`PRODUCT_DEFINITION_SHAPE('','',${pd})`);
+  const mm = add('( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) )');
+  const rad = add('( NAMED_UNIT(*) PLANE_ANGLE_UNIT() SI_UNIT($,.RADIAN.) )');
+  const sr = add('( NAMED_UNIT(*) SI_UNIT($,.STERADIAN.) SOLID_ANGLE_UNIT() )');
+  const unc = add(`UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-07),${mm},'distance_accuracy_value','')`);
+  const ctx = add(`( GEOMETRIC_REPRESENTATION_CONTEXT(3) GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((${unc})) GLOBAL_UNIT_ASSIGNED_CONTEXT((${mm},${rad},${sr})) REPRESENTATION_CONTEXT('','') )`);
+  const size = [dx, dy, dz];
+  const pos = c => c.map((b, k) => b * size[k]);
+  const V = {}, E = {};
+  const vtx = c => V[c] ??= add(`VERTEX_POINT('',${pt(pos(c))})`);
+  // Kante a→b einmal anlegen; zurück: Kante und ob sie in Laufrichtung liegt
+  const edge = (a, b) => {
+    if (E[a + '|' + b]) return [E[a + '|' + b], '.T.'];
+    if (E[b + '|' + a]) return [E[b + '|' + a], '.F.'];
+    const d = pos(b).map((v, k) => v - pos(a)[k]), len = Math.max(...d.map(Math.abs));
+    const line = add(`LINE('',${pt(pos(a))},${add(`VECTOR('',${dir(d.map(v => v / len))},${len.toFixed(1)})`)})`);
+    return [E[a + '|' + b] = add(`EDGE_CURVE('',${vtx(a)},${vtx(b)},${line},.T.)`), '.T.'];
+  };
+  const faces = [];
+  for (let axis = 0; axis < 3; axis++) for (const side of [0, 1]) {
+    const [u, w] = [0, 1, 2].filter(k => k !== axis);
+    // Ecken gegen den Uhrzeigersinn von aussen gesehen: Normale zeigt nach aussen
+    let corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([cu, cw]) => { const c = [0, 0, 0]; c[axis] = side; c[u] = cu; c[w] = cw; return c; });
+    if ((axis === 1) === !!side) corners.reverse();
+    const oes = corners.map((c, i) => { const [ed, fw] = edge(c, corners[(i + 1) % 4]); return add(`ORIENTED_EDGE('',*,*,${ed},${fw})`); });
+    const n = [0, 0, 0]; n[axis] = side ? 1 : -1;
+    const ref = [0, 0, 0]; ref[u] = 1;
+    const plane = add(`PLANE('',${add(`AXIS2_PLACEMENT_3D('',${pt(pos(corners[0]))},${dir(n)},${dir(ref)})`)})`);
+    faces.push(add(`ADVANCED_FACE('',(${add(`FACE_OUTER_BOUND('',${add(`EDGE_LOOP('',(${oes.join(',')}))`)},.T.)`)}),${plane},.T.)`));
+  }
+  const brep = add(`MANIFOLD_SOLID_BREP('Quader',${add(`CLOSED_SHELL('',(${faces.join(',')}))`)})`);
+  const origin = add(`AXIS2_PLACEMENT_3D('',${pt([0, 0, 0])},${dir([0, 0, 1])},${dir([1, 0, 0])})`);
+  add(`SHAPE_DEFINITION_REPRESENTATION(${pds},${add(`ADVANCED_BREP_SHAPE_REPRESENTATION('',(${origin},${brep}),${ctx})`)})`);
+  return "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((''),'2;1');\nFILE_NAME('quader.stp','2026-01-01T00:00:00',(''),(''),'','','');\n"
+    + "FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\nENDSEC;\nDATA;\n"
+    + e.map((s, i) => `#${i + 1}=${s};\n`).join('') + 'ENDSEC;\nEND-ISO-10303-21;\n';
+}
+
+async function uploadNamed(revId, content, name) {
+  const form = new FormData();
+  form.append('file', new Blob([content]), name);
+  const r = await fetch(`${BASE}/api/revisions/${revId}/datasets`, { method: 'POST', body: form });
+  assert.ok(r.ok, `Upload fehlgeschlagen: ${r.status}`);
+  return (await r.json()).id;
+}
+
+test('STEP: Baugruppe zeigt die STEP statt der 3MF, 3D-Vorschau als Netz', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'STEP' });
+  const bg = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Gehäuse', item_type: 'asm' });
+  const revId = await firstRev(bg.id);
+  const zip = new (require('adm-zip'))();
+  zip.addFile('Metadata/thumbnail.png', Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'));
+  await uploadNamed(revId, zip.toBuffer(), 'druckbett.3mf');
+  const stepId = await uploadNamed(revId, stepBox(10, 20, 30), 'gehaeuse.stp');
+  assert.strictEqual((await api(`/api/items/${bg.id}`)).thumb_id, stepId, 'Baugruppe: STEP vor 3MF');
+
+  // Netz als binäre STL: ein Quader hat 12 Dreiecke
+  const mesh = Buffer.from(await (await fetch(`${BASE}/api/datasets/${stepId}/mesh`)).arrayBuffer());
+  assert.strictEqual(mesh.readUInt32LE(80), 12);
+  assert.strictEqual(mesh.length, 84 + 12 * 50);
+  const ds = (await api(`/api/items/${bg.id}`)).revisions[0].datasets.find(d => d.id === stepId);
+  assert.deepStrictEqual(ds.dims, [10, 20, 30], 'Aussenmasse aus dem Netz');
+  const png = Buffer.from(await (await fetch(`${BASE}/api/datasets/${stepId}/thumb`)).arrayBuffer());
+  assert.strictEqual(png.subarray(1, 4).toString(), 'PNG');
+
+  // Unlesbare STEP: kein Netz, danach nicht mehr als Vorschaubild angeboten
+  const badId = await uploadNamed(revId, 'ISO-10303-21; kaputt', 'kaputt.step');
+  assert.strictEqual((await fetch(`${BASE}/api/datasets/${badId}/mesh`)).status, 404);
+  assert.strictEqual((await fetch(`${BASE}/api/datasets/${badId}/thumb`)).status, 404);
+  assert.strictEqual((await api(`/api/items/${bg.id}`)).thumb_id, stepId);
+
+  // Bei einem Part bleibt die STL vorne
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Deckel', item_type: 'prt' });
+  const tRev = await firstRev(teil.id);
+  await uploadNamed(tRev, stepBox(5, 5, 5), 'deckel.step');
+  const stlId = await uploadNamed(tRev, 'solid t\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid t\n', 'deckel.stl');
+  assert.strictEqual((await api(`/api/items/${teil.id}`)).thumb_id, stlId, 'Part: STL vor STEP');
 });
