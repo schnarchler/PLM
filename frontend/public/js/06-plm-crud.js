@@ -803,11 +803,19 @@ async function _putItemPatch(itemId, patch) {
 async function _saveItemField(itemId, input, field) {
   const val = input.value.trim();
   const parsed = val === '' ? null : parseFloat(val);
+  if (state.item?.id === itemId && (state.item[field] ?? null) === parsed) return;   // nichts geändert
   try {
     await _putItemPatch(itemId, { [field]: parsed });
-    input.style.borderColor = 'var(--green)';
-    setTimeout(() => { input.style.borderColor = ''; }, 1200);
-  } catch(e) { input.style.borderColor = 'var(--red)'; toast('Fehler: ' + e, 'err'); }
+  } catch(e) { input.style.borderColor = 'var(--red)'; toast('Fehler: ' + e, 'err'); return; }
+  // Neu zeichnen: Freigabe-Hinweis („fehlt noch: Gewicht“), Datenblatt und
+  // Freigabe-Prüfung arbeiten sonst mit dem alten Wert weiter
+  if (state.item?.id === itemId) {
+    state.item = await api('/api/items/' + itemId);
+    renderItemDetail(state.item, state.activeRevId);
+    input = document.getElementById(input.id) || input;
+  }
+  input.style.borderColor = 'var(--green)';
+  setTimeout(() => { input.style.borderColor = ''; }, 1200);
 }
 
 async function saveItemWeight(itemId, input) { return _saveItemField(itemId, input, 'weight_g'); }
@@ -1016,7 +1024,7 @@ async function openStatusModal(revId, targetStatus) {
   if (targetStatus === 'REL' && state.item) {
     // Der Verkaufspreis gehört nicht zur Freigabe — er bleibt jederzeit änderbar
     const warnings = [];
-    if (state.item.weight_g == null)      warnings.push('Kein Gewicht hinterlegt');
+    if (state.item.item_type !== 'doc' && state.item.effective_weight_g == null) warnings.push('Kein Gewicht hinterlegt');
     const rev = state.item.revisions?.find(r => r.id === revId);
     if (!rev?.datasets?.length)           warnings.push('Keine Dateien hochgeladen');
     if (warnings.length) {

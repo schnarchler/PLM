@@ -26,11 +26,25 @@ function _sortBtns(key, rerender) {
 function _resortProject() {
   if (!state.project) return;
   renderProjectTree(state.project);
+  _rerenderProjectDetail();
+}
+// Projektansicht rechts neu zeichnen, falls sie offen ist — im selben Tab
+function _rerenderProjectDetail() {
   if (!document.getElementById('pt-files')) return;
   const tabs = [...document.querySelectorAll('#dp-tabs .tab')];
   const active = tabs.findIndex(t => t.classList.contains('active'));
   openProjectDetail(state.project);
   if (active > 0) document.querySelectorAll('#dp-tabs .tab')[active]?.click();
+}
+// Nach Änderungen von ausserhalb des Projekts (Checkout-Import): Baum und
+// Projektansicht neu laden — nur wenn das Projekt gerade links offen ist.
+// projectId: nur dieses Projekt; ohne Angabe das offene.
+async function refreshOpenProject(projectId) {
+  if (!state.project || !document.getElementById('project-tree')) return;
+  if (projectId != null && state.project.id != projectId) return;
+  state.project = await api(`/api/projects/${state.project.id}`);
+  renderProjectTree(state.project);
+  _rerenderProjectDetail();
 }
 
 async function renderProjectsList() {
@@ -162,7 +176,7 @@ function renderProjectTree(p) {
   const openIds = _treeOpenIds();
   const items = p.items || [];
   if (!items.length) {
-    setLeftBody(`<div class="empty"><div class="empty-icon">🔩</div><div class="empty-text">Noch keine Items</div>
+    setLeftBody(`<div class="empty" id="project-tree"><div class="empty-icon">🔩</div><div class="empty-text">Noch keine Items</div>
       <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
         <button class="btn btn-ghost btn-sm" onclick="openItemModal(${p.id},null,'asm')">+ Baugruppe</button>
         <button class="btn btn-primary btn-sm" onclick="openItemModal(${p.id},null,'prt')">+ Part</button>
@@ -257,7 +271,7 @@ function togN(nid, tid) {
 function openProjectDetail(p) {
   const docCount = (p.documents||[]).length;
   document.getElementById('dp-title').innerHTML =
-    `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-right:6px">${p.number}</span><strong>${esc(p.name)}</strong>`;
+    `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);margin-right:6px;flex-shrink:0">${p.number}</span><strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(p.name)}">${esc(p.name)}</strong>`;
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'pt-info')">Info</button>
     <button class="tab" onclick="switchTab(this,'pt-files')">Struktur</button>
@@ -483,7 +497,7 @@ function renderItemDetail(item, activeRevId) {
     `<span style="font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
     + (item.short_code && !isDOC ? `<span class="chip" style="flex-shrink:0" title="Kurzcode zum Aufdrucken — Datenblatt">${esc(item.short_code)}</span>` : '')
-    + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(item.name)}</strong>`
+    + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(item.name)}">${esc(item.name)}</strong>`
     + (item.classification ? ' ' + _classChip(item.classification) : '')
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})" title="In anderes Projekt verschieben">↪</button>`
@@ -536,11 +550,13 @@ function renderItemDetail(item, activeRevId) {
           </span>
           <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
             ⚖
-            <input id="item-weight-field" type="number" step="0.1" min="0" placeholder="—"
+            <input id="item-weight-field" type="number" step="0.1" min="0"
+              placeholder="${item.weight_g == null && item.effective_weight_g != null ? fmtN(item.effective_weight_g, 1) : '—'}"
+              title="${isASM ? 'Leer lassen: Summe aus der Stückliste (Teile und Normteile mit Gewicht)' : 'Gewicht in Gramm'}"
               value="${item.weight_g != null ? item.weight_g : ''}"
               style="width:72px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:13px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
               class="no-spin" onblur="saveItemWeight(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
-            <span style="color:var(--t4)">g</span>
+            <span style="color:var(--t4)">g${isASM && item.weight_g == null && item.effective_weight_g != null ? ' (aus BOM)' : ''}</span>
           </span>
           ${item.source_url ? (safeLinkHost(item.source_url)
             ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>`
@@ -629,15 +645,20 @@ function _fmtHours(h) {
 function _fmtDur(h) { return _fmtHours(h) || '0 min'; }
 
 // ── 3D-VORSCHAU UND SLICER ────────────────────────────────────
-function _stlFiles(rev) {
-  return (rev?.datasets || []).filter(d => dtClass(d.original_name, d.ds_type) === 'dt-STL');
+// STL und STEP — eine STEP vernetzt der Server (/mesh). Bei Baugruppen zuerst
+// die STEP: sie zeigt den Zusammenbau, eine STL oft nur ein einzelnes Teil.
+const _isStep = d => ['step', 'stp'].includes(_extOf(d));
+function _stlFiles(rev, item) {
+  const ds = rev?.datasets || [];
+  const stl = ds.filter(d => dtClass(d.original_name, d.ds_type) === 'dt-STL'), step = ds.filter(_isStep);
+  return item?.item_type === 'asm' ? [...step, ...stl] : [...stl, ...step];
 }
 
 // Vorschau der STL-Dateien einer Revision. key trennt Datenblatt und
 // Revisionen-Tab, die dieselbe Revision gleichzeitig enthalten.
 function _stlPreview(key, stls, top = '12px') {
   if (!stls.length) return '';
-  const url = d => `${API}/api/datasets/${d.id}/download`;
+  const url = d => `${API}/api/datasets/${d.id}/${_isStep(d) ? 'mesh' : 'download'}`;
   const sel = stls.length > 1
     ? `<select style="margin-left:auto;font-size:13px;background:var(--bg1);color:var(--t1);border:1px solid var(--line);border-radius:var(--r);padding:2px 6px" onchange="switchSTLViewer('${key}', this.value)">
         ${stls.map(d => `<option value="${url(d)}">${esc(d.original_name)}</option>`).join('')}</select>`
@@ -815,6 +836,7 @@ function renderItemSheet(item, activeRevId) {
     const bomTotal = priced.reduce((s, b) => s + b.default_price * b.quantity, 0);
     const stdTotal = std.reduce((s, b) => s + ((b.unit_price || 0) * b.quantity), 0);
     const positions = bom.length + std.length;
+    const bw = rev?.bom_weight || {};
     if (positions) {
       bomBlock = `<div class="sep-label">Stückliste <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
         <div class="ps-grid">
@@ -824,6 +846,7 @@ function renderItemSheet(item, activeRevId) {
           ${_sheetCell('Teilesumme', bomTotal ? fmtChf(bomTotal) : null, { mono: true })}
           ${_sheetCell('Normteilsumme', stdTotal ? fmtChf(stdTotal) : null, { mono: true })}
           ${_sheetCell('Gesamt', (bomTotal + stdTotal) ? fmtChf(bomTotal + stdTotal) : null, { mono: true })}
+          ${_sheetCell('Gewicht', bw.total_g != null ? fmtN(bw.total_g, 1) + ' g' : null, { mono: true })}
         </div>
         ${(() => {
           const pinned = bom.filter(x => x.child_pinned_rev);
@@ -836,6 +859,9 @@ function renderItemSheet(item, activeRevId) {
         })()}
         ${priced.length < bom.length
           ? `<div style="font-size:13px;color:var(--amber);margin-top:7px">⚠ ${bom.length - priced.length} von ${bom.length} eigenen Teilen ohne Preis — Summe unvollständig.</div>`
+          : ''}
+        ${bw.missing
+          ? `<div style="font-size:13px;color:var(--amber);margin-top:7px">⚖ ${bw.missing} von ${positions} Positionen ohne Gewicht — ${bw.total_g != null ? 'Gewicht unvollständig' : 'kein Gewicht berechenbar'}.</div>`
           : ''}`;
     } else {
       bomBlock = `<div class="sep-label">Stückliste</div>
@@ -923,7 +949,7 @@ function renderItemSheet(item, activeRevId) {
   // -- Slicer und 3D-Vorschau der gewählten Revision; ohne Datei nichts davon
   const modelFile = _slicerModelFile(rev);
   const slicerBtn = modelFile ? _slicerButton(modelFile, false) : '';
-  const stlBlock = rev ? _stlPreview('sheet' + rev.id, _stlFiles(rev), '0') : '';
+  const stlBlock = rev ? _stlPreview('sheet' + rev.id, _stlFiles(rev, item), '0') : '';
 
   // -- QR-Code der Teilenummer: klein im Kopf, ein Klick zeigt ihn gross
   const qr = typeof qrSvg === 'function'
@@ -1222,7 +1248,10 @@ function initSTLViewer(canvasId, url) {
   const loadDiv = document.getElementById('stl-load-' + canvasId.replace('stl-c-',''));
   const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
   if (!gl) { if (loadDiv) loadDiv.textContent = 'WebGL nicht verfügbar'; return; }
-  fetch(url).then(r => r.arrayBuffer()).then(buf => {
+  fetch(url).then(async r => {
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'HTTP ' + r.status);
+    return r.arrayBuffer();
+  }).then(buf => {
     const { pos, nrm } = parseSTL(buf);
     if (loadDiv) loadDiv.style.display = 'none';
     if (!pos.length) return;
@@ -1297,7 +1326,7 @@ function initSTLViewer(canvasId, url) {
       ro.observe(canvas);
     }
     draw();
-  }).catch(e=>{if(loadDiv)loadDiv.textContent='Fehler beim Laden.';console.error('STL viewer:',e);});
+  }).catch(e=>{if(loadDiv)loadDiv.textContent='Fehler beim Laden: '+e.message;console.error('STL viewer:',e);});
 }
 
 function switchSTLViewer(key, url) {
@@ -1340,6 +1369,11 @@ function _bomRevBadge(b, locked, itemId, parentRevId) {
     title="${esc(title)}" onclick="event.stopPropagation();openBomRevPicker(${b.id},${b.child_item_id},${itemId},${parentRevId})">${inner}</span>`;
 }
 
+// Stückgewicht einer Position — fehlt es, zählt die Position nicht ins Baugruppengewicht
+const _bomWeightTag = b => b.weight_g > 0
+  ? `<span style="font-size:11px;font-family:var(--mono);color:var(--t4);flex-shrink:0" title="Gewicht pro Stück">⚖ ${fmtN(b.weight_g, 1)} g</span>`
+  : `<span style="font-size:11px;color:var(--t4);flex-shrink:0;opacity:.6" title="Kein Gewicht — zählt nicht ins Baugruppengewicht">⚖ —</span>`;
+
 function renderBomList(rev, item, locked) {
   const plmRows = (rev.bom||[]).map(b => ({ ...b, _std: false })).sort((a,b) => (a.position||999)-(b.position||999));
   const stdRows = (rev.bom_std||[]).map(b => ({ ...b, _std: true }));
@@ -1359,6 +1393,7 @@ function renderBomList(rev, item, locked) {
       <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</span>
       ${_bomRevBadge(b, locked, item.id, rev.id)}
       ${(b.dev_hours||0) > 0 ? `<span style="font-size:11px;font-family:var(--mono);color:var(--amber);flex-shrink:0" title="Entwicklungszeit">⏱ ${fmtN(b.dev_hours,2)} h</span>` : ''}
+      ${_bomWeightTag(b)}
       ${locked
         ? `<span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>`
         : `<span class="bom-qty" style="display:flex;align-items:center;gap:4px">
@@ -1383,6 +1418,7 @@ function renderBomList(rev, item, locked) {
       <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(157,180,255,.15);color:var(--blue);flex-shrink:0">N</span>
       <span class="bom-num" style="color:var(--t2)">${esc(b.designation)}</span>
       <span style="flex:1;font-size:13px;color:var(--t3)">${b.material ? esc(b.material) : ''}</span>
+      ${_bomWeightTag(b)}
       ${locked
         ? `<span class="bom-qty">${b.quantity} ${b.unit||'Stk'}</span>`
         : `<span class="bom-qty" style="display:flex;align-items:center;gap:4px">
@@ -1561,7 +1597,7 @@ function renderRevDetail(rev, item) {
     </div>
     ` : ''}
 
-    ${_stlPreview(rev.id, _stlFiles(rev))}
+    ${_stlPreview(rev.id, _stlFiles(rev, item))}
 
     <!-- Dateien -->
     <div class="sep-label" style="margin-top:12px">Dateien

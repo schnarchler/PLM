@@ -421,7 +421,7 @@ async function doCheckout(itemId) {
     _hideDynModal();
     if (r.warning) { toast(r.warning, 'err'); return; }
     await loadCheckouts();
-    if (state.project) renderProjectTree(state.project);
+    if (document.getElementById('project-tree')) renderProjectTree(state.project);
     if (state.item) renderItemDetail(state.item, state.activeRevId);
     _showCheckoutResult(r);
   } catch(e) {
@@ -537,8 +537,7 @@ async function doCheckin(folder, btn) {
       return;
     }
     toast(_checkinMessage(r), 'ok');
-    if (state.project) renderProjectTree(state.project);
-    if (state.item) { const fresh = await api('/api/items/'+state.item.id); renderItemDetail(fresh, r.revisions?.length ? null : state.activeRevId); }
+    await _refreshOpenViews(null, r.revisions?.length ? null : state.activeRevId);
   } catch(e) {
     if (btn) { btn.innerHTML = orig; btn.disabled = false; }
     toast('Fehler beim Einchecken: ' + (e.message||''), 'err');
@@ -555,8 +554,16 @@ async function doCheckinAll() {
   await loadCheckouts();
   _hideDynModal();
   toast(kept ? `Eingecheckt — ${kept} Checkout${kept !== 1 ? 's bleiben' : ' bleibt'} bestehen` : 'Alle Checkouts eingecheckt', 'ok');
-  if (state.project) renderProjectTree(state.project);
-  if (state.item) renderItemDetail(state.item, state.activeRevId);
+  await _refreshOpenViews(null, state.activeRevId);
+}
+
+// Nach Einchecken oder Import: Projektbaum und offenes Item frisch vom Server.
+// itemId: nur dieses Item neu laden; ohne Angabe das offene.
+async function _refreshOpenViews(itemId, revId) {
+  await refreshOpenProject();
+  if (!state.item || (itemId != null && state.item.id !== itemId)) return;
+  state.item = await api('/api/items/' + state.item.id);
+  renderItemDetail(state.item, revId);
 }
 
 async function openCheckoutFolder(folder) {
@@ -650,7 +657,7 @@ async function importCheckoutFiles(g) {
     await loadCheckouts();
     _showDynModal(null);
     toast(`${r.count} Datei(en) zu rev${r.rev} hinzugefügt`, 'ok');
-    if (state.item?.id === g.item_id) renderItemDetail(state.item, state.activeRevId);
+    await _refreshOpenViews(g.item_id, state.activeRevId);
     showCheckoutList();
   } catch(e) { toast('Import fehlgeschlagen: ' + (e.message||''), 'err'); }
 }
@@ -712,7 +719,7 @@ async function _doImportNewItem() {
     await loadCheckouts();
     toast(`Item ${r.item_number} angelegt`, 'ok');
     showCheckoutList();
-    if (state.project) { const p = await api(`/api/projects/${state.project.id}`); openProjectDetail(p); }
+    await refreshOpenProject(project_id);
   } catch(e) { toast('Fehler: ' + (e.message||''), 'err'); }
 }
 
@@ -800,6 +807,7 @@ async function _doAttachCheckoutFile() {
     toast(`${esc(f.name)} angehängt (rev${r.rev})`, 'ok');
     await loadCheckouts();
     showCheckoutList();
+    await _refreshOpenViews(parseInt(itemId), state.activeRevId);
   } catch(e) {
     toast('Fehler beim Anhängen', 'err');
   }
@@ -848,9 +856,5 @@ async function _doCreateNewItemFromCheckout() {
   toast(`${item.item_number} – ${esc(name)} angelegt`, 'ok');
   _hideDynModal();
   showCheckoutList();
-  // Navigate to the new item if the project is open
-  if (state.project?.id == project_id) {
-    const p = await api(`/api/projects/${project_id}`);
-    openProjectDetail(p);
-  }
+  await refreshOpenProject(project_id);
 }

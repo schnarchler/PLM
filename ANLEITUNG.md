@@ -139,7 +139,9 @@ Lieferanten:       LF-0001
 
 **Weitere Tabs:** Datenblatt, Historie, Zeiten, Verwendung, Aufträge, Varianten
 
-**Vorschaubilder:** In Projektbaum, Stückliste und Suche erscheint ein Vorschaubild, wenn man kurz mit der Maus auf der Zeile verweilt. PLM zeichnet dafür die STL der neusten Revision isometrisch, wie die 3D-Vorschau. Ohne STL dient das Bild aus einer Slicer-3MF oder ein hochgeladenes Bild (PNG, JPG) als Vorschau.
+**Vorschaubilder:** In Projektbaum, Stückliste und Suche erscheint ein Vorschaubild, wenn man kurz mit der Maus auf der Zeile verweilt. PLM zeichnet dafür die STL oder STEP der neusten Revision isometrisch, wie die 3D-Vorschau. Bei Parts geht die STL vor, bei Baugruppen die STEP — sie zeigt die Baugruppe zusammengebaut, eine 3MF meist nur die Teile verteilt auf dem Druckbett. Ohne STL und STEP dient das Bild aus einer Slicer-3MF oder ein hochgeladenes Bild (PNG, JPG) als Vorschau.
+
+**3D-Vorschau:** Im Datenblatt und in der Revision lassen sich STL- und STEP-Dateien (`.stp`, `.step`) drehen und zoomen. Eine STEP wandelt PLM beim ersten Öffnen einmal in ein Dreiecksnetz um — bei grossen Baugruppen dauert das ein paar Sekunden, danach geht es sofort. Für eine Baugruppe genügt der STEP-Export aus Solid Edge, eine zusätzliche STL ist nicht nötig.
 
 **Schaltflächen im Titel:**
 - **↪** — Item in ein anderes Projekt verschieben
@@ -149,6 +151,8 @@ Lieferanten:       LF-0001
 ### 5.5 Gewicht
 
 Das Gewicht ⚖ eines Parts wird direkt in der Detailansicht neben dem Verkaufspreis eingetragen (in Gramm). Es wird für die automatische Materialkostenkalkulation in Angeboten verwendet.
+
+Bei einer Baugruppe ohne eigenes Gewicht zählt PLM die Stückliste zusammen: Teile und Normteile mit Gewicht, jeweils mal Menge. Positionen ohne Gewicht zählen nicht mit; das Datenblatt sagt, wie viele das sind. Jede Stücklistenzeile zeigt ihr Stückgewicht. Ein eigenes Gewicht an der Baugruppe geht der Summe vor. Das Gewicht eines Normteils steht im Normteil unter **Gewicht pro Stück**.
 
 ### 5.6 Klassifizierung
 
@@ -240,6 +244,7 @@ Felder ausfüllen → Bezeichnung wird automatisch generiert (z.B. `DIN 912 Zyli
 | Kurzbezeichnung | Zylinderschraube |
 | Material / Güte | A2-70 |
 | Stückpreis | 0.15 CHF |
+| Gewicht pro Stück | 1.2 g |
 
 ### Dateien
 

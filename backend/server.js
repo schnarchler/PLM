@@ -771,6 +771,8 @@ function applySchema() {
   try { db.run('ALTER TABLE bom ADD COLUMN child_rev_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE purchase_order_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
   try { db.run('ALTER TABLE inventory_items ADD COLUMN std_part_id INTEGER REFERENCES standard_parts(id)'); } catch {}
+  // Stückgewicht eines Normteils — zählt in das Gewicht der Baugruppe
+  try { db.run('ALTER TABLE standard_parts ADD COLUMN weight_g REAL DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE deliveries ADD COLUMN material_consumed INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE projects ADD COLUMN color TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN valid_until TEXT DEFAULT NULL'); } catch {}
@@ -2199,7 +2201,10 @@ function stlDimensions(buf) {
 }
 // Wie _fileHash: einmal gerechnet, dann aus der DB. Nur für STL-Dateien.
 function _datasetDims(ds) {
-  if (path.extname(ds.original_name || ds.filename || '').toLowerCase() !== '.stl') return null;
+  const ext = path.extname(ds.original_name || ds.filename || '').toLowerCase();
+  // STEP: Masse trägt /mesh nach, sobald die Datei einmal vernetzt ist
+  if (STEP_EXT.includes(ext)) { try { return ds.dims ? JSON.parse(ds.dims) : null; } catch { return null; } }
+  if (ext !== '.stl') return null;
   if (ds.dims === null || ds.dims === undefined) {
     let d = null;
     const p = path.join(FILES_DIR, ds.filename);
@@ -2241,8 +2246,10 @@ app.get('/api/items/:id', (req, res) => {
         b.rev_outdated = !!(b.child_pinned_rev && b.child_active_rev
           && b.child_pinned_rev.id !== b.child_active_rev.id);
         b.dev_hours = calcDevHours(b.child_item_id);
+        b.weight_g = getEffectiveWeight(b.child_item_id, new Set([item.id]));
       });
-      rev.bom_std = all('SELECT bs.*, sp.designation, sp.name as sp_name, sp.material, sp.size, sp.unit_price, sp.standard, sp.std_number FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.parent_rev_id=? ORDER BY bs.position', [rev.id]);
+      rev.bom_std = all('SELECT bs.*, sp.designation, sp.name as sp_name, sp.material, sp.size, sp.unit_price, sp.weight_g, sp.standard, sp.std_number FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.parent_rev_id=? ORDER BY bs.position', [rev.id]);
+      rev.bom_weight = bomWeight(rev.id, new Set([item.id]));
     }
   });
   item.changelog = all("SELECT * FROM changelog WHERE entity_type='item' AND entity_id=? ORDER BY created_at DESC", [item.id]);
@@ -3748,14 +3755,21 @@ app.post('/api/datasets/:id/open-in-slicer', async (req, res) => {
 // Eine STL wird beim ersten Abruf isometrisch gezeichnet (wie die 3D-Vorschau),
 // aus einer 3MF das Bild des Slicers geholt; beides liegt danach unter
 // DATA_DIR/thumbs — benannt nach der Datei, die sich nie ändert. Hochgeladene
-// Bilder zeigen sich selbst. Pro Item gilt die neuste Revision, dort STL vor
-// 3MF vor Bild. datasets.thumb = 0: kein Bild möglich, wird nicht mehr angeboten.
+// Bilder zeigen sich selbst. Eine STEP wird zuerst vernetzt (siehe stepMesh).
+// Pro Item gilt die neuste Revision, dort STL vor STEP vor 3MF vor Bild — bei
+// Baugruppen STEP vor STL: die STEP zeigt sie zusammengebaut, die 3MF meist
+// die Teile verteilt auf dem Druckbett. datasets.thumb = 0: kein Bild
+// möglich, wird nicht mehr angeboten.
 const THUMB_IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 const THUMB_STL_LIMIT = 64 * 1024 * 1024;
+const STEP_EXT = ['.step', '.stp'];
+const _likeExt = (exts, col = 'd.filename') => '(' + exts.map(e => `LOWER(${col}) LIKE '%${e}'`).join(' OR ') + ')';
 const thumbIdSql = itemCol => `(SELECT d.id FROM datasets d JOIN revisions r ON r.id=d.revision_id
-  WHERE r.item_id=${itemCol} AND (((LOWER(d.filename) LIKE '%.stl' OR LOWER(d.filename) LIKE '%.3mf') AND COALESCE(d.thumb,1)=1)
-    OR ${THUMB_IMAGE_EXT.map(e => `LOWER(d.filename) LIKE '%${e}'`).join(' OR ')})
-  ORDER BY r.id DESC, CASE WHEN LOWER(d.filename) LIKE '%.stl' THEN 0 WHEN LOWER(d.filename) LIKE '%.3mf' THEN 1 ELSE 2 END, d.id DESC LIMIT 1)`;
+  WHERE r.item_id=${itemCol} AND ((${_likeExt(['.stl', '.3mf', ...STEP_EXT])} AND COALESCE(d.thumb,1)=1)
+    OR ${_likeExt(THUMB_IMAGE_EXT)})
+  ORDER BY r.id DESC, CASE WHEN ${_likeExt(['.stl'])} THEN 1 + ((SELECT item_type FROM items WHERE id=r.item_id)='asm')
+    WHEN ${_likeExt(STEP_EXT)} THEN 2 - ((SELECT item_type FROM items WHERE id=r.item_id)='asm')
+    WHEN LOWER(d.filename) LIKE '%.3mf' THEN 3 ELSE 4 END, d.id DESC LIMIT 1)`;
 
 // Dreiecke einer STL als [x,y,z, x,y,z, x,y,z, …]. Binär erkennen wie stlDimensions.
 function stlPositions(buf) {
@@ -3859,11 +3873,11 @@ function encodePng(w, h, rgba) {
     chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-function stlThumb(ds) {
+// src: die STL selbst oder das Netz einer STEP
+function stlThumb(ds, src = path.join(FILES_DIR, ds.filename)) {
   const out = thumbPath(ds);
   if (fs.existsSync(out)) return out;
   try {
-    const src = path.join(FILES_DIR, ds.filename);
     if (fs.statSync(src).size > THUMB_STL_LIMIT) return null;
     const png = renderStlPng(fs.readFileSync(src));
     if (!png) return null;
@@ -3873,6 +3887,66 @@ function stlThumb(ds) {
   } catch (e) { console.error('STL-Vorschau nicht möglich:', ds.filename, e.message); return null; }
 }
 const thumbPath = ds => path.join(DATA_DIR, 'thumbs', ds.filename + '.png');
+const meshPath = ds => path.join(DATA_DIR, 'thumbs', ds.filename + '.stl');
+
+// STEP beschreibt Flächen, keine Dreiecke. OpenCascade (occt-import-js,
+// WebAssembly, offline) vernetzt die Datei einmal; das Netz liegt danach als
+// binäre STL neben den Vorschaubildern und dient der 3D-Vorschau, dem
+// Vorschaubild und den Aussenmassen. Fehlt das Paket (Installation ohne
+// npm install seit dem Update), bleibt STEP ohne Vorschau — sonst geht alles.
+let _occt;
+function occt() {
+  if (!_occt) _occt = Promise.resolve().then(() => require('occt-import-js')()).catch(e => {
+    console.error('STEP-Vorschau nicht verfügbar — im Ordner backend „npm install“ ausführen:', e.message);
+    return null;
+  });
+  return _occt;
+}
+// Alle Teile der STEP in eine binäre STL, Flächennormale je Dreieck
+function meshesToStl(meshes) {
+  const tris = meshes.reduce((n, m) => n + m.index.array.length / 3, 0);
+  const buf = Buffer.alloc(84 + tris * 50);
+  buf.writeUInt32LE(tris, 80);
+  let o = 84;
+  for (const m of meshes) {
+    const p = m.attributes.position.array, idx = m.index.array;
+    for (let t = 0; t < idx.length; t += 3) {
+      const v = [idx[t] * 3, idx[t + 1] * 3, idx[t + 2] * 3];
+      const ux = p[v[1]] - p[v[0]], uy = p[v[1] + 1] - p[v[0] + 1], uz = p[v[1] + 2] - p[v[0] + 2];
+      const wx = p[v[2]] - p[v[0]], wy = p[v[2] + 1] - p[v[0] + 1], wz = p[v[2] + 2] - p[v[0] + 2];
+      let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      buf.writeFloatLE(nx / nl, o); buf.writeFloatLE(ny / nl, o + 4); buf.writeFloatLE(nz / nl, o + 8);
+      for (let k = 0; k < 3; k++) for (let c = 0; c < 3; c++) buf.writeFloatLE(p[v[k] + c], o + 12 + k * 12 + c * 4);
+      o += 50;
+    }
+  }
+  return buf;
+}
+// Pfad zum Netz der STEP; null = nicht lesbar, undefined = OpenCascade fehlt.
+// Gleichzeitige Abrufe derselben Datei teilen sich eine Umwandlung.
+const _stepJobs = new Map();
+function stepMesh(ds) {
+  const out = meshPath(ds);
+  if (fs.existsSync(out)) return Promise.resolve(out);
+  if (!_stepJobs.has(out)) _stepJobs.set(out, (async () => {
+    const lib = await occt();
+    if (!lib) return undefined;
+    try {
+      const src = path.join(FILES_DIR, ds.filename);
+      if (fs.statSync(src).size > THUMB_STL_LIMIT) return null;
+      const r = lib.ReadStepFile(new Uint8Array(fs.readFileSync(src)), {
+        linearUnit: 'millimeter', linearDeflectionType: 'bounding_box_ratio', linearDeflection: 0.001, angularDeflection: 0.5,
+      });
+      const meshes = (r?.success && r.meshes || []).filter(m => m.index?.array?.length);
+      if (!meshes.length) return null;
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, meshesToStl(meshes));
+      return out;
+    } catch (e) { console.error('STEP nicht lesbar:', ds.filename, e.message); return null; }
+  })().finally(() => _stepJobs.delete(out)));
+  return _stepJobs.get(out);
+}
 // Bambu/Orca legen zusätzlich Masken (pick_*) und Draufsichten (top_*) ab
 function extractThumb(ds) {
   const out = thumbPath(ds);
@@ -3887,19 +3961,41 @@ function extractThumb(ds) {
     return out;
   } catch (e) { console.error('Vorschaubild nicht lesbar:', ds.filename, e.message); return null; }
 }
-app.get('/api/datasets/:id/thumb', (req, res) => {
+app.get('/api/datasets/:id/thumb', async (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
   if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
   const ext = path.extname(ds.filename).toLowerCase();
   let fp = null;
   if (THUMB_IMAGE_EXT.includes(ext)) fp = path.join(FILES_DIR, ds.filename);
-  else if (ext === '.3mf' || ext === '.stl') {
-    fp = ext === '.stl' ? stlThumb(ds) : extractThumb(ds);
+  else if (ext === '.3mf' || ext === '.stl' || STEP_EXT.includes(ext)) {
+    if (STEP_EXT.includes(ext)) {
+      const mesh = await stepMesh(ds);
+      // Ohne OpenCascade nicht als „kein Bild möglich“ merken — nach npm install geht es
+      if (mesh === undefined) return res.status(404).json({ error: 'STEP-Vorschau nicht installiert' });
+      fp = mesh && stlThumb(ds, mesh);
+    } else fp = ext === '.stl' ? stlThumb(ds) : extractThumb(ds);
     if (ds.thumb !== (fp ? 1 : 0)) run('UPDATE datasets SET thumb=? WHERE id=?', [fp ? 1 : 0, ds.id]);
   }
   if (!fp || !fs.existsSync(fp)) return res.status(404).json({ error: 'Kein Vorschaubild' });
   res.setHeader('Cache-Control', 'private, max-age=3600');
   res.sendFile(fp);
+});
+
+// Dreiecksnetz für die 3D-Vorschau im Browser: STL wie sie ist, STEP vernetzt
+app.get('/api/datasets/:id/mesh', async (req, res) => {
+  const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
+  if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
+  const ext = path.extname(ds.filename).toLowerCase();
+  let fp = ext === '.stl' ? path.join(FILES_DIR, ds.filename) : null;
+  if (STEP_EXT.includes(ext)) {
+    fp = await stepMesh(ds);
+    if (fp === undefined) return res.status(501).json({ error: 'STEP-Vorschau nicht installiert — im Ordner backend „npm install“ ausführen' });
+    // Masse fürs Datenblatt nachtragen, sobald das Netz da ist
+    if (fp && !ds.dims) { try { run('UPDATE datasets SET dims=? WHERE id=?', [JSON.stringify(stlDimensions(fs.readFileSync(fp))), ds.id]); } catch {} }
+  }
+  if (!fp || !fs.existsSync(fp)) return res.status(404).json({ error: 'Kein 3D-Modell lesbar' });
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.type('model/stl').sendFile(fp);
 });
 
 app.get('/api/datasets/:id/download', (req, res) => {
@@ -3935,6 +4031,7 @@ app.delete('/api/datasets/:id', (req, res) => {
   if (rejectIfDelivered(res, ds.revision_id)) return;
   trashFile(ds.filename);
   try { fs.unlinkSync(thumbPath(ds)); } catch {}   // aus dem Papierkorb zurück: wird neu geholt
+  try { fs.unlinkSync(meshPath(ds)); } catch {}
   run('DELETE FROM datasets WHERE id=?', [ds.id]);
   log('revision', ds.revision_id, 'Datei gelöscht', ds.original_name);
   res.json({ success: true });
@@ -4932,17 +5029,24 @@ function getEffectiveWeight(itemId, _visited) {
   if (item.weight_g > 0) return item.weight_g;
   if (item.item_type !== 'asm') return null;
   const rev = getLatestRevision(itemId);
-  if (!rev) return null;
-  const bom = all('SELECT child_item_id, quantity FROM bom WHERE parent_rev_id=?', [rev.id]);
-  if (!bom.length) return null;
-  let total = 0, hasAny = false;
-  for (const b of bom) {
-    const w = getEffectiveWeight(b.child_item_id, new Set(visited));
-    if (w == null) continue;
-    total += w * b.quantity;
-    hasAny = true;
-  }
-  return hasAny ? total : null;
+  return rev ? bomWeight(rev.id, visited).total_g : null;
+}
+
+// Gewicht einer Stückliste: Teile (eigenes Gewicht oder ihre BOM-Summe) und
+// Normteile, jeweils mal Menge. Positionen ohne Gewicht zählen nicht mit —
+// missing sagt, wie viele das sind. total_g ist null, wenn keine eins hat.
+function bomWeight(revId, visited) {
+  const rows = [
+    ...all('SELECT child_item_id, quantity FROM bom WHERE parent_rev_id=?', [revId])
+      .map(b => ({ w: getEffectiveWeight(b.child_item_id, new Set(visited)), qty: b.quantity })),
+    ...all('SELECT sp.weight_g, bs.quantity FROM bom_std_parts bs JOIN standard_parts sp ON sp.id=bs.std_part_id WHERE bs.parent_rev_id=?', [revId])
+      .map(b => ({ w: b.weight_g > 0 ? b.weight_g : null, qty: b.quantity })),
+  ];
+  const known = rows.filter(r => r.w != null);
+  return {
+    total_g: known.length ? known.reduce((s, r) => s + r.w * r.qty, 0) : null,
+    missing: rows.length - known.length,
+  };
 }
 
 function calcLineItemCost(oi) {
@@ -7185,7 +7289,7 @@ app.get('/api/standard-parts', (req, res) => {
 });
 
 app.get('/api/standard-parts/export', (req, res) => {
-  const parts = all('SELECT designation,standard,std_number,name,size,material,unit_price,notes FROM standard_parts ORDER BY standard,std_number,size,designation');
+  const parts = all('SELECT designation,standard,std_number,name,size,material,unit_price,weight_g,notes FROM standard_parts ORDER BY standard,std_number,size,designation');
   res.setHeader('Content-Disposition', 'attachment; filename="normteile.json"');
   res.setHeader('Content-Type', 'application/json');
   res.send(JSON.stringify({ version: 1, exported: new Date().toISOString(), parts }, null, 2));
@@ -7199,8 +7303,8 @@ app.post('/api/standard-parts/import', (req, res) => {
   for (const p of parts) {
     if (!p.designation) continue;
     if (existing.has(p.designation)) { skipped++; continue; }
-    runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
-      [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.notes||'']);
+    runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,weight_g,notes) VALUES (?,?,?,?,?,?,?,?,?)',
+      [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.weight_g||null, p.notes||'']);
     existing.add(p.designation);
     added++;
   }
@@ -7209,27 +7313,27 @@ app.post('/api/standard-parts/import', (req, res) => {
 });
 
 app.post('/api/standard-parts', (req, res) => {
-  const { designation, standard, std_number, name, size, material, unit_price, notes } = req.body;
+  const { designation, standard, std_number, name, size, material, unit_price, weight_g, notes } = req.body;
   if (!designation) return res.status(400).json({ error: 'Bezeichnung fehlt' });
-  const id = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, notes||'']);
+  const id = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,weight_g,notes) VALUES (?,?,?,?,?,?,?,?,?)',
+    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, weight_g||null, notes||'']);
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [id]));
 });
 
 app.post('/api/standard-parts/:id/clone', (req, res) => {
   const p = get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]);
   if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
-  const newId = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,notes) VALUES (?,?,?,?,?,?,?,?)',
-    [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.notes||'']);
+  const newId = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,weight_g,notes) VALUES (?,?,?,?,?,?,?,?,?)',
+    [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.weight_g||null, p.notes||'']);
   saveDb();
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [newId]));
 });
 
 app.put('/api/standard-parts/:id', (req, res) => {
-  const { designation, standard, std_number, name, size, material, unit_price, notes } = req.body;
+  const { designation, standard, std_number, name, size, material, unit_price, weight_g, notes } = req.body;
   if (!designation) return res.status(400).json({ error: 'Bezeichnung fehlt' });
-  run('UPDATE standard_parts SET designation=?,standard=?,std_number=?,name=?,size=?,material=?,unit_price=?,notes=? WHERE id=?',
-    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, notes||'', req.params.id]);
+  run('UPDATE standard_parts SET designation=?,standard=?,std_number=?,name=?,size=?,material=?,unit_price=?,weight_g=?,notes=? WHERE id=?',
+    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, weight_g||null, notes||'', req.params.id]);
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]));
 });
 
