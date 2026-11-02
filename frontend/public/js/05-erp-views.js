@@ -775,7 +775,7 @@ async function openOrderDetail(id) {
         ${o.status === 'QUOTE'
           ? `<button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'order-quote')">&#128196; Angebot PDF</button>`
           : `<button class="btn btn-ghost btn-sm" onclick="generateDoc(${id},'invoice')">&#128196; Rechnung PDF</button>`}
-        <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Dublizieren</button>
+        <button class="btn btn-ghost btn-sm" onclick="cloneOrder(${id})">⧉ Duplizieren</button>
         ${o.status === 'QUOTE'
           ? `<button class="btn btn-primary btn-sm" onclick="acceptQuotePhase(${id})">✓ Angebot angenommen</button>
              <button class="btn btn-ghost btn-sm" onclick="declineQuotePhase(${id})">Abgelehnt</button>`

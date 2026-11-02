@@ -371,9 +371,6 @@ die Items ihn behalten oder verlieren. Werte, die an Items stehen, aber in der L
 fehlen, lassen sich mit „＋ übernehmen“ zurückholen. Schreibweisen wie „ kaufteil “
 werden beim Speichern auf den Listeneintrag „Kaufteil“ gezogen.
 
-Wie sich die Klassifizierung weiter ausbauen liesse, beschreibt
-[KONZEPT-KLASSIFIZIERUNG.md](KONZEPT-KLASSIFIZIERUNG.md).
-
 ---
 
 ## Angebot als Auftragsphase
@@ -506,7 +503,7 @@ Beim Hinzufügen einer Produktionsposition kann eine `.3mf`-Datei hochgeladen we
 
 ## Begriffe
 
-Damit Oberfläche, Belege und diese Anleitung dieselbe Sprache sprechen. Schreibweise
+Damit Oberfläche, Belege und das Handbuch dieselbe Sprache sprechen. Schreibweise
 Schweizer Hochdeutsch (ss statt ß).
 
 | Begriff | Bedeutung | Nicht verwenden |
@@ -561,7 +558,7 @@ PLM/
 │       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
 │       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
 ├── plm.config             ← Konfiguration dieses PCs: data_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (wird auto-erstellt)
-├── ANLEITUNG.md           ← Bedienungsanleitung (Deutsch)
+├── HANDBUCH.md            ← Handbuch für die Bedienung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 ├── VERKNUEPFUNG-ERSTELLEN.bat ← legt die Desktop-Verknüpfung mit Logo an (Windows)
 ├── PLM-ERP.ico            ← Logo als Windows-Symbol für die Verknüpfung
@@ -583,8 +580,8 @@ Geräte herankommen, entscheidet die Firewall des PCs.
 - Paketlücken prüfen: `cd backend && npm audit --omit=dev`
 
 Die Benutzer (Einstellungen → Benutzer) dienen der Nachvollziehbarkeit, nicht als Schutz:
-gewählt wird ohne Passwort; jede Person kann ihre Kachel mit einer PIN schützen. Details und Grenzen in
-[KONZEPT-BENUTZERVERWALTUNG.md](KONZEPT-BENUTZERVERWALTUNG.md).
+gewählt wird ohne Passwort; jede Person kann ihre Kachel mit einer PIN schützen. Bedienung siehe
+[HANDBUCH.md](HANDBUCH.md), Kapitel Einstellungen → Benutzer.
 
 ---
 

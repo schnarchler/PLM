@@ -7415,9 +7415,14 @@ app.delete('/api/inventory/:id', (req, res) => {
 app.post('/api/inventory/:id/movement', (req, res) => {
   const { type, qty, reference, notes } = req.body;
   if (!type || qty == null) return res.status(400).json({ error: 'Art und Menge fehlen' });
+  if (!['in', 'out', 'adjust'].includes(type)) return res.status(400).json({ error: 'Unbekannte Buchungsart' });
+  const n = parseFloat(qty);
+  if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'Ungültige Menge' });
   const item = get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
-  const delta = type === 'out' ? -Math.abs(parseFloat(qty)) : Math.abs(parseFloat(qty));
+  // Korrektur: qty ist der neue Bestand, gebucht wird die Differenz
+  const delta = type === 'adjust' ? n - (item.stock_qty || 0) : type === 'out' ? -n : n;
+  if (type === 'adjust' && delta === 0) return res.status(400).json({ error: `Der Bestand ist schon ${n}` });
   tx(() => {
     run('INSERT INTO inventory_movements (item_id,type,qty,reference,notes) VALUES (?,?,?,?,?)',
       [req.params.id, type, delta, reference||'', notes||'']);

@@ -115,6 +115,20 @@ test('Lager: Zugang, Abgang mit Referenz, Bestand korrekt', async () => {
   assert.ok(refs.includes('AUF-2026-001') && refs.includes('Ausschuss Montage'));
 });
 
+test('Lager: Korrektur setzt den Bestand und bucht die Differenz', async () => {
+  const inv = await api('/api/inventory', 'POST', { name: 'Mutter M4', unit: 'Stk', min_qty: 0 });
+  await api(`/api/inventory/${inv.id}/movement`, 'POST', { type: 'in', qty: 50 });
+  await api(`/api/inventory/${inv.id}/movement`, 'POST', { type: 'adjust', qty: 42, notes: 'Inventur' });
+  let item = await api(`/api/inventory/${inv.id}`);
+  assert.equal(item.stock_qty, 42);
+  assert.equal(item.movements.find(m => m.type === 'adjust').qty, -8);
+  await api(`/api/inventory/${inv.id}/movement`, 'POST', { type: 'adjust', qty: 0 });
+  item = await api(`/api/inventory/${inv.id}`);
+  assert.equal(item.stock_qty, 0, 'Korrektur auf 0 ist erlaubt');
+  await assert.rejects(api(`/api/inventory/${inv.id}/movement`, 'POST', { type: 'adjust', qty: 0 }), 'gleicher Bestand wird abgelehnt');
+  await assert.rejects(api(`/api/inventory/${inv.id}/movement`, 'POST', { type: 'in', qty: -3 }), 'negative Menge wird abgelehnt');
+});
+
 test('Angebot → Auftrag konvertieren übernimmt Positionen', async () => {
   const q = await api('/api/quotes', 'POST', { title: 'Angebotstest' });
   await api(`/api/quotes/${q.id}/items`, 'POST', { description: 'Halter', quantity: 3, unit: 'Stk', unit_price: 8 });

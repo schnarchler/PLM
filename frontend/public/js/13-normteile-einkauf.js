@@ -56,7 +56,7 @@ async function openNormteilDetail(id) {
     <div id="nt-info">
       <div style="display:flex;gap:6px;margin-bottom:14px">
         <button class="btn btn-ghost btn-sm" onclick="openNormteilModal(${id})">✎ Bearbeiten</button>
-        <button class="btn btn-ghost btn-sm" onclick="cloneNormteil(${id})">⧉ Dublizieren</button>
+        <button class="btn btn-ghost btn-sm" onclick="cloneNormteil(${id})">⧉ Duplizieren</button>
         <button class="btn btn-red btn-sm" onclick="delNormteil(${id})">🗑</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">

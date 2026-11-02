@@ -152,7 +152,7 @@ async function openInventoryDetail(id) {
         <thead><tr><th>Datum</th><th>Typ</th><th>Menge</th><th>Referenz</th><th>Notiz</th></tr></thead>
         <tbody>${item.movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtDT(m.created_at,'')}</td>
-          <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(110,222,156,.15)':'rgba(255,142,142,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'Zugang':'Abgang'}</span></td>
+          <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(110,222,156,.15)':'rgba(255,142,142,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.type==='adjust'?'Korrektur':m.qty>0?'Zugang':'Abgang'}</span></td>
           <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.reference||'—')}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.notes||'')}</td>
@@ -289,12 +289,12 @@ async function openMovementModal(itemId, defaultType) {
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
       <div class="fg"><label class="fl">Typ</label>
-        <select id="mov-type" class="fi">
+        <select id="mov-type" class="fi" onchange="document.getElementById('mov-qty-label').textContent=this.value==='adjust'?'Neuer Bestand':'Menge'">
           <option value="in"${defaultType==='in'?' selected':''}>Zugang (+)</option>
           <option value="out"${defaultType==='out'?' selected':''}>Abgang (−)</option>
           <option value="adjust">Korrektur (=)</option>
         </select></div>
-      <div class="fg"><label class="fl">Menge</label><input id="mov-qty" type="number" min="0.01" step="0.01" class="fi" placeholder="1"></div>
+      <div class="fg"><label class="fl" id="mov-qty-label">Menge</label><input id="mov-qty" type="number" min="0" step="0.01" class="fi" placeholder="1"></div>
       <div class="fg"><label class="fl">Referenz</label>
         <input id="mov-ref" class="fi" list="mov-ref-orders" placeholder="Freitext oder Auftrag wählen">${refList}</div>
       <div class="fg"><label class="fl">Notiz</label><input id="mov-notes" class="fi" placeholder="optional"></div>
@@ -311,8 +311,11 @@ async function saveMovement(itemId) {
   const qty = parseFloat(document.getElementById('mov-qty').value);
   const reference = document.getElementById('mov-ref').value.trim();
   const notes = document.getElementById('mov-notes').value.trim();
-  if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
-  await api(`/api/inventory/${itemId}/movement`, 'POST', { type, qty, reference, notes });
+  // Korrektur darf auf 0 setzen, Zugang und Abgang brauchen eine Menge
+  if (isNaN(qty) || qty < 0 || (qty === 0 && type !== 'adjust')) { toast('Menge erforderlich', 'err'); return; }
+  try {
+    await api(`/api/inventory/${itemId}/movement`, 'POST', { type, qty, reference, notes });
+  } catch { return; }   // Meldung kommt schon von api()
   _hideDynModal();
   toast('Buchung gespeichert', 'ok');
   await renderInventory();
