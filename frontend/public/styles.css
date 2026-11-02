@@ -444,7 +444,8 @@ tbody tr:last-child { border-bottom: none; }
 .tree-children { padding-left: 18px; margin-left: 8px; border-left: 1px solid var(--line); }
 .tree-num { font-family: var(--mono); font-size: 13px; color: var(--blue); flex-shrink: 0; font-weight: 500; }
 .tree-name { font-size: 13px; color: var(--t1); font-weight: 450; }
-.tree-rev { font-family: var(--mono); font-size: 11px; margin-left: auto; flex-shrink: 0; }
+.tree-rev { font-family: var(--mono); font-size: 11px; margin-left: auto; flex-shrink: 0; min-width: 48px; justify-content: center; }
+.tree-revno { font-family: var(--mono); font-size: 12px; color: var(--t3); flex-shrink: 0; }
 .tree-tog { width: 14px; flex-shrink: 0; text-align: center; font-size: 11px; color: var(--t4); cursor: pointer; line-height: 1; transition: color .12s; }
 .tree-tog:hover { color: var(--t1); }
 
@@ -548,6 +549,9 @@ tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; 
 .st-REL  { background: var(--green-soft);     color: var(--green); }
 .st-ECO  { background: var(--purple-soft);    color: var(--purple); }
 .st-OBS  { background: var(--grey-soft);      color: var(--t3); }
+/* Legende unter dem Projektbaum: unten im Bereich, beim Scrollen sichtbar */
+.status-legend { margin-top: auto; position: sticky; bottom: -28px; display: flex; flex-wrap: wrap; gap: 6px 14px;
+  padding: 10px 0 12px; border-top: 1px solid var(--line); background: var(--bg0); font-size: 12px; color: var(--t3); }
 
 .status-sel {
   font-family: var(--mono);

@@ -202,9 +202,19 @@ function renderProjectTree(p) {
       </button>
       <span style="margin-left:auto;display:inline-flex;gap:4px">${_sortBtns('sort_items', '_resortProject')}</span>
     </div>
-    <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>`);
+    <div style="display:flex;flex-direction:column;min-height:calc(100% - 46px)">
+      <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>
+      ${_statusLegend()}
+    </div>`);
 
   _treeRestoreOpen(openIds);
+}
+
+// Was die Farben der Revisions-Kennzeichen bedeuten — unten an der Liste,
+// bleibt beim Scrollen stehen
+function _statusLegend() {
+  return `<div class="status-legend">${Object.entries(PLM_ST_LABEL).map(([st, label]) =>
+    `<span style="display:inline-flex;align-items:center;gap:5px"><span class="status st-${st}">${st}</span>${esc(label)}</span>`).join('')}</div>`;
 }
 
 function toggleBomFilter() {
@@ -251,10 +261,11 @@ function _renderTreeNode(item, map, isRoot) {
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 20)}
       <span class="tree-num" style="font-size:13px">${item.item_number}</span>
+      ${rev ? `<span class="tree-revno">rev${esc(rev.rev)}</span>` : ''}
       <span class="tree-name">${esc(item.name)}</span>
       ${item.classification ? _classChip(item.classification) : ''}
       ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(121,221,227,.12);border:1px solid rgba(121,221,227,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
-      ${rev ? `<span class="status st-${rev.status} tree-rev" style="font-size:11px">rev${rev.rev}</span>` : ''}
+      ${rev ? `<span class="status st-${rev.status} tree-rev" title="${esc(PLM_ST_LABEL[rev.status] || '')}">${rev.status}</span>` : ''}
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" data-item-id="${item.id}" style="display:none">${childHtml}</div>` : ''}
   </div>`;
