@@ -733,6 +733,12 @@ function applySchema() {
   });
 
   // Add new columns to existing databases (safe try/catch)
+  try { db.run('ALTER TABLE users ADD COLUMN color TEXT DEFAULT NULL'); } catch {}
+  // Jede Person hat eine Farbe — bestehende bekommen der Reihe nach eine
+  migrateOnce('user-colors-v1', () => {
+    all('SELECT id FROM users WHERE color IS NULL ORDER BY id').forEach((u, i) =>
+      db.run('UPDATE users SET color=? WHERE id=?', [USER_COLORS[i % USER_COLORS.length], u.id]));
+  });
   try { db.run('ALTER TABLE projects ADD COLUMN pinned INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN estimated_hours REAL DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE orders ADD COLUMN include_hours INTEGER DEFAULT 0'); } catch {}
@@ -1882,16 +1888,24 @@ app.use(express.json());
 const { AsyncLocalStorage } = require('node:async_hooks');
 const userContext = new AsyncLocalStorage();   // Person der laufenden Anfrage, für log()
 const ROLES = ['user', 'superuser', 'admin'];
+// Farben der Personen — auf den Kacheln bei „Wer ist dran?" findet man sich
+// daran schneller. Neue Personen bekommen die erste, die noch niemand hat.
+const USER_COLORS = ['#9db4ff', '#6ede9c', '#f5c061', '#c4a2ff', '#79dde3', '#ff8e8e', '#f49ac1', '#ffb074'];
+const validColor = c => /^#[0-9a-f]{6}$/i.test(String(c || '')) ? String(c).toLowerCase() : null;
+function nextUserColor() {
+  const used = new Set(all('SELECT color FROM users WHERE active=1').map(u => u.color));
+  return USER_COLORS.find(c => !used.has(c)) || USER_COLORS[used.size % USER_COLORS.length];
+}
 const ROLE_RANK = { user: 1, superuser: 2, admin: 3 };
 const ROLE_LABEL = { user: 'User', superuser: 'Superuser', admin: 'Admin' };
 const sessions = new Map();                    // Token → { userId, lastActivity }
 const sessionCookie = () => 'plm_user_' + PORT; // Cookies kennen keinen Port
 
 function activeUsers() {
-  return all(`SELECT id, name, role, pin_hash, last_seen_at FROM users WHERE active=1
+  return all(`SELECT id, name, role, color, pin_hash, last_seen_at FROM users WHERE active=1
     ORDER BY COALESCE(last_seen_at,'') DESC, name COLLATE NOCASE`);
 }
-const publicUser = u => u && ({ id: u.id, name: u.name, role: u.role, has_pin: !!u.pin_hash });
+const publicUser = u => u && ({ id: u.id, name: u.name, role: u.role, color: u.color || null, has_pin: !!u.pin_hash });
 const userMode = users => users.length === 0 ? 'none' : users.length === 1 ? 'single' : 'team';
 function idleMinutes() {
   const v = parseFloat(getSetting('user_idle_minutes', '30'));
@@ -2034,7 +2048,7 @@ app.put('/api/session/pin', (req, res) => {
 });
 
 app.get('/api/users', (req, res) => {
-  res.json(all(`SELECT id, name, role, active, created_at, last_seen_at, pin_hash IS NOT NULL AS has_pin
+  res.json(all(`SELECT id, name, role, color, active, created_at, last_seen_at, pin_hash IS NOT NULL AS has_pin
     FROM users ORDER BY active DESC, name COLLATE NOCASE`));
 });
 const cleanName = n => String(n ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -2050,8 +2064,8 @@ app.post('/api/users', (req, res) => {
   const role = before.length === 0 ? 'admin' : (ROLES.includes(req.body?.role) ? req.body.role : 'user');
   const pin = req.body?.pin ? String(req.body.pin) : '';
   if (pin && !validPin(pin)) return res.status(400).json({ error: 'Die PIN braucht 4 bis 12 Zeichen' });
-  const id = runGetId('INSERT INTO users (name, role, pin_hash) VALUES (?,?,?)',
-    [name, role, pin ? hashPin(pin) : null]);
+  const id = runGetId('INSERT INTO users (name, role, color, pin_hash) VALUES (?,?,?,?)',
+    [name, role, validColor(req.body?.color) || nextUserColor(), pin ? hashPin(pin) : null]);
   log('user', id, 'Person angelegt', `${name} (${ROLE_LABEL[role]})`);
   // Aus „allein" wird „Team": Die bisherige Person bleibt an diesem Gerät gewählt
   if (before.length === 1 && !resolveUser(req).session) startSession(req, res, before[0].id);
@@ -2065,6 +2079,8 @@ app.put('/api/users/:id', (req, res) => {
   const name = b.name !== undefined ? cleanName(b.name) : u.name;
   const role = b.role !== undefined ? b.role : u.role;
   const active = b.active !== undefined ? (b.active ? 1 : 0) : u.active;
+  const color = b.color !== undefined ? validColor(b.color) : u.color;
+  if (b.color !== undefined && !color) return res.status(400).json({ error: 'Farbe als #rrggbb' });
   if (!name) return res.status(400).json({ error: 'Name fehlt' });
   if (!ROLES.includes(role)) return res.status(400).json({ error: 'Unbekannte Rolle' });
   if (active && nameTaken(name, u.id)) return res.status(400).json({ error: `„${name}" gibt es schon` });
@@ -2077,10 +2093,11 @@ app.put('/api/users/:id', (req, res) => {
     if (b.pin && !validPin(b.pin)) return res.status(400).json({ error: 'Die PIN braucht 4 bis 12 Zeichen' });
     pinHash = b.pin ? hashPin(String(b.pin)) : null;
   }
-  run('UPDATE users SET name=?, role=?, active=?, pin_hash=? WHERE id=?', [name, role, active, pinHash, u.id]);
+  run('UPDATE users SET name=?, role=?, active=?, color=?, pin_hash=? WHERE id=?', [name, role, active, color, pinHash, u.id]);
   if (!active) endSessionsOf(u.id);
   const changes = [name !== u.name && `Name ${u.name} → ${name}`, role !== u.role && `Rolle ${ROLE_LABEL[role]}`,
-    active !== u.active && (active ? 'aktiviert' : 'deaktiviert'), pinHash !== u.pin_hash && (pinHash ? 'PIN gesetzt' : 'PIN entfernt')]
+    active !== u.active && (active ? 'aktiviert' : 'deaktiviert'), color !== u.color && 'Farbe',
+    pinHash !== u.pin_hash && (pinHash ? 'PIN gesetzt' : 'PIN entfernt')]
     .filter(Boolean);
   if (changes.length) log('user', u.id, 'Person geändert', `${name}: ${changes.join(', ')}`);
   res.json(publicUser(get('SELECT * FROM users WHERE id=?', [u.id])));

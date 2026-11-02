@@ -368,7 +368,13 @@ body {
 .who-tile { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 16px 10px 12px; min-width: 0;
   background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; color: var(--t1); font: inherit; cursor: pointer;
   transition: background .12s var(--ease), border-color .12s var(--ease); }
-.who-tile:hover, .who-tile:focus-visible { background: var(--bg3); border-color: var(--blue); outline: none; }
+.who-tile:hover, .who-tile:focus-visible { background: var(--bg3); border-color: var(--uc, var(--blue)); outline: none; }
+/* Farbe der Person: Streifen oben auf der Kachel */
+.who-tile[style*="--uc"] { border-top: 4px solid var(--uc); padding-top: 13px; }
+/* Avatar als Farbwähler: das Farbfeld liegt unsichtbar darüber */
+.user-color { position: relative; display: inline-flex; cursor: pointer; flex-shrink: 0; border-radius: 50%; }
+.user-color:hover { box-shadow: 0 0 0 2px var(--line3); }
+.user-color input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .who-tile.current { border-color: rgba(157,180,255,.55); box-shadow: inset 0 0 0 1px rgba(157,180,255,.25); }
 .who-tile.picked { border-color: var(--blue); }
 .who-name { font-size: 14px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }

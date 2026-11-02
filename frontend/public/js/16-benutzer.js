@@ -36,8 +36,9 @@ function _renderUserChip() {
   if (!s || s.mode === 'none') { el.style.display = 'none'; return; }
   const u = s.user;
   el.style.display = '';
+  el.style.borderColor = u?.color || '';
   el.innerHTML = u
-    ? `${_avatar(u.name, 22)}<span class="tb-user-name">${esc(u.name)}</span>`
+    ? `${_avatar(u.name, 22, u.color)}<span class="tb-user-name">${esc(u.name)}</span>`
       + (s.mode === 'team' ? `<span class="tb-user-role">${esc(ROLE_LABEL[u.role] || u.role)}</span>` : '')
     : '<span class="tb-user-name">Wer ist dran?</span>';
   el.title = s.mode === 'team' ? 'Person wechseln' : 'Personen verwalten';
@@ -66,8 +67,9 @@ function _whoTiles(users, currentId) {
   const list = currentId
     ? [...users.filter(u => u.id === currentId), ...users.filter(u => u.id !== currentId)]
     : users;
-  return list.map(u => `<button type="button" class="who-tile${u.id === currentId ? ' current' : ''}" data-id="${u.id}">
-      ${_avatar(u.name, 44)}
+  return list.map(u => `<button type="button" class="who-tile${u.id === currentId ? ' current' : ''}" data-id="${u.id}"${
+      /^#[0-9a-f]{6}$/i.test(u.color || '') ? ` style="--uc:${u.color}"` : ''}>
+      ${_avatar(u.name, 44, u.color)}
       <span class="who-name">${esc(u.name)}</span>
       <span class="who-role">${esc(ROLE_LABEL[u.role] || u.role)}${u.has_pin ? ' · PIN' : ''}</span>
     </button>`).join('');
@@ -178,8 +180,10 @@ function _usersPanel(users, s, admin) {
     team: 'Team: PLM fragt beim Öffnen „Wer ist dran?“ und nach einer Pause bei der nächsten Änderung noch einmal kurz nach. Ein Klick auf den Namen oben wechselt die Person.',
   }[mode];
 
+  // Klick auf den Avatar wählt die Farbe — sie erscheint auf der Kachel bei „Wer ist dran?"
   const editRow = u => `<div class="user-row">
-      ${_avatar(u.name, 30)}
+      <label class="user-color" title="Farbe ändern — erscheint auf der Kachel bei „Wer ist dran?“">${_avatar(u.name, 30, u.color)}
+        <input type="color" value="${esc(u.color || '#9db4ff')}" onchange="_saveUser(${u.id}, { color: this.value })"></label>
       <input class="fi" style="flex:1;min-width:120px" value="${esc(u.name)}" onchange="_saveUser(${u.id}, { name: this.value })" aria-label="Name">
       ${mode === 'team' ? roleSelect(u) : roleChip(u)}
       ${mode === 'team' ? (u.has_pin
@@ -190,7 +194,7 @@ function _usersPanel(users, s, admin) {
         ? `<span class="chip" title="${ONLY_ADMIN}">einziger Admin</span>`
         : `<button class="btn btn-ghost btn-sm" onclick="_saveUser(${u.id}, { active: false })" title="Bleibt in der Historie, steht aber nicht mehr zur Auswahl">Deaktivieren</button>`}
     </div>`;
-  const readRow = u => `<div class="user-row">${_avatar(u.name, 30)}<span style="flex:1">${esc(u.name)}</span>${roleChip(u)}</div>`;
+  const readRow = u => `<div class="user-row">${_avatar(u.name, 30, u.color)}<span style="flex:1">${esc(u.name)}</span>${roleChip(u)}</div>`;
   const rows = active.map(admin ? editRow : readRow).join('');
   const noPin = mode === 'team' && admin && active.some(u => u.role === 'admin' && !u.has_pin);
 
@@ -200,6 +204,7 @@ function _usersPanel(users, s, admin) {
     ${noPin ? `<div class="st-notice">Ohne PIN kann jede Person die Admin-Kachel wählen — und damit auch Personen verwalten.
       Wer das verhindern will, setzt beim Admin eine PIN.</div>` : ''}
     ${rows ? `<div style="display:flex;flex-direction:column;gap:6px">${rows}</div>` : ''}
+    ${rows && admin ? '<div style="font-size:12px;color:var(--t4);margin-top:6px">Klick auf den farbigen Kreis ändert die Farbe der Person.</div>' : ''}
     ${admin ? `<div class="user-row" style="margin-top:${rows ? '12px' : '0'}">
       <input class="fi" id="st-user-new" style="flex:1;min-width:120px" placeholder="${mode === 'none' ? 'Dein Name' : 'Name der neuen Person'}"
         onkeydown="if(event.key==='Enter')_addUser()">
@@ -209,7 +214,7 @@ function _usersPanel(users, s, admin) {
     </div>` : ''}
     ${inactive.length ? `<div class="sep-label" style="margin-top:20px">Deaktiviert</div>
       <div style="display:flex;flex-direction:column;gap:6px">${inactive.map(u => `<div class="user-row" style="opacity:.7">
-        ${_avatar(u.name, 30)}<span style="flex:1">${esc(u.name)}</span>
+        ${_avatar(u.name, 30, u.color)}<span style="flex:1">${esc(u.name)}</span>
         ${admin ? `<button class="btn btn-ghost btn-sm" onclick="_saveUser(${u.id}, { active: true })">Aktivieren</button>` : ''}</div>`).join('')}</div>` : ''}
     ${mode === 'team' ? `<div class="sep-label" style="margin-top:20px">Nachfragen nach einer Pause</div>
       <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2)">

@@ -224,15 +224,18 @@ function _renderProfitRows() {
 
 // Initialen mit fester Farbe je Name, damit man Partner schneller wiedererkennt
 const _PARTNER_HUES = ['blue', 'green', 'amber', 'purple', 'teal'];
-function _avatar(name, size = 38) {
+// color: feste Farbe (Personen), sonst eine aus dem Namen abgeleitete
+function _avatar(name, size = 38, color = null) {
   const words = String(name || '').trim().split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w));
   const first = w => [...(w || '')][0] || '';
   const ini = (words.length > 1 ? first(words[0]) + first(words[1]) : [...(words[0] || '?')].slice(0, 2).join('')).toUpperCase();
   let h = 0;
   for (const ch of String(name || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0;
   const hue = _PARTNER_HUES[h % _PARTNER_HUES.length];
-  const bg = hue === 'blue' ? 'var(--blue-glow)' : `var(--${hue}-soft)`;
-  return `<span class="partner-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.37)}px;background:${bg};color:var(--${hue})">${esc(ini)}</span>`;
+  const ok = /^#[0-9a-f]{6}$/i.test(color || '');
+  const bg = ok ? color : hue === 'blue' ? 'var(--blue-glow)' : `var(--${hue}-soft)`;
+  const fg = ok ? 'var(--bg0)' : `var(--${hue})`;
+  return `<span class="partner-avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.37)}px;background:${bg};color:${fg}">${esc(ini)}</span>`;
 }
 const _cityLine = p => [p.postal_code, p.city].filter(Boolean).join(' ');
 // Strukturierte Adresse, sonst das frühere Freitextfeld

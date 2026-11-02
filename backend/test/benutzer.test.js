@@ -165,6 +165,24 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
     'auch sich selbst nicht zum Admin machen');
 });
 
+test('Farben: jede Person bekommt eine eigene, der Admin kann sie ändern', async () => {
+  const users = (await ok('/api/users', { cookie: anna })).body.filter(u => u.active);
+  const colors = users.map(u => u.color);
+  assert.ok(colors.every(c => /^#[0-9a-f]{6}$/.test(c)), 'alle haben eine Farbe');
+  assert.strictEqual(new Set(colors).size, colors.length, 'keine doppelt');
+  assert.ok((await ok('/api/session', { cookie: anna })).body.users.every(u => u.color), 'auf den Kacheln');
+
+  const ben0 = users.find(u => u.id === ids.ben).color;
+  assert.strictEqual((await req(`/api/users/${ids.ben}`, { method: 'PUT', body: { color: 'rot' }, cookie: anna })).status, 400);
+  assert.strictEqual((await req(`/api/users/${ids.ben}`, { method: 'PUT', body: { color: '#123456' }, cookie: cleo })).status, 403,
+    'nur Admins');
+  const b = (await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { color: '#ABCDEF' }, cookie: anna })).body;
+  assert.strictEqual(b.color, '#abcdef');
+  assert.strictEqual((await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { name: 'Ben' }, cookie: anna })).body.color, '#abcdef',
+    'andere Änderungen lassen die Farbe');
+  await ok(`/api/users/${ids.ben}`, { method: 'PUT', body: { color: ben0 }, cookie: anna });
+});
+
 test('Rückmeldungen: jeder reicht ein, nur Admins sehen und erledigen sie', async () => {
   const sent = { kind: 'BUG', text: 'Dropdown abgeschnitten\nim Dialog',
     context: { view: 'Projekte', item: '003-prt-003 – Abdeckung', errors: ['GET /api/x → 500 kaputt'], pin_hash: 'nicht übernehmen' } };
