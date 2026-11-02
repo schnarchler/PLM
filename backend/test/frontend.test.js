@@ -531,21 +531,38 @@ test('Mindmap: Klick stellt auf das Teil um, Doppelklick öffnet es', async () =
 });
 
 // ── Workflow-Umschaltung ──────────────────────────────────────
-test('Workflow: einfacher Modus bietet "Neue Revision" statt Review', () => {
+test('Workflow: einfacher Modus bietet "Neue Revision", Prüfung nur mit Vier-Augen-Prinzip', t => {
   const src = read('js/02-plm-browse.js');
   const seg = src.slice(src.indexOf('  const simple = typeof simpleWorkflow'),
                         src.indexOf('  return `\n    <!-- Rev info -->'));
-  const buttonsFor = (mode, status, delivered = []) => {
+  const savedState = global.state;
+  t.after(() => { global.state = savedState; });
+  const buttonsFor = (mode, status, delivered = [], { fourEyes = false, submittedBy, me, admin = false } = {}) => {
     global.simpleWorkflow = () => mode === 'simple';
-    const rev = { status, id: 7, delivered };
+    global.isAdmin = () => admin;
+    global.reviewRequired = () => mode !== 'simple' && fourEyes;
+    global.canRelease = () => true;
+    global.state = { ...savedState, session: { user: me ? { id: me } : null } };
+    const rev = { status, id: 7, delivered, submitted_by: submittedBy ? { id: submittedBy, name: 'X' } : null };
     return (0, eval)('(function(rev, item){' + seg + 'return wfBtns;})')(rev, { id: 3, revisions: [rev] });
   };
-  assert.match(buttonsFor('full', 'DFT'), /In Review/);
+  // Ohne Vier-Augen-Prinzip direkt freigeben, mit erst zur Prüfung
+  assert.match(buttonsFor('full', 'DFT'), /openStatusModal\(7,'REL'\)/);
+  assert.ok(!buttonsFor('full', 'DFT').includes("'REV'"));
+  assert.match(buttonsFor('full', 'DFT', [], { fourEyes: true }), /openStatusModal\(7,'REV'\)/);
+  assert.ok(!buttonsFor('full', 'DFT', [], { fourEyes: true }).includes("'REL'"));
   assert.match(buttonsFor('full', 'REV'), /Freigeben/);
+  assert.match(buttonsFor('full', 'REV', [], { fourEyes: true, submittedBy: 2, me: 1 }), /openStatusModal\(7,'REL'\)/);
+  assert.match(buttonsFor('full', 'REV', [], { fourEyes: true, submittedBy: 1, me: 1 }), /zweite Person[^]*disabled>✓ Freigeben/,
+    'wer eingereicht hat, gibt nicht selbst frei');
+  // Admins geben auch selbst frei — direkt oder nach eigenem Review
+  const adminDft = buttonsFor('full', 'DFT', [], { fourEyes: true, admin: true });
+  assert.ok(adminDft.includes("'REV'") && adminDft.includes("'REL'"));
+  assert.match(buttonsFor('full', 'REV', [], { fourEyes: true, submittedBy: 1, me: 1, admin: true }), /openStatusModal\(7,'REL'\)/);
   assert.match(buttonsFor('simple', 'DFT'), /Neue Revision/);
   assert.match(buttonsFor('simple', 'DFT'), /createNextRevision\(3\)/);
-  assert.ok(!buttonsFor('simple', 'DFT').includes('In Review'));
-  assert.ok(!buttonsFor('full', 'DFT').includes('Neue Revision'), 'ohne Lieferung führt der Weg über In Review');
+  assert.ok(!buttonsFor('simple', 'DFT').includes('Prüfung'));
+  assert.ok(!buttonsFor('full', 'DFT').includes('Neue Revision'), 'ohne Lieferung führt der Weg über die Freigabe');
   assert.match(buttonsFor('full', 'DFT', [{ id: 1, number: 'LS-2026-0001' }]), /Neue Revision/,
     'gelieferter Entwurf ist fixiert — weiter geht es mit einer neuen Revision');
   assert.strictEqual((buttonsFor('simple', 'DFT', [{ id: 1 }]).match(/Neue Revision/g) || []).length, 1, 'nicht doppelt');

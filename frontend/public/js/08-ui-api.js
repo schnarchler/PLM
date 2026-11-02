@@ -111,7 +111,7 @@ function _clUser(entry) {
 function renderChangelogList(entries) {
   return (entries || []).map(cl => `
     <div class="cl-row"><div class="cl-dot"></div>
-    <div><div class="cl-action">${esc(cl.action)}${_clUser(cl)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
+    <div><div class="cl-action">${cl.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(cl.rev)}</span>` : ''}${esc(cl.action)}${_clUser(cl)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
     <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>';
 }
 function setLeftHeader(title, actionsHtml) {

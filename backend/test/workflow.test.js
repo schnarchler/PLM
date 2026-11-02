@@ -651,7 +651,6 @@ test('Eigenschaften je Klassifizierung und Prüfung vor der Freigabe', async () 
   // Pflichtpunkte aus den Einstellungen dazu
   await api('/api/settings', 'PUT', { release_checks: 'cad,drawing,weight' });
   const revId = detail.revisions[0].id;
-  await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REV' });
   const blocked = await apiFails(`/api/revisions/${revId}/status`, 'PUT', { status: 'REL' });
   assert.strictEqual(blocked.status, 400);
   assert.deepStrictEqual(JSON.parse(blocked.text).missing, ['CAD-Datei', 'Zeichnung (PDF)', 'Gewicht', 'Werkstoff']);
@@ -804,4 +803,30 @@ test('STEP: Baugruppe zeigt die STEP statt der 3MF, 3D-Vorschau als Netz', async
   await uploadNamed(tRev, stepBox(5, 5, 5), 'deckel.step');
   const stlId = await uploadNamed(tRev, 'solid t\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid t\n', 'deckel.stl');
   assert.strictEqual((await api(`/api/items/${teil.id}`)).thumb_id, stlId, 'Part: STL vor STEP');
+});
+
+test('Historie am Item zeigt auch die Revisionen: Statuswechsel mit Kommentar', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Kommentare' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Lasche', item_type: 'prt' });
+  const revId = (await api(`/api/items/${teil.id}`)).revisions[0].id;
+  await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REV', description: 'Bitte Masse prüfen' });
+  const log = (await api(`/api/items/${teil.id}`)).changelog;
+  const rev = log.find(c => c.action === 'Status → REV');
+  assert.ok(rev, 'Statuswechsel steht in der Historie des Items');
+  assert.deepStrictEqual([rev.details, rev.rev], ['Bitte Masse prüfen', '1']);
+  assert.strictEqual(log[0], rev, 'neueste zuerst');
+  assert.ok(log.some(c => c.action === 'Erstellt' && c.rev == null), 'Einträge zum Item selbst bleiben');
+});
+
+test('Allein wirkt das Vier-Augen-Prinzip nicht: direkt freigeben', async () => {
+  await api('/api/settings', 'PUT', { release_four_eyes: '1', release_checks: '' });
+  try {
+    const proj = await api('/api/projects', 'POST', { name: 'Allein frei' });
+    const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Bügel', item_type: 'prt' });
+    const revId = (await api(`/api/items/${teil.id}`)).revisions[0].id;
+    await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REL', description: 'direkt' });
+    assert.strictEqual((await api(`/api/items/${teil.id}`)).revisions[0].status, 'REL');
+  } finally {
+    await api('/api/settings', 'PUT', { release_four_eyes: '0' });
+  }
 });

@@ -266,6 +266,10 @@ async function renderSettings() {
           Bestimmt, welche Schritte eine Revision durchläuft.
         </div>
         <div id="st-wf-options" style="display:flex;flex-direction:column;gap:6px;max-width:560px"></div>
+        <label style="display:flex;align-items:baseline;gap:7px;cursor:pointer;font-size:13px;color:var(--t2);margin-top:12px">
+          <input type="checkbox" id="st-four-eyes" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue);position:relative;top:2px">
+          <span>Vier-Augen-Prinzip: Freigabe durch eine zweite Person</span></label>
+        <div id="st-four-eyes-hint" style="font-size:12.5px;color:var(--t3);margin:3px 0 0 22px;max-width:540px;line-height:1.5"></div>
 
         <div class="sep-label" style="margin-top:28px">Prüfung vor der Freigabe</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">

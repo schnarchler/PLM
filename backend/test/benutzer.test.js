@@ -192,6 +192,79 @@ test('Rückmeldungen: jeder reicht ein, nur Admins sehen und erledigen sie', asy
   assert.ok(!(await ok('/api/feedback', { cookie: anna })).body.some(x => x.id === id));
 });
 
+test('Freigabe: direkt aus dem Entwurf, mit Vier-Augen-Prinzip über eine zweite Person', async () => {
+  const proj = (await ok('/api/projects', { method: 'POST', body: { name: 'Vier Augen' }, cookie: ben })).body;
+  const neu = async (name, cookie) => {
+    const t = (await ok(`/api/projects/${proj.id}/items`, { method: 'POST', body: { name, item_type: 'prt' }, cookie })).body;
+    return { id: t.id, rev: (await ok(`/api/items/${t.id}`)).body.revisions[0].id };
+  };
+  const status = (rev, s, cookie) => req(`/api/revisions/${rev}/status`, { method: 'PUT', body: { status: s }, cookie });
+
+  // Ohne Vier-Augen-Prinzip: direkt freigeben
+  const direkt = await neu('Direkt', ben);
+  assert.strictEqual((await status(direkt.rev, 'REL', cleo)).status, 200);
+
+  await ok('/api/settings', { method: 'PUT', body: { release_four_eyes: '1' }, cookie: anna });
+  try {
+    const a = await neu('Geprüft', ben);
+    const r = await status(a.rev, 'REL', cleo);
+    assert.strictEqual(r.status, 400, 'nicht direkt aus dem Entwurf');
+    assert.match(r.body.error, /in Review setzen/);
+    assert.strictEqual((await status(a.rev, 'REV', ben)).status, 200);
+    assert.strictEqual((await ok(`/api/items/${a.id}`)).body.revisions[0].submitted_by.name, 'Ben');
+    assert.strictEqual((await status(a.rev, 'REL', cleo)).status, 200, 'eine andere Person gibt frei');
+
+    const b = await neu('Selbst', cleo);
+    await status(b.rev, 'REV', cleo);
+    const self = await status(b.rev, 'REL', cleo);
+    assert.strictEqual(self.status, 403, 'wer eingereicht hat, gibt nicht selbst frei');
+    assert.match(self.body.error, /zweite Person/);
+    assert.strictEqual((await status(b.rev, 'REL', anna)).status, 200);
+
+    // Admins sind ausgenommen: direkt aus dem Entwurf und nach eigenem Review
+    const c = await neu('Admin direkt', anna);
+    assert.strictEqual((await status(c.rev, 'REL', anna)).status, 200);
+    const d = await neu('Admin Review', anna);
+    await status(d.rev, 'REV', anna);
+    assert.strictEqual((await status(d.rev, 'REL', anna)).status, 200);
+  } finally {
+    await ok('/api/settings', { method: 'PUT', body: { release_four_eyes: '0' }, cookie: anna });
+  }
+});
+
+test('In Review und freigegeben ist der Inhalt gesperrt — zurück auf Entwurf geht es wieder', async () => {
+  const proj = (await ok('/api/projects', { method: 'POST', body: { name: 'Gesperrt' }, cookie: ben })).body;
+  const teil = (await ok(`/api/projects/${proj.id}/items`, { method: 'POST', body: { name: 'Platte', item_type: 'prt' }, cookie: ben })).body;
+  const kind = (await ok(`/api/projects/${proj.id}/items`, { method: 'POST', body: { name: 'Schraube', item_type: 'prt' }, cookie: ben })).body;
+  const rev = (await ok(`/api/items/${teil.id}`)).body.revisions[0].id;
+  const tryUpload = async () => {
+    const form = new FormData();
+    form.append('file', new Blob(['solid a\nendsolid a\n']), 'platte.stl');
+    const r = await fetch(`${BASE}/api/revisions/${rev}/datasets`, { method: 'POST', body: form, headers: { Cookie: ben } });
+    return { status: r.status, body: await r.json() };
+  };
+  await ok(`/api/revisions/${rev}/status`, { method: 'PUT', body: { status: 'REV' }, cookie: ben });
+  const up = await tryUpload();
+  assert.strictEqual(up.status, 409);
+  assert.match(up.body.error, /in Review und gesperrt.*zurück auf Entwurf/);
+  assert.strictEqual((await req(`/api/revisions/${rev}/bom`, { method: 'POST', body: { child_item_id: kind.id, quantity: 1 }, cookie: ben })).status, 409);
+  assert.strictEqual((await req(`/api/revisions/${rev}/print-settings`, { method: 'PUT', body: { material: 'PLA' }, cookie: ben })).status, 409);
+
+  await ok(`/api/revisions/${rev}/status`, { method: 'PUT', body: { status: 'DFT' }, cookie: ben });
+  assert.strictEqual((await tryUpload()).status, 200, 'im Entwurf wieder änderbar');
+  await ok(`/api/revisions/${rev}/status`, { method: 'PUT', body: { status: 'REL' }, cookie: cleo });
+  assert.match((await tryUpload()).body.error, /freigegeben und gesperrt.*neuen Revision/);
+
+  // Wird während des Reviews geändert (Check-in, Änderungsantrag), geht die Revision zurück auf Entwurf
+  const kindRev = (await ok(`/api/items/${kind.id}`)).body.revisions[0].id;
+  await ok(`/api/revisions/${kindRev}/status`, { method: 'PUT', body: { status: 'REV' }, cookie: ben });
+  const ecr = (await ok('/api/ecrs', { method: 'POST', body: { title: 'Kürzer', items: [{ item_id: kind.id }] }, cookie: ben })).body;
+  await ok(`/api/ecrs/${ecr.id}/decision`, { method: 'PUT', body: { approve: true }, cookie: cleo });
+  await ok(`/api/ecrs/${ecr.id}/implement`, { method: 'POST', cookie: ben });
+  const revs = (await ok(`/api/items/${kind.id}`)).body.revisions;
+  assert.deepStrictEqual(revs.map(r => [r.id, r.status]), [[kindRev, 'DFT']], 'dieselbe Revision, wieder Entwurf');
+});
+
 test('PIN, mindestens ein Admin, Deaktivieren beendet die Auswahl', async () => {
   const a = (await ok(`/api/users/${ids.anna}`, { method: 'PUT', body: { pin: '2468' }, cookie: anna })).body;
   assert.strictEqual(a.has_pin, true);

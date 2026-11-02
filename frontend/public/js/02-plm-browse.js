@@ -919,7 +919,7 @@ function renderItemSheet(item, activeRevId) {
     ? `<div class="cl-row" style="padding:0;border:none">
         <div class="cl-dot"></div>
         <div class="cl-body">
-          <div class="cl-action">${esc(lastLog.action)}${_clUser(lastLog)}</div>
+          <div class="cl-action">${lastLog.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(lastLog.rev)}</span>` : ''}${esc(lastLog.action)}${_clUser(lastLog)}</div>
           ${lastLog.details ? `<div class="cl-detail">${esc(lastLog.details)}</div>` : ''}
         </div>
         <div class="cl-time">${fmtDate(lastLog.created_at)}</div>
@@ -1519,11 +1519,12 @@ async function _bomDrop(e, revId) {
 function renderRevDetail(rev, item) {
   const isASM = item.item_type === 'asm';
   const isDOC = item.item_type === 'doc';
-  // Geliefert heisst fixiert: wie eine Freigabe gesperrt, auch im Entwurf
+  // Geliefert heisst fixiert: wie eine Freigabe gesperrt, auch im Entwurf.
+  // In Review ist ebenfalls gesperrt — geprüft wird, was eingereicht wurde.
   const delivered = rev.delivered || [];
   const released = rev.status === 'REL' || rev.status === 'OBS' || rev.status === 'ECO';
-  const locked = released || delivered.length > 0;
-  const lockLabel = released ? `Gesperrt (${rev.status})` : 'Gesperrt (geliefert)';
+  const locked = released || rev.status === 'REV' || delivered.length > 0;
+  const lockLabel = released ? `Gesperrt (${rev.status})` : rev.status === 'REV' ? 'Gesperrt (in Review)' : 'Gesperrt (geliefert)';
   const deliveredBox = delivered.length ? `
     <div style="display:flex;gap:10px;align-items:flex-start;padding:9px 11px;margin-bottom:10px;background:var(--teal-soft);border:1px solid var(--teal-line);border-radius:var(--r-sm);font-size:13px">
       <span style="font-size:15px;line-height:1.2">🚚</span>
@@ -1545,7 +1546,11 @@ function renderRevDetail(rev, item) {
     ECO: [{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
     OBS: []
   } : {
-    DFT: [{s:'REV',label:'→ In Review',cls:'btn-amber'}],
+    // Ohne Vier-Augen-Prinzip gibt man direkt frei; REV nur, wenn eine zweite
+    // Person prüft. Admins dürfen beides: selbst freigeben oder prüfen lassen.
+    DFT: !reviewRequired() ? [{s:'REL',label:'✓ Freigeben',cls:'btn-green'}]
+      : isAdmin() ? [{s:'REV',label:'→ In Review',cls:'btn-amber'},{s:'REL',label:'✓ Freigeben',cls:'btn-green'}]
+      : [{s:'REV',label:'→ In Review',cls:'btn-amber'}],
     REV: [{s:'DFT',label:'← Zurück zu Entwurf',cls:'btn-ghost'},{s:'REL',label:'✓ Freigeben',cls:'btn-green'}],
     REL: [{s:'ECO',label:'⚡ ECO starten',cls:'btn-purple'},{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
     ECO: [{s:'OBS',label:'Als veraltet markieren (OBS)',cls:'btn-ghost'}],
@@ -1560,8 +1565,13 @@ function renderRevDetail(rev, item) {
   }
   // Freigeben und Veralten dürfen Superuser und Admins (allein: man selbst)
   const missing = rev.release_missing || [];
+  // Vier-Augen-Prinzip: wer eingereicht hat, gibt nicht selbst frei — ausser Admins
+  const ownReview = reviewRequired() && !isAdmin() && rev.status === 'REV' && rev.submitted_by?.id
+    && rev.submitted_by.id === state.session?.user?.id;
   const wfBtns = actions.map(b => b.s === '_NEWREV'
     ? `<button class="btn btn-sm ${b.cls}" onclick="createNextRevision(${item.id})">${b.label}</button>`
+    : b.s === 'REL' && ownReview
+      ? `<span title="Du hast die Revision eingereicht — freigeben muss eine zweite Person" style="display:inline-flex"><button class="btn btn-sm ${b.cls}" disabled>${b.label}</button></span>`
     : b.s === 'REL' && missing.length
       ? `<span title="Für die Freigabe fehlt: ${esc(missing.join(', '))}" style="display:inline-flex"><button class="btn btn-sm ${b.cls}" disabled>${b.label}</button></span>`
     : (['REL', 'OBS'].includes(b.s) && !canRelease()
@@ -1576,7 +1586,8 @@ function renderRevDetail(rev, item) {
       <div><div class="ps-label">Status</div><span class="status st-${rev.status}" title="${esc(PLM_ST_LABEL[rev.status] || '')}">${rev.status}</span> <span style="color:var(--t3)">${esc(PLM_ST_LABEL[rev.status] || '')}</span></div>
       <div><div class="ps-label">Erstellt</div>${fmtDate(rev.created_at)}</div>
       ${rev.released_at ? `<div><div class="ps-label">Freigegeben</div>${fmtDate(rev.released_at)}</div>` : ''}
-      ${rev.released_by ? `<div><div class="ps-label">Von</div>${rev.released_by}</div>` : ''}
+      ${rev.released_by ? `<div><div class="ps-label">Von</div>${esc(rev.released_by)}</div>` : ''}
+      ${rev.submitted_by?.name ? `<div><div class="ps-label">In Review gesetzt von</div>${esc(rev.submitted_by.name)}</div>` : ''}
       ${rev.description ? `<div style="grid-column:span 2"><div class="ps-label">Beschreibung</div>${esc(rev.description)}</div>` : ''}
       ${rev.eco_reason ? `<div style="grid-column:span 2"><div class="ps-label">ECO-Grund</div><span style="color:var(--purple)">${esc(rev.eco_reason)}</span></div>` : ''}
     </div>

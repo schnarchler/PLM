@@ -231,8 +231,8 @@ function _adoptClass(name) {
 // ── PLM-VOREINSTELLUNGEN: Workflow und Standard-Klassifizierung ──
 const WORKFLOW_MODES = [
   { id: 'full', title: 'Mit Freigabe',
-    desc: 'DFT → REV → REL → ECO. Revisionen werden geprüft und freigegeben, '
-        + 'freigegebene Stände sind gesperrt. Neue Revisionen entstehen über einen ECO.' },
+    desc: 'DFT → REL → ECO. Revisionen werden freigegeben, freigegebene Stände sind gesperrt. '
+        + 'Neue Revisionen entstehen über einen ECO. Mit Vier-Augen-Prinzip (unten) zusätzlich über In Review (REV).' },
   { id: 'simple', title: 'Ohne Freigabe',
     desc: 'Alle Revisionen bleiben Entwurf (DFT) und bearbeitbar. Eine neue Revision '
         + 'legst du direkt an — Dateien, Druckparameter und Stückliste werden übernommen. '
@@ -272,11 +272,24 @@ function _loadPlmPrefs() {
   if (bought) bought.innerHTML = opts(s.default_class_bought || '');
   window._wfPick = s.workflow_mode === 'simple' ? 'simple' : 'full';
   _renderWorkflowOptions(window._wfPick);
+  const four = document.getElementById('st-four-eyes');
+  if (four) { four.checked = s.release_four_eyes === '1'; _fourEyesHint(); }
   const on = String(s.release_checks || '').split(',');
   const box = document.getElementById('st-release-checks');
   if (box) box.innerHTML = RELEASE_CHECKS.map(([k, label, hint]) => `<label style="display:flex;align-items:baseline;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)">
       <input type="checkbox" data-check="${k}" ${on.includes(k) ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue);position:relative;top:2px">
       <span>${esc(label)}${hint ? ` <span style="color:var(--t4)">· ${esc(hint)}</span>` : ''}</span></label>`).join('');
+}
+
+// Hinweis zum Vier-Augen-Prinzip: wirkt nur im Team. Hängen bleibt nichts —
+// es gibt immer einen Admin, und Admins dürfen auch selbst freigeben.
+function _fourEyesHint() {
+  const el = document.getElementById('st-four-eyes-hint');
+  if (!el) return;
+  el.textContent = (state.session?.users || []).length < 2
+    ? 'Wirkt erst ab zwei Personen — allein gibst du direkt frei.'
+    : 'Revisionen gehen erst in Review (REV) und sind dort gesperrt; freigeben darf eine andere Person als die, '
+      + 'die sie in Review gesetzt hat. Admins dürfen auch selbst freigeben.';
 }
 
 // Prüfung vor der Freigabe: [Schlüssel wie im Server, Bezeichnung, für wen]
@@ -293,6 +306,7 @@ async function _savePlmPrefs() {
     default_class_own:    document.getElementById('st-class-own')?.value || '',
     default_class_bought: document.getElementById('st-class-bought')?.value || '',
     workflow_mode:        window._wfPick || 'full',
+    release_four_eyes:    document.getElementById('st-four-eyes')?.checked ? '1' : '0',
     release_checks: [...document.querySelectorAll('#st-release-checks [data-check]:checked')].map(c => c.dataset.check).join(','),
   });
   state.settings = await api('/api/settings');
@@ -305,6 +319,11 @@ async function _savePlmPrefs() {
 // Im einfachen Workflow gibt es kein REL — das PLM verhält sich an mehreren
 // Stellen anders. Eine Stelle für die Abfrage, damit es nicht auseinanderläuft.
 function simpleWorkflow() { return (state.settings?.workflow_mode || 'full') === 'simple'; }
+// Vier-Augen-Prinzip — wie reviewRequired() im Server: eingeschaltet, mit
+// Freigabe-Workflow und ab zwei Personen
+function reviewRequired() {
+  return !simpleWorkflow() && state.settings?.release_four_eyes === '1' && state.session?.mode === 'team';
+}
 
 
 let _classDragIdx = null;
@@ -1012,7 +1031,7 @@ async function createNextRevision(itemId) {
 
 // ── REVISION / STATUS ─────────────────────────────────────────
 const statusHints = {
-  REV: 'Revision wird zur Prüfung eingereicht.',
+  REV: 'Revision geht in Review und ist bis zur Freigabe gesperrt. Freigeben muss danach eine zweite Person (oder ein Admin).',
   DFT: 'Revision zurück auf Entwurf setzen.',
   REL: 'Revision freigeben. Alle vorherigen REL-Revisionen werden auf OBS gesetzt.',
   ECO: 'Änderung (ECO) starten. Die aktuelle Revision wird gesperrt (ECO). Eine neue DFT-Revision wird automatisch angelegt und übernimmt Dateien, Stückliste und Druckparameter.',

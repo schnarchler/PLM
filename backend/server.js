@@ -1473,6 +1473,21 @@ function rejectIfDelivered(res, revId) {
   return true;
 }
 
+// Inhalt einer Revision (Dateien, Stückliste, Druckparameter) ändern geht nur
+// im Entwurf: In Review wird geprüft, REL/ECO/OBS sind festgeschrieben, und
+// eine Lieferung fixiert auch den Entwurf. true = abgewiesen.
+const LOCKED_STATUS = { REV: 'in Review', REL: 'freigegeben', ECO: 'im ECO', OBS: 'veraltet' };
+function rejectIfLocked(res, revId) {
+  if (!revId) return false;
+  const st = get('SELECT status FROM revisions WHERE id=?', [revId])?.status;
+  if (LOCKED_STATUS[st]) {
+    res.status(409).json({ error: `Diese Revision ist ${LOCKED_STATUS[st]} und gesperrt. `
+      + (st === 'REV' ? 'Für Änderungen zuerst zurück auf Entwurf.' : 'Änderungen bitte in einer neuen Revision.') });
+    return true;
+  }
+  return rejectIfDelivered(res, revId);
+}
+
 // Dateien, Druckparameter und Stückliste einer Revision in eine neue
 // übernehmen. „Neue Revision", ECO und Check-in nutzen denselben Weg, damit
 // eine neue Revision immer gleich aussieht.
@@ -1669,6 +1684,16 @@ const erpLog = (req, type, id) => isAdminReq(req)
 // 'full'   = DFT → REV → REL → ECO → OBS (Standard)
 // 'simple' = ohne Freigabe: Revisionen bleiben DFT, neue Revision direkt anlegbar
 function workflowMode()     { return getSetting('workflow_mode','full') === 'simple' ? 'simple' : 'full'; }
+// Vier-Augen-Prinzip: nur mit Freigabe-Workflow und ab zwei Personen. Dann
+// geht eine Revision erst in Review (REV), und freigeben muss eine andere
+// Person als die, die eingereicht hat — ausser Admins. Sonst gibt man direkt
+// aus DFT frei.
+function reviewRequired() {
+  return workflowMode() === 'full' && getSetting('release_four_eyes', '0') === '1' && userMode(activeUsers()) === 'team';
+}
+// Wer die Revision zuletzt zur Prüfung eingereicht hat — steht in der Historie
+const reviewSubmitter = revId => get(`SELECT user_id, user_name FROM changelog
+  WHERE entity_type='revision' AND entity_id=? AND action='Status → REV' ORDER BY id DESC LIMIT 1`, [revId]);
 function itemSep()          { return getSetting('num_sep','-'); }
 function segAsm()           { return getSetting('seg_asm','asm'); }
 function segPrt()           { return getSetting('seg_prt','prt'); }
@@ -2268,10 +2293,18 @@ app.get('/api/items/:id', (req, res) => {
       rev.bom_weight = bomWeight(rev.id, new Set([item.id]));
     }
   });
-  item.changelog = all("SELECT * FROM changelog WHERE entity_type='item' AND entity_id=? ORDER BY created_at DESC", [item.id]);
+  // Auch was an den Revisionen geschah: Statuswechsel mit Kommentar, Dateien, Stückliste
+  item.changelog = all(`SELECT c.*, r.rev FROM changelog c
+    LEFT JOIN revisions r ON c.entity_type='revision' AND r.id=c.entity_id
+    WHERE (c.entity_type='item' AND c.entity_id=?) OR (c.entity_type='revision' AND r.item_id=?)
+    ORDER BY c.created_at DESC, c.id DESC`, [item.id, item.id]);
   // Was für die Freigabe noch fehlt — als Hinweis, bevor jemand freigeben will
   if (workflowMode() === 'full') item.revisions.forEach(rev => {
     if (['DFT', 'REV'].includes(rev.status)) rev.release_missing = releaseMissing(item, rev);
+    if (rev.status === 'REV') {
+      const by = reviewSubmitter(rev.id);
+      rev.submitted_by = by ? { id: by.user_id, name: by.user_name } : null;
+    }
   });
   item.attributes = parseAttrs(item.attributes);
   item.thumb_id = get(`SELECT ${thumbIdSql('?')} AS t`, [item.id])?.t ?? null;
@@ -2870,9 +2903,20 @@ app.put('/api/revisions/:id/status', (req, res) => {
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
   if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
 
-  const validTransitions = { DFT:['REV'], REV:['DFT','REL'], REL:['ECO','OBS'], ECO:['OBS'], OBS:[] };
-  if (!validTransitions[rev.status]?.includes(status))
-    return res.status(400).json({ error: `Statuswechsel von ${rev.status} nach ${status} ist nicht möglich` });
+  // Admins sind vom Vier-Augen-Prinzip ausgenommen: sie geben auch selbst frei
+  const review = reviewRequired() && req.plmUser?.role !== 'admin';
+  const validTransitions = { DFT: review ? ['REV'] : ['REV', 'REL'], REV:['DFT','REL'], REL:['ECO','OBS'], ECO:['OBS'], OBS:[] };
+  if (!validTransitions[rev.status]?.includes(status)) {
+    return res.status(400).json({ error: rev.status === 'DFT' && status === 'REL'
+      ? 'Vier-Augen-Prinzip: zuerst in Review setzen, freigeben muss dann eine zweite Person'
+      : `Statuswechsel von ${rev.status} nach ${status} ist nicht möglich` });
+  }
+  if (review && status === 'REL') {
+    const by = reviewSubmitter(rev.id);
+    if (by?.user_id && by.user_id === req.plmUser?.id) {
+      return res.status(403).json({ error: 'Vier-Augen-Prinzip: Du hast die Revision eingereicht — freigeben muss eine zweite Person' });
+    }
+  }
 
   if (status === 'REL') {
     // For assemblies: all BOM children must have at least one REL revision.
@@ -2977,7 +3021,7 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
     printer_cost_hr, filament_price_kg, filament_weight_total, part_weight, print_duration, raw_material_id } = req.body;
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
   if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (rejectIfDelivered(res, rev.id)) return;
+  if (rejectIfLocked(res, rev.id)) return;
   run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,infill_pattern,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(revision_id) DO UPDATE SET
@@ -3002,7 +3046,7 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
 // ==============================================================
 app.post('/api/revisions/:revId/bom', (req, res) => {
   const { child_item_id, quantity, unit, position, notes, child_rev_id } = req.body;
-  if (rejectIfDelivered(res, req.params.revId)) return;
+  if (rejectIfLocked(res, req.params.revId)) return;
   // Revision nur uebernehmen, wenn sie wirklich zu diesem Kind gehoert
   const pin = child_rev_id
     ? get('SELECT id FROM revisions WHERE id=? AND item_id=?', [child_rev_id, child_item_id])?.id || null
@@ -3018,7 +3062,7 @@ app.post('/api/revisions/:revId/bom', (req, res) => {
 
 app.put('/api/bom/:id/quantity', (req, res) => {
   const { quantity, unit } = req.body;
-  if (rejectIfDelivered(res, get('SELECT parent_rev_id FROM bom WHERE id=?', [req.params.id])?.parent_rev_id)) return;
+  if (rejectIfLocked(res, get('SELECT parent_rev_id FROM bom WHERE id=?', [req.params.id])?.parent_rev_id)) return;
   run('UPDATE bom SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
   saveDb();
   res.json({ success: true });
@@ -3030,7 +3074,7 @@ app.put('/api/bom/:id/revision', (req, res) => {
   const { rev_id } = req.body;
   const bom = get('SELECT b.*, i.item_number FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.id=?', [req.params.id]);
   if (!bom) return res.status(404).json({ error: 'Position nicht gefunden' });
-  if (rejectIfDelivered(res, bom.parent_rev_id)) return;
+  if (rejectIfLocked(res, bom.parent_rev_id)) return;
 
   if (rev_id == null || rev_id === '') {
     run('UPDATE bom SET child_rev_id=NULL WHERE id=?', [bom.id]);
@@ -3049,7 +3093,7 @@ app.put('/api/bom/:id/revision', (req, res) => {
 
 app.put('/api/revisions/:revId/bom-reorder', (req, res) => {
   const { order } = req.body; // array of bom ids in new order
-  if (rejectIfDelivered(res, req.params.revId)) return;
+  if (rejectIfLocked(res, req.params.revId)) return;
   order.forEach((id, idx) => run('UPDATE bom SET position=? WHERE id=? AND parent_rev_id=?', [idx+1, id, req.params.revId]));
   saveDb();
   res.json({ success: true });
@@ -3057,7 +3101,7 @@ app.put('/api/revisions/:revId/bom-reorder', (req, res) => {
 
 app.delete('/api/bom/:id', (req, res) => {
   const bom = get('SELECT b.*, i.item_number FROM bom b JOIN items i ON b.child_item_id=i.id WHERE b.id=?', [req.params.id]);
-  if (bom && rejectIfDelivered(res, bom.parent_rev_id)) return;
+  if (bom && rejectIfLocked(res, bom.parent_rev_id)) return;
   if (bom) log('revision', bom.parent_rev_id, 'BOM: Position entfernt', bom.item_number + ' x' + bom.quantity);
   run('DELETE FROM bom WHERE id=?', [req.params.id]);
   res.json({ success: true });
@@ -3070,10 +3114,9 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.revId]);
   if (!rev) return res.status(404).json({ error: 'Revision nicht gefunden' });
   if (!req.file) return res.status(400).json({ error: 'Keine Datei' });
-  const lockedBy = deliveriesOfRevision(rev.id);
-  if (lockedBy.length) {
+  if (rejectIfLocked(res, rev.id)) {
     try { fs.unlinkSync(req.file.path); } catch {}
-    return res.status(409).json({ error: deliveredLockMessage(lockedBy) });
+    return;
   }
   const { notes, version } = req.body;
   const dsType = guessType(req.file.originalname);
@@ -3339,17 +3382,11 @@ app.post('/api/checkout/import', (req, res) => {
       // Auch von der obersten Ebene: Dateien, die nicht im Ordner eines Items liegen
       const folder = checkoutFolderFrom(req.body.folder, { allowRoot: true });
       if (!folder) return res.status(400).json({ error: 'Kein Ordner im Checkout-Verzeichnis' });
-      // Add files to existing item's latest non-REL revision
+      // In den Entwurf — wie beim Check-in: In Review zurück auf Entwurf,
+      // freigegeben über einen ECO, sonst eine neue Revision
       const item = get('SELECT * FROM items WHERE id=?', [item_id]);
       if (!item) return res.status(404).json({ error: 'Item nicht gefunden' });
-      let rev = get("SELECT * FROM revisions WHERE item_id=? AND status != 'REL' ORDER BY id DESC LIMIT 1", [item_id]);
-      if (!rev) {
-        // All revisions are REL — create new revision
-        const lastRev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY id DESC LIMIT 1', [item_id]);
-        const nextRev = lastRev ? String(parseInt(lastRev.rev || '1') + 1) : '2';
-        const revId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [item_id, nextRev, 'DFT', 'Neue Revision durch Checkout-Import']);
-        rev = get('SELECT * FROM revisions WHERE id=?', [revId]);
-      }
+      const rev = _draftRevision(item_id, 'Dateien aus Checkout angehängt');
       const imported = [];
       for (const f of files || []) {
         const src = checkoutFileIn(folder, f.name);
@@ -3463,7 +3500,14 @@ function _changedInCheckout(folder, meta) {
 function _draftRevision(itemId, reason) {
   const last = getLatestRevision(itemId);
   if (!last) return null;
-  if (last.status === 'DFT' && !deliveriesOfRevision(last.id).length) return last;
+  const delivered = deliveriesOfRevision(last.id).length;
+  if (last.status === 'DFT' && !delivered) return last;
+  // Geändert, während sie geprüft wird: die Prüfung gilt nicht mehr
+  if (last.status === 'REV' && !delivered) {
+    run("UPDATE revisions SET status='DFT', updated_at=datetime('now') WHERE id=?", [last.id]);
+    log('revision', last.id, 'Status → DFT', `Zurück aus Review: ${reason}`);
+    return get('SELECT * FROM revisions WHERE id=?', [last.id]);
+  }
   if (last.status === 'REL') {
     const rev = startEco(last, reason);
     log('revision', last.id, 'Status → ECO', reason);
@@ -4036,7 +4080,7 @@ app.put('/api/datasets/:id', (req, res) => {
   const { notes, original_name } = req.body;
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
   if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (rejectIfDelivered(res, ds.revision_id)) return;
+  if (rejectIfLocked(res, ds.revision_id)) return;
   run('UPDATE datasets SET notes=?,original_name=? WHERE id=?', [notes||'', original_name||ds.original_name, req.params.id]);
   res.json(get('SELECT * FROM datasets WHERE id=?', [req.params.id]));
 });
@@ -4044,7 +4088,7 @@ app.put('/api/datasets/:id', (req, res) => {
 app.delete('/api/datasets/:id', (req, res) => {
   const ds = get('SELECT * FROM datasets WHERE id=?', [req.params.id]);
   if (!ds) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (rejectIfDelivered(res, ds.revision_id)) return;
+  if (rejectIfLocked(res, ds.revision_id)) return;
   trashFile(ds.filename);
   try { fs.unlinkSync(thumbPath(ds)); } catch {}   // aus dem Papierkorb zurück: wird neu geholt
   try { fs.unlinkSync(meshPath(ds)); } catch {}
@@ -5963,7 +6007,7 @@ app.post('/api/revisions/:revId/bom-bulk', (req, res) => {
   if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: 'Keine Einträge' });
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.revId]);
   if (!rev) return res.status(404).json({ error: 'Revision nicht gefunden' });
-  if (rejectIfDelivered(res, rev.id)) return;
+  if (rejectIfLocked(res, rev.id)) return;
   try {
     let pos = (get('SELECT MAX(position) as m FROM bom WHERE parent_rev_id=?', [req.params.revId])?.m || 0) + 1;
     let count = 0;
@@ -7441,7 +7485,7 @@ app.delete('/api/standard-part-files/:id', (req, res) => {
 
 app.post('/api/revisions/:revId/bom-std', (req, res) => {
   const { std_part_id, quantity, unit, notes } = req.body;
-  if (rejectIfDelivered(res, req.params.revId)) return;
+  if (rejectIfLocked(res, req.params.revId)) return;
   const sp = get('SELECT * FROM standard_parts WHERE id=?', [std_part_id]);
   if (!sp) return res.status(404).json({ error: 'Normteil nicht gefunden' });
   try {
@@ -7455,7 +7499,7 @@ app.post('/api/revisions/:revId/bom-std', (req, res) => {
 
 app.put('/api/bom-std/:id/quantity', (req, res) => {
   const { quantity, unit } = req.body;
-  if (rejectIfDelivered(res, get('SELECT parent_rev_id FROM bom_std_parts WHERE id=?', [req.params.id])?.parent_rev_id)) return;
+  if (rejectIfLocked(res, get('SELECT parent_rev_id FROM bom_std_parts WHERE id=?', [req.params.id])?.parent_rev_id)) return;
   run('UPDATE bom_std_parts SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
   saveDb();
   res.json({ success: true });
@@ -7463,7 +7507,7 @@ app.put('/api/bom-std/:id/quantity', (req, res) => {
 
 app.put('/api/revisions/:revId/bom-std-reorder', (req, res) => {
   const { order } = req.body; // array of bom_std_parts ids in new order
-  if (rejectIfDelivered(res, req.params.revId)) return;
+  if (rejectIfLocked(res, req.params.revId)) return;
   order.forEach((id, idx) => run('UPDATE bom_std_parts SET position=? WHERE id=? AND parent_rev_id=?', [idx+1, id, req.params.revId]));
   saveDb();
   res.json({ success: true });
@@ -7471,7 +7515,7 @@ app.put('/api/revisions/:revId/bom-std-reorder', (req, res) => {
 
 app.delete('/api/bom-std/:id', (req, res) => {
   const row = get('SELECT bs.*, sp.designation FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.id=?', [req.params.id]);
-  if (row && rejectIfDelivered(res, row.parent_rev_id)) return;
+  if (row && rejectIfLocked(res, row.parent_rev_id)) return;
   if (row) log('revision', row.parent_rev_id, 'BOM: Position entfernt', row.designation);
   run('DELETE FROM bom_std_parts WHERE id=?', [req.params.id]);
   res.json({ success: true });

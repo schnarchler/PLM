@@ -65,10 +65,16 @@ Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** kon
 ## Freigabe-Workflow
 
 ```
-DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
-         │                └──► OBS (veraltet)
-         └──► DFT (zurück)
+DFT ──────────► REL ──► ECO ──► (neue Revision in DFT)
+ │               ▲        └──► OBS (veraltet)
+ └──► REV ───────┘   (nur mit Vier-Augen-Prinzip)
+       └──► DFT (zurück)
 ```
+
+Allein oder ohne Vier-Augen-Prinzip gibt man direkt aus dem Entwurf frei. Mit
+Vier-Augen-Prinzip (Einstellungen → PLM, ab zwei Personen) geht eine Revision erst
+in Review (REV) und ist dort gesperrt; freigeben darf dann nur eine andere Person als die,
+die eingereicht hat — Admins dürfen auch selbst freigeben.
 
 | Status | Bedeutung |
 |--------|-----------|
@@ -89,7 +95,7 @@ Eigenschaften der Klassifizierung. Fehlt etwas, nennt PLM es und sperrt „Freig
 
 **Ohne Freigabe arbeiten:** Unter **Einstellungen → PLM → Freigabe-Workflow** lässt sich
 auf den einfachen Modus umstellen. Dann bleiben alle Revisionen im Status DFT und
-bearbeitbar; statt „In Review“ steht dort **„＋ Neue Revision“**, die Dateien,
+bearbeitbar; statt „Freigeben“ steht dort **„＋ Neue Revision“**, die Dateien,
 Druckparameter und Stückliste der bisherigen Revision übernimmt. Für die Arbeit allein,
 ohne Prüfschritt. Bestehende freigegebene Revisionen bleiben unangetastet, und der
 ECO-Weg steht dort weiterhin zur Verfügung.
@@ -105,7 +111,7 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - **Projektfarben** – jedem Projekt eine Farbe geben; sie erscheint als Streifen in der
   Liste, färbt die Nummernkachel und markiert das offene Projekt im Brotkrumenpfad
 - Revisionsverwaltung rev1, rev2, … (alle alten Revisionen bleiben erhalten)
-- Freigabe-Workflow: DFT → REV → REL → ECO → neue Revision
+- Freigabe-Workflow: DFT → REL → ECO → neue Revision, optional mit Vier-Augen-Prüfung (REV)
 - Stückliste (BOM) pro Revision – mehrere Positionen gleichzeitig hinzufügen (Warenkorb)
 - Normteile in BOM einsetzbar
 - Dateien pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
@@ -132,7 +138,7 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - **Revisionen vergleichen** – zwei Revisionen eines Items gegenüberstellen: Kopfdaten,
   Druckparameter, Stückliste, Normteile und Dateien (siehe unten)
 - **Freigabe-Workflow abschaltbar** – unter Einstellungen → PLM wählbar zwischen
-  Freigabelauf (DFT → REV → REL → ECO) und einfachem Betrieb ohne Freigabe
+  Freigabelauf (DFT → REL → ECO, optional mit Prüfung REV) und einfachem Betrieb ohne Freigabe
 - **Druckparameter aus 3MF** – beim Hochladen einer `.3mf` an eine Revision werden
   Schichthöhe, Füllung, Füllmuster, Temperaturen, Material und Drucker automatisch übernommen
 - **Klassifizierung automatisch** – neue Items werden anhand der Quelle als Eigen-

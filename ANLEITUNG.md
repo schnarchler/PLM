@@ -263,9 +263,10 @@ Im BOM-Dialog einer Baugruppe → Tab **⚙ Normteil** → Normteil aus der List
 ## 7. Freigabe-Workflow
 
 ```
-DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
-         │                └──► OBS (veraltet)
-         └──► DFT (zurück)
+DFT ──────────► REL ──► ECO ──► (neue Revision in DFT)
+ │               ▲        └──► OBS (veraltet)
+ └──► REV ───────┘   (nur mit Vier-Augen-Prinzip)
+       └──► DFT (zurück)
 ```
 
 | Status | Farbe | Bedeutung |
@@ -276,7 +277,11 @@ DFT ──► REV ──► REL ──► ECO ──► (neue Revision in DFT)
 | **ECO** | Lila | Änderung (Engineering Change Order) — die Revision bleibt gültig und gesperrt, in einer neuen DFT wird geändert |
 | **OBS** | Grau | Veraltet (Obsolete) — abgelöst, wird nicht mehr gefertigt, bleibt zur Nachverfolgung erhalten |
 
-Die Knöpfe heissen **→ In Review**, **✓ Freigeben**, **⚡ ECO starten** und **Als veraltet markieren (OBS)**.
+Die Knöpfe heissen **✓ Freigeben**, **⚡ ECO starten** und **Als veraltet markieren (OBS)**. Allein oder ohne Vier-Augen-Prinzip gibt man direkt aus dem Entwurf frei.
+
+**Vier-Augen-Prinzip** (Einstellungen → PLM → Freigabe-Workflow, wirkt ab zwei Personen): Eine Revision geht zuerst mit **→ In Review** auf REV. Freigeben darf dann nur eine andere Person mit Freigaberecht (Superuser/Admin) als die, die sie in Review gesetzt hat; wer das war, steht in den Revisionsdetails. **Admins** sind ausgenommen: sie geben auch eigene Revisionen frei, direkt aus dem Entwurf oder nach dem Review.
+
+**In Review ist gesperrt:** Dateien, Stückliste und Druckparameter lassen sich nicht ändern — geprüft wird, was eingereicht wurde. Für Änderungen **← Zurück zu Entwurf**. Werden geänderte Dateien eingecheckt oder aus dem Checkout angehängt, geht die Revision automatisch zurück auf Entwurf (steht in der Historie).
 
 Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in die neue DFT-Revision übernommen. Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück. Wird die neue Revision freigegeben, wird die bisherige (REL oder ECO) automatisch **OBS** — gültig ist immer genau eine Revision.
 
