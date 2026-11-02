@@ -29,6 +29,7 @@ function _renderUserChip() {
   // ERP-Verlauf nur für Admins
   const erpLog = document.getElementById('ni-erplog');
   if (erpLog) erpLog.style.display = isAdmin() ? '' : 'none';
+  _renderFeedbackButton();
   const el = document.getElementById('tb-user');
   if (!el) return;
   const s = state.session;
@@ -55,6 +56,7 @@ function _afterUserChange() {
   if (!isAdmin() && document.querySelector('#od-log, #dd-log, #cd-log, #sd-log, #po-log')) closeDetail();
   if (state.view === 'erplog') renderChangelog('erp');
   else if (state.view === 'settings') renderSettings();
+  else if (state.view === 'dashboard') renderDashboard();   // Rückmeldungen nur für Admins
   else if (state.item && document.getElementById('it-sheet')) renderItemDetail(state.item, state.activeRevId);
 }
 

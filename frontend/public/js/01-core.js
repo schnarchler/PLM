@@ -541,3 +541,45 @@ async function gotoView(v) {
   else if (v === 'ecr') await renderEcrList();
   else if (v === 'purchasing') await renderPurchasing();
 }
+
+// Such-Dropdowns (id="…-results", position:absolute) in Dialogen: .modal
+// scrollt (overflow-y:auto) und würde sie abschneiden. Beim Einblenden
+// werden sie deshalb fixed über dem Eingabefeld platziert — bei wenig Platz
+// unten öffnen sie nach oben.
+(() => {
+  const floated = new Set();
+  // data-max-h markiert ein einmal umgesetztes Dropdown (auch nach Ausblenden)
+  const place = el => {
+    const anchor = el.parentElement.getBoundingClientRect();
+    if (!el.dataset.maxH) el.dataset.maxH = parseInt(el.style.maxHeight) || 220;
+    const want = +el.dataset.maxH;
+    const below = window.innerHeight - anchor.bottom - 8;
+    const above = anchor.top - 8;
+    const up = below < Math.min(want, 150) && above > below;
+    Object.assign(el.style, {
+      position: 'fixed', zIndex: '1000',
+      left: anchor.left + 'px', width: anchor.width + 'px', right: 'auto',
+      top: up ? 'auto' : anchor.bottom + 2 + 'px',
+      bottom: up ? window.innerHeight - anchor.top + 2 + 'px' : 'auto',
+      maxHeight: Math.max(80, Math.min(want, up ? above : below)) + 'px',
+    });
+  };
+  const check = el => {
+    if (!el.id?.endsWith('-results') || !el.closest('.modal')) return;
+    if (el.style.position !== 'absolute' && !el.dataset.maxH) return;
+    if (el.style.display === 'none' || !el.isConnected) { floated.delete(el); return; }
+    floated.add(el);
+    place(el);
+  };
+  const obs = new MutationObserver(muts => {
+    new Set(muts.map(m => m.target)).forEach(check);
+    obs.takeRecords(); // eigene Stil-Änderungen aus place() verwerfen
+  });
+  obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['style'] });
+  const follow = () => {
+    floated.forEach(el => el.isConnected && el.style.display !== 'none' ? place(el) : floated.delete(el));
+    obs.takeRecords();
+  };
+  window.addEventListener('resize', follow);
+  document.addEventListener('scroll', follow, true);
+})();

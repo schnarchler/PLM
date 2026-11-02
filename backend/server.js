@@ -847,6 +847,20 @@ function applySchema() {
     rev_after INTEGER,
     UNIQUE(ecr_id, item_id)
   )`);
+  // Rückmeldungen ans Admin: Fehler oder Idee, mit dem Kontext, in dem sie
+  // entstanden ist (Ansicht, Item, Browser, letzte Skriptfehler). OPEN → DONE.
+  db.run(`CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL CHECK (kind IN ('BUG','IDEA')),
+    text TEXT NOT NULL,
+    context TEXT,
+    user_id INTEGER,
+    user_name TEXT,
+    status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','DONE')),
+    created_at TEXT DEFAULT (datetime('now')),
+    done_by TEXT,
+    done_at TEXT
+  )`);
   migrateOnce('infill-pattern-from-3mf-v1', () => {
     let n = 0;
     for (const ps of all("SELECT revision_id FROM print_settings WHERE infill_pattern IS NULL OR infill_pattern=''")) {
@@ -1645,9 +1659,10 @@ const PO_ITEM_HIST = [
   ['description', 'Beschreibung'], ['quantity', 'Menge', 'num'], ['unit', 'Einheit'],
   ['unit_price', 'Preis', 'money'], ['notes', 'Notizen'],
 ];
-// Verlauf-Tab eines Belegs — nur für Admins (allein oder ohne Personen: alle)
-const erpLogAllowed = req => req.plmMode !== 'team' || req.plmUser?.role === 'admin';
-const erpLog = (req, type, id) => erpLogAllowed(req)
+// Admin bei dieser Anfrage? Allein oder ohne Personen: ja. Nötig etwa für den
+// Verlauf-Tab eines Belegs und die Rückmeldungen auf dem Dashboard.
+const isAdminReq = req => req.plmMode !== 'team' || req.plmUser?.role === 'admin';
+const erpLog = (req, type, id) => isAdminReq(req)
   ? all('SELECT * FROM erp_log WHERE entity_type=? AND entity_id=? ORDER BY created_at DESC, id DESC LIMIT 200', [type, id])
   : undefined;
 
@@ -1904,6 +1919,7 @@ const PERSONAL_SETTINGS = ['font_scale', 'theme', 'sort_projects', 'sort_items',
   'customer_view', 'supplier_view', 'purchasing_tab'];
 const ADMIN_ONLY = [
   /^PUT \/api\/settings$/,
+  /^(PUT|DELETE) \/api\/feedback\/\d+$/,
   /^(POST|PUT) \/api\/users(\/\d+)?$/,
   /^(PUT|POST) \/api\/data-path(\/move)?$/,
   /^POST \/api\/backups\/(restore-upload|[^/]+\/restore)$/, /^DELETE \/api\/backups\/[^/]+$/,
@@ -1912,7 +1928,7 @@ const ADMIN_ONLY = [
   /^DELETE \/api\/(projects|items|customers|suppliers)\/\d+$/,
 ];
 // Lesen nur für Admins: ganze Datenbank, Sicherungen, Dateiablage auf der Platte
-const ADMIN_READ = [/^GET \/api\/(export|export-named|backups|file-index)$/];
+const ADMIN_READ = [/^GET \/api\/(export|export-named|backups|file-index|feedback)$/];
 function requiredRole(req) {
   const key = req.method + ' ' + req.path;
   if (ADMIN_READ.some(r => r.test(key))) return 'admin';
@@ -4641,6 +4657,50 @@ app.delete('/api/ecrs/:id', (req, res) => {
 });
 
 // ==============================================================
+// RÜCKMELDUNGEN (Fehler und Ideen ans Admin)
+// ==============================================================
+// Einreichen darf jede Person, lesen und erledigen nur Admins. Den Kontext
+// schickt der Browser mit; Version und Browser ergänzt der Server.
+const FEEDBACK_KINDS = ['BUG', 'IDEA'];
+
+app.post('/api/feedback', (req, res) => {
+  const kind = req.body?.kind;
+  const text = String(req.body?.text ?? '').trim().slice(0, 5000);
+  if (!FEEDBACK_KINDS.includes(kind)) return res.status(400).json({ error: 'Fehler oder Idee?' });
+  if (!text) return res.status(400).json({ error: 'Bitte kurz beschreiben' });
+  const c = req.body?.context && typeof req.body.context === 'object' ? req.body.context : {};
+  const short = (v, n = 300) => v == null ? undefined : String(v).slice(0, n);
+  const context = {
+    view: short(c.view, 60), item: short(c.item, 200),
+    screen: short(c.screen, 40), errors: Array.isArray(c.errors) ? c.errors.slice(-5).map(e => short(e, 500)) : undefined,
+    version: [APP_VERSION.version, APP_VERSION.commit].filter(Boolean).join(' '), browser: short(req.headers['user-agent']),
+  };
+  const id = runGetId('INSERT INTO feedback (kind,text,context,user_id,user_name) VALUES (?,?,?,?,?)',
+    [kind, text, JSON.stringify(context), req.plmUser?.id ?? null, _userName()]);
+  res.json({ id });
+});
+
+const _feedbackRow = f => f && { ...f, context: (() => { try { return JSON.parse(f.context || '{}'); } catch { return {}; } })() };
+app.get('/api/feedback', (req, res) => {
+  res.json(all("SELECT * FROM feedback ORDER BY status='DONE', id DESC").map(_feedbackRow));
+});
+
+// Erledigt oder wieder offen
+app.put('/api/feedback/:id', (req, res) => {
+  const f = get('SELECT * FROM feedback WHERE id=?', [req.params.id]);
+  if (!f) return res.status(404).json({ error: 'Nicht gefunden' });
+  const done = !!req.body?.done;
+  run(`UPDATE feedback SET status=?, done_by=?, done_at=${done ? "datetime('now')" : 'NULL'} WHERE id=?`,
+    [done ? 'DONE' : 'OPEN', done ? _userName() : null, f.id]);
+  res.json(_feedbackRow(get('SELECT * FROM feedback WHERE id=?', [f.id])));
+});
+
+app.delete('/api/feedback/:id', (req, res) => {
+  run('DELETE FROM feedback WHERE id=?', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// ==============================================================
 // DASHBOARD
 // ==============================================================
 // Nur was offen ist und Aufmerksamkeit braucht — leere Bereiche blendet die
@@ -4728,7 +4788,11 @@ app.get('/api/dashboard', (req, res) => {
       (SELECT COUNT(*) FROM ecr_items WHERE ecr_id=e.id) AS item_count
     FROM ecrs e WHERE e.status IN ('OPEN','APPROVED','IN_WORK') ORDER BY e.id DESC`);
 
-  res.json({ openDeliveries, openOrders, openQuotes, inReview, lowStock, openEcrs,
+  // Rückmeldungen sieht nur, wer sie bearbeitet
+  const openFeedback = isAdminReq(req) ? all(`SELECT id, kind, text, user_name, created_at FROM feedback
+    WHERE status='OPEN' ORDER BY id DESC`) : [];
+
+  res.json({ openDeliveries, openOrders, openQuotes, inReview, lowStock, openEcrs, openFeedback,
     revenueMonth: revenue(true), revenueTotal: revenue(false), stats });
 });
 
@@ -4977,7 +5041,7 @@ app.get('/api/changelog', (req, res) => {
   res.json(withLogRefs(all('SELECT * FROM changelog ORDER BY created_at DESC, id DESC LIMIT ?', [limit])));
 });
 app.get('/api/erp-log', (req, res) => {
-  if (!erpLogAllowed(req)) return res.status(403).json({ error: 'Den ERP-Verlauf sehen nur Admins.' });
+  if (!isAdminReq(req)) return res.status(403).json({ error: 'Den ERP-Verlauf sehen nur Admins.' });
   const limit = parseInt(req.query.limit) || 150;
   res.json(withLogRefs(all('SELECT * FROM erp_log ORDER BY created_at DESC, id DESC LIMIT ?', [limit])));
 });

@@ -160,6 +160,7 @@ async function api(url, method='GET', body=null, _again=true) {
   if (!r.ok) {
     const e = await r.json().catch(() => ({ error: 'HTTP '+r.status }));
     if (_again && await _askOnUserError(e)) return api(url, method, body, false);
+    globalThis._noteError?.(`${method} ${url} → ${r.status} ${e.error || ''}`);   // für Rückmeldungen
     if (r.status !== 404) toast(e.error||'Serverfehler', 'err');
     throw new Error(e.error||'HTTP '+r.status);
   }

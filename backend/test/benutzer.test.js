@@ -161,6 +161,35 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
     'auch sich selbst nicht zum Admin machen');
 });
 
+test('Rückmeldungen: jeder reicht ein, nur Admins sehen und erledigen sie', async () => {
+  const sent = { kind: 'BUG', text: 'Dropdown abgeschnitten\nim Dialog',
+    context: { view: 'Projekte', item: '003-prt-003 – Abdeckung', errors: ['GET /api/x → 500 kaputt'], pin_hash: 'nicht übernehmen' } };
+  const { id } = (await ok('/api/feedback', { method: 'POST', body: sent, cookie: ben })).body;
+  await ok('/api/feedback', { method: 'POST', body: { kind: 'IDEA', text: 'Dunkles Logo' }, cookie: cleo });
+  assert.strictEqual((await req('/api/feedback', { method: 'POST', body: { kind: 'IDEA', text: '  ' }, cookie: ben })).status, 400);
+  assert.strictEqual((await req('/api/feedback', { method: 'POST', body: { kind: 'LOB', text: 'x' }, cookie: ben })).status, 400);
+
+  // Auf dem Dashboard nur für Admins
+  assert.deepStrictEqual((await ok('/api/dashboard', { cookie: cleo })).body.openFeedback, []);
+  const dash = (await ok('/api/dashboard', { cookie: anna })).body.openFeedback;
+  assert.deepStrictEqual(dash.map(f => f.kind), ['IDEA', 'BUG'], 'neueste zuerst');
+
+  assert.strictEqual((await req('/api/feedback', { cookie: cleo })).status, 403);
+  const f = (await ok('/api/feedback', { cookie: anna })).body.find(x => x.id === id);
+  assert.deepStrictEqual([f.user_name, f.status, f.context.view, f.context.item, f.context.errors],
+    ['Ben', 'OPEN', 'Projekte', '003-prt-003 – Abdeckung', ['GET /api/x → 500 kaputt']]);
+  assert.ok(f.context.version, 'Version vom Server');
+  assert.ok(!('pin_hash' in f.context), 'nur bekannte Felder');
+
+  assert.strictEqual((await req(`/api/feedback/${id}`, { method: 'PUT', body: { done: true }, cookie: ben })).status, 403);
+  const done = (await ok(`/api/feedback/${id}`, { method: 'PUT', body: { done: true }, cookie: anna })).body;
+  assert.deepStrictEqual([done.status, done.done_by], ['DONE', 'Anna Muster']);
+  assert.strictEqual((await ok('/api/dashboard', { cookie: anna })).body.openFeedback.length, 1, 'erledigte nicht mehr');
+  assert.strictEqual((await req(`/api/feedback/${id}`, { method: 'DELETE', cookie: cleo })).status, 403);
+  await ok(`/api/feedback/${id}`, { method: 'DELETE', cookie: anna });
+  assert.ok(!(await ok('/api/feedback', { cookie: anna })).body.some(x => x.id === id));
+});
+
 test('PIN, mindestens ein Admin, Deaktivieren beendet die Auswahl', async () => {
   const a = (await ok(`/api/users/${ids.anna}`, { method: 'PUT', body: { pin: '2468' }, cookie: anna })).body;
   assert.strictEqual(a.has_pin, true);

@@ -70,12 +70,13 @@ async function renderDashboard() {
       </div>
       <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:2px">${right}</div>
     </div>`;
-  const section = (title, list, view, render) => !list.length ? '' : `
+  // link: Ziel für „Liste →" — ein Ansichtsname oder ein eigener Aufruf
+  const section = (title, list, view, render, link = `gotoView('${view}')`) => !list.length ? '' : `
     <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);padding:10px 6px 6px;margin-bottom:12px">
       <div style="display:flex;align-items:baseline;gap:8px;padding:0 10px 6px">
         <span style="font-size:13px;font-weight:600">${title}</span>
         <span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${list.length}</span>
-        ${view ? `<span onclick="gotoView('${view}')" style="margin-left:auto;font-size:13px;color:var(--blue);cursor:pointer">${list.length > DASH_MAX ? `alle ${list.length} →` : 'Liste →'}</span>` : ''}
+        ${view ? `<span onclick="${link}" style="margin-left:auto;font-size:13px;color:var(--blue);cursor:pointer">${list.length > DASH_MAX ? `alle ${list.length} →` : 'Liste →'}</span>` : ''}
       </div>
       ${list.slice(0, DASH_MAX).map(render).join('')}
     </div>`;
@@ -83,6 +84,11 @@ async function renderDashboard() {
   const who = x => `${esc(x.number)} · ${esc(x.customer_name || '—')}`;
 
   const sections = [
+    section('Rückmeldungen', d.openFeedback || [], 'feedback', f => row(`openFeedbackDetail(${f.id})`,
+      `<span title="${FEEDBACK_KIND[f.kind].label}">${FEEDBACK_KIND[f.kind].icon}</span>`, esc(_feedbackTitle(f.text)),
+      `${esc(f.user_name || '—')} · ${fmtDate(f.created_at)}`,
+      `<span style="font-size:13px;color:${FEEDBACK_KIND[f.kind].color}">${FEEDBACK_KIND[f.kind].label}</span>`),
+      'showFeedbackList()'),
     section('Produktion', d.openDeliveries, 'deliveries', x => row(`gotoView('deliveries');openDeliveryDetail(${x.id})`,
       stBadge('delivery', x.status), esc(x.title), who(x), _dashDue(x.delivery_date, 'delivery'))),
     section('Aufträge', d.openOrders, 'orders', o => row(`gotoView('orders');openOrderDetail(${o.id})`,

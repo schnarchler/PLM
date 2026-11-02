@@ -23,6 +23,9 @@
       onkeydown="if(event.key==='Enter'){event.preventDefault();onSearchEnter(this.value)}">
   </div>
   <div class="tb-right">
+    <button id="tb-feedback" class="btn btn-ghost btn-sm tb-feedback" onclick="openFeedbackModal()" title="Fehler melden oder Idee einreichen" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </button>
     <button id="tb-user" class="tb-user" onclick="onUserChip()" style="display:none"></button>
     <button id="tb-cad-btn" class="btn btn-ghost btn-sm" onclick="launchCad()" title="CAD-Programm starten" style="font-size:11px">🖥 CAD</button>
     <button id="tb-checkout-btn" class="btn btn-ghost btn-sm" onclick="showCheckoutList()" title="Aktive Checkouts anzeigen" style="font-size:11px">⬆ Checkouts</button>
@@ -933,5 +936,6 @@
 <script src="js/16-benutzer.js"></script>
 <script src="js/17-aenderungen.js"></script>
 <script src="js/18-rueckverfolgung.js"></script>
+<script src="js/19-rueckmeldung.js"></script>
 </body>
 </html>
