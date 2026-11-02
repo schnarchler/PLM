@@ -131,6 +131,27 @@ test('Kurzcode im Produktionsauftrag mit der gelieferten Revision', async () => 
   assert.strictEqual((await api(`/api/deliveries/${d.id}`)).items[0].short_code, code);
 });
 
+test('Suche findet Aufträge und Produktionsaufträge über ihre Positionen', async () => {
+  const teil = await api('/api/items/1');
+  const o = await api('/api/orders', 'POST', { title: 'Sammelbestellung' });
+  await api(`/api/orders/${o.id}/items`, 'POST', { item_id: teil.id, description: teil.name, quantity: 3, unit: 'Stk', unit_price: 5 });
+  await api(`/api/orders/${o.id}/items`, 'POST', { description: 'Versand', quantity: 1, unit: 'Stk', unit_price: 9 });
+  const fremd = await api('/api/orders', 'POST', { title: 'Etwas anderes' });
+
+  // Kurzcode mit Revision: alle Aufträge, die das Teil enthalten, mit der passenden Position
+  const r = await api('/api/search?' + new URLSearchParams({ q: `${teil.short_code}-1` }));
+  const hit = r.orders.find(x => x.id === o.id);
+  assert.ok(hit, 'Auftrag mit dem Teil gefunden');
+  assert.deepStrictEqual(hit.hits.map(h => [h.item_number, h.quantity]), [[teil.item_number, 3]], 'nur die passende Position');
+  assert.ok(!r.orders.some(x => x.id === fremd.id));
+  assert.ok(r.deliveries.some(d => d.title === 'Los 1' && d.hits.length === 1), 'Produktionsauftrag ebenso');
+
+  // Teilenummer und Positionstext gehen auch ohne Kurzcode-Treffer
+  assert.ok((await api('/api/search?' + new URLSearchParams({ q: teil.item_number }))).orders.some(x => x.id === o.id));
+  const versand = (await api('/api/search?q=Versand')).orders.find(x => x.id === o.id);
+  assert.deepStrictEqual(versand.hits.map(h => h.label), ['Versand']);
+});
+
 test('Lieferanten: Freitext-Adresse aus älterer Datenbank wird in Felder übernommen', async () => {
   const list = await api('/api/suppliers');
   const by = n => list.find(s => s.name === n);

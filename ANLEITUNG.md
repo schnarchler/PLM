@@ -609,6 +609,8 @@ Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktion
 - **Mehrere Wörter** müssen alle vorkommen, egal in welchem Feld: „Halter PETG“ findet einen Halter mit „PETG“ in der Beschreibung.
 - Gross-/Kleinschreibung spielt keine Rolle, auch nicht bei Umlauten („öse“ findet „Öse“).
 - Eine exakt eingegebene Item-Nummer steht oben.
+- **Kurzcode** (z. B. `XHJ-1`, auch per Barcode-Scanner): oben erscheint der Kurzcode-Treffer; **Teil öffnen ↵** (Klick oder Enter) öffnet das Teil in dieser Revision.
+- **Aufträge, Angebote und Produktionsaufträge** werden auch über ihre Positionen gefunden — Teilenummer, Kurzcode, Teilename oder Positionstext. Unter dem Titel steht, welche Position passt („enthält 001-prt-001 Kabelhalter × 12“).
 
 **Filter nach Klassifizierung:** Die Chips über den Ergebnissen zeigen pro Klassifizierung die Zahl der Treffer.
 

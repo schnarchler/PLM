@@ -1000,7 +1000,7 @@ function _renderCodeMatch(m) {
           <span style="font-family:var(--mono);color:var(--blue)">${esc(it.item_number)}</span> · ${esc(it.project_name || '')}</div>
         <div style="font-size:12px;margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${revBadge(rev || latest)} ${note}</div>
       </div>
-      <span class="chip" style="flex-shrink:0">Öffnen ↵</span>
+      <span class="chip" style="flex-shrink:0" title="Klick oder Enter öffnet das Teil in dieser Revision">Teil öffnen ↵</span>
     </div>`;
 }
 
@@ -1056,6 +1056,10 @@ function _renderSearchResults(r, q) {
   const fmtSz = b => !b?'—':b<1024?b+'B':b<1048576?(b/1024).toFixed(0)+'KB':(b/1048576).toFixed(1)+'MB';
   const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMAGE:'🖼',DOC:'📄'}[t]||'📎');
   const section = (label, count, total) => `<div class="sep-label" style="margin-top:16px">${label}${count ? ` <span style="color:var(--t4);font-weight:400">(${total && total > count ? count + ' von ' + total : count})</span>` : ''}</div>`;
+  // Welche Positionen eines Auftrags zur Suche passen — unter dem Titel
+  const hits = x => x.hits?.length ? `<div style="font-size:12px;color:var(--t3);margin-top:2px">enthält ${x.hits.slice(0, 3).map(h =>
+      `${h.item_number ? `<span style="font-family:var(--mono);color:var(--blue)">${esc(h.item_number)}</span> ` : ''}${esc(h.label || '')} × ${fmtN(h.quantity, 0)}`).join(' · ')}${
+      x.hits.length > 3 ? ` · +${x.hits.length - 3}` : ''}</div>` : '';
   const filterLabel = _searchClass === '__none__' ? 'ohne Klassifizierung' : `Klassifizierung „${esc(_searchClass)}"`;
   const noHits = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Keine Treffer${q ? ` für „${esc(q)}"` : ''}${_searchClass ? ' mit ' + filterLabel : ''}</div></div>`;
   const total = ['projects','items','datasets','orders','customers','deliveries','rawMaterials'].reduce((n, k) => n + (r[k]?.length || 0), 0);
@@ -1084,7 +1088,7 @@ function _renderSearchResults(r, q) {
       <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Datum</th></tr></thead>
       <tbody>${r.orders.map(o=>`<tr style="cursor:pointer" onclick="gotoView('orders');openOrderDetail(${o.id})">
         <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(o.number)}</td>
-        <td>${esc(o.title)}</td><td style="color:var(--t3)">${esc(o.customer_name||'—')}</td>
+        <td>${esc(o.title)}${hits(o)}</td><td style="color:var(--t3)">${esc(o.customer_name||'—')}</td>
         <td>${stBadge('order', o.status)}</td>
         <td style="font-family:var(--mono);font-size:13px;color:var(--t3)" title="${o.status === 'QUOTE' ? 'gültig bis' : 'Liefertermin'}">${fmtD(o.status === 'QUOTE' ? o.valid_until : o.delivery_date)}</td>
       </tr>`).join('')}</tbody></table></div>` : ''}
@@ -1092,7 +1096,7 @@ function _renderSearchResults(r, q) {
       <thead><tr><th>Nr.</th><th>Bezeichnung</th><th>Kunde</th><th>Status</th><th>Lieferdatum</th></tr></thead>
       <tbody>${r.deliveries.map(d=>`<tr style="cursor:pointer" onclick="${d.order_id ? `openOrderFromProduction(${d.order_id})` : `gotoView('deliveries');openDeliveryDetail(${d.id})`}">
         <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</td>
-        <td>${esc(d.title)}</td><td style="color:var(--t3)">${esc(d.customer_name||'—')}</td>
+        <td>${esc(d.title)}${hits(d)}</td><td style="color:var(--t3)">${esc(d.customer_name||'—')}</td>
         <td>${stBadge('delivery', d.status)}</td>
         <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
       </tr>`).join('')}</tbody></table></div>` : ''}

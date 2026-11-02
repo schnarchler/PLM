@@ -4976,21 +4976,45 @@ app.get('/api/search', (req, res) => {
     FROM datasets d JOIN revisions r ON d.revision_id=r.id JOIN items i ON r.item_id=i.id JOIN projects p ON i.project_id=p.id
     WHERE ${wd.sql} ORDER BY d.id DESC LIMIT 20`, wd.params);
 
-  const wo = likeAll(tokens, ['o.number', 'o.title', 'c.name', 'o.customer_name_free']);
-  const orders = all(`SELECT o.id, o.number, o.title, o.status, o.order_date, o.delivery_date, o.valid_until,
-    COALESCE(c.name, o.customer_name_free) as customer_name
-    FROM orders o LEFT JOIN customers c ON o.customer_id=c.id
-    WHERE ${wo.sql} ORDER BY o.id DESC LIMIT 15`, wo.params);
+  // Kurzcode oder Etiketten-QR: direkter Treffer auf Teil und Revision
+  const code_match = findByPrintCode(req.query.q);
+
+  // Aufträge und Produktionsaufträge auch über ihre Positionen: Teilenummer,
+  // Kurzcode, Teilename oder Positionstext. Bei einem Kurzcode-Treffer
+  // kommen alle dazu, die dieses Teil enthalten. „hits" nennt die Positionen.
+  const posCols = p => [`${p}.description`, 'pi.item_number', 'pi.short_code', 'pi.name'];
+  const codeItem = code_match?.item?.id ?? null;
+  const withPositions = (head, posTable, fk, headCols, select, from) => {
+    const w = likeAll(tokens, [...headCols, ...posCols('x')]);
+    const rows = all(`SELECT DISTINCT ${select} FROM ${from}
+      LEFT JOIN ${posTable} x ON x.${fk}=${head}.id LEFT JOIN items pi ON pi.id=x.item_id
+      WHERE (${w.sql})${codeItem ? ` OR x.item_id=${Number(codeItem)}` : ''}
+      ORDER BY ${head}.id DESC LIMIT 15`, w.params);
+    const low = tokens.map(t => t.toLowerCase());
+    for (const r of rows) {
+      r.hits = all(`SELECT x.description, x.quantity, x.unit, x.item_id, pi.item_number, pi.short_code, pi.name
+        FROM ${posTable} x LEFT JOIN items pi ON pi.id=x.item_id WHERE x.${fk}=?`, [r.id])
+        .filter(x => x.item_id === codeItem || (low.length && low.every(t =>
+          [x.description, x.item_number, x.short_code, x.name].some(v => String(v || '').toLowerCase().includes(t)))))
+        .map(x => ({ item_number: x.item_number, label: x.name || x.description, quantity: x.quantity, unit: x.unit }));
+    }
+    // Wer das gesuchte Teil enthält, steht vorne
+    return rows.sort((a, b) => (b.hits.length > 0) - (a.hits.length > 0));
+  };
+
+  const orders = withPositions('o', 'order_items', 'order_id', ['o.number', 'o.title', 'c.name', 'o.customer_name_free'],
+    `o.id, o.number, o.title, o.status, o.order_date, o.delivery_date, o.valid_until,
+     COALESCE(c.name, o.customer_name_free) as customer_name`,
+    'orders o LEFT JOIN customers c ON o.customer_id=c.id');
 
   const wc = likeAll(tokens, ['number', 'name', 'email', 'city']);
   const customers = all(`SELECT id, number, name, email, city, phone FROM customers
     WHERE ${wc.sql} ORDER BY id DESC LIMIT 10`, wc.params);
 
-  const wl = likeAll(tokens, ['d.number', 'd.title', 'c.name', 'd.customer_name_free']);
-  const deliveries = all(`SELECT d.id, d.number, d.title, d.status, d.delivery_date, d.order_id,
-    COALESCE(c.name, d.customer_name_free) as customer_name
-    FROM deliveries d LEFT JOIN customers c ON d.customer_id=c.id
-    WHERE ${wl.sql} ORDER BY d.id DESC LIMIT 10`, wl.params);
+  const deliveries = withPositions('d', 'delivery_items', 'delivery_id', ['d.number', 'd.title', 'c.name', 'd.customer_name_free'],
+    `d.id, d.number, d.title, d.status, d.delivery_date, d.order_id,
+     COALESCE(c.name, d.customer_name_free) as customer_name`,
+    'deliveries d LEFT JOIN customers c ON d.customer_id=c.id');
 
   // Rohmaterial: sucht auch in Lot- und Artikelnummern
   const wr = likeAll(tokens, ['rm.name', 'rm.material_type', 'rm.color', 'rm.brand', 'rmm.article_number', 'rmm.lot_number']);
@@ -5001,9 +5025,6 @@ app.get('/api/search', (req, res) => {
     LEFT JOIN raw_material_movements rmm ON rmm.raw_material_id=rm.id AND rmm.article_number IS NOT NULL
     WHERE ${wr.sql}
     ORDER BY rm.name LIMIT 15`, wr.params);
-
-  // Kurzcode oder Etiketten-QR: direkter Treffer auf Teil und Revision
-  const code_match = findByPrintCode(req.query.q);
 
   res.json({ code_match, items: shown, items_total, projects, datasets, orders, customers, deliveries, rawMaterials, class_counts, class: '' });
 });
