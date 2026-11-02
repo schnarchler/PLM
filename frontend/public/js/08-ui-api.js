@@ -122,7 +122,15 @@ function setLeftHeader(title, actionsHtml) {
   }
   document.getElementById('left-actions').innerHTML = actionsHtml||'';
 }
-function setLeftBody(html) { document.getElementById('left-body').innerHTML = html; }
+// Neuer Inhalt links: die Fusszeile gehört zur vorigen Ansicht (z. B. die
+// Legende der Projektliste) — wer sie braucht, setzt sie danach mit setLeftFooter
+function setLeftBody(html) { document.getElementById('left-body').innerHTML = html; setLeftFooter(''); }
+function setLeftFooter(html) {
+  const el = document.getElementById('left-footer');
+  if (!el) return;
+  el.innerHTML = html;
+  el.hidden = !html;
+}
 
 // Beim Start sofort, danach gesammelt: mehrere Änderungen kurz
 // hintereinander ergeben nur eine Abfrage

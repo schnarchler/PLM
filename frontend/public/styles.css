@@ -549,9 +549,9 @@ tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; 
 .st-REL  { background: var(--green-soft);     color: var(--green); }
 .st-ECO  { background: var(--purple-soft);    color: var(--purple); }
 .st-OBS  { background: var(--grey-soft);      color: var(--t3); }
-/* Legende unter dem Projektbaum: unten im Bereich, beim Scrollen sichtbar */
-.status-legend { margin-top: auto; position: sticky; bottom: -28px; display: flex; flex-wrap: wrap; gap: 6px 14px;
-  padding: 10px 0 12px; border-top: 1px solid var(--line); background: var(--bg0); font-size: 12px; color: var(--t3); }
+/* Legende unter dem Projektbaum: feste Fusszeile der linken Spalte */
+#left-footer { flex-shrink: 0; padding: 8px 18px; border-top: 1px solid var(--line); }
+.status-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--t3); }
 
 .status-sel {
   font-family: var(--mono);

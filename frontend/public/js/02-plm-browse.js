@@ -202,16 +202,14 @@ function renderProjectTree(p) {
       </button>
       <span style="margin-left:auto;display:inline-flex;gap:4px">${_sortBtns('sort_items', '_resortProject')}</span>
     </div>
-    <div style="display:flex;flex-direction:column;min-height:calc(100% - 46px)">
-      <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>
-      ${_statusLegend()}
-    </div>`);
+    <div id="project-tree">${renderTreeNodes(visibleRoots, items)}</div>`);
+  setLeftFooter(_statusLegend());
 
   _treeRestoreOpen(openIds);
 }
 
-// Was die Farben der Revisions-Kennzeichen bedeuten — unten an der Liste,
-// bleibt beim Scrollen stehen
+// Was die Farben der Revisions-Kennzeichen bedeuten — als Fusszeile ganz
+// unten in der linken Spalte, unabhängig vom Scrollen
 function _statusLegend() {
   return `<div class="status-legend">${Object.entries(PLM_ST_LABEL).map(([st, label]) =>
     `<span style="display:inline-flex;align-items:center;gap:5px"><span class="status st-${st}">${st}</span>${esc(label)}</span>`).join('')}</div>`;
@@ -261,7 +259,8 @@ function _renderTreeNode(item, map, isRoot) {
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 20)}
       <span class="tree-num" style="font-size:13px">${item.item_number}</span>
-      ${rev ? `<span class="tree-revno">rev${esc(rev.rev)}</span>` : ''}
+      ${printCodeOf(item, rev) ? `<span class="tree-revno" title="Kurzcode · rev${esc(rev?.rev ?? '')}">${esc(printCodeOf(item, rev))}</span>`
+        : rev ? `<span class="tree-revno">rev${esc(rev.rev)}</span>` : ''}
       <span class="tree-name">${esc(item.name)}</span>
       ${item.classification ? _classChip(item.classification) : ''}
       ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(121,221,227,.12);border:1px solid rgba(121,221,227,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
@@ -606,6 +605,12 @@ function renderItemDetail(item, activeRevId) {
 }
 
 // ── DATENBLATT-TAB ────────────────────────────────────────────
+// Kurzcode zum Aufdrucken mit der Revision nach dem Strich (JXE-1) — im
+// Datenblatt und in der Projektliste. Dokumente werden nicht gedruckt und haben keinen.
+function printCodeOf(item, rev) {
+  return item.short_code && item.item_type !== 'doc' ? item.short_code + (rev ? '-' + rev.rev : '') : '';
+}
+
 // Was für die Freigabe noch fehlt (Einstellungen → PLM → Prüfung vor der Freigabe)
 function _releaseMissingBox(rev) {
   const m = rev?.release_missing || [];
@@ -948,7 +953,7 @@ function renderItemSheet(item, activeRevId) {
     </div>`;
 
   // -- Kurzcode zum Aufdrucken: folgt der gewählten Revision
-  const pcode = item.short_code && item.item_type !== 'doc' ? item.short_code + (rev ? '-' + rev.rev : '') : '';
+  const pcode = printCodeOf(item, rev);
   const codeBlock = pcode ? `<div class="print-code">
       <span class="print-code-label">Kurzcode</span>
       <span class="print-code-val">${esc(pcode)}</span>
