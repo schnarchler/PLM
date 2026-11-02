@@ -155,8 +155,11 @@ test('Gelieferter Stand: Check-in legt eine neue Revision an', async () => {
 
   const co = await api(`/api/items/${teil.id}/checkout`, 'POST', {});
   assert.ok(co.folder, 'Checkout-Ordner angelegt');
-  fs.writeFileSync(path.join(co.folder, 'halter.stl'), 'solid geaendert');
-  await api('/api/checkout/checkin', 'POST', { folder: co.folder });
+  const datei = path.join(co.folder, co.files[0].name);
+  fs.writeFileSync(datei, 'solid geaendert');
+  const ask = await api('/api/checkout/checkin', 'POST', { folder: co.folder });
+  assert.deepStrictEqual([ask.ask, ask.files[0].status], ['rel_changed', 'DELIVERED'], 'erst nachfragen');
+  await api('/api/checkout/checkin', 'POST', { folder: co.folder, rel_changes: 'new_revision' });
 
   const fresh = await item(teil.id);
   assert.strictEqual(fresh.revisions.length, 2, 'neue Revision statt Überschreiben');

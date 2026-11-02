@@ -285,8 +285,8 @@ der aktiven Revision (blasses Kennzeichen `rev2`). Sobald der Produktionsauftrag
 | Item mit gelieferter Revision | nur noch unter **Einstellungen → Admin** löschbar |
 
 Weiterarbeiten geht in einer **neuen Revision** — im Revisionen-Tab erscheint dafür
-„＋ Neue Revision“, auch im Workflow mit Freigabe. Ein Check-in in eine gelieferte
-Revision legt automatisch eine neue an.
+„＋ Neue Revision“, auch im Workflow mit Freigabe. Werden bei einem Check-in Dateien
+einer gelieferten Revision geändert, fragt PLM nach und legt dafür eine neue Revision an.
 
 - **Vor der Lieferung** lässt sich eine Position über das Kennzeichen von Hand auf eine
   Revision setzen (z. B. wenn bewusst noch rev1 gedruckt wird).
@@ -461,8 +461,9 @@ Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis**
 
 2. In Solid Edge bearbeiten
 
-3. → "⬆ Einchecken" → Ordner wird gelöscht, Eintrag in der Historie
-   (ist die Revision schon geliefert, landen die Dateien in einer neuen Revision)
+3. → "⬆ Einchecken" → nur geänderte Dateien werden übernommen, Ordner wird gelöscht.
+   Ist das Teil inzwischen nicht mehr im Entwurf (freigegeben, in Review, veraltet,
+   geliefert), fragt PLM vorher nach: als neue Revision hochladen oder verwerfen
 
 4. Neue Dateien → PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht
 ```

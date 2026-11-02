@@ -308,13 +308,24 @@ Navigation → **Änderungen** → **+ Änderungsantrag**.
 
 **Arbeiten im CAD:** Dateien bearbeiten oder neue erstellen.
 
-**Einchecken:** **⬆ Einchecken** → Ordner wird gelöscht, Eintrag in der Historie. Ist die Revision bereits geliefert, landen die Dateien in einer neuen Revision.
+**Einchecken:** **⬆ Einchecken** → übernommen werden nur **geänderte** Dateien, danach wird der Ordner gelöscht (Eintrag in der Historie). Unveränderte Dateien (gleiches Änderungsdatum oder gleicher Inhalt) bleiben in PLM unangetastet — so kann nichts versehentlich überschrieben werden. Dateien eines Unterteils (Checkout einer Baugruppe) landen in der Revision dieses Unterteils.
 
-**Freigegebene Teile (REL):** Unverändert (gleiches Änderungsdatum oder gleicher Inhalt) wird beim Einchecken nur der Ordner gelöscht. Wurde trotzdem etwas bearbeitet, fragt PLM nach: **Neue Revision anlegen** (die Freigabe bleibt, die Änderungen kommen per ECO in eine neue Revision; bei Baugruppen in die Revision des geänderten Unterteils), **Änderungen verwerfen** oder **Abbrechen** (der Ordner bleibt).
+Entscheidend ist der **heutige** Stand in PLM, nicht der beim Auschecken:
+
+| Stand des Teils | Geänderte Dateien |
+|---|---|
+| Entwurf (DFT) | direkt übernommen, gleichnamige ersetzt |
+| Freigegeben (REL) | Rückfrage — hochladen: die Freigabe bleibt, die Änderung kommt per ECO in eine neue Revision |
+| In Review (REV) | Rückfrage — hochladen: die Revision geht zurück auf Entwurf |
+| Veraltet (OBS) oder geliefert | Rückfrage — hochladen: neue Revision mit dem bisherigen Inhalt |
+
+Bei der Rückfrage: **Als neue Revision hochladen**, **Änderungen verwerfen** (löscht sie mit dem Ordner) oder **Abbrechen** (der Ordner bleibt, in PLM ändert sich nichts).
 
 **Neue Dateien:** PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht (⬆ Checkouts):
 - Im Unterordner eines Items → „Zum Item hinzufügen"
-- Im Hauptordner → „Als neues Item anlegen"
+- Im Hauptordner → „Als neues Item anlegen" oder „An Item anhängen"
+
+**Aufräumen:** Dateien im Hauptordner, die schon in PLM sind (als Item angelegt oder angehängt), bleiben zunächst liegen — falls eine Baugruppe im CAD noch auf sie verweist. Die Checkout-Übersicht listet sie unter „… sind schon in PLM“; **🧹 Aufräumen** löscht sie. Gelöscht wird nur, was inhaltlich gleich in PLM liegt (Prüfsumme). Geänderte oder unbekannte Dateien und die Ordner der Checkouts bleiben.
 
 ### Solid Edge Standardpfad
 

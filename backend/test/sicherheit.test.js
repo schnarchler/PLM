@@ -168,6 +168,26 @@ test('Import: Dateien auf oberster Ebene — neues Item, dann an das Item anhän
   assert.strictEqual(raus.count, 0, 'von der obersten Ebene führt kein ../ hinaus');
 });
 
+test('Aufräumen: löscht nur Dateien, deren Inhalt PLM schon hat', { skip }, async () => {
+  fs.mkdirSync(coDir, { recursive: true });
+  const schon = path.join(coDir, 'Klammer.stl'), fremd = path.join(coDir, 'Notiz.txt'), unterordner = path.join(coDir, 'Ordner');
+  fs.writeFileSync(schon, 'solid klammer\nendsolid klammer\n');
+  fs.writeFileSync(fremd, 'nicht in PLM');
+  fs.mkdirSync(unterordner, { recursive: true });
+  const proj = await api('/api/projects', 'POST', { name: 'Aufräumen' });
+  await api('/api/checkout/import', 'POST', { mode: 'new', new_item: { project_id: proj.id,
+    item_type: 'prt', name: 'Klammer', file_path: schon, file_name: 'Klammer.stl', ds_type: 'CAD' } });
+
+  const scan = await api('/api/checkout/scan');
+  assert.ok(scan.in_plm.some(f => f.name === 'Klammer.stl'), 'als aufräumbar gemeldet');
+  assert.ok(!scan.in_plm.some(f => f.name === 'Notiz.txt'));
+  const r = await api('/api/checkout/cleanup', 'POST', {});
+  assert.ok(r.deleted.includes('Klammer.stl') && !r.deleted.includes('Notiz.txt'));
+  assert.deepStrictEqual([fs.existsSync(schon), fs.existsSync(fremd), fs.existsSync(unterordner)], [false, true, true],
+    'nur was PLM hat, Ordner bleiben');
+  assert.ok(!(await api('/api/checkout/scan')).in_plm.some(f => f.name === 'Klammer.stl'));
+});
+
 test('Ordner öffnen: nur Checkout-Ordner, nur von diesem PC', { skip }, async () => {
   assert.strictEqual((await status('/api/checkout/open', 'POST', { folder: victim })).status, 400);
   assert.strictEqual(await foreignHost('/api/checkout/open', 'POST', { folder: coDir }), 403);

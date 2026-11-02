@@ -3334,9 +3334,9 @@ app.post('/api/items/:id/checkout', (req, res) => {
 app.get('/api/checkout/scan', (req, res) => {
   try {
     const checkoutDir = getCheckoutDir();
-    if (!fs.existsSync(checkoutDir)) return res.json({ item_files: [], root_files: [] });
+    if (!fs.existsSync(checkoutDir)) return res.json({ item_files: [], root_files: [], in_plm: [] });
 
-    const result = { item_files: [], root_files: [] };
+    const result = { item_files: [], root_files: [], in_plm: [] };
     const entries = fs.readdirSync(checkoutDir);
 
     // Root-level files (not directories, not hidden). Was schon im PLM ist —
@@ -3346,9 +3346,9 @@ app.get('/api/checkout/scan', (req, res) => {
       if (e.startsWith('.')) continue;
       const p = path.join(checkoutDir, e);
       const st = fs.statSync(p);
-      if (st.isFile() && !_contentInPlm(p, st)) {
-        result.root_files.push({ name: e, path: p, ds_type: guessType(e) });
-      }
+      if (!st.isFile()) continue;
+      if (_contentInPlm(p, st)) result.in_plm.push({ name: e, size: st.size });   // lässt sich aufräumen
+      else result.root_files.push({ name: e, path: p, ds_type: guessType(e) });
     }
 
     // Subdirectory: detect new files not in .checkout.json
@@ -3468,6 +3468,25 @@ app.post('/api/checkout/import', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Aufräumen: Dateien auf oberster Ebene des Checkout-Verzeichnisses löschen,
+// deren Inhalt schon im PLM liegt (als neues Item angelegt oder angehängt).
+// Was PLM nicht hat, bleibt — ebenso die Ordner der Checkouts.
+app.post('/api/checkout/cleanup', (req, res) => {
+  const checkoutDir = getCheckoutDir();
+  const deleted = [];
+  if (fs.existsSync(checkoutDir)) {
+    for (const e of fs.readdirSync(checkoutDir)) {
+      if (e.startsWith('.')) continue;
+      const p = path.join(checkoutDir, e);
+      try {
+        const st = fs.statSync(p);
+        if (st.isFile() && _contentInPlm(p, st)) { fs.unlinkSync(p); deleted.push(e); }
+      } catch {}
+    }
+  }
+  res.json({ deleted });
+});
+
 app.get('/api/checkout/list', (req, res) => {
   const checkoutDir = getCheckoutDir();
   if (!fs.existsSync(checkoutDir)) return res.json([]);
@@ -3558,65 +3577,40 @@ app.post('/api/checkout/checkin', (req, res) => {
       if (fs.existsSync(metaPath)) meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
     } catch {}
 
+    // Hochgeladen wird nur, was sich geändert hat — Unverändertes bleibt in PLM,
+    // wie es ist, damit nichts versehentlich überschrieben wird. Ob eine
+    // Änderung direkt übernommen wird, hängt vom heutigen Stand ab, nicht vom
+    // Stand beim Auschecken: ein offener Entwurf nimmt sie auf; ist das Teil
+    // freigegeben, in Review, veraltet oder geliefert, fragt PLM zuerst —
+    // neue Revision (bei REL per ECO, in Review zurück auf Entwurf) oder verwerfen.
     const uploaded = [];
     const revisions = [];
     let discarded = 0;
-    const wasRel = meta?.rev_status === 'REL' || meta?.rev_status === 'OBS';
-
-    if (meta?.item_id && wasRel) {
-      // Freigegeben: unverändert ist nichts zu tun. Wurde trotzdem etwas
-      // bearbeitet, bleibt der Ordner, bis entschieden ist — neue Revision
-      // (bei REL per ECO) oder verwerfen.
+    if (meta?.item_id) {
       const changed = _changedInCheckout(folder, meta);
+      // Dateien eines Unterteils (Checkout einer Baugruppe) gehören in dessen Revision
       const ownerOf = name => (meta.files || []).find(f => f.name === name)?.item_number || meta.item_number;
+      const byItem = new Map();
+      for (const name of changed) byItem.set(ownerOf(name), [...(byItem.get(ownerOf(name)) || []), name]);
+      const plan = [...byItem].map(([number, names]) => {
+        const item = get('SELECT * FROM items WHERE item_number=?', [number]) || get('SELECT * FROM items WHERE id=?', [meta.item_id]);
+        const last = item && getLatestRevision(item.id);
+        const delivered = !!last && deliveriesOfRevision(last.id).length > 0;
+        const status = !last ? null : delivered ? 'DELIVERED' : last.status;
+        return { item, names, rev: last?.rev, status, open: status === 'DFT' };
+      }).filter(p => p.item);
+      const locked = plan.filter(p => !p.open);
       const choice = req.body.rel_changes;
-      if (changed.length && choice !== 'new_revision' && choice !== 'discard') {
+      if (locked.length && choice !== 'new_revision' && choice !== 'discard') {
         return res.json({ ask: 'rel_changed', item_number: meta.item_number, item_name: meta.item_name,
-          files: changed.map(name => ({ name, item_number: ownerOf(name) })) });
+          files: locked.flatMap(p => p.names.map(name => ({ name, item_number: p.item.item_number, rev: p.rev, status: p.status }))) });
       }
-      if (choice === 'discard') discarded = changed.length;
-      else {
-        // Dateien eines Unterteils (Checkout einer Baugruppe) gehören in dessen Revision
-        const byItem = new Map();
-        for (const name of changed) byItem.set(ownerOf(name), [...(byItem.get(ownerOf(name)) || []), name]);
-        for (const [number, names] of byItem) {
-          const item = get('SELECT * FROM items WHERE item_number=?', [number]) || get('SELECT * FROM items WHERE id=?', [meta.item_id]);
-          const rev = item && _draftRevision(item.id, 'Beim Einchecken geändert');
-          if (!rev) continue;
-          for (const name of names) uploaded.push(_checkinFile(rev, item, path.join(folder, name)));
-          revisions.push({ item_number: item.item_number, rev: rev.rev });
-        }
-      }
-    } else if (meta?.item_id) {
-      // Find or create active revision
-      let rev = get("SELECT * FROM revisions WHERE item_id=? AND status NOT IN ('REL','OBS') ORDER BY id DESC LIMIT 1", [meta.item_id]);
-      // Eine gelieferte Revision ist fixiert — die eingecheckten Dateien
-      // landen in einer neuen Revision, die den bisherigen Inhalt übernimmt.
-      if (rev && deliveriesOfRevision(rev.id).length) {
-        const label = nextRev(rev.rev);
-        const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
-          [meta.item_id, label, 'DFT', `Neue Revision durch Check-in (rev${rev.rev} ist geliefert)`]);
-        copyRevisionContent(rev, newRevId, label);
-        log('item', meta.item_id, 'Neue Revision', `rev${label} angelegt, weil rev${rev.rev} geliefert und fixiert ist`);
-        rev = get('SELECT * FROM revisions WHERE id=?', [newRevId]);
-      }
-      if (!rev) {
-        const lastRev = get('SELECT * FROM revisions WHERE item_id=? ORDER BY id DESC LIMIT 1', [meta.item_id]);
-        const nextRevStr = lastRev ? String(parseInt(lastRev.rev || '1') + 1) : '2';
-        const newRevId = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)',
-          [meta.item_id, nextRevStr, 'DFT', 'Neue Revision durch Check-in']);
-        rev = get('SELECT * FROM revisions WHERE id=?', [newRevId]);
-      }
-      const item = get('SELECT item_number FROM items WHERE id=?', [meta.item_id]);
-
-      // Upload all non-hidden files from folder
-      for (const fname of fs.readdirSync(folder)) {
-        if (fname.startsWith('.')) continue;
-        const src = path.join(folder, fname);
-        try {
-          if (!fs.statSync(src).isFile()) continue;
-        } catch { continue; }
-        uploaded.push(_checkinFile(rev, item, src));
+      for (const p of plan) {
+        if (!p.open && choice === 'discard') { discarded += p.names.length; continue; }
+        const rev = _draftRevision(p.item.id, 'Beim Einchecken geändert');
+        if (!rev) continue;
+        for (const name of p.names) uploaded.push(_checkinFile(rev, p.item, path.join(folder, name)));
+        revisions.push({ item_number: p.item.item_number, rev: rev.rev, was: p.status });
       }
     }
 

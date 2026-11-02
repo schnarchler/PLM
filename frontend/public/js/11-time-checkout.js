@@ -470,9 +470,10 @@ function _showCheckoutResult(r) {
   </div>`);
 }
 
-// Einchecken. Wurde ein freigegebenes Teil trotzdem bearbeitet, fragt PLM
-// nach: neue Revision, verwerfen oder abbrechen. null = abgebrochen, der
-// Checkout-Ordner bleibt.
+// Einchecken: übernommen wird nur, was geändert wurde. Betrifft eine Änderung
+// ein Teil, das nicht im Entwurf ist (freigegeben, in Review, veraltet,
+// geliefert), fragt PLM nach: als neue Revision hochladen, verwerfen oder
+// abbrechen. null = abgebrochen, der Checkout-Ordner bleibt.
 async function _checkin(folder) {
   const r = await api('/api/checkout/checkin', 'POST', { folder });
   if (r.ask !== 'rel_changed') return r;
@@ -480,34 +481,46 @@ async function _checkin(folder) {
   return choice ? api('/api/checkout/checkin', 'POST', { folder, rel_changes: choice }) : null;
 }
 
+// Was mit einer Änderung passiert, je nach heutigem Stand des Teils
+const CHECKIN_LOCKED = {
+  REL: ['freigegeben', 'die Freigabe bleibt, die Änderung kommt per ECO in eine neue Revision'],
+  REV: ['in Review', 'die Revision geht zurück auf Entwurf und bekommt die Änderung'],
+  OBS: ['veraltet', 'eine neue Revision bekommt den bisherigen Inhalt und die Änderung'],
+  ECO: ['im ECO', 'eine neue Revision bekommt den bisherigen Inhalt und die Änderung'],
+  DELIVERED: ['geliefert', 'eine neue Revision bekommt den bisherigen Inhalt und die Änderung'],
+};
+
 function _askRelChanged(r) {
   return new Promise(resolve => {
     window._relChoice = v => { _hideDynModal(); resolve(v); };
     const n = r.files.length;
+    const byItem = new Map();
+    for (const f of r.files) byItem.set(f.item_number, [...(byItem.get(f.item_number) || []), f]);
+    const groups = [...byItem].map(([number, files]) => {
+      const [label, what] = CHECKIN_LOCKED[files[0].status] || ['gesperrt', 'eine neue Revision bekommt die Änderung'];
+      return `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px">
+        <div style="font-size:13px"><span style="font-family:var(--mono);color:var(--blue)">${esc(number)}</span>
+          <span style="color:var(--t3)">rev${esc(files[0].rev)} ist</span> <strong style="color:var(--amber)">${label}</strong></div>
+        ${files.map(f => `<div style="font-family:var(--mono);font-size:12.5px;color:var(--t2);margin-top:3px">✎ ${esc(f.name)}</div>`).join('')}
+        <div style="font-size:12.5px;color:var(--t3);margin-top:4px">Hochladen: ${what}.</div>
+      </div>`;
+    }).join('');
     _showDynModal(`<div class="modal" style="max-width:580px;width:95vw">
       <div class="modal-head">
-        <div class="modal-title" style="color:var(--amber)">Freigegebenes Teil bearbeitet</div>
+        <div class="modal-title" style="color:var(--amber)">${n} geänderte Datei${n !== 1 ? 'en' : ''} — neu hochladen?</div>
         <button class="btn btn-icon btn-ghost" onclick="_relChoice(null)">✕</button>
       </div>
-      <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:13px;color:var(--t2)">
-          <span style="font-family:var(--mono);color:var(--blue)">${esc(r.item_number)}</span> – ${esc(r.item_name)}
-          ist freigegeben, im Checkout wurde${n !== 1 ? 'n' : ''} aber ${n} Datei${n !== 1 ? 'en' : ''} geändert:
-        </div>
-        <div style="display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto">
-          ${r.files.map(f => `<div style="font-family:var(--mono);font-size:13px;color:var(--t2)">${esc(f.name)}${f.item_number !== r.item_number
-            ? ` <span style="color:var(--t4)">(${esc(f.item_number)})</span>` : ''}</div>`).join('')}
-        </div>
-        <div style="font-size:13px;color:var(--t3);line-height:1.5">
-          <strong style="color:var(--t2)">Neue Revision</strong> — die Freigabe bleibt unverändert (ECO), die neue Revision
-          übernimmt Dateien, Stückliste und Druckparameter und bekommt die Änderungen.<br>
-          <strong style="color:var(--t2)">Verwerfen</strong> löscht die geänderten Dateien mit dem Checkout-Ordner.
-        </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:13px;color:var(--t2)">Im Checkout wurde${n !== 1 ? 'n' : ''} ${n !== 1 ? 'Dateien' : 'eine Datei'} geändert, deren Stand in PLM gesperrt ist.
+          Die Dateien in PLM bleiben unangetastet, bis du entscheidest.</div>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto">${groups}</div>
+        <div style="font-size:12.5px;color:var(--t3)"><strong style="color:var(--t2)">Verwerfen</strong> löscht die geänderten Dateien mit dem Checkout-Ordner.
+          <strong style="color:var(--t2)">Abbrechen</strong> lässt den Ordner stehen.</div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="_relChoice(null)">Abbrechen</button>
         <button class="btn btn-red" onclick="_relChoice('discard')">Änderungen verwerfen</button>
-        <button class="btn btn-primary" onclick="_relChoice('new_revision')">Neue Revision anlegen</button>
+        <button class="btn btn-primary" onclick="_relChoice('new_revision')">Als neue Revision hochladen</button>
       </div>
     </div>`);
     document.getElementById('dynModal').addEventListener('click', e => { if (e.target.id === 'dynModal') resolve(null); });
@@ -515,16 +528,18 @@ function _askRelChanged(r) {
 }
 
 function _checkinMessage(r) {
-  if (r.revisions?.length) return `Eingecheckt — Änderungen in ${r.revisions.map(x => `${x.item_number} rev${x.rev}`).join(', ')}, Ordner gelöscht`;
-  if (r.discarded) return 'Eingecheckt — Änderungen verworfen, Ordner gelöscht';
   const count = r.uploaded?.length || 0;
+  const locked = (r.revisions || []).filter(x => x.was && x.was !== 'DFT');
+  if (locked.length) return `Eingecheckt — Änderungen in ${locked.map(x => `${x.item_number} rev${x.rev}`).join(', ')}`
+    + `${r.discarded ? `, ${r.discarded} verworfen` : ''}, Ordner gelöscht`;
+  if (r.discarded) return `Eingecheckt — Änderungen verworfen${count ? `, ${count} in den Entwurf übernommen` : ''}, Ordner gelöscht`;
   return count > 0
-    ? `Eingecheckt — ${count} Datei${count!==1?'en':''} hochgeladen, Ordner gelöscht`
-    : `Eingecheckt — Ordner gelöscht (REL-Element, keine Dateien hochgeladen)`;
+    ? `Eingecheckt — ${count} geänderte Datei${count !== 1 ? 'en' : ''} übernommen, Ordner gelöscht`
+    : 'Eingecheckt — nichts geändert, Ordner gelöscht';
 }
 
 async function doCheckin(folder, btn) {
-  if (!confirm('Dateien in PLM hochladen und Checkout-Ordner löschen?')) return;
+  if (!confirm('Geänderte Dateien in PLM übernehmen und Checkout-Ordner löschen?\n\nUnveränderte Dateien bleiben in PLM, wie sie sind.')) return;
   const orig = btn?.innerHTML;
   if (btn) { btn.innerHTML = '⏳…'; btn.disabled = true; }
   try {
@@ -576,6 +591,16 @@ async function openCheckoutFolder(folder) {
   }
 }
 
+// Dateien löschen, die PLM schon hat — der Server prüft den Inhalt noch einmal
+async function cleanupCheckoutDir(btn) {
+  const n = _scanResult.in_plm?.length || 0;
+  if (!confirm(`${n} Datei${n !== 1 ? 'en' : ''} aus dem Checkout-Verzeichnis löschen?\n\nGelöscht wird nur, was inhaltlich gleich schon in PLM liegt.`)) return;
+  if (btn) btn.disabled = true;
+  const r = await api('/api/checkout/cleanup', 'POST', {});
+  toast(`${r.deleted.length} Datei${r.deleted.length !== 1 ? 'en' : ''} aufgeräumt`, 'ok');
+  showCheckoutList();
+}
+
 async function showCheckoutList() {
   await loadCheckouts();
   const list = state.checkouts;
@@ -616,6 +641,17 @@ async function showCheckoutList() {
               </div>
             </div>`).join('')}
         </div>
+      </div>` : ''}
+
+      ${_scanResult.in_plm?.length ? `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--t2);flex:1;min-width:200px">
+            <strong>${_scanResult.in_plm.length} Datei${_scanResult.in_plm.length !== 1 ? 'en' : ''}</strong> im Checkout-Verzeichnis
+            ${_scanResult.in_plm.length !== 1 ? 'sind' : 'ist'} schon in PLM (als Item angelegt oder angehängt).
+          </span>
+          <button class="btn btn-ghost btn-sm" onclick="cleanupCheckoutDir(this)">🧹 Aufräumen</button>
+        </div>
+        <div style="font-family:var(--mono);font-size:12.5px;color:var(--t3);margin-top:6px;line-height:1.6">${_scanResult.in_plm.map(f => esc(f.name)).join(' · ')}</div>
       </div>` : ''}
 
       ${list.length ? `<div>
