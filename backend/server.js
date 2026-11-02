@@ -4791,8 +4791,10 @@ app.get('/api/dashboard', (req, res) => {
   // Rückmeldungen sieht nur, wer sie bearbeitet
   const openFeedback = isAdminReq(req) ? all(`SELECT id, kind, text, user_name, created_at FROM feedback
     WHERE status='OPEN' ORDER BY id DESC`) : [];
+  // Erledigte zählen nur, damit die Liste auch ohne offene erreichbar bleibt
+  const doneFeedback = isAdminReq(req) ? n("SELECT COUNT(*) n FROM feedback WHERE status='DONE'") : 0;
 
-  res.json({ openDeliveries, openOrders, openQuotes, inReview, lowStock, openEcrs, openFeedback,
+  res.json({ openDeliveries, openOrders, openQuotes, inReview, lowStock, openEcrs, openFeedback, doneFeedback,
     revenueMonth: revenue(true), revenueTotal: revenue(false), stats });
 });
 

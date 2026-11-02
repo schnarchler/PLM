@@ -184,7 +184,9 @@ test('Rückmeldungen: jeder reicht ein, nur Admins sehen und erledigen sie', asy
   assert.strictEqual((await req(`/api/feedback/${id}`, { method: 'PUT', body: { done: true }, cookie: ben })).status, 403);
   const done = (await ok(`/api/feedback/${id}`, { method: 'PUT', body: { done: true }, cookie: anna })).body;
   assert.deepStrictEqual([done.status, done.done_by], ['DONE', 'Anna Muster']);
-  assert.strictEqual((await ok('/api/dashboard', { cookie: anna })).body.openFeedback.length, 1, 'erledigte nicht mehr');
+  const after = (await ok('/api/dashboard', { cookie: anna })).body;
+  assert.deepStrictEqual([after.openFeedback.length, after.doneFeedback], [1, 1], 'erledigte nur noch gezählt');
+  assert.strictEqual((await ok('/api/dashboard', { cookie: cleo })).body.doneFeedback, 0);
   assert.strictEqual((await req(`/api/feedback/${id}`, { method: 'DELETE', cookie: cleo })).status, 403);
   await ok(`/api/feedback/${id}`, { method: 'DELETE', cookie: anna });
   assert.ok(!(await ok('/api/feedback', { cookie: anna })).body.some(x => x.id === id));

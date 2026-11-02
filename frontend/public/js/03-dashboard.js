@@ -116,6 +116,8 @@ async function renderDashboard() {
       <span>gesamt <span style="font-family:var(--mono);color:var(--t2);margin-left:4px">${fmtCHF(d.revenueTotal || 0)}</span></span>
     </div>
     ${sections || `<div class="empty"><div class="empty-icon" style="color:var(--green)">✓</div><div class="empty-text">Nichts offen — alles erledigt.</div></div>`}
+    ${!d.openFeedback?.length && d.doneFeedback ? `<div style="font-size:13px;color:var(--t3);margin:0 0 12px 2px">
+      Rückmeldungen: alle ${d.doneFeedback} erledigt · <span onclick="showFeedbackList()" style="color:var(--blue);cursor:pointer">Liste →</span></div>` : ''}
     ${_dashStats(d.stats)}
   </div>`);
 }
