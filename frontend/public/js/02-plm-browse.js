@@ -212,7 +212,8 @@ function renderProjectTree(p) {
 // unten in der linken Spalte, unabhängig vom Scrollen
 function _statusLegend() {
   return `<div class="status-legend">${Object.entries(PLM_ST_LABEL).map(([st, label]) =>
-    `<span style="display:inline-flex;align-items:center;gap:5px"><span class="status st-${st}">${st}</span>${esc(label)}</span>`).join('')}</div>`;
+    `<span style="display:inline-flex;align-items:center;gap:5px"><span class="status st-${st}">${st}</span>${esc(label)}</span>`).join('')}
+    <span style="display:inline-flex;align-items:center;gap:5px"><span class="tree-co" style="font-size:11px">CO</span>Ausgecheckt</span></div>`;
 }
 
 function toggleBomFilter() {
@@ -263,8 +264,10 @@ function _renderTreeNode(item, map, isRoot) {
         : rev ? `<span class="tree-revno">rev${esc(rev.rev)}</span>` : ''}
       <span class="tree-name">${esc(item.name)}</span>
       ${item.classification ? _classChip(item.classification) : ''}
-      ${co ? `<span style="font-family:var(--mono);font-size:11px;color:var(--teal);background:rgba(121,221,227,.12);border:1px solid rgba(121,221,227,.25);padding:1px 5px;border-radius:3px;flex-shrink:0" title="Ausgecheckt">CO</span>` : ''}
-      ${rev ? `<span class="status st-${rev.status} tree-rev" title="${esc(PLM_ST_LABEL[rev.status] || '')}">${rev.status}</span>` : ''}
+      <span class="tree-right">
+        ${co ? '<span class="tree-co" title="Ausgecheckt — wird gerade bearbeitet">CO</span>' : ''}
+        ${rev ? `<span class="status st-${rev.status} tree-rev" title="${esc(PLM_ST_LABEL[rev.status] || '')}">${rev.status}</span>` : ''}
+      </span>
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" data-item-id="${item.id}" style="display:none">${childHtml}</div>` : ''}
   </div>`;
