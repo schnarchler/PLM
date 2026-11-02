@@ -1036,6 +1036,11 @@ function applySchema() {
     }
     if (n) console.log(`Migration Lieferanten-Adresse: ${n} übernommen`);
   });
+  // Pflicht für die Freigabe, solange nichts eingestellt ist: eine Datei und
+  // das Gewicht. Wer die Liste schon gespeichert hat, behält seine Auswahl.
+  migrateOnce('release-checks-default-v1', () => {
+    db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('release_checks','file,weight')");
+  });
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -2883,6 +2888,7 @@ function startEco(rev, reason) {
 // Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung.
 // Dokumente brauchen keine CAD-Datei und kein Gewicht.
 const RELEASE_CHECKS = {
+  file:           { label: 'Datei',          ok: (item, rev) => !!get('SELECT 1 as y FROM datasets WHERE revision_id=? LIMIT 1', [rev.id]) },
   cad:            { label: 'CAD-Datei',      ok: (item, rev) => item.item_type === 'doc' || !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='CAD' LIMIT 1", [rev.id]) },
   drawing:        { label: 'Zeichnung (PDF)', ok: (item, rev) => !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='PDF' LIMIT 1", [rev.id]) },
   description:    { label: 'Beschreibung',   ok: item => !!String(item.description || '').trim() },

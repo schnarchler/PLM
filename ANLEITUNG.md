@@ -285,7 +285,7 @@ Die Knöpfe heissen **✓ Freigeben**, **⚡ ECO starten** und **Als veraltet ma
 
 Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in die neue DFT-Revision übernommen. Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück. Wird die neue Revision freigegeben, wird die bisherige (REL oder ECO) automatisch **OBS** — gültig ist immer genau eine Revision.
 
-**Prüfung vor der Freigabe:** Unter **Einstellungen → PLM → Prüfung vor der Freigabe** wählbar, was eine Revision mitbringen muss: CAD-Datei, Zeichnung als PDF, Beschreibung, Klassifizierung, Gewicht (Parts). Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Fehlt etwas, steht im Datenblatt und in der Revision „Für die Freigabe fehlt noch: …“, und **✓ Freigeben** ist gesperrt.
+**Prüfung vor der Freigabe:** Unter **Einstellungen → PLM → Prüfung vor der Freigabe** wählbar, was eine Revision mitbringen muss: mindestens eine Datei, CAD-Datei, Zeichnung als PDF, Beschreibung, Klassifizierung, Gewicht (Parts). Standard: eine Datei und das Gewicht. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Fehlt etwas, steht im Datenblatt und in der Revision „Für die Freigabe fehlt noch: …“, und **✓ Freigeben** ist gesperrt.
 
 Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin**.
 

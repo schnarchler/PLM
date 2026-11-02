@@ -294,6 +294,7 @@ function _fourEyesHint() {
 
 // Prüfung vor der Freigabe: [Schlüssel wie im Server, Bezeichnung, für wen]
 const RELEASE_CHECKS = [
+  ['file', 'Mindestens eine Datei hochgeladen', ''],
   ['cad', 'CAD-Datei vorhanden', 'Parts und Baugruppen'],
   ['drawing', 'Zeichnung als PDF vorhanden', ''],
   ['description', 'Beschreibung ausgefüllt', ''],
@@ -1039,46 +1040,14 @@ const statusHints = {
 };
 
 async function openStatusModal(revId, targetStatus) {
-  // Check completeness before REL
-  if (targetStatus === 'REL' && state.item) {
-    // Der Verkaufspreis gehört nicht zur Freigabe — er bleibt jederzeit änderbar
-    const warnings = [];
-    if (state.item.item_type !== 'doc' && state.item.effective_weight_g == null) warnings.push('Kein Gewicht hinterlegt');
-    const rev = state.item.revisions?.find(r => r.id === revId);
-    if (!rev?.datasets?.length)           warnings.push('Keine Dateien hochgeladen');
-    if (warnings.length) {
-      const proceed = await _showReleaseWarning(warnings);
-      if (!proceed) return;
-    }
-  }
+  // Was für die Freigabe Pflicht ist, prüft der Server (Einstellungen → PLM);
+  // fehlt etwas, ist „Freigeben“ schon gesperrt
   set('sm-rev-id', revId); set('sm-target-status', targetStatus);
   set('sm-desc',''); set('sm-eco','');
   document.getElementById('sm-title').textContent = `Status → ${targetStatus}`;
   document.getElementById('sm-hint').textContent = statusHints[targetStatus]||'';
   document.getElementById('sm-eco-row').style.display = targetStatus==='ECO' ? 'block':'none';
   openModal('statusModal');
-}
-
-function _showReleaseWarning(warnings) {
-  return new Promise(resolve => {
-    _showDynModal(`<div class="modal" style="max-width:420px">
-      <div class="modal-head"><div class="modal-title" style="color:var(--amber)">⚠ Freigabe-Warnung</div></div>
-      <div class="modal-body">
-        <div style="font-size:13px;color:var(--t2);margin-bottom:12px">Folgende Angaben fehlen:</div>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
-          ${warnings.map(w => `<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--amber)">
-            <span>⚠</span><span>${esc(w)}</span>
-          </div>`).join('')}
-        </div>
-        <div style="font-size:13px;color:var(--t3)">Trotzdem freigeben?</div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" onclick="_hideDynModal();window._releaseResolve(false)">Abbrechen</button>
-        <button class="btn btn-amber" onclick="_hideDynModal();window._releaseResolve(true)">Trotzdem freigeben</button>
-      </div>
-    </div>`);
-    window._releaseResolve = resolve;
-  });
 }
 
 async function doStatusChange() {

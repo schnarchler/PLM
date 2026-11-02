@@ -64,16 +64,22 @@ async function upload3mf(revId, file) {
   return r.json();
 }
 
+let defaultReleaseChecks;
 before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-wf-'));
   serverProc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT) }, stdio: 'ignore',
   });
-  for (let i = 0; i < 60; i++) {
-    try { await fetch(BASE + '/api/stats'); return; }
+  let up = false;
+  for (let i = 0; i < 60 && !up; i++) {
+    try { await fetch(BASE + '/api/stats'); up = true; }
     catch { await new Promise(r => setTimeout(r, 200)); }
   }
-  throw new Error('Server startet nicht');
+  if (!up) throw new Error('Server startet nicht');
+  // Standard-Pflichtpunkte merken und ausschalten: die Tests geben auch Teile ohne Datei und Gewicht frei
+  defaultReleaseChecks = (await (await fetch(BASE + '/api/settings')).json()).release_checks;
+  await fetch(BASE + '/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ release_checks: '' }) });
 });
 
 after(() => {
@@ -828,5 +834,32 @@ test('Allein wirkt das Vier-Augen-Prinzip nicht: direkt freigeben', async () => 
     assert.strictEqual((await api(`/api/items/${teil.id}`)).revisions[0].status, 'REL');
   } finally {
     await api('/api/settings', 'PUT', { release_four_eyes: '0' });
+  }
+});
+
+test('Pflicht für die Freigabe: Standard eine Datei und das Gewicht', async () => {
+  assert.strictEqual(defaultReleaseChecks, 'file,weight', 'Standard bei neuer Datenbank');
+  await api('/api/settings', 'PUT', { release_checks: 'file,weight' });
+  try {
+    const proj = await api('/api/projects', 'POST', { name: 'Pflicht' });
+    const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Haken', item_type: 'prt' });
+    const revId = (await api(`/api/items/${teil.id}`)).revisions[0].id;
+    assert.deepStrictEqual((await api(`/api/items/${teil.id}`)).revisions[0].release_missing, ['Datei', 'Gewicht']);
+    const blocked = await apiFails(`/api/revisions/${revId}/status`, 'PUT', { status: 'REL' });
+    assert.strictEqual(blocked.status, 400);
+    assert.deepStrictEqual(JSON.parse(blocked.text).missing, ['Datei', 'Gewicht']);
+
+    const form = new FormData();
+    form.append('file', new Blob(['%PDF-1.4']), 'skizze.pdf');
+    assert.ok((await fetch(`${BASE}/api/revisions/${revId}/datasets`, { method: 'POST', body: form })).ok);
+    await api(`/api/items/${teil.id}`, 'PUT', { name: 'Haken', description: '', weight_g: 4 });
+    assert.deepStrictEqual((await api(`/api/items/${teil.id}`)).revisions[0].release_missing, []);
+    await api(`/api/revisions/${revId}/status`, 'PUT', { status: 'REL' });
+
+    // Dokumente brauchen kein Gewicht
+    const doc = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Anleitung', item_type: 'doc' });
+    assert.deepStrictEqual((await api(`/api/items/${doc.id}`)).revisions[0].release_missing, ['Datei']);
+  } finally {
+    await api('/api/settings', 'PUT', { release_checks: '' });
   }
 });

@@ -89,8 +89,9 @@ die neue DFT-Revision übernommen — genau wie bei „＋ Neue Revision“.
 Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.  
 Wird die neue Revision freigegeben, geht die bisherige (REL oder ECO) auf OBS.
 
-**Prüfung vor der Freigabe** (Einstellungen → PLM): wählbare Pflichtpunkte — CAD-Datei,
-Zeichnung (PDF), Beschreibung, Klassifizierung, Gewicht — plus die als Pflicht markierten
+**Prüfung vor der Freigabe** (Einstellungen → PLM): wählbare Pflichtpunkte — mindestens
+eine Datei, CAD-Datei, Zeichnung (PDF), Beschreibung, Klassifizierung, Gewicht (Standard:
+Datei und Gewicht) — plus die als Pflicht markierten
 Eigenschaften der Klassifizierung. Fehlt etwas, nennt PLM es und sperrt „Freigeben“.
 
 **Ohne Freigabe arbeiten:** Unter **Einstellungen → PLM → Freigabe-Workflow** lässt sich

@@ -45,11 +45,15 @@ before(async () => {
     env: { ...process.env, PLM_DATA_DIR: path.join(tmp, 'data'), PLM_PORT: String(PORT), PLM_CONFIG: path.join(tmp, 'plm.config') },
     stdio: 'ignore',
   });
-  for (let i = 0; i < 60; i++) {
-    try { await fetch(BASE + '/api/stats'); return; }
+  let up = false;
+  for (let i = 0; i < 60 && !up; i++) {
+    try { await fetch(BASE + '/api/stats'); up = true; }
     catch { await new Promise(r => setTimeout(r, 200)); }
   }
-  throw new Error('Server startet nicht');
+  if (!up) throw new Error('Server startet nicht');
+  // Standard-Pflichtpunkte ausschalten: die Tests geben auch Teile ohne Datei und Gewicht frei
+  await fetch(BASE + '/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ release_checks: '' }) });
 });
 after(() => {
   serverProc?.kill();

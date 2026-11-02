@@ -275,6 +275,7 @@ async function renderSettings() {
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
           Was eine Revision mitbringen muss, bevor sie freigegeben werden kann. Fehlt etwas, nennt PLM es im Datenblatt
           und sperrt „Freigeben“. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Gilt nur mit Freigabe-Workflow.
+          Standard: eine Datei und das Gewicht.
         </div>
         <div id="st-release-checks" style="display:flex;flex-direction:column;gap:7px"></div>
 

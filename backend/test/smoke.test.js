@@ -35,8 +35,12 @@ before(async () => {
   });
   // Warten bis der Server antwortet
   for (let i = 0; i < 50; i++) {
-    try { await fetch(BASE + '/api/stats'); return; }
-    catch { await new Promise(r => setTimeout(r, 200)); }
+    try { await fetch(BASE + '/api/stats'); }
+    catch { await new Promise(r => setTimeout(r, 200)); continue; }
+    // Standard-Pflichtpunkte aus: die Tests geben auch Teile ohne Datei und Gewicht frei
+    await fetch(BASE + '/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ release_checks: '' }) });
+    return;
   }
   throw new Error('Server nicht erreichbar auf Port ' + PORT);
 });

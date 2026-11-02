@@ -39,8 +39,12 @@ before(async () => {
     env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT) }, stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {
-    try { await fetch(BASE + '/api/stats'); return; }
-    catch { await new Promise(r => setTimeout(r, 200)); }
+    try { await fetch(BASE + '/api/stats'); }
+    catch { await new Promise(r => setTimeout(r, 200)); continue; }
+    // Standard-Pflichtpunkte aus: die Tests geben auch Teile ohne Datei und Gewicht frei
+    await fetch(BASE + '/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ release_checks: '' }) });
+    return;
   }
   throw new Error('Server startet nicht');
 });
