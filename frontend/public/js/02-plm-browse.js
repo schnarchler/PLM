@@ -257,8 +257,8 @@ function _renderTreeNode(item, map, isRoot) {
     <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}${_thumbAttr(item.thumb_id)}
       style="${co ? 'background:rgba(121,221,227,.07);box-shadow:inset 2px 0 0 var(--teal);' : ''}">
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
-      ${_itemChip(item.item_type, 20)}
-      <span class="tree-num" style="font-size:13px">${item.item_number}</span>
+      ${_itemChip(item.item_type, 22)}
+      <span class="tree-num">${esc(item.item_number)}</span>
       ${printCodeOf(item, rev) ? `<span class="tree-revno" title="Kurzcode · rev${esc(rev?.rev ?? '')}">${esc(printCodeOf(item, rev))}</span>`
         : rev ? `<span class="tree-revno">rev${esc(rev.rev)}</span>` : ''}
       <span class="tree-name">${esc(item.name)}</span>
