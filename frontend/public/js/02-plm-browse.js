@@ -213,7 +213,7 @@ function renderProjectTree(p) {
 function _statusLegend() {
   return `<div class="status-legend">${Object.entries(PLM_ST_LABEL).map(([st, label]) =>
     `<span style="display:inline-flex;align-items:center;gap:5px"><span class="status st-${st}">${st}</span>${esc(label)}</span>`).join('')}
-    <span style="display:inline-flex;align-items:center;gap:5px"><span class="tree-co" style="font-size:11px">CO</span>Ausgecheckt</span></div>`;
+    <span style="display:inline-flex;align-items:center;gap:5px"><span class="tree-co">CO</span>Ausgecheckt</span></div>`;
 }
 
 function toggleBomFilter() {
@@ -256,7 +256,7 @@ function _renderTreeNode(item, map, isRoot) {
   }).join('') : '';
   return `<div class="tree-node">
     <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}${_thumbAttr(item.thumb_id)}
-      style="${co ? 'background:rgba(121,221,227,.07);box-shadow:inset 2px 0 0 var(--teal);' : ''}">
+      style="${co ? 'background:var(--amber-soft);box-shadow:inset 2px 0 0 var(--amber);' : ''}">
       <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 22)}
       <span class="tree-num">${esc(item.item_number)}</span>

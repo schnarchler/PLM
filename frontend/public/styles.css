@@ -443,15 +443,16 @@ tbody tr:last-child { border-bottom: none; }
 .tree-row:hover { background: var(--bg2); }
 .tree-row.selected { background: var(--bg3); box-shadow: inset 2px 0 0 var(--blue); }
 .tree-children { padding-left: 18px; margin-left: 8px; border-left: 1px solid var(--line); }
-/* Projektliste so gross wie das Menü links (15px); die Schriftgrösse in den
-   Einstellungen skaliert alles (zoom) */
+/* Projektliste so gross wie das Menü links (15px), die Kennzeichen rechts
+   klein; die Schriftgrösse in den Einstellungen skaliert alles (zoom) */
 .tree-num { font-family: var(--mono); font-size: 15px; color: var(--blue); flex-shrink: 0; font-weight: 500; }
 .tree-name { font-size: 15px; color: var(--t1); font-weight: 450; }
-.status.tree-rev { font-family: var(--mono); font-size: 15px; padding-top: 1px; padding-bottom: 1px; flex-shrink: 0; min-width: 66px; justify-content: center; letter-spacing: .4px; }
+.tree-rev { font-family: var(--mono); font-size: 11px; flex-shrink: 0; }
 /* Rechte Spalte: Ausgecheckt (CO) und Status, rechtsbündig */
 .tree-right { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.tree-co { font: 700 15px var(--mono); letter-spacing: .4px; padding: 1px 7px; border-radius: var(--r-xs);
-  background: var(--teal); color: var(--bg0); flex-shrink: 0; }
+/* Ausgecheckt: im Stil der Status-Kennzeichen, gelb wie beim Einchecken */
+.tree-co { font: 600 11px var(--mono); letter-spacing: .6px; padding: 2px 7px; border-radius: var(--r-xs);
+  background: var(--amber-soft); color: var(--amber); border: 1px solid var(--amber-line); flex-shrink: 0; }
 .tree-revno { font-family: var(--mono); font-size: 15px; color: var(--t3); flex-shrink: 0; }
 .tree-tog { width: 14px; flex-shrink: 0; text-align: center; font-size: 11px; color: var(--t4); cursor: pointer; line-height: 1; transition: color .12s; }
 .tree-tog:hover { color: var(--t1); }
