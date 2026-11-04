@@ -970,6 +970,37 @@ test('Datenblatt: Verkaufspreis bleibt bei freigegebener Revision änderbar', ()
   assert.match(h, /CHF 59\.48 <button[^>]*onclick="openPriceModal\(7\)"/, '✏ direkt hinter dem Preis');
 });
 
+test('Datenblatt: Gewicht und Preis der gewählten Revision', () => {
+  const item = demoItem({ revisions: [
+    { id: 32, rev: '2', status: 'DFT', datasets: [], weight_g: 150, effective_weight_g: 150, default_price: 61 },
+    { id: 31, rev: '1', status: 'OBS', datasets: [], weight_g: 184, effective_weight_g: 184, default_price: 59.48 },
+  ] });
+  global.state.item = item;
+  const neu = renderItemSheet(item, 32), alt = renderItemSheet(item, 31);
+  assert.match(neu, /150\.0 g/);
+  assert.match(neu, /CHF 61\.00/);
+  assert.match(alt, /184\.0 g/);
+  assert.match(alt, /CHF 59\.48/);
+});
+
+test('Gewicht: nur in der offenen Revision änderbar', () => {
+  const item = { revisions: [{ id: 2, rev: '2', status: 'DFT' }, { id: 1, rev: '1', status: 'OBS' }] };
+  assert.strictEqual(revWeightLock(item, item.revisions[0]), null);
+  assert.match(revWeightLock(item, item.revisions[1]), /aktuellen Revision rev2/);
+  assert.match(revWeightLock(item, { id: 2, rev: '2', status: 'REL' }), /gesperrt/);
+  assert.match(revWeightLock({ revisions: [{ id: 2 }] }, { id: 2, status: 'DFT', delivered: [{ number: 'L1' }] }), /geliefert/);
+});
+
+test('Baum: Revisionszeile öffnet das Item mit dieser Revision', () => {
+  const _renderTreeRev = evalPart('js/02-plm-browse.js', '// Eine Revision im Baum', 'function togN(', '_renderTreeRev');
+  global.state.item = null;
+  const h = _renderTreeRev({ id: 7 }, { id: 31, rev: '1', status: 'OBS', weight_g: 184, default_price: 59.48 });
+  assert.match(h, /openItemDetail\(7, 31\)/);
+  assert.match(h, /rev1/);
+  assert.match(h, /184\.0 g · CHF 59\.48/);
+  assert.match(h, /st-OBS/);
+});
+
 test('Version: Klick sucht jedes Mal frisch nach Updates — Dialog oder Meldung', async () => {
   const F = evalPart('js/01-core.js', 'const UPDATE_CHECK_MS', 'function showUpdateDialog(',
     '({ checkUpdateNow })');

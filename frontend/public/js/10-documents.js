@@ -155,6 +155,7 @@ function _renderCompare(a, b) {
 const COMPARE_META_LABEL = {
   status: 'Status', description: 'Beschreibung', eco_reason: 'ECO-Grund',
   released_at: 'Freigegeben am', released_by: 'Freigegeben von',
+  weight_g: 'Gewicht', default_price: 'Verkaufspreis',
 };
 const COMPARE_CHANGE = {
   added:   { label: 'neu',      color: 'var(--green)', bg: 'var(--green-soft)' },
@@ -249,7 +250,9 @@ function _renderRevisionCompare(c, only) {
     </div>`;
 
   const metaRows = c.meta.filter(m => !only || m.changed).map(m => {
-    const show = v => m.field.endsWith('_at') ? val(v && fmtDate(v)) : m.field === 'status' && v ? `${esc(v)} <span style="color:var(--t3)">${esc(PLM_ST_LABEL[v] || '')}</span>` : val(v);
+    const show = v => m.field === 'weight_g' ? val(v != null ? fmtN(v, 1) + ' g' : null)
+      : m.field === 'default_price' ? val(v != null ? fmtChf(v) : null)
+      : m.field.endsWith('_at') ? val(v && fmtDate(v)) : m.field === 'status' && v ? `${esc(v)} <span style="color:var(--t3)">${esc(PLM_ST_LABEL[v] || '')}</span>` : val(v);
     return tr(m.changed ? 'changed' : 'same', [esc(COMPARE_META_LABEL[m.field] || m.field), show(m.a), show(m.b), chip(m.changed ? 'changed' : 'same')]);
   });
   const psRows = c.print_settings.filter(p => !only || p.changed).map(p =>
@@ -421,10 +424,9 @@ function generateItemTemplate(type, opts = {}) {
       ['Typ', item.item_type.toUpperCase()],
       ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
       ['Klassifizierung', item.classification],
-      ['Gewicht', item.effective_weight_g != null
-        ? fmtN(item.effective_weight_g, 1) + ' g' + (item.weight_g == null && item.item_type === 'asm' ? ' (aus BOM)' : '') : null],
+      ['Gewicht', revWeightTxt(item, rev)],
       ['Aussenmasse', !dims.length ? null : dimsOne ? dims[0].txt : dims.map(d => d.name + ': ' + d.txt).join(' · '), !dimsOne],
-      ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null],
+      ['Verkaufspreis', revPrice(item, rev) != null ? fmtChf(revPrice(item, rev)) : null],
       ['Entwicklungszeit', _fmtHours(item.dev_hours)],
       ['Erstellt', fmtD(item.created_at, null)],
       ['Quelle', item.source_url, true],
@@ -577,7 +579,7 @@ function generateItemTemplate(type, opts = {}) {
     body += `<div style="display:flex;gap:20px;margin-bottom:16px;font-size:13px;color:#6b7280">
       <span>Revision: <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
       <span class="badge" style="background:#dbeafe;color:#1d4ed8">${rev?.status||''}</span>
-      ${item.effective_weight_g != null ? `<span>Gewicht: <strong>${fmtN(item.effective_weight_g,1)} g</strong></span>` : ''}
+      ${revEffWeight(item, rev) != null ? `<span>Gewicht: <strong>${fmtN(revEffWeight(item, rev),1)} g</strong></span>` : ''}
       ${item.classification ? `<span>Klassifizierung: <strong>${escHtml(item.classification)}</strong></span>` : ''}
     </div>
     ${tpl.note ? `<div class="txt">${escHtml(tpl.note)}</div>` : ''}

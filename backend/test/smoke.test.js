@@ -223,7 +223,7 @@ test('Verkaufspreis: nach Freigabe änderbar, Protokoll mit alt → neu und Grun
   assert.strictEqual(d.revisions.length, 1, 'keine neue Revision');
   assert.strictEqual(d.revisions[0].status, 'REL');
   const pr = d.changelog.filter(c => c.action === 'Preis geändert');
-  assert.deepStrictEqual(pr.map(c => c.details), ['VP 12.50 → 14.80 CHF · Zulieferer teurer']);
+  assert.deepStrictEqual(pr.map(c => c.details), ['rev1: VP 12.50 → 14.80 CHF · Zulieferer teurer']);
   assert.ok(!d.changelog.some(c => c.action === 'Geändert'), 'nur der Preis geändert → kein zusätzliches „Geändert“');
 });
 

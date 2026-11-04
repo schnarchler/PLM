@@ -286,3 +286,54 @@ test('Klassifizierung umbenennen überträgt den Namen auf die Items', async () 
   await api('/api/classifications/rename', 'POST', { renames: [{ from: 'Profil', to: '' }] });
   assert.strictEqual((await item(y.id)).classification, null, 'leerer Name entfernt die Klassifizierung');
 });
+
+test('Gewicht und Preis gehören zur Revision und werden übernommen', async () => {
+  const base = name => ({ name, description: '', source_url: null, classification: null });
+  const proj = await api('/api/projects', 'POST', { name: 'Optimiert' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { ...base('Arm'), item_type: 'prt', default_price: 20 });
+  const r1 = await firstRev(teil.id);
+  assert.strictEqual(r1.default_price, 20, 'Preis aus dem Anlegen steht an rev1');
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base('Arm'), weight_g: 50 });
+  await api(`/api/revisions/${r1.id}/status`, 'PUT', { status: 'REL' });
+
+  // ECO: neue Revision übernimmt Gewicht und Preis
+  await api(`/api/revisions/${r1.id}/status`, 'PUT', { status: 'ECO', eco_reason: 'leichter' });
+  let it = await item(teil.id);
+  const r2 = it.revisions[0];
+  assert.strictEqual(r2.weight_g, 50);
+  assert.strictEqual(r2.default_price, 20);
+
+  // Freigegebene/ältere Revision: Gewicht gesperrt, Preis bleibt änderbar
+  const zu = await apiFails(`/api/items/${teil.id}`, 'PUT', { ...base('Arm'), weight_g: 45, revision_id: r1.id });
+  assert.strictEqual(zu.status, 409);
+  assert.match(zu.text, /nur in der aktuellen Revision rev2/);
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base('Arm'), weight_g: 50, default_price: 21, revision_id: r1.id });
+  assert.strictEqual((await item(teil.id)).revisions.find(r => r.id === r1.id).default_price, 21, 'Preis geht, gleiches Gewicht stört nicht');
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base('Arm'), default_price: 20, revision_id: r1.id });
+
+  // In rev2 optimiert: rev1 behält ihr Gewicht
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base('Arm'), weight_g: 38, revision_id: r2.id });
+  it = await item(teil.id);
+  assert.strictEqual(it.revisions.find(r => r.id === r1.id).weight_g, 50, 'alte Revision unverändert');
+  assert.strictEqual(it.revisions.find(r => r.id === r2.id).weight_g, 38);
+  assert.strictEqual(it.revisions.find(r => r.id === r2.id).effective_weight_g, 38);
+  assert.ok(it.changelog.some(c => c.action === 'Gewicht geändert' && c.details === 'rev2: 50 g → 38 g'));
+
+  // Item spiegelt die aktive Revision (rev1 im ECO → neueste)
+  assert.strictEqual(it.weight_g, 38);
+  await api(`/api/revisions/${r2.id}/status`, 'PUT', { status: 'REL' });
+  assert.strictEqual((await item(teil.id)).weight_g, 38);
+  const rel = await apiFails(`/api/items/${teil.id}`, 'PUT', { ...base('Arm'), weight_g: 30, revision_id: r2.id });
+  assert.strictEqual(rel.status, 409, 'freigegeben → Gewicht gesperrt');
+
+  // Nicht mitgeschickte Felder bleiben, fremde Revision wird abgewiesen
+  await api(`/api/items/${teil.id}`, 'PUT', base('Arm neu'));
+  assert.strictEqual((await item(teil.id)).revisions[0].weight_g, 38);
+  const fremd = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Fremd', item_type: 'prt' });
+  const bad = await apiFails(`/api/items/${fremd.id}`, 'PUT', { ...base('Fremd'), weight_g: 1, revision_id: r2.id });
+  assert.strictEqual(bad.status, 400);
+
+  // Baum: Revisionen zum Aufklappen
+  const p = await api(`/api/projects/${proj.id}`);
+  assert.deepStrictEqual(p.items.find(i => i.id === teil.id).revisions.map(r => r.rev), ['2', '1']);
+});

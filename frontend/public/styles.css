@@ -462,6 +462,11 @@ tbody tr:last-child { border-bottom: none; }
 .tree-revno { font-family: var(--mono); font-size: 15px; color: var(--t3); flex-shrink: 0; }
 .tree-tog { width: 14px; flex-shrink: 0; text-align: center; font-size: 11px; color: var(--t4); cursor: pointer; line-height: 1; transition: color .12s; }
 .tree-tog:hover { color: var(--t1); }
+/* Revisionen eines Items im Baum (aufklappbar ab zwei Revisionen) */
+.tree-revs:not(:last-child) { border-bottom: 1px dashed var(--line); margin-bottom: 3px; padding-bottom: 3px; }
+.tree-rev-row { gap: 8px; padding-block: 2px; }
+.tree-rev-row .tree-revno { font-size: 13px; color: var(--t2); }
+.tree-rev-meta { font-family: var(--mono); font-size: 12px; color: var(--t4); white-space: nowrap; }
 
 /* ── VORSCHAUBILD: beim Überfahren einer Zeile neben der Maus ── */
 .thumb-pop { position: fixed; z-index: 3000; width: 120px; height: 120px; object-fit: contain; pointer-events: none;

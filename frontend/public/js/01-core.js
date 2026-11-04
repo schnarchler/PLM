@@ -31,6 +31,30 @@ const _hintHtml = h => `<div>
     <div class="important-note-title">${h.label} <span class="important-note-sub">· ${h.where}</span></div>
     <div class="important-note-text">${esc(h.text)}</div>
   </div>`;
+// Gewicht und Verkaufspreis gehören zur Revision (ein optimiertes Teil wiegt
+// in der neuen Revision weniger). Ohne Revision oder ohne das Feld an der
+// Revision gilt der Wert am Item — der spiegelt die aktive Revision.
+const _revHas = (rev, k) => !!rev && Object.prototype.hasOwnProperty.call(rev, k);
+function revPrice(item, rev) { return (_revHas(rev, 'default_price') ? rev.default_price : item.default_price) ?? null; }
+function revWeight(item, rev) { return (_revHas(rev, 'weight_g') ? rev.weight_g : item.weight_g) ?? null; }
+function revEffWeight(item, rev) { return (_revHas(rev, 'effective_weight_g') ? rev.effective_weight_g : item.effective_weight_g) ?? null; }
+function revWeightTxt(item, rev) {
+  const eff = revEffWeight(item, rev);
+  return eff != null
+    ? fmtN(eff, 1) + ' g' + (revWeight(item, rev) == null && item.item_type === 'asm' ? ' (aus BOM)' : '')
+    : null;
+}
+// Das Gewicht ändert sich nur in der offenen Revision: der neusten, solange sie
+// nicht in Review, freigegeben, veraltet oder geliefert ist. Gibt null zurück,
+// wenn änderbar, sonst den Grund (für den Tooltip).
+function revWeightLock(item, rev) {
+  if (!rev) return null;
+  const latest = (item.revisions || [])[0];
+  if (latest && latest.id !== rev.id) return `Gewicht nur in der aktuellen Revision rev${latest.rev} änderbar`;
+  if (['REV', 'REL', 'ECO', 'OBS'].includes(rev.status)) return `Revision ${PLM_ST_LABEL[rev.status] || rev.status} — Gewicht gesperrt, Änderung in einer neuen Revision`;
+  if ((rev.delivered || []).length) return 'Revision geliefert — Gewicht gesperrt, Änderung in einer neuen Revision';
+  return null;
+}
 // Statusbadge aus den zentralen Tabellen oben — damit überall dieselben Wörter stehen
 function stBadge(type, status, style = '') {
   const m = type === 'order' ? ORDER_ST_MAP : type === 'quote' ? QUOTE_ST_MAP : DELIVERY_ST_MAP;

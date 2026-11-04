@@ -807,25 +807,32 @@ async function confirmMoveItem(itemId) {
   }
 }
 
-// Einzelne Felder speichern: die übrigen Werte frisch vom Server übernehmen
+// Einzelne Felder speichern: die übrigen Werte frisch vom Server übernehmen.
+// Gewicht und Verkaufspreis gehören zur Revision — nur mitschicken, wenn sie
+// geändert werden, dann mit revision_id (sonst gilt die aktive Revision).
 async function _putItemPatch(itemId, patch) {
   const item = await api('/api/items/' + itemId);
   return api('/api/items/' + itemId, 'PUT', {
     name: item.name, description: item.description,
     source_url: item.source_url || null,
-    default_price: item.default_price ?? null,
-    weight_g: item.weight_g ?? null,
     classification: item.classification || null,
     ...patch
   });
 }
 
+// Revision, die in der Detailansicht gewählt ist
+function _selRev(itemId) {
+  const it = state.item?.id === itemId ? state.item : null;
+  return it ? (it.revisions || []).find(r => r.id === state.activeRevId) || (it.revisions || [])[0] || null : null;
+}
+
 async function _saveItemField(itemId, input, field) {
   const val = input.value.trim();
   const parsed = val === '' ? null : parseFloat(val);
-  if (state.item?.id === itemId && (state.item[field] ?? null) === parsed) return;   // nichts geändert
+  const rev = _selRev(itemId);
+  if (rev && (rev[field] ?? null) === parsed) return;   // nichts geändert
   try {
-    await _putItemPatch(itemId, { [field]: parsed });
+    await _putItemPatch(itemId, { [field]: parsed, ...(rev ? { revision_id: rev.id } : {}) });
   } catch(e) { input.style.borderColor = 'var(--red)'; toast('Fehler: ' + e, 'err'); return; }
   // Neu zeichnen: Freigabe-Hinweis („fehlt noch: Gewicht“), Datenblatt und
   // Freigabe-Prüfung arbeiten sonst mit dem alten Wert weiter
@@ -834,6 +841,7 @@ async function _saveItemField(itemId, input, field) {
     renderItemDetail(state.item, state.activeRevId);
     input = document.getElementById(input.id) || input;
   }
+  if (state.project) refreshProjectTree();   // Baum zeigt Gewicht je Revision
   input.style.borderColor = 'var(--green)';
   setTimeout(() => { input.style.borderColor = ''; }, 1200);
 }
@@ -847,9 +855,10 @@ async function saveItemWeight(itemId, input) { return _saveItemField(itemId, inp
 function openPriceModal(itemId, preset) {
   const item = state.item;
   if (!item || item.id !== itemId) return;
-  const price = preset != null ? preset : item.default_price;
+  const rev = _selRev(itemId);
+  const price = preset != null ? preset : revPrice(item, rev);
   _showDynModal(`<div class="modal" style="max-width:400px">
-    <div class="modal-head"><div class="modal-title">Verkaufspreis: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-head"><div class="modal-title">Verkaufspreis: ${esc(item.item_number)}${rev ? ' · rev' + esc(rev.rev) : ''}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
       <div class="form-row">
         <div class="fg"><label class="fl">Verkaufspreis (CHF)</label><input class="fi" id="pm-price" type="number" step="0.01" min="0" placeholder="0.00"
@@ -859,7 +868,7 @@ function openPriceModal(itemId, preset) {
         <div class="fg"><label class="fl">Grund (optional)</label><input class="fi" id="pm-reason" placeholder="z.B. Zulieferer teurer"
           value="${preset != null ? 'Aus BOM übernommen' : ''}" onkeydown="if(event.key==='Enter')savePriceModal(${item.id})"></div>
       </div>
-      <div style="font-size:13px;color:var(--t3)">Braucht keine neue Revision. Die Änderung steht im Protokoll; bestehende Angebote und Aufträge behalten ihren Preis.</div>
+      <div style="font-size:13px;color:var(--t3)">Gilt für ${rev ? 'rev' + esc(rev.rev) : 'die aktive Revision'} und braucht keine neue Revision. Die Änderung steht im Protokoll; bestehende Angebote und Aufträge behalten ihren Preis.</div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -908,12 +917,14 @@ async function savePriceModal(itemId) {
   const price = val === '' ? null : parseFloat(val);
   if (price != null && (isNaN(price) || price < 0)) return toast('Ungültiger Preis', 'err');
   try {
-    await _putItemPatch(itemId, { default_price: price, price_reason: V('pm-reason').trim() });
+    const rev = _selRev(itemId);
+    await _putItemPatch(itemId, { default_price: price, price_reason: V('pm-reason').trim(), ...(rev ? { revision_id: rev.id } : {}) });
     _hideDynModal();
     toast('Verkaufspreis gespeichert', 'ok');
     const item = await api('/api/items/' + itemId);
     state.item = item;
     renderItemDetail(item, state.activeRevId);
+    if (state.project) refreshProjectTree();
   } catch (e) { toast('Fehler: ' + e, 'err'); }
 }
 
@@ -924,7 +935,17 @@ async function openEditItemModal(id) {
   set('eim-name', item.name);
   set('eim-desc', item.description || '');
   set('eim-url', item.source_url || '');
-  set('eim-weight', item.weight_g != null ? item.weight_g : '');
+  // Gewicht der gewählten Revision
+  const selRev = (item.revisions || []).find(r => r.id === state.activeRevId) || (item.revisions || [])[0];
+  set('eim-weight', revWeight(item, selRev) ?? '');
+  set('eim-rev-id', selRev?.id || '');
+  const wl = document.getElementById('eim-weight-label');
+  if (wl) wl.textContent = 'Gewicht (g)' + (selRev ? ' · rev' + selRev.rev : '');
+  // Nur in der offenen Revision änderbar — sonst nur anzeigen
+  const wLock = revWeightLock(item, selRev);
+  const wIn = document.getElementById('eim-weight');
+  if (wIn) { wIn.disabled = !!wLock; wIn.title = wLock || ''; }
+  if (wl && wLock) wl.textContent += ' 🔒';
   const clSel = document.getElementById('eim-classification');
   // Ein Wert, der nicht (mehr) in der Liste steht, bleibt wählbar — sonst ginge
   // er beim Speichern stillschweigend verloren
@@ -961,10 +982,14 @@ async function saveEditItem() {
   if (!name) return toast('Name fehlt', 'err');
   const attributes = {};
   document.querySelectorAll('#eim-attrs [data-attr]').forEach(i => { attributes[i.dataset.attr] = i.value; });
-  // Preis bleibt unberührt — der läuft über openPriceModal
+  // Preis bleibt unberührt — der läuft über openPriceModal.
+  // Das Gewicht gilt für die Revision, die beim Öffnen gewählt war.
   await _putItemPatch(id, {
     name, description: V('eim-desc'), source_url: V('eim-url')||null,
-    weight_g: V('eim-weight') ? parseFloat(V('eim-weight')) : null,
+    ...(document.getElementById('eim-weight')?.disabled ? {} : {
+      weight_g: V('eim-weight') ? parseFloat(V('eim-weight')) : null,
+      ...(V('eim-rev-id') ? { revision_id: parseInt(V('eim-rev-id')) } : {}),
+    }),
     classification: document.getElementById('eim-classification').value || null,
     attributes
   });

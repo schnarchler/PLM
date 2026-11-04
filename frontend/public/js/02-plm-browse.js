@@ -248,16 +248,19 @@ function _renderTreeNode(item, map, isRoot) {
   const isDOC = item.item_type === 'doc';
   const co = state.checkouts.some(c => c.item_id === item.id);
   const bomKids = (isASM && rev?.bom) ? rev.bom : [];
-  const hasKids = bomKids.length > 0;
+  // Ab zwei Revisionen lassen sich diese aufklappen — wie die Stückliste
+  const revKids = (item.revisions || []).length > 1 ? item.revisions : [];
+  const hasKids = bomKids.length > 0 || revKids.length > 0;
   const n = _nim(); const nid = `tn${n}`, tid = `tt${n}`;
-  const childHtml = hasKids ? bomKids.map(b => {
+  const revHtml = revKids.length ? `<div class="tree-revs">${revKids.map(r => _renderTreeRev(item, r)).join('')}</div>` : '';
+  const childHtml = revHtml + bomKids.map(b => {
     const ci = map[b.child_item_id];
     return ci ? _renderTreeNode(ci, map, false) : '';
-  }).join('') : '';
+  }).join('');
   return `<div class="tree-node">
     <div class="tree-row" onclick="openItemDetail(${item.id})" ${isRoot ? `id="tr-${item.id}"` : ''}${_thumbAttr(item.thumb_id)}
       style="${co ? 'background:var(--amber-soft);box-shadow:inset 2px 0 0 var(--amber);' : ''}">
-      <span class="tree-tog" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)">${hasKids ? '▶' : ''}</span>
+      <span class="tree-tog" id="${tid}" onclick="event.stopPropagation();togN('${nid}','${tid}')" style="color:var(--t4)" title="${revKids.length && !bomKids.length ? 'Revisionen' : ''}">${hasKids ? '▶' : ''}</span>
       ${_itemChip(item.item_type, 22)}
       <span class="tree-num">${esc(item.item_number)}</span>
       ${printCodeOf(item, rev) ? `<span class="tree-revno" title="Kurzcode · rev${esc(rev?.rev ?? '')}">${esc(printCodeOf(item, rev))}</span>`
@@ -271,6 +274,28 @@ function _renderTreeNode(item, map, isRoot) {
     </div>
     ${hasKids ? `<div id="${nid}" class="tree-children" data-item-id="${item.id}" style="display:none">${childHtml}</div>` : ''}
   </div>`;
+}
+
+// Eine Revision im Baum: Klick öffnet das Item mit genau dieser Revision
+function _renderTreeRev(item, r) {
+  const meta = [
+    r.weight_g != null ? '⚖ ' + fmtN(r.weight_g, 1) + ' g' : '',
+    r.default_price != null ? fmtChf(r.default_price) : '',
+  ].filter(Boolean).join(' · ');
+  const sel = state.item?.id === item.id && state.activeRevId === r.id;
+  return `<div class="tree-row tree-rev-row${sel ? ' selected' : ''}" data-rev-row="${r.id}"
+      onclick="event.stopPropagation();openItemDetail(${item.id}, ${r.id})" title="rev${esc(r.rev)} · ${esc(PLM_ST_LABEL[r.status] || r.status)}">
+      <span class="tree-tog"></span>
+      <span class="tree-revno">rev${esc(r.rev)}</span>
+      ${meta ? `<span class="tree-rev-meta">${meta}</span>` : ''}
+      <span class="tree-right"><span class="status st-${r.status} tree-rev">${r.status}</span></span>
+    </div>`;
+}
+
+// Gewählte Revision im Baum markieren (Item-Zeile bleibt markiert)
+function _treeMarkRev(revId) {
+  document.querySelectorAll('.tree-rev-row.selected').forEach(r => r.classList.remove('selected'));
+  if (revId) document.querySelectorAll(`.tree-rev-row[data-rev-row="${revId}"]`).forEach(r => r.classList.add('selected'));
 }
 
 function togN(nid, tid) {
@@ -472,6 +497,7 @@ async function openItemDetail(itemId, revId) {
   _trackRecent('item', item.id, item.name, item.item_number, item.item_type);
 
   state._detailItemId = null;   // neu geöffnet → Datenblatt, nicht der zuletzt offene Tab
+  _treeMarkRev(revId ? state.activeRevId : null);
   renderItemDetail(item, state.activeRevId);
   showDetail();
 }
@@ -542,8 +568,10 @@ function renderItemDetail(item, activeRevId) {
     ${renderItemSheet(item, activeRevId)}
     <div id="it-revs" style="display:none">
       ${(() => {
-        const activeRev = item.active_revision || (item.revisions||[])[0];
-        const bom = activeRev?.bom || [];
+        const bom = rev?.bom || [];
+        const price = revPrice(item, rev), weight = revWeight(item, rev), effW = revEffWeight(item, rev);
+        const weightLock = revWeightLock(item, rev);
+        const revTag = rev ? ` <span style="color:var(--t4);font-family:var(--mono)">rev${esc(rev.rev)}</span>` : '';
         const bomTotal = item.item_type === 'asm' && bom.length
           ? bom.reduce((s, b) => s + (b.default_price != null ? b.default_price * b.quantity : 0), 0)
           : null;
@@ -557,19 +585,19 @@ function renderItemDetail(item, activeRevId) {
           : (item.item_type === 'asm' && bom.length ? `<span style="font-size:13px;color:var(--amber)">BOM: ⚠ keine Preise</span>` : '');
         return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 10px;background:var(--bg2);border-radius:var(--r-sm);margin-bottom:10px">
           <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
-            VP:
-            <span style="font-family:var(--mono);color:${item.default_price != null ? 'var(--t1)' : 'var(--t4)'}">${item.default_price != null ? fmtChf(item.default_price) : '—'}</span>
-            <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis ändern (ohne neue Revision)">✏</button>
+            VP${revTag}:
+            <span style="font-family:var(--mono);color:${price != null ? 'var(--t1)' : 'var(--t4)'}">${price != null ? fmtChf(price) : '—'}</span>
+            <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis dieser Revision ändern (ohne neue Revision)">✏</button>
           </span>
           <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
             ⚖
-            <input id="item-weight-field" type="number" step="0.1" min="0"
-              placeholder="${item.weight_g == null && item.effective_weight_g != null ? fmtN(item.effective_weight_g, 1) : '—'}"
-              title="${isASM ? 'Leer lassen: Summe aus der Stückliste (Teile und Normteile mit Gewicht)' : 'Gewicht in Gramm'}"
-              value="${item.weight_g != null ? item.weight_g : ''}"
+            ${weightLock ? `<span style="font-family:var(--mono);color:${effW != null ? 'var(--t1)' : 'var(--t4)'}" title="${esc(weightLock)}">${effW != null ? fmtN(effW, 1) : '—'}</span>` : `<input id="item-weight-field" type="number" step="0.1" min="0"
+              placeholder="${weight == null && effW != null ? fmtN(effW, 1) : '—'}"
+              title="${isASM ? 'Leer lassen: Summe aus der Stückliste (Teile und Normteile mit Gewicht)' : 'Gewicht in Gramm'} — gilt für diese Revision"
+              value="${weight != null ? weight : ''}"
               style="width:72px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:13px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
-              class="no-spin" onblur="saveItemWeight(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">
-            <span style="color:var(--t4)">g${isASM && item.weight_g == null && item.effective_weight_g != null ? ' (aus BOM)' : ''}</span>
+              class="no-spin" onblur="saveItemWeight(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">`}
+            <span style="color:var(--t4)">g${isASM && weight == null && effW != null ? ' (aus BOM)' : ''}${revTag}${weightLock ? ` <span title="${esc(weightLock)}">🔒</span>` : ''}</span>
           </span>
           ${item.source_url ? (safeLinkHost(item.source_url)
             ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>`
@@ -786,9 +814,8 @@ function renderItemSheet(item, activeRevId) {
   const revCount = (item.revisions || []).length;
   const allDs = (item.revisions || []).flatMap(r => (r.datasets || []).map(d => ({ ...d, rev: r.rev })));
   const dsBytes = allDs.reduce((s, d) => s + (d.file_size || 0), 0);
-  const weightTxt = item.effective_weight_g != null
-    ? fmtN(item.effective_weight_g, 1) + ' g' + (item.weight_g == null && item.item_type === 'asm' ? ' (aus BOM)' : '')
-    : null;
+  const weightTxt = revWeightTxt(item, rev);
+  const priceVal = revPrice(item, rev);
 
   // Aussenmasse der gewählten Revision. Mehrere STL mit verschiedenen Massen:
   // die erste zeigen, alle im Tooltip.
@@ -806,9 +833,9 @@ function renderItemSheet(item, activeRevId) {
     ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
     ['Gewicht', weightTxt],
     ...(item.item_type !== 'doc' ? [['Aussenmasse', dimsCell, true]] : []),
-    // Preis ist nicht an die Revision gebunden — ✏ auch bei freigegebenen Teilen
-    ['Verkaufspreis', item.default_price != null ? fmtChf(item.default_price) : null, false,
-      ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis ändern (ohne neue Revision)">✏</button>`],
+    // Preis gehört zur Revision, braucht aber keine neue — ✏ auch bei freigegebenen Teilen
+    ['Verkaufspreis', priceVal != null ? fmtChf(priceVal) : null, false,
+      ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis dieser Revision ändern (ohne neue Revision)">✏</button>`],
     ['Entwicklungszeit', _fmtHours(item.dev_hours)],
     ['Erstellt', item.created_at ? fmtD(item.created_at) : null],
     ['Revisionen', revCount ? String(revCount) : null],
@@ -1048,8 +1075,7 @@ async function saveItemNotes(itemId, el) {
   try {
     await api(`/api/items/${itemId}`, 'PUT', {
       name: it.name, description: it.description, source_url: it.source_url,
-      default_price: it.default_price, classification: it.classification,
-      weight_g: it.weight_g, notes: value,
+      classification: it.classification, notes: value,
     });
     it.notes = value;
     el.dataset.saved = value;
@@ -1701,6 +1727,7 @@ function renderDatasets(datasets, revId, locked) {
 
 async function switchRev(itemId, revId) {
   state.activeRevId = revId;
+  _treeMarkRev(revId);
   const item = await api(`/api/items/${itemId}`);
   state.item = item;
   renderItemDetail(item, revId);

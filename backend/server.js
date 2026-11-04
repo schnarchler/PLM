@@ -744,6 +744,11 @@ function applySchema() {
   try { db.run('ALTER TABLE orders ADD COLUMN include_hours INTEGER DEFAULT 0'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN classification TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN weight_g REAL'); } catch {}
+  // Gewicht und Verkaufspreis gehören zur Revision: ein optimiertes Teil wiegt
+  // in der neuen Revision weniger, die alte behält ihren Wert. items.weight_g
+  // und items.default_price spiegeln die aktive Revision (syncItemFromActiveRev).
+  try { db.run('ALTER TABLE revisions ADD COLUMN weight_g REAL'); } catch {}
+  try { db.run('ALTER TABLE revisions ADD COLUMN default_price REAL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN notes TEXT DEFAULT NULL'); } catch {}
   // Hinweise am Teil, je Art ein Feld. Nur der Kundenhinweis kommt auf den Lieferschein.
@@ -1021,6 +1026,13 @@ function applySchema() {
       'Stückliste: Revision': 'BOM: Revision',
     };
     for (const [from, to] of Object.entries(map)) db.run('UPDATE changelog SET action=? WHERE action=?', [to, from]);
+  });
+
+  // Bisherige Werte vom Item in alle seine Revisionen übernehmen
+  migrateOnce('revision-weight-price-v1', () => {
+    db.run(`UPDATE revisions SET
+      weight_g=(SELECT weight_g FROM items WHERE items.id=revisions.item_id),
+      default_price=(SELECT default_price FROM items WHERE items.id=revisions.item_id)`);
   });
 
   // ECO-Revisionen, deren Nachfolger schon freigegeben ist, sind veraltet —
@@ -1369,6 +1381,14 @@ function getActiveRevision(itemId) {
   return get("SELECT * FROM revisions WHERE item_id=? AND status='REL' ORDER BY rowid DESC LIMIT 1", [itemId])
     || getLatestRevision(itemId);
 }
+// Gewicht und Verkaufspreis des Items = die der aktiven Revision. Angebote,
+// Aufträge, Listen und Kalkulation lesen weiter am Item. Nach jeder Änderung
+// an Revisionen (neu, Status, gelöscht, Werte) aufrufen.
+function syncItemFromActiveRev(itemId) {
+  const rev = getActiveRevision(itemId);
+  if (!rev) return;
+  run('UPDATE items SET weight_g=?, default_price=? WHERE id=?', [rev.weight_g ?? null, rev.default_price ?? null, itemId]);
+}
 // Welche Revision war an einem Datum aktiv? Nur für Lieferungen aus der Zeit
 // vor dem automatischen Fixieren — beste Näherung aus Freigabe- und Erstelldatum,
 // nach denselben Regeln wie getActiveRevision.
@@ -1503,6 +1523,9 @@ function rejectIfLocked(res, revId) {
 // übernehmen. „Neue Revision", ECO und Check-in nutzen denselben Weg, damit
 // eine neue Revision immer gleich aussieht.
 function copyRevisionContent(from, toRevId, toRevLabel) {
+  // Gewicht und Preis übernehmen — in der neuen Revision dann änderbar
+  const src = get('SELECT weight_g, default_price FROM revisions WHERE id=?', [from.id]);
+  if (src) run('UPDATE revisions SET weight_g=?, default_price=? WHERE id=?', [src.weight_g ?? null, src.default_price ?? null, toRevId]);
   let files = 0;
   for (const ds of all('SELECT * FROM datasets WHERE revision_id=?', [from.id])) {
     try {
@@ -2176,6 +2199,8 @@ app.get('/api/projects/:id', (req, res) => {
   p.items = all(`SELECT i.*, ${thumbIdSql('i.id')} AS thumb_id FROM items i WHERE i.project_id=? ORDER BY i.item_type, i.item_number DESC`, [p.id]);
   p.items.forEach(item => {
     item.latest_revision = getLatestRevision(item.id);
+    // Für den Baum: Revisionen zum Aufklappen, neueste zuerst
+    item.revisions = all('SELECT id, rev, status, weight_g, default_price FROM revisions WHERE item_id=? ORDER BY rowid DESC', [item.id]);
     if (item.latest_revision && item.item_type === 'asm') {
       item.latest_revision.bom = all(
         'SELECT b.child_item_id, b.quantity, b.unit, b.position FROM bom b WHERE b.parent_rev_id=? ORDER BY b.position',
@@ -2309,11 +2334,16 @@ app.get('/api/items/:id', (req, res) => {
         b.rev_outdated = !!(b.child_pinned_rev && b.child_active_rev
           && b.child_pinned_rev.id !== b.child_active_rev.id);
         b.dev_hours = calcDevHours(b.child_item_id);
-        b.weight_g = getEffectiveWeight(b.child_item_id, new Set([item.id]));
+        // Gewicht und Preis der Revision, die in der Position steckt
+        b.weight_g = b.child_pinned_rev
+          ? revEffectiveWeight(b.child_pinned_rev, new Set([item.id]))
+          : getEffectiveWeight(b.child_item_id, new Set([item.id]));
+        if (b.child_effective_rev) b.default_price = b.child_effective_rev.default_price ?? null;
       });
       rev.bom_std = all('SELECT bs.*, sp.designation, sp.name as sp_name, sp.material, sp.size, sp.unit_price, sp.weight_g, sp.standard, sp.std_number FROM bom_std_parts bs JOIN standard_parts sp ON bs.std_part_id=sp.id WHERE bs.parent_rev_id=? ORDER BY bs.position', [rev.id]);
       rev.bom_weight = bomWeight(rev.id, new Set([item.id]));
     }
+    rev.effective_weight_g = revEffectiveWeight(rev);
   });
   // Auch was an den Revisionen geschah: Statuswechsel mit Kommentar, Dateien, Stückliste
   item.changelog = all(`SELECT c.*, r.rev FROM changelog c
@@ -2379,21 +2409,46 @@ app.post('/api/projects/:projectId/items', (req, res) => {
     [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null, derivedClass,
      cleanAttrs(req.body.attributes, classFields(derivedClass))]);
   assignShortCode(itemId);
-  run('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, firstRevLabel(), 'DFT', 'Erste Revision']);
+  run('INSERT INTO revisions (item_id,rev,status,description,default_price) VALUES (?,?,?,?,?)',
+    [itemId, firstRevLabel(), 'DFT', 'Erste Revision', default_price != null ? parseFloat(default_price) : null]);
   log('item', itemId, 'Erstellt', item_type + ' ' + item_number + ' rev' + firstRevLabel());
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
 });
 
 app.put('/api/items/:id', (req, res) => {
-  const { name, description, source_url, default_price, classification, weight_g, notes } = req.body;
+  const { name, description, source_url, classification, notes } = req.body;
+  const has = k => Object.prototype.hasOwnProperty.call(req.body, k);
   // notes nur schreiben, wenn das Feld im Request vorkommt — sonst wuerden
   // Aufrufe ohne notes (z.B. Preis-Inline-Edit) die Notizen leeren.
-  const keepNotes = !Object.prototype.hasOwnProperty.call(req.body, 'notes');
+  const keepNotes = !has('notes');
   const before = get('SELECT * FROM items WHERE id=?', [req.params.id]);
-  run(`UPDATE items SET name=?,description=?,source_url=?,default_price=?,classification=?,weight_g=?,
+  if (!before) return res.status(404).json({ error: 'Nicht gefunden' });
+  // Gewicht und Verkaufspreis gehören zur Revision: revision_id oder die aktive.
+  // Nur mitgeschickte Felder werden geschrieben.
+  const rev = req.body.revision_id
+    ? get('SELECT * FROM revisions WHERE id=? AND item_id=?', [req.body.revision_id, before.id])
+    : getActiveRevision(before.id);
+  if (req.body.revision_id && !rev) return res.status(400).json({ error: 'Revision gehört nicht zu diesem Item' });
+  const num = v => (v == null || v === '' || isNaN(parseFloat(v))) ? null : parseFloat(v);
+  // Das Gewicht ändert sich nur in der offenen Revision: der neusten, solange
+  // sie nicht gesperrt (Review, freigegeben, veraltet) oder geliefert ist.
+  // Ältere Revisionen behalten ihr Gewicht.
+  if (rev && has('weight_g') && num(req.body.weight_g) !== (rev.weight_g ?? null)) {
+    const latest = getLatestRevision(before.id);
+    if (latest && latest.id !== rev.id) {
+      return res.status(409).json({ error: `Das Gewicht lässt sich nur in der aktuellen Revision rev${latest.rev} ändern.` });
+    }
+    if (rejectIfLocked(res, rev.id)) return;
+  }
+  const revBefore = rev ? { ...rev } : null;
+  if (rev && has('weight_g')) run('UPDATE revisions SET weight_g=? WHERE id=?', [num(req.body.weight_g), rev.id]);
+  if (rev && has('default_price')) run('UPDATE revisions SET default_price=? WHERE id=?', [num(req.body.default_price), rev.id]);
+  const revAfter = rev ? get('SELECT * FROM revisions WHERE id=?', [rev.id]) : null;
+  run(`UPDATE items SET name=?,description=?,source_url=?,classification=?,
        notes=CASE WHEN ? THEN notes ELSE ? END WHERE id=?`,
-    [name, description, source_url||null, default_price != null ? parseFloat(default_price) : null, canonicalClass(classification), weight_g != null ? parseFloat(weight_g) : null,
+    [name, description, source_url||null, canonicalClass(classification),
      keepNotes ? 1 : 0, notes || null, req.params.id]);
+  syncItemFromActiveRev(before.id);
   // Eigenschaften: mitgeschickt → übernehmen; sonst nur auf die Felder der
   // (evtl. neuen) Klassifizierung kürzen, damit keine verwaisten Werte bleiben
   const fields = classFields(classification);
@@ -2408,12 +2463,17 @@ app.put('/api/items/:id', (req, res) => {
   const after = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   // Der Verkaufspreis ist kaufmännisch und braucht keine neue Revision —
   // nachvollziehbar bleibt er über einen eigenen Eintrag mit alt → neu und Grund.
-  const priceChanged = before && before.default_price !== after.default_price;
+  const priceChanged = !!rev && revBefore.default_price !== revAfter.default_price;
   if (priceChanged) {
     const chf = v => v == null ? '—' : v.toFixed(2);
     const reason = String(req.body.price_reason || '').trim();
     log('item', req.params.id, 'Preis geändert',
-      `VP ${chf(before.default_price)} → ${chf(after.default_price)} CHF` + (reason ? ' · ' + reason : ''));
+      `rev${rev.rev}: VP ${chf(revBefore.default_price)} → ${chf(revAfter.default_price)} CHF` + (reason ? ' · ' + reason : ''));
+  }
+  const weightChanged = !!rev && revBefore.weight_g !== revAfter.weight_g;
+  if (weightChanged) {
+    const g = v => v == null ? '—' : v + ' g';
+    log('item', req.params.id, 'Gewicht geändert', `rev${rev.rev}: ${g(revBefore.weight_g)} → ${g(revAfter.weight_g)}`);
   }
   // Hinweise sind oft sicherheitsrelevant — darum mit vollem Wortlaut im Protokoll
   const hintsChanged = before ? Object.keys(HINT_LABEL).filter(k => before[k] !== after[k]) : [];
@@ -2426,9 +2486,9 @@ app.put('/api/items/:id', (req, res) => {
   const attrDiff = [...new Set([...Object.keys(oldA), ...Object.keys(newA)])].filter(k => oldA[k] !== newA[k] && labels[k])
     .map(k => `${labels[k]}: ${oldA[k] || '—'} → ${newA[k] || '—'}`);
   if (attrDiff.length) log('item', req.params.id, 'Eigenschaften geändert', attrDiff.join(' · '));
-  const otherChanged = !before || ['name', 'description', 'source_url', 'classification', 'weight_g', 'notes']
+  const otherChanged = ['name', 'description', 'source_url', 'classification', 'notes']
     .some(k => before[k] !== after[k]);
-  if (otherChanged || !(priceChanged || hintsChanged.length || attrDiff.length)) log('item', req.params.id, 'Geändert', name);
+  if (otherChanged || !(priceChanged || weightChanged || hintsChanged.length || attrDiff.length)) log('item', req.params.id, 'Geändert', name);
   res.json(after);
 });
 
@@ -2817,7 +2877,7 @@ app.get('/api/items/:id/compare', (req, res) => {
     released_at: r.released_at, released_by: r.released_by, description: r.description,
     eco_reason: r.eco_reason, delivered: deliveriesOfRevision(r.id).map(d => d.number) });
 
-  const meta = ['status', 'description', 'eco_reason', 'released_at', 'released_by']
+  const meta = ['status', 'description', 'eco_reason', 'released_at', 'released_by', 'weight_g', 'default_price']
     .map(f => ({ field: f, a: ra[f] ?? null, b: rb[f] ?? null, changed: !_sameValue(ra[f], rb[f]) }))
     .filter(r => !_blank(r.a) || !_blank(r.b));
 
@@ -2897,6 +2957,7 @@ function startEco(rev, reason) {
   // Wie „Neue Revision": Dateien, Druckparameter und Stückliste übernehmen
   const copied = copyRevisionContent(rev, newRevId, newRev);
   log('revision', rev.id, 'ECO', `Neue Revision rev${newRev} erstellt, ${copied.files} Datei(en), Druckparameter und BOM übernommen`);
+  syncItemFromActiveRev(rev.item_id);
   return get('SELECT * FROM revisions WHERE id=?', [newRevId]);
 }
 
@@ -2910,7 +2971,7 @@ const RELEASE_CHECKS = {
   drawing:        { label: 'Zeichnung (PDF)', ok: (item, rev) => !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='PDF' LIMIT 1", [rev.id]) },
   description:    { label: 'Beschreibung',   ok: item => !!String(item.description || '').trim() },
   classification: { label: 'Klassifizierung', ok: item => !!String(item.classification || '').trim() },
-  weight:         { label: 'Gewicht',        ok: item => item.item_type !== 'prt' || item.weight_g > 0 },
+  weight:         { label: 'Gewicht',        ok: (item, rev) => item.item_type !== 'prt' || rev.weight_g > 0 },
 };
 function releaseMissing(item, rev) {
   const on = getSetting('release_checks', '').split(',').map(x => x.trim()).filter(k => RELEASE_CHECKS[k]);
@@ -2974,6 +3035,7 @@ app.put('/api/revisions/:id/status', (req, res) => {
   }
 
   log('revision', rev.id, 'Status → ' + status, description || eco_reason || '');
+  syncItemFromActiveRev(rev.item_id);
   res.json(get('SELECT * FROM revisions WHERE id=?', [rev.id]));
 });
 
@@ -2996,6 +3058,7 @@ app.post('/api/items/:id/revisions', (req, res) => {
     [item.id, newRev, 'DFT', req.body?.description || '']);
 
   if (last) copyRevisionContent(last, newRevId, newRev);
+  syncItemFromActiveRev(item.id);
 
   log('item', item.id, 'Neue Revision', `rev${newRev} angelegt`);
   saveDb();
@@ -3036,6 +3099,7 @@ app.delete('/api/revisions/:id', (req, res) => {
     run("UPDATE revisions SET status='REL', updated_at=datetime('now') WHERE id=?", [ecoRev.id]);
     log('revision', ecoRev.id, 'Status → REL', 'ECO zurückgesetzt nach Löschen der DFT-Revision');
   }
+  syncItemFromActiveRev(rev.item_id);
   res.json({ ok: true });
 });
 
@@ -3558,6 +3622,7 @@ function _draftRevision(itemId, reason) {
   const label = nextRev(last.rev);
   const id = runGetId('INSERT INTO revisions (item_id,rev,status,description) VALUES (?,?,?,?)', [itemId, label, 'DFT', reason]);
   copyRevisionContent(last, id, label);
+  syncItemFromActiveRev(itemId);
   log('item', itemId, 'Neue Revision', `rev${label}: ${reason}`);
   return get('SELECT * FROM revisions WHERE id=?', [id]);
 }
@@ -5180,13 +5245,28 @@ function getEffectiveWeight(itemId, _visited) {
   return rev ? bomWeight(rev.id, visited).total_g : null;
 }
 
+// Gewicht einer bestimmten Revision: ihr eigenes, sonst (Baugruppe) die
+// Summe ihrer Stückliste.
+function revEffectiveWeight(rev, visited) {
+  if (!rev) return null;
+  if (rev.weight_g > 0) return rev.weight_g;
+  if (get('SELECT item_type FROM items WHERE id=?', [rev.item_id])?.item_type !== 'asm') return null;
+  return bomWeight(rev.id, new Set([...(visited || []), rev.item_id])).total_g;
+}
+
 // Gewicht einer Stückliste: Teile (eigenes Gewicht oder ihre BOM-Summe) und
 // Normteile, jeweils mal Menge. Positionen ohne Gewicht zählen nicht mit —
 // missing sagt, wie viele das sind. total_g ist null, wenn keine eins hat.
 function bomWeight(revId, visited) {
+  const childW = b => {
+    if (!b.child_rev_id) return getEffectiveWeight(b.child_item_id, new Set(visited));
+    // Fixierte Position: Gewicht genau dieser Revision
+    if (visited?.has(b.child_item_id)) return null;
+    return revEffectiveWeight(get('SELECT * FROM revisions WHERE id=?', [b.child_rev_id]), visited);
+  };
   const rows = [
-    ...all('SELECT child_item_id, quantity FROM bom WHERE parent_rev_id=?', [revId])
-      .map(b => ({ w: getEffectiveWeight(b.child_item_id, new Set(visited)), qty: b.quantity })),
+    ...all('SELECT child_item_id, child_rev_id, quantity FROM bom WHERE parent_rev_id=?', [revId])
+      .map(b => ({ w: childW(b), qty: b.quantity })),
     ...all('SELECT sp.weight_g, bs.quantity FROM bom_std_parts bs JOIN standard_parts sp ON sp.id=bs.std_part_id WHERE bs.parent_rev_id=?', [revId])
       .map(b => ({ w: b.weight_g > 0 ? b.weight_g : null, qty: b.quantity })),
   ];

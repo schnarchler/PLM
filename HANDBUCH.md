@@ -149,6 +149,7 @@ Funktionen. Details stehen jeweils im verlinkten Kapitel.
 3. Eine hochgeladene **3MF** liefert automatisch die Druckparameter (Schichthöhe, Füllung,
    Temperaturen …).
 4. **Gewicht ⚖** in Gramm neben dem Verkaufspreis eintragen — es wird für die Preiskalkulation gebraucht.
+   Gewicht und Preis gelten für die gewählte Revision (siehe 6.9).
 
 ### 3.4 Freigeben
 
@@ -310,7 +311,7 @@ Die Nummern der ERP-Belege stehen unter [26. Nummernkreise](#26-nummernkreise).
 | **Varianten** | Verknüpfte Ausführungen (siehe 6.15) |
 
 **Revisionen-Tab:**
-- Verkaufspreis (VP) und Gewicht direkt inline editierbar
+- Verkaufspreis (VP) und Gewicht der gewählten Revision direkt inline editierbar
 - Revisionen als Reiter — 🚚 kennzeichnet gelieferte Revisionen (siehe 12.3)
 - **⇄ Revisionen vergleichen** — zwei Revisionen gegenüberstellen (siehe 6.18)
 - Stückliste (BOM) mit PLM-Items und Normteilen
@@ -323,6 +324,8 @@ Die Nummern der ERP-Belege stehen unter [26. Nummernkreise](#26-nummernkreise).
 - **📄** — Dokument erstellen (Datenblatt, Stückliste, Prüfprotokoll)
 - **⇄** — Dieses Item mit einem anderen Item vergleichen
 - **⌗** — Mindmap der Abhängigkeiten (siehe 6.13)
+
+**Revisionen im Projektbaum:** Hat ein Item mehr als eine Revision, lässt es sich im Baum links mit **▶** aufklappen — wie eine Baugruppe. Jede Revision steht mit Status, Gewicht und Preis darunter; ein Klick öffnet das Item in genau dieser Revision. Bei Baugruppen stehen die Revisionen über der Stückliste.
 
 **Vorschaubilder:** In Projektbaum, Stückliste und Suche erscheint ein Vorschaubild, wenn man kurz mit der Maus auf der Zeile verweilt. PLM zeichnet dafür die STL oder STEP der neusten Revision isometrisch, wie die 3D-Vorschau. Bei Parts geht die STL vor, bei Baugruppen die STEP — sie zeigt die Baugruppe zusammengebaut, eine 3MF meist nur die Teile verteilt auf dem Druckbett. Ohne STL und STEP dient das Bild aus einer Slicer-3MF oder ein hochgeladenes Bild (PNG, JPG) als Vorschau.
 
@@ -366,6 +369,8 @@ dieser Revision (siehe 18). Dokumente haben keinen Kurzcode.
 ### 6.9 Gewicht
 
 Das Gewicht ⚖ eines Parts wird direkt in der Detailansicht neben dem Verkaufspreis eingetragen (in Gramm). Es wird für die automatische Materialkostenkalkulation in Angeboten verwendet.
+
+Gewicht und Verkaufspreis gehören zur **Revision**. Eine neue Revision (auch über ECO oder Check-in) übernimmt beide Werte der bisherigen; danach lassen sie sich in der neuen Revision ändern, ohne dass die alte ihren Wert verliert — z. B. wenn ein optimiertes Teil leichter wird. Das **Gewicht** ist nur in der aktuell offenen Revision änderbar: der neusten, solange sie nicht in Review, freigegeben, veraltet oder geliefert ist. Ältere und gesperrte Revisionen zeigen ihr Gewicht mit 🔒 — ein neues Gewicht kommt dort über eine neue Revision. Der **Verkaufspreis** ist kaufmännisch und bleibt in jeder Revision änderbar. Jede Änderung steht in der Historie mit Revision, alt → neu. Angebote, Aufträge, Listen und Kalkulation verwenden die Werte der aktiven Revision (die freigegebene, sonst die neuste). Der **Revisionsvergleich** zeigt Gewicht und Preis mit.
 
 Bei einer Baugruppe ohne eigenes Gewicht zählt PLM die Stückliste zusammen: Teile und Normteile mit Gewicht, jeweils mal Menge. Positionen ohne Gewicht zählen nicht mit; das Datenblatt sagt, wie viele das sind. Jede Stücklistenzeile zeigt ihr Stückgewicht. Ein eigenes Gewicht an der Baugruppe geht der Summe vor. Das Gewicht eines Normteils steht im Normteil unter **Gewicht pro Stück**.
 
