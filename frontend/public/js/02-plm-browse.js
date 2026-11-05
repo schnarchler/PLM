@@ -47,6 +47,75 @@ async function refreshOpenProject(projectId) {
   _rerenderProjectDetail();
 }
 
+// ── TEILE: alle Items über alle Projekte ──────────────────────
+// Eine flache Liste, gefiltert nach Text und Typ. Ein Klick öffnet das Teil
+// rechts; „+ Teil“ fragt nach dem Projekt, weil die Nummer daran hängt.
+let _partsAll = [], _partsQ = '', _partsType = '';
+const _PARTS_TYPES = [['', 'Alle'], ['prt', 'Parts'], ['asm', 'Baugruppen'], ['doc', 'Dokumente']];
+
+async function renderPartsList() {
+  // Kein offener Projektbaum: Änderungen am Teil frischen diese Liste auf
+  state.project = null;
+  _partsHeader();
+  if (!document.getElementById('parts-rows')) {
+    setLeftBody(`<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <input class="fi" id="parts-q" placeholder="Filtern: Nummer, Name, Kurzcode, Projekt …" value="${esc(_partsQ)}"
+          oninput="_partsQ=this.value;_renderPartsRows()" style="flex:1;min-width:160px">
+        <span id="parts-types" style="display:inline-flex;gap:4px"></span>
+      </div>
+      <div id="parts-rows"><div class="empty"><div class="empty-text" style="font-size:13px">Lade…</div></div></div>`);
+  }
+  try { _partsAll = await api('/api/items'); } catch { return; }
+  const badge = document.getElementById('badge-parts');
+  if (badge) badge.textContent = _partsAll.length || '—';
+  _renderPartsRows();
+}
+
+function _partsHeader() {
+  setLeftHeader('Teile', `<span style="display:inline-flex;gap:4px;align-items:center">${_sortBtns('sort_parts', '_resortParts')}<span style="width:6px"></span>`
+    + `<button class="btn btn-primary btn-sm" onclick="openItemModal(null,null,'prt')">+ Teil</button></span>`);
+}
+function _resortParts() { _partsHeader(); _renderPartsRows(); }
+function _partsSetType(t) { _partsType = t; _renderPartsRows(); }
+
+function _renderPartsRows() {
+  const el = document.getElementById('parts-rows');
+  if (!el) return;
+  const types = document.getElementById('parts-types');
+  if (types) types.innerHTML = _PARTS_TYPES.map(([t, label]) =>
+    `<button class="btn btn-sm ${_partsType === t ? 'btn-primary' : 'btn-ghost'}" onclick="_partsSetType('${t}')">${label}</button>`).join('');
+  if (!_partsAll.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🔩</div><div class="empty-text">Noch keine Teile</div>
+      <div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="openItemModal(null,null,'prt')">+ Teil</button></div></div>`;
+    return;
+  }
+  const terms = _partsQ.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = _partsAll.filter(i => (!_partsType || i.item_type === _partsType)
+    && terms.every(t => [i.item_number, i.name, i.short_code, i.project_number, i.project_name, i.classification]
+      .some(v => String(v || '').toLowerCase().includes(t))));
+  // Der Server liefert nach Nummer; nach Name über alle Typen hinweg
+  if (_sortOf('sort_parts') === 'name') rows.sort((a, b) => _byName(a, b) || a.item_number.localeCompare(b.item_number));
+  const sel = state.item?.id;
+  el.innerHTML = `<div style="font-size:12px;color:var(--t4);margin:0 0 4px 2px">${rows.length === _partsAll.length
+      ? `${rows.length} Teile` : `${rows.length} von ${_partsAll.length} Teilen`}</div>`
+    + (rows.length ? rows.map(i => {
+      const code = printCodeOf(i, i.rev_id ? { rev: i.rev } : null);
+      const co = state.checkouts.some(c => c.item_id === i.id);
+      return `<div class="tree-row${i.id === sel ? ' selected' : ''}" id="tr-${i.id}" onclick="openItemDetail(${i.id})"${_thumbAttr(i.thumb_id)}>
+        ${_itemChip(i.item_type, 22)}
+        <span class="tree-num">${esc(i.item_number)}</span>
+        ${code ? `<span class="tree-revno" title="Kurzcode · rev${esc(i.rev ?? '')}">${esc(code)}</span>`
+          : i.rev ? `<span class="tree-revno">rev${esc(i.rev)}</span>` : ''}
+        <span class="tree-name">${esc(i.name)}</span>
+        <span class="tree-right">
+          <span style="font-family:var(--mono);font-size:12px;color:var(--t4)" title="Projekt ${esc(i.project_number)} · ${esc(i.project_name)}">${esc(i.project_number)}</span>
+          ${co ? '<span class="tree-co" title="Ausgecheckt — wird gerade bearbeitet">CO</span>' : ''}
+          ${i.status ? `<span class="status st-${i.status} tree-rev" title="${esc(PLM_ST_LABEL[i.status] || '')}">${i.status}</span>` : ''}
+        </span>
+      </div>`;
+    }).join('') : '<div style="color:var(--t3);font-size:13px;padding:8px 2px">Kein Teil passt zum Filter.</div>');
+}
+
 async function renderProjectsList() {
   const viewBtn = (v, icon, title) => `<button class="btn btn-sm ${_projectView() === v ? 'btn-primary' : 'btn-ghost'}" onclick="setProjectView('${v}')" title="${title}">${icon}</button>`;
   setLeftHeader('Projekte', `<span style="display:inline-flex;gap:4px;align-items:center">${_sortBtns('sort_projects', 'renderProjectsList')}<span style="width:6px"></span>${viewBtn('list', '☰', 'Als Liste')}${viewBtn('tiles', '▦', 'Als Kacheln')}

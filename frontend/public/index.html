@@ -50,6 +50,11 @@
       Projekte
       <span class="badge" id="badge-projects">—</span>
     </button>
+    <button class="nav-item" id="ni-parts" onclick="gotoView('parts')" title="Alle Teile, Baugruppen und Dokumente aus allen Projekten">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg>
+      Teile
+      <span class="badge" id="badge-parts">—</span>
+    </button>
     <button class="nav-item" id="ni-normteile" onclick="gotoView('normteile')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
       Normteile
@@ -206,6 +211,11 @@
       <div class="form-row cols2">
         <div class="fg"><label class="fl">Quelle / Download-Link</label><input class="fi" id="im-url" type="url" placeholder="https://…"></div>
         <div class="fg"><label class="fl">Verkaufspreis (CHF)</label><input class="fi" id="im-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <!-- Nur beim Anlegen aus „Teile“: das Projekt bestimmt die Nummer -->
+      <div class="form-row" id="im-project-row" style="display:none">
+        <div class="fg"><label class="fl">Projekt *</label><select class="fs" id="im-project-sel"></select>
+          <div style="font-size:12px;color:var(--t4);margin-top:4px">Die Nummer des Teils hängt am Projekt, z. B. 0001-prt-001.</div></div>
       </div>
       <input type="hidden" id="im-project-id">
       <input type="hidden" id="im-parent-id">

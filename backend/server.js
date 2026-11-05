@@ -2007,7 +2007,7 @@ const NO_CHANGE = [/^(POST|DELETE) \/api\/session$/, /^POST \/api\/shutdown$/, /
   /^POST \/api\/print-(receipt|receipt-delivery|label)$/, /^POST \/api\/launch-cad$/, /^POST \/api\/checkout\/open$/,
   /^POST \/api\/datasets\/\d+\/open-in-slicer$/];
 // Einstellungen, die jede Person für sich ändern darf
-const PERSONAL_SETTINGS = ['font_scale', 'theme', 'sort_projects', 'sort_items', 'project_view',
+const PERSONAL_SETTINGS = ['font_scale', 'theme', 'sort_projects', 'sort_items', 'sort_parts', 'project_view',
   'customer_view', 'supplier_view', 'purchasing_tab'];
 const ADMIN_ONLY = [
   /^PUT \/api\/settings$/,
@@ -2335,6 +2335,18 @@ function _datasetDims(ds) {
 // ==============================================================
 // ITEMS
 // ==============================================================
+// Alle Teile über alle Projekte (Ansicht „Teile“): mit Projekt, Kurzcode und
+// der neusten Revision samt Status. Angelegt wird weiterhin im Projekt —
+// die Nummer hängt an ihm.
+app.get('/api/items', (req, res) => {
+  res.json(all(`SELECT i.id, i.item_type, i.item_number, i.name, i.short_code, i.classification, i.created_at,
+      p.id AS project_id, p.number AS project_number, p.name AS project_name,
+      r.id AS rev_id, r.rev, r.status, ${thumbIdSql('i.id')} AS thumb_id
+    FROM items i JOIN projects p ON p.id=i.project_id
+    LEFT JOIN revisions r ON r.id=(SELECT id FROM revisions WHERE item_id=i.id ORDER BY rowid DESC LIMIT 1)
+    ORDER BY i.item_number COLLATE NOCASE`));
+});
+
 app.get('/api/items/:id', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Nicht gefunden' });

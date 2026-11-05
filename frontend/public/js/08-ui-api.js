@@ -153,6 +153,8 @@ async function loadStats() {
     _statsShown = true;
     const s = await api('/api/stats');
     document.getElementById('badge-projects').textContent = s.projects||0;
+    const bpt = document.getElementById('badge-parts');
+    if (bpt) bpt.textContent = s.items || '—';
     document.getElementById('badge-customers').textContent = s.customers||0;
     document.getElementById('badge-orders').textContent = s.orders||0;
     const el = document.getElementById('badge-quotes');

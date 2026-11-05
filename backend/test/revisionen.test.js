@@ -402,3 +402,21 @@ test('Historie: Änderungen mit alt → neu statt nur „Geändert"', async () =
   assert.strictEqual(eLog.details,
     `${e.number}: Titel: Clip stärker → Clip dicker · Teile dazu: ${zweit.item_number} · Notiz ${teil.item_number}: — → 2 mm`);
 });
+
+test('Teile: alle Items über alle Projekte, Anlegen nur mit Projekt', async () => {
+  const a = await api('/api/projects', 'POST', { name: 'Alpha' });
+  const b = await api('/api/projects', 'POST', { name: 'Beta' });
+  const ta = await api(`/api/projects/${a.id}/items`, 'POST', { name: 'Winkel', item_type: 'prt' });
+  const tb = await api(`/api/projects/${b.id}/items`, 'POST', { name: 'Gehäuse', item_type: 'asm' });
+  const list = await api('/api/items');
+  const fa = list.find(i => i.id === ta.id), fb = list.find(i => i.id === tb.id);
+  assert.strictEqual(fa.project_number, a.number);
+  assert.strictEqual(fb.project_name, 'Beta');
+  assert.strictEqual(fa.rev, '1');
+  assert.strictEqual(fa.status, 'DFT');
+  assert.ok(fa.short_code, 'Kurzcode dabei');
+  const nums = list.map(i => i.item_number.toLowerCase());
+  assert.deepStrictEqual(nums, [...nums].sort((x, y) => x.localeCompare(y)), 'nach Nummer sortiert');
+  // Ohne gültiges Projekt kein Teil — die Nummer hängt am Projekt
+  assert.strictEqual((await apiFails('/api/projects/999999/items', 'POST', { name: 'Waise', item_type: 'prt' })).status, 404);
+});

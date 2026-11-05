@@ -1104,3 +1104,41 @@ test('Datenblatt: Eigenschaften der Klassifizierung, fehlende Pflicht und Hinwei
   global._classFields = {};
   assert.ok(!renderItemSheet(demoItem(), 31).includes('>Eigenschaften'), 'ohne Felder kein Abschnitt');
 });
+
+test('Teile: alle Projekte in einer Liste, Filter nach Text und Typ', () => {
+  const P = evalPart('js/02-plm-browse.js', '// ── TEILE: alle Items', 'async function renderProjectsList(',
+    '({ _renderPartsRows, set: (a, q, t) => { _partsAll = a; _partsQ = q; _partsType = t; _renderPartsRows(); } })');
+  const el = { innerHTML: '' }, types = { innerHTML: '' };
+  const prev = global.document;
+  global.document = { getElementById: id => ({ 'parts-rows': el, 'parts-types': types })[id] };
+  global.state.checkouts = [{ item_id: 2 }];
+  global.state.item = null;
+  global._thumbAttr ??= id => id ? ` data-thumb="${id}"` : '';
+  Object.assign(global, evalPart('js/02-plm-browse.js', 'const _sortOf =', 'function setPlmSort', '({ _sortOf })'),
+    evalPart('js/02-plm-browse.js', 'const _byName =', '// Der Server liefert Items', '({ _byName })'));
+  const items = [
+    { id: 1, item_type: 'prt', item_number: '0001-prt-001', name: 'Winkel <links>', short_code: 'MM3', rev_id: 5, rev: '2', status: 'REL', project_number: '0001', project_name: 'Alpha' },
+    { id: 2, item_type: 'asm', item_number: '0002-asm-001', name: 'Gehäuse', short_code: 'K7M', rev_id: 6, rev: '1', status: 'DFT', project_number: '0002', project_name: 'Beta' },
+  ];
+  try {
+    P.set(items, '', '');
+    assert.match(el.innerHTML, /2 Teile/);
+    assert.match(el.innerHTML, /onclick="openItemDetail\(1\)"[\s\S]*MM3-2[\s\S]*Winkel &lt;links&gt;[\s\S]*>0001<[\s\S]*st-REL/);
+    assert.match(el.innerHTML, /tree-co/, 'ausgecheckt markiert');
+    P.set(items, 'beta', '');
+    assert.match(el.innerHTML, /1 von 2 Teilen/);
+    assert.ok(el.innerHTML.includes('Gehäuse') && !el.innerHTML.includes('Winkel'), 'Filter auf Projektname');
+    P.set(items, '', 'prt');
+    assert.ok(el.innerHTML.includes('Winkel') && !el.innerHTML.includes('Gehäuse'), 'nur Parts');
+    assert.match(types.innerHTML, /btn-primary" onclick="_partsSetType\('prt'\)">Parts/);
+    P.set(items, 'xyz', '');
+    assert.match(el.innerHTML, /Kein Teil passt/);
+    // Nach Name sortiert: Gehäuse vor Winkel, obwohl die Nummer später kommt
+    global.state.settings = { ...global.state.settings, sort_parts: 'name' };
+    P.set(items, '', '');
+    assert.ok(el.innerHTML.indexOf('Gehäuse') < el.innerHTML.indexOf('Winkel'), 'A–Z');
+    global.state.settings = { ...global.state.settings, sort_parts: 'number' };
+    P.set(items, '', '');
+    assert.ok(el.innerHTML.indexOf('Winkel') < el.innerHTML.indexOf('Gehäuse'), 'Nr.');
+  } finally { global.document = prev; global.state.checkouts = []; }
+});

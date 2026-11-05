@@ -263,11 +263,17 @@ Beschreibung. **Ändern:** Projekt öffnen → **Bearbeiten**.
 
 **Löschen:** Ein leeres Projekt über **Löschen**. Projekte mit Inhalt nur unter **Einstellungen → Admin**.
 
+**Alle Teile:** Navigation → **Teile** listet alle Parts, Baugruppen und Dokumente aus allen
+Projekten, nach Nummer sortiert, mit Kurzcode, Projekt und Status. Das Feld oben filtert nach
+Nummer, Name, Kurzcode, Projekt oder Klassifizierung; die Knöpfe daneben nach Typ. **Nr.** / **A–Z**
+oben sortiert nach Nummer oder Name. Ein Klick öffnet das Teil rechts.
+
 ### 6.2 Items anlegen
 
 | Was | Wo |
 |---|---|
 | Baugruppe, Part, Dokument im Projekt | Projekt öffnen → **+ Baugruppe** / **+ Part** / **+ Dokument** |
+| Aus der Liste aller Teile | **Teile** → **+ Teil** → **Projekt** wählen (Pflicht, die Nummer hängt am Projekt). Vorgeschlagen wird das Projekt des offenen Teils, sonst das zuletzt gewählte |
 | Unterbaugruppe oder Part in einer Baugruppe | Baugruppe öffnen → Tab **Revisionen** → **+ Unterbaugruppe**; im Dialog lässt sich der **Typ** auf Part umstellen |
 
 Pflicht ist nur die **Bezeichnung**. Jedes neue Item bekommt eine Nummer (siehe 6.3), die erste

@@ -550,6 +550,7 @@ async function gotoView(v) {
   _pushHistory({ view: v });
 
   if (v === 'projects') await renderProjectsList();
+  else if (v === 'parts') await renderPartsList();
   else if (v === 'dashboard') await renderDashboard();
   else if (v === 'customers') await renderCustomers();
   else if (v === 'quotes') await renderQuotes();

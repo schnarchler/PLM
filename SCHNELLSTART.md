@@ -36,7 +36,7 @@ Alles unter **Einstellungen**:
 | | Schritt | So geht's |
 |---|---|---|
 | 1 | Projekt anlegen | **Projekte → + Projekt** → Bezeichnung |
-| 2 | Part anlegen | Projekt öffnen → **+ Part** → Bezeichnung |
+| 2 | Part anlegen | Projekt öffnen → **+ Part** → Bezeichnung (oder **Teile → + Teil** mit Projekt wählen) |
 | 3 | Dateien und Gewicht | Tab **Revisionen** → **+ Datei** (3MF liefert die Druckparameter); Gewicht im **Datenblatt** → **✏** |
 | 4 | Freigeben | Tab **Revisionen** → **✓ Freigeben** |
 | 5 | Kunde | **Kunden → + Kunde** |

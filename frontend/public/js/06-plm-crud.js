@@ -801,6 +801,7 @@ async function confirmMoveItem(itemId) {
     toast('Item verschoben', 'ok');
     closeDetail();
     if (state.project) openProject(state.project.id);
+    else if (state.view === 'parts') renderPartsList();
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Verschieben'; }
     toast('Fehler: ' + e, 'err');
@@ -869,6 +870,7 @@ async function saveWeightModal(itemId) {
     state.item = await api('/api/items/' + itemId);
     renderItemDetail(state.item, state.activeRevId);
     if (state.project) refreshProjectTree();   // Baum zeigt Gewicht je Revision
+    else if (state.view === 'parts') renderPartsList();
   } catch (e) { toast('Fehler: ' + e, 'err'); }
 }
 
@@ -985,6 +987,7 @@ async function savePriceModal(itemId) {
     state.item = item;
     renderItemDetail(item, state.activeRevId);
     if (state.project) refreshProjectTree();
+    else if (state.view === 'parts') renderPartsList();
   } catch (e) { toast('Fehler: ' + e, 'err'); }
 }
 
@@ -1060,11 +1063,27 @@ async function saveEditItem() {
   state.item = item;
   renderItemDetail(item, state.activeRevId);
   if (state.project) openProject(state.project.id);
+  else if (state.view === 'parts') renderPartsList();
 }
 
-function openItemModal(projectId, parentId, type) {
+// Ohne projectId (Ansicht „Teile“) muss ein Projekt gewählt werden —
+// die Nummer des Teils hängt an ihm.
+async function openItemModal(projectId, parentId, type) {
   set('im-name',''); set('im-desc',''); set('im-url',''); set('im-price','');
-  set('im-project-id', projectId);
+  set('im-project-id', projectId || '');
+  const row = document.getElementById('im-project-row');
+  if (row) {
+    row.style.display = projectId ? 'none' : '';
+    if (!projectId) {
+      const projects = await api('/api/projects').catch(() => []);
+      const sel = document.getElementById('im-project-sel');
+      sel.innerHTML = '<option value="">— Projekt wählen —</option>'
+        + projects.map(p => `<option value="${p.id}">${esc(p.number)} · ${esc(p.name)}</option>`).join('');
+      // Vorschlag: Projekt des offenen Teils, sonst das zuletzt gewählte
+      const guess = String(state.item?.project_id || localStorage.getItem('plm_last_item_project') || '');
+      sel.value = projects.some(p => String(p.id) === guess) ? guess : '';
+    }
+  }
   set('im-parent-id', parentId||'');
   document.getElementById('im-type').value = type||'prt';
   document.getElementById('im-title').textContent = type==='asm' ? 'Neue Baugruppe' : type==='doc' ? 'Neues Dokument' : 'Neues Part';
@@ -1073,12 +1092,15 @@ function openItemModal(projectId, parentId, type) {
 
 async function saveItem() {
   const name = V('im-name'); if (!name) return toast('Name fehlt','err');
-  const projectId = V('im-project-id');
+  const projectId = V('im-project-id') || V('im-project-sel');
+  if (!projectId) return toast('Bitte ein Projekt wählen — die Nummer hängt daran', 'err');
+  if (!V('im-project-id')) try { localStorage.setItem('plm_last_item_project', projectId); } catch {}
   const parentId = V('im-parent-id');
   const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null, source_url: V('im-url')||null, default_price: V('im-price') ? parseFloat(V('im-price')) : null };
   const newItem = await api(`/api/projects/${projectId}/items`,'POST',body);
   toast('Item angelegt','ok'); closeModal('itemModal');
-  await openProject(projectId); loadStats();
+  if (state.view === 'parts') await renderPartsList(); else await openProject(projectId);
+  loadStats();
   if (newItem?.id) openItemDetail(newItem.id);
 }
 
@@ -1088,6 +1110,7 @@ async function deleteItem(id) {
   await api(`/api/items/${id}`,'DELETE');
   toast('Item gelöscht','ok'); closeDetail();
   if (state.project) openProject(state.project.id);
+  else if (state.view === 'parts') renderPartsList();
 }
 
 async function deleteRevision(revId, itemId) {
