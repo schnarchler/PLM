@@ -749,6 +749,9 @@ function applySchema() {
   // und items.default_price spiegeln die aktive Revision (syncItemFromActiveRev).
   try { db.run('ALTER TABLE revisions ADD COLUMN weight_g REAL'); } catch {}
   try { db.run('ALTER TABLE revisions ADD COLUMN default_price REAL'); } catch {}
+  // Beschreibung des Teils je Revision: eine Änderung in rev2 lässt rev1, wie
+  // sie war. items.description spiegelt die aktive Revision. NULL = die am Item.
+  try { db.run('ALTER TABLE revisions ADD COLUMN item_description TEXT DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN variant_group_id INTEGER DEFAULT NULL'); } catch {}
   try { db.run('ALTER TABLE items ADD COLUMN notes TEXT DEFAULT NULL'); } catch {}
   // Hinweise am Teil, je Art ein Feld. Nur der Kundenhinweis kommt auf den Lieferschein.
@@ -823,6 +826,11 @@ function applySchema() {
   }
   // Ältere Abbuchungen kennen den Produktionsauftrag nur aus der Notiz
   // („Verbrauch LS-2026-001") — einmalig verknüpfen, die Position nur wenn eindeutig
+  // Bisherige Revisionen bekommen den heutigen Text als ihren eigenen
+  migrateOnce('rev-item-description-v1', () => {
+    db.run(`UPDATE revisions SET item_description=(SELECT COALESCE(description,'') FROM items WHERE items.id=revisions.item_id)
+            WHERE item_description IS NULL`);
+  });
   migrateOnce('trace-consumption-links-v1', () => {
     for (const m of all("SELECT id, raw_material_id, notes FROM raw_material_movements WHERE type='out' AND delivery_id IS NULL AND notes LIKE 'Verbrauch %'")) {
       const d = get('SELECT id FROM deliveries WHERE number=?', [m.notes.slice('Verbrauch '.length).trim()]);
@@ -1387,7 +1395,8 @@ function getActiveRevision(itemId) {
 function syncItemFromActiveRev(itemId) {
   const rev = getActiveRevision(itemId);
   if (!rev) return;
-  run('UPDATE items SET weight_g=?, default_price=? WHERE id=?', [rev.weight_g ?? null, rev.default_price ?? null, itemId]);
+  run('UPDATE items SET weight_g=?, default_price=?, description=COALESCE(?, description) WHERE id=?',
+    [rev.weight_g ?? null, rev.default_price ?? null, rev.item_description ?? null, itemId]);
 }
 // Welche Revision war an einem Datum aktiv? Nur für Lieferungen aus der Zeit
 // vor dem automatischen Fixieren — beste Näherung aus Freigabe- und Erstelldatum,
@@ -1523,9 +1532,11 @@ function rejectIfLocked(res, revId) {
 // übernehmen. „Neue Revision", ECO und Check-in nutzen denselben Weg, damit
 // eine neue Revision immer gleich aussieht.
 function copyRevisionContent(from, toRevId, toRevLabel) {
-  // Gewicht und Preis übernehmen — in der neuen Revision dann änderbar
-  const src = get('SELECT weight_g, default_price FROM revisions WHERE id=?', [from.id]);
-  if (src) run('UPDATE revisions SET weight_g=?, default_price=? WHERE id=?', [src.weight_g ?? null, src.default_price ?? null, toRevId]);
+  // Gewicht, Preis und Beschreibung übernehmen — in der neuen Revision dann änderbar
+  const src = get(`SELECT r.weight_g, r.default_price, COALESCE(r.item_description, i.description) AS item_description
+                   FROM revisions r JOIN items i ON i.id=r.item_id WHERE r.id=?`, [from.id]);
+  if (src) run('UPDATE revisions SET weight_g=?, default_price=?, item_description=? WHERE id=?',
+    [src.weight_g ?? null, src.default_price ?? null, src.item_description ?? null, toRevId]);
   let files = 0;
   for (const ds of all('SELECT * FROM datasets WHERE revision_id=?', [from.id])) {
     try {
@@ -2409,8 +2420,8 @@ app.post('/api/projects/:projectId/items', (req, res) => {
     [project.id, parent_id || null, item_type, item_number, name, description || '', source_url || null, default_price != null ? parseFloat(default_price) : null, derivedClass,
      cleanAttrs(req.body.attributes, classFields(derivedClass))]);
   assignShortCode(itemId);
-  run('INSERT INTO revisions (item_id,rev,status,description,default_price) VALUES (?,?,?,?,?)',
-    [itemId, firstRevLabel(), 'DFT', 'Erste Revision', default_price != null ? parseFloat(default_price) : null]);
+  run('INSERT INTO revisions (item_id,rev,status,description,default_price,item_description) VALUES (?,?,?,?,?,?)',
+    [itemId, firstRevLabel(), 'DFT', 'Erste Revision', default_price != null ? parseFloat(default_price) : null, description || '']);
   log('item', itemId, 'Erstellt', item_type + ' ' + item_number + ' rev' + firstRevLabel());
   res.json(get('SELECT * FROM items WHERE id=?', [itemId]));
 });
@@ -2443,12 +2454,21 @@ app.put('/api/items/:id', (req, res) => {
   const revBefore = rev ? { ...rev } : null;
   if (rev && has('weight_g')) run('UPDATE revisions SET weight_g=? WHERE id=?', [num(req.body.weight_g), rev.id]);
   if (rev && has('default_price')) run('UPDATE revisions SET default_price=? WHERE id=?', [num(req.body.default_price), rev.id]);
+  // Beschreibung gehört zur Revision und ist in jeder änderbar — auch freigegeben,
+  // sie ist ein Text, kein Teil der Konstruktion. rev_description schreibt die
+  // gewählte Revision; ein geändertes description (ältere Aufrufer) ebenso.
+  // Unverändert mitgeschickt (Notizen, Preis …) lässt sie alle Revisionen, wie sie sind.
+  const revDesc = has('rev_description') ? String(req.body.rev_description ?? '')
+    : has('description') && (description ?? '') !== (before.description ?? '') ? String(description ?? '') : null;
+  if (rev && revDesc !== null) run('UPDATE revisions SET item_description=? WHERE id=?', [revDesc, rev.id]);
   const revAfter = rev ? get('SELECT * FROM revisions WHERE id=?', [rev.id]) : null;
   run(`UPDATE items SET name=?,description=?,source_url=?,classification=?,
        notes=CASE WHEN ? THEN notes ELSE ? END WHERE id=?`,
-    [name, description, source_url||null, canonicalClass(classification),
+    // Mit Revision kommt die Beschreibung aus der aktiven (syncItemFromActiveRev)
+    [name, rev ? before.description : description, source_url||null, canonicalClass(classification),
      keepNotes ? 1 : 0, notes || null, req.params.id]);
   syncItemFromActiveRev(before.id);
+  const revAfterDesc = rev ? get('SELECT item_description FROM revisions WHERE id=?', [rev.id]).item_description : null;
   // Eigenschaften: mitgeschickt → übernehmen; sonst nur auf die Felder der
   // (evtl. neuen) Klassifizierung kürzen, damit keine verwaisten Werte bleiben
   const fields = classFields(classification);
@@ -2486,9 +2506,11 @@ app.put('/api/items/:id', (req, res) => {
   const attrDiff = [...new Set([...Object.keys(oldA), ...Object.keys(newA)])].filter(k => oldA[k] !== newA[k] && labels[k])
     .map(k => `${labels[k]}: ${oldA[k] || '—'} → ${newA[k] || '—'}`);
   if (attrDiff.length) log('item', req.params.id, 'Eigenschaften geändert', attrDiff.join(' · '));
-  const otherChanged = ['name', 'description', 'source_url', 'classification', 'notes']
-    .some(k => before[k] !== after[k]);
-  if (otherChanged || !(priceChanged || weightChanged || hintsChanged.length || attrDiff.length)) log('item', req.params.id, 'Geändert', name);
+  const descChanged = !!rev && revDesc !== null && (revBefore.item_description ?? before.description ?? '') !== (revAfterDesc ?? '');
+  if (descChanged) log('item', req.params.id, 'Beschreibung geändert', `rev${rev.rev}: ${revAfterDesc || '—'}`);
+  const otherChanged = ['name', 'source_url', 'classification', 'notes'].some(k => before[k] !== after[k])
+    || (!rev && before.description !== after.description);
+  if (otherChanged || !(priceChanged || weightChanged || descChanged || hintsChanged.length || attrDiff.length)) log('item', req.params.id, 'Geändert', name);
   res.json(after);
 });
 
@@ -2877,7 +2899,7 @@ app.get('/api/items/:id/compare', (req, res) => {
     released_at: r.released_at, released_by: r.released_by, description: r.description,
     eco_reason: r.eco_reason, delivered: deliveriesOfRevision(r.id).map(d => d.number) });
 
-  const meta = ['status', 'description', 'eco_reason', 'released_at', 'released_by', 'weight_g', 'default_price']
+  const meta = ['status', 'description', 'item_description', 'eco_reason', 'released_at', 'released_by', 'weight_g', 'default_price']
     .map(f => ({ field: f, a: ra[f] ?? null, b: rb[f] ?? null, changed: !_sameValue(ra[f], rb[f]) }))
     .filter(r => !_blank(r.a) || !_blank(r.b));
 
@@ -2969,7 +2991,7 @@ const RELEASE_CHECKS = {
   file:           { label: 'Datei',          ok: (item, rev) => !!get('SELECT 1 as y FROM datasets WHERE revision_id=? LIMIT 1', [rev.id]) },
   cad:            { label: 'CAD-Datei',      ok: (item, rev) => item.item_type === 'doc' || !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='CAD' LIMIT 1", [rev.id]) },
   drawing:        { label: 'Zeichnung (PDF)', ok: (item, rev) => !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='PDF' LIMIT 1", [rev.id]) },
-  description:    { label: 'Beschreibung',   ok: item => !!String(item.description || '').trim() },
+  description:    { label: 'Beschreibung',   ok: (item, rev) => !!String(rev.item_description ?? item.description ?? '').trim() },
   classification: { label: 'Klassifizierung', ok: item => !!String(item.classification || '').trim() },
   weight:         { label: 'Gewicht',        ok: (item, rev) => item.item_type !== 'prt' || rev.weight_g > 0 },
 };

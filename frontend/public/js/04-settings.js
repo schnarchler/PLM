@@ -360,11 +360,11 @@ async function renderSettings() {
         <div class="form-row">
           <div class="fg">
             <label class="fl">Checkout-Pfad</label>
-            <input class="fi" id="st-checkout-dir" placeholder="z.B. /home/user/CAD-Checkout">
+            <input class="fi" id="st-checkout-dir" placeholder="wird geladen…" disabled>
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" onclick="saveCheckoutDir()">Pfad speichern</button>
+          <button class="btn btn-ghost btn-sm" id="st-checkout-save" onclick="saveCheckoutDir()" disabled>Pfad speichern</button>
           <span id="st-checkout-msg" style="font-size:13px;color:var(--t3)"></span>
         </div>
 
@@ -524,10 +524,19 @@ async function renderSettings() {
     document.getElementById('st-data-dir').value = d.data_dir;
     if (!d.configured) _showFirstRunModal(d.data_dir, d.config_file);
   });
+  // Feld und Knopf erst nach dem Laden freigeben: sonst speichert ein früher
+  // Klick (oder einer nach einem Ladefehler) einen leeren Pfad, und PLM sucht
+  // die Checkouts plötzlich im Standardordner
   api('/api/settings').then(s => {
     const el = document.getElementById('st-checkout-dir');
-    if (el) el.value = s.checkout_dir || '';
-  });
+    if (!el) return;
+    el.value = s.checkout_dir || '';
+    el.dataset.loaded = el.value;
+    el.placeholder = 'z.B. /home/user/CAD-Checkout';
+    el.disabled = false;
+    const btn = document.getElementById('st-checkout-save');
+    if (btn) btn.disabled = false;
+  }).catch(() => {});
 }
 
 // ── SICHERUNGEN ───────────────────────────────────────────────
@@ -726,8 +735,17 @@ async function launchCad() {
 }
 
 async function saveCheckoutDir() {
-  const val = document.getElementById('st-checkout-dir')?.value.trim() || '';
+  const el = document.getElementById('st-checkout-dir');
+  if (!el || el.dataset.loaded === undefined) return;   // noch nicht geladen
+  const val = el.value.trim();
+  // Laufende Checkouts bleiben im alten Ordner liegen — PLM sähe sie nicht mehr
+  const changed = val !== (el.dataset.loaded || '').trim();
+  if (changed) await loadCheckouts();
+  if (changed && state.checkouts.length && !confirm(`${state.checkouts.length} Checkout(s) liegen im bisherigen Verzeichnis.\n\n`
+    + 'Nach dem Wechsel zeigt PLM sie nicht mehr an, bis der alte Pfad wieder eingestellt ist. Trotzdem wechseln?')) return;
   await api('/api/settings', 'PUT', { checkout_dir: val });
+  el.dataset.loaded = val;
+  loadCheckouts();
   const msg = document.getElementById('st-checkout-msg');
   if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
   state.settings = await api('/api/settings');
@@ -773,7 +791,7 @@ async function saveSettings() {
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
     'hourly_rate',
-    'invoice_footer','quote_footer','receipt_footer','receipt_line_width','checkout_dir'];
+    'invoice_footer','quote_footer','receipt_footer','receipt_line_width'];   // Checkout-Pfad: eigener Knopf
   const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes','label_show_qr'];
   const body = {};
   keys.forEach(k => {

@@ -266,7 +266,6 @@ function _renderTreeNode(item, map, isRoot) {
       ${printCodeOf(item, rev) ? `<span class="tree-revno" title="Kurzcode · rev${esc(rev?.rev ?? '')}">${esc(printCodeOf(item, rev))}</span>`
         : rev ? `<span class="tree-revno">rev${esc(rev.rev)}</span>` : ''}
       <span class="tree-name">${esc(item.name)}</span>
-      ${item.classification ? _classChip(item.classification) : ''}
       <span class="tree-right">
         ${co ? '<span class="tree-co" title="Ausgecheckt — wird gerade bearbeitet">CO</span>' : ''}
         ${rev ? `<span class="status st-${rev.status} tree-rev" title="${esc(PLM_ST_LABEL[rev.status] || '')}">${rev.status}</span>` : ''}
@@ -537,12 +536,11 @@ function renderItemDetail(item, activeRevId) {
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
     + (item.short_code && !isDOC ? `<span class="chip" style="flex-shrink:0" title="Kurzcode zum Aufdrucken — Datenblatt">${esc(item.short_code)}</span>` : '')
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(item.name)}">${esc(item.name)}</strong>`
-    + (item.classification ? ' ' + _classChip(item.classification) : '')
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})" title="In anderes Projekt verschieben">↪</button>`
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument erstellen">&#128196;</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Mit anderem Item vergleichen">⇄</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemMindmap(${item.id})" title="Abhängigkeiten als Mindmap">⌗</button>`;
+    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Mit anderem Item vergleichen">⇄</button>`;
+  // Klassifizierung nur im Datenblatt unter „Allgemein“, Mindmap über den Knopf im Datenblatt
 
   const tabs = `
     <button class="tab active" data-pane="it-sheet" onclick="switchTab(this,'it-sheet');_initVisibleStl()">Datenblatt</button>
@@ -788,10 +786,15 @@ function renderItemSheet(item, activeRevId) {
     ? `<span class="status st-REV" style="background:var(--teal-soft);color:var(--teal)">ausgecheckt</span>`
     : `<span class="chip">eingecheckt</span>`;
 
-  // -- Beschreibung
-  const descBlock = item.description
-    ? `<div style="font-size:13px;line-height:1.65;color:var(--t2);white-space:pre-wrap">${esc(item.description)}</div>`
-    : `<div style="font-size:13px;color:var(--t3)">Keine Beschreibung hinterlegt.${ergaenzen()}</div>`;
+  // -- Beschreibung der gewählten Revision. In jeder Revision änderbar (✏),
+  // auch wenn das Teil sonst gesperrt ist — die anderen Revisionen bleiben gleich.
+  const desc = revDesc(item, rev);
+  const descEdit = rev
+    ? ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openDescModal(${item.id})" title="Beschreibung von rev${esc(rev.rev)} ändern — andere Revisionen bleiben, wie sie sind">✏</button>`
+    : '';
+  const descBlock = desc
+    ? `<div style="font-size:13px;line-height:1.65;color:var(--t2);white-space:pre-wrap">${esc(desc)}${descEdit}</div>`
+    : `<div style="font-size:13px;color:var(--t3)">Keine Beschreibung hinterlegt.${descEdit || ergaenzen()}</div>`;
 
   // -- Quelle. Pruefung zentral in safeLinkHost (01-core.js).
   let srcBlock;
@@ -1038,7 +1041,7 @@ function renderItemSheet(item, activeRevId) {
 
     ${stlBlock}
 
-    <div class="sep-label"${stlBlock ? '' : ' style="margin-top:0"'}>Beschreibung</div>
+    <div class="sep-label"${stlBlock ? '' : ' style="margin-top:0"'}>Beschreibung${rev ? ` <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${esc(rev.rev)}</span>` : ''}</div>
     ${descBlock}
 
     ${item.source_url || editable ? `<div class="sep-label">Quelle</div>

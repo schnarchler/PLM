@@ -36,6 +36,8 @@ const _hintHtml = h => `<div>
 // Revision gilt der Wert am Item — der spiegelt die aktive Revision.
 const _revHas = (rev, k) => !!rev && Object.prototype.hasOwnProperty.call(rev, k);
 function revPrice(item, rev) { return (_revHas(rev, 'default_price') ? rev.default_price : item.default_price) ?? null; }
+// Beschreibung ebenso: jede Revision hat ihre eigene
+function revDesc(item, rev) { return (_revHas(rev, 'item_description') && rev.item_description != null ? rev.item_description : item.description) || ''; }
 function revWeight(item, rev) { return (_revHas(rev, 'weight_g') ? rev.weight_g : item.weight_g) ?? null; }
 function revEffWeight(item, rev) { return (_revHas(rev, 'effective_weight_g') ? rev.effective_weight_g : item.effective_weight_g) ?? null; }
 function revWeightTxt(item, rev) {

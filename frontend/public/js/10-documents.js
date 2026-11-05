@@ -153,7 +153,7 @@ function _renderCompare(a, b) {
 // der Server aus (/api/items/:id/compare), hier stehen sie mit denselben
 // Bezeichnungen wie im Datenblatt (PRINT_PARAMS, PLM_ST_LABEL).
 const COMPARE_META_LABEL = {
-  status: 'Status', description: 'Beschreibung', eco_reason: 'ECO-Grund',
+  status: 'Status', description: 'Beschreibung', item_description: 'Teilebeschreibung', eco_reason: 'ECO-Grund',
   released_at: 'Freigegeben am', released_by: 'Freigegeben von',
   weight_g: 'Gewicht', default_price: 'Verkaufspreis',
 };
@@ -378,7 +378,7 @@ function generateItemTemplate(type, opts = {}) {
     </div>
     <div style="margin-bottom:22px">
       <div style="font-size:20px;font-weight:700;color:#111827">${escHtml(item.name)}</div>
-      ${item.description ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">${escHtml(item.description)}</div>` : ''}
+      ${revDesc(item, rev) ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">${escHtml(revDesc(item, rev))}</div>` : ''}
     </div>
     ${itemHints(item).map(h => `<div class="warn"><b>⚠ ${h.label}</b><br>${escHtml(h.text)}</div>`).join('')}`;
 

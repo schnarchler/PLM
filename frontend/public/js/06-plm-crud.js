@@ -912,6 +912,42 @@ async function saveItemHints(itemId) {
   } catch (e) { toast('Fehler: ' + e, 'err'); }
 }
 
+// Beschreibung der gewählten Revision — in jeder Revision änderbar, auch
+// freigegeben; die übrigen Revisionen behalten ihren Text
+function openDescModal(itemId) {
+  const item = state.item;
+  if (!item || item.id !== itemId) return;
+  const rev = _selRev(itemId);
+  if (!rev) return;
+  _showDynModal(`<div class="modal" style="max-width:520px">
+    <div class="modal-head"><div class="modal-title">Beschreibung: ${esc(item.item_number)} · rev${esc(rev.rev)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><textarea class="ft" id="dm-desc" rows="6">${esc(revDesc(item, rev))}</textarea></div>
+      </div>
+      <div style="font-size:13px;color:var(--t3)">Gilt nur für rev${esc(rev.rev)} und braucht keine neue Revision. Die anderen Revisionen behalten ihren Text; die Änderung steht in der Historie.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveDescModal(${item.id})">Speichern</button>
+    </div>
+  </div>`);
+  document.getElementById('dm-desc')?.focus();
+}
+
+async function saveDescModal(itemId) {
+  const rev = _selRev(itemId);
+  if (!rev) return;
+  try {
+    await _putItemPatch(itemId, { rev_description: V('dm-desc'), revision_id: rev.id });
+    _hideDynModal();
+    toast('Beschreibung gespeichert', 'ok');
+    const item = await api('/api/items/' + itemId);
+    state.item = item;
+    renderItemDetail(item, state.activeRevId);
+  } catch (e) { toast('Fehler: ' + e, 'err'); }
+}
+
 async function savePriceModal(itemId) {
   const val = V('pm-price').trim();
   const price = val === '' ? null : parseFloat(val);
@@ -933,10 +969,12 @@ async function openEditItemModal(id) {
   const item = await api('/api/items/' + id);
   set('eim-id', id);
   set('eim-name', item.name);
-  set('eim-desc', item.description || '');
   set('eim-url', item.source_url || '');
-  // Gewicht der gewählten Revision
+  // Beschreibung und Gewicht der gewählten Revision
   const selRev = (item.revisions || []).find(r => r.id === state.activeRevId) || (item.revisions || [])[0];
+  set('eim-desc', revDesc(item, selRev));
+  const dl = document.getElementById('eim-desc-label');
+  if (dl) dl.textContent = 'Beschreibung' + (selRev ? ' · rev' + selRev.rev : '');
   set('eim-weight', revWeight(item, selRev) ?? '');
   set('eim-rev-id', selRev?.id || '');
   const wl = document.getElementById('eim-weight-label');
@@ -983,12 +1021,13 @@ async function saveEditItem() {
   const attributes = {};
   document.querySelectorAll('#eim-attrs [data-attr]').forEach(i => { attributes[i.dataset.attr] = i.value; });
   // Preis bleibt unberührt — der läuft über openPriceModal.
-  // Das Gewicht gilt für die Revision, die beim Öffnen gewählt war.
+  // Beschreibung und Gewicht gelten für die Revision, die beim Öffnen gewählt war.
+  const revId = V('eim-rev-id') ? parseInt(V('eim-rev-id')) : null;
   await _putItemPatch(id, {
-    name, description: V('eim-desc'), source_url: V('eim-url')||null,
+    name, source_url: V('eim-url')||null,
+    ...(revId ? { revision_id: revId, rev_description: V('eim-desc') } : { description: V('eim-desc') }),
     ...(document.getElementById('eim-weight')?.disabled ? {} : {
       weight_g: V('eim-weight') ? parseFloat(V('eim-weight')) : null,
-      ...(V('eim-rev-id') ? { revision_id: parseInt(V('eim-rev-id')) } : {}),
     }),
     classification: document.getElementById('eim-classification').value || null,
     attributes

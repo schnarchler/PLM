@@ -275,6 +275,7 @@ Revision im Status DFT und einen Kurzcode (siehe 6.8).
 > In die Stückliste kommt es über **+ Position hinzufügen** (siehe 6.10).
 
 **Ändern:** Item öffnen → **✏ Bearbeiten** (Name, Beschreibung, Quelle, Klassifizierung, Eigenschaften).
+Die **Beschreibung** gehört zur Revision: Sie gilt für die gewählte Revision, die anderen behalten ihren Text. Eine neue Revision übernimmt den Text der vorherigen. Mit **✏** neben der Beschreibung im Datenblatt lässt sie sich in jeder Revision ändern, auch wenn diese freigegeben ist. Die Änderung steht in der Historie.
 **Verschieben:** **↪** im Titel → **Zielprojekt** wählen → **Verschieben**. Die Nummer passt sich dem neuen Projekt an.
 **Löschen:** Tab **Revisionen** → **🗑 Item löschen**. Freigegebene oder gelieferte Items nur unter **Einstellungen → Admin**.
 
@@ -323,7 +324,6 @@ Die Nummern der ERP-Belege stehen unter [26. Nummernkreise](#26-nummernkreise).
 - **↪** — Item in ein anderes Projekt verschieben
 - **📄** — Dokument erstellen (Datenblatt, Stückliste, Prüfprotokoll)
 - **⇄** — Dieses Item mit einem anderen Item vergleichen
-- **⌗** — Mindmap der Abhängigkeiten (siehe 6.13)
 
 **Revisionen im Projektbaum:** Hat ein Item mehr als eine Revision, lässt es sich im Baum links mit **▶** aufklappen — wie eine Baugruppe. Jede Revision steht mit Status, Gewicht und Preis darunter; ein Klick öffnet das Item in genau dieser Revision. Bei Baugruppen stehen die Revisionen über der Stückliste.
 
@@ -411,7 +411,7 @@ Die Ansicht gruppiert nach Baugruppe: Pro Baugruppe werden alle Revisionen aufge
 
 ### 6.13 Mindmap
 
-**⌗** im Titel (oder **⌗ Mindmap** im Datenblatt) zeigt die Abhängigkeiten als Graph:
+**⌗ Mindmap** im Datenblatt zeigt die Abhängigkeiten als Graph:
 
 ```
 Baugruppen, die es verwenden  ──►  [ Item ]  ──►  Teile, aus denen es besteht

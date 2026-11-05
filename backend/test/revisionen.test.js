@@ -337,3 +337,37 @@ test('Gewicht und Preis gehören zur Revision und werden übernommen', async () 
   const p = await api(`/api/projects/${proj.id}`);
   assert.deepStrictEqual(p.items.find(i => i.id === teil.id).revisions.map(r => r.rev), ['2', '1']);
 });
+
+test('Beschreibung gehört zur Revision: Änderung in rev2 lässt rev1, wie sie war', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Beschrieben' });
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Ledhalter', item_type: 'prt', description: 'Erster Entwurf' });
+  const r1 = await firstRev(teil.id);
+  assert.strictEqual(r1.item_description, 'Erster Entwurf', 'Text aus dem Anlegen steht an rev1');
+  await api(`/api/revisions/${r1.id}/status`, 'PUT', { status: 'REL' });
+  await api(`/api/revisions/${r1.id}/status`, 'PUT', { status: 'ECO', eco_reason: 'neue Form' });
+  let it = await item(teil.id);
+  const r2 = it.revisions[0];
+  assert.strictEqual(r2.item_description, 'Erster Entwurf', 'neue Revision übernimmt den Text');
+
+  // rev2 ändern: rev1 bleibt, Item spiegelt die aktive Revision
+  const base = { name: 'Ledhalter', description: it.description, source_url: null, classification: null };
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, rev_description: 'Mit Kabelkanal', revision_id: r2.id });
+  it = await item(teil.id);
+  assert.strictEqual(it.revisions.find(r => r.id === r1.id).item_description, 'Erster Entwurf');
+  assert.strictEqual(it.revisions.find(r => r.id === r2.id).item_description, 'Mit Kabelkanal');
+  assert.strictEqual(it.description, 'Mit Kabelkanal');
+  assert.ok(it.changelog.some(c => c.action === 'Beschreibung geändert' && c.details === 'rev2: Mit Kabelkanal'));
+
+  // Auch eine freigegebene/ältere Revision lässt sich beschreiben — ohne die aktive zu ändern
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, description: 'Mit Kabelkanal', rev_description: 'Erste Form, eckig', revision_id: r1.id });
+  it = await item(teil.id);
+  assert.strictEqual(it.revisions.find(r => r.id === r1.id).item_description, 'Erste Form, eckig');
+  assert.strictEqual(it.description, 'Mit Kabelkanal', 'Item zeigt weiter die aktive Revision');
+
+  // Andere Felder speichern (Preis an rev1, Notizen) lässt alle Beschreibungen stehen
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, description: it.description, default_price: 5, revision_id: r1.id });
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, description: it.description, notes: 'Notiz' });
+  it = await item(teil.id);
+  assert.strictEqual(it.revisions.find(r => r.id === r1.id).item_description, 'Erste Form, eckig');
+  assert.strictEqual(it.revisions.find(r => r.id === r2.id).item_description, 'Mit Kabelkanal');
+});
