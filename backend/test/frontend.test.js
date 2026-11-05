@@ -127,7 +127,7 @@ test('Quellen-Links: nur http und https werden verlinkt', () => {
 });
 
 // ── Datenblatt ────────────────────────────────────────────────
-evalPart('js/02-plm-browse.js', '// ── DATENBLATT-TAB', 'function renderVariantsSection(',
+evalPart('js/02-plm-browse.js', '// ── DATENBLATT-TAB', 'async function openLinkVariantModal(',
   'globalThis.renderItemSheet = renderItemSheet');
 
 function demoItem(extra = {}) {
@@ -959,7 +959,7 @@ test('Datenblatt: „Allgemein“ im selben kompakten Stil wie die Druckparamete
   const allg = h.slice(h.indexOf('>Allgemein<'), h.indexOf('>Notizen<'));
   assert.match(allg, /class="ps-kv"/);
   assert.ok(!allg.includes('ps-cell'), 'keine Kacheln mehr');
-  assert.match(allg, /<span class="ps-kv-label">Gewicht<\/span><span class="ps-kv-val">184\.0 g<\/span>/);
+  assert.match(allg, /<span class="ps-kv-label">Gewicht<\/span><span class="ps-kv-val">184\.0 g <button[^>]*onclick="openWeightModal\(7\)"/, 'Gewicht im Datenblatt eintragen');
   assert.match(allg, /<span class="ps-kv-label">Klassifizierung<\/span><span class="ps-kv-val"><span class="chip">Bauteil<\/span><\/span>/, 'Chip als HTML');
   assert.match(allg, /<span class="ps-kv-label">Verkaufspreis<\/span><span class="ps-kv-val" style="color:var\(--t3\)">— <button/, 'fehlender Wert gedimmt');
   assert.match(allg, /Entwicklungszeit<\/span><span class="ps-kv-val">1 h 30 min</);
@@ -971,6 +971,19 @@ test('Datenblatt: Verkaufspreis bleibt bei freigegebener Revision änderbar', ()
   const h = renderItemSheet(item, 31);
   assert.ok(!h.includes('Jetzt ergänzen') && !h.includes('openEditItemModal'), 'übrige Felder gesperrt');
   assert.match(h, /CHF 59\.48 <button[^>]*onclick="openPriceModal\(7\)"/, '✏ direkt hinter dem Preis');
+});
+
+test('Datenblatt: Gewicht nur in der offenen Revision, Varianten nur hier, BOM-Summe als Preis', () => {
+  const rel = demoItem({ revisions: [{ id: 31, rev: '2', status: 'REL', datasets: [] }] });
+  global.state.item = rel;
+  const h = renderItemSheet(rel, 31);
+  assert.ok(!h.includes('openWeightModal'), 'freigegeben: kein ✏ beim Gewicht');
+  assert.match(h, /Gewicht<\/span><span class="ps-kv-val">184\.0 g <span title="[^"]*gesperrt/);
+  assert.match(h, />Varianten</, 'Varianten am Ende des Datenblatts');
+  const asm = demoItem({ item_type: 'asm', default_price: 10, revisions: [{ id: 31, rev: '1', status: 'DFT', datasets: [],
+    bom: [{ default_price: 4, quantity: 3 }, { default_price: null, quantity: 1 }] }] });
+  global.state.item = asm;
+  assert.match(renderItemSheet(asm, 31), /openPriceModal\(7,12\.00\)[^>]*>BOM CHF 12\.00 übernehmen/);
 });
 
 test('Datenblatt: Gewicht und Preis der gewählten Revision', () => {

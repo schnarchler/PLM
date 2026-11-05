@@ -3,9 +3,12 @@
 Teamcenter-inspiriertes PLM- und ERP-System.  
 Läuft lokal auf Linux/Windows – kein Internet, kein Cloud-Zwang.
 
+> **🚀 [Schnellstart](SCHNELLSTART.md)** — das Wichtigste auf einer Seite  
+> **📖 [Handbuch](HANDBUCH.md)** — Bedienung Schritt für Schritt
+
 ---
 
-## Schnellstart
+## Installation und Start
 
 **Linux:**
 ```bash

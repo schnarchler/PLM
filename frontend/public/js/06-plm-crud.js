@@ -826,27 +826,51 @@ function _selRev(itemId) {
   return it ? (it.revisions || []).find(r => r.id === state.activeRevId) || (it.revisions || [])[0] || null : null;
 }
 
-async function _saveItemField(itemId, input, field) {
-  const val = input.value.trim();
-  const parsed = val === '' ? null : parseFloat(val);
+// Gewicht der gewählten Revision — im Datenblatt unter „Allgemein“ (✏).
+// Nur in der offenen Revision; der Server prüft das ebenfalls.
+function openWeightModal(itemId) {
+  const item = state.item;
+  if (!item || item.id !== itemId) return;
   const rev = _selRev(itemId);
-  if (rev && (rev[field] ?? null) === parsed) return;   // nichts geändert
-  try {
-    await _putItemPatch(itemId, { [field]: parsed, ...(rev ? { revision_id: rev.id } : {}) });
-  } catch(e) { input.style.borderColor = 'var(--red)'; toast('Fehler: ' + e, 'err'); return; }
-  // Neu zeichnen: Freigabe-Hinweis („fehlt noch: Gewicht“), Datenblatt und
-  // Freigabe-Prüfung arbeiten sonst mit dem alten Wert weiter
-  if (state.item?.id === itemId) {
-    state.item = await api('/api/items/' + itemId);
-    renderItemDetail(state.item, state.activeRevId);
-    input = document.getElementById(input.id) || input;
-  }
-  if (state.project) refreshProjectTree();   // Baum zeigt Gewicht je Revision
-  input.style.borderColor = 'var(--green)';
-  setTimeout(() => { input.style.borderColor = ''; }, 1200);
+  if (!rev) return;
+  const lock = revWeightLock(item, rev);
+  if (lock) return toast(lock, 'err');
+  const isASM = item.item_type === 'asm';
+  const w = revWeight(item, rev), effW = revEffWeight(item, rev);
+  _showDynModal(`<div class="modal" style="max-width:400px">
+    <div class="modal-head"><div class="modal-title">Gewicht: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="fg"><label class="fl">Gewicht (g)</label><input class="fi" id="wm-weight" type="number" step="0.1" min="0"
+          placeholder="${isASM && effW != null ? fmtN(effW, 1) + ' (aus Stückliste)' : 'z.B. 45.5'}"
+          value="${w != null ? w : ''}" onkeydown="if(event.key==='Enter')saveWeightModal(${item.id})"></div>
+      </div>
+      <div style="font-size:13px;color:var(--t3)">Gilt für die geöffnete Revision.${isASM ? ' Leer lassen: Summe aus der Stückliste.' : ''}</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveWeightModal(${item.id})">Speichern</button>
+    </div>
+  </div>`);
+  document.getElementById('wm-weight')?.select();
 }
 
-async function saveItemWeight(itemId, input) { return _saveItemField(itemId, input, 'weight_g'); }
+async function saveWeightModal(itemId) {
+  const val = V('wm-weight').trim();
+  const weight = val === '' ? null : parseFloat(val);
+  if (weight != null && (isNaN(weight) || weight < 0)) return toast('Ungültiges Gewicht', 'err');
+  const rev = _selRev(itemId);
+  if (!rev) return;
+  try {
+    await _putItemPatch(itemId, { weight_g: weight, revision_id: rev.id });
+    _hideDynModal();
+    toast('Gewicht gespeichert', 'ok');
+    // Neu zeichnen: Freigabe-Hinweis („fehlt noch: Gewicht“) und Datenblatt
+    state.item = await api('/api/items/' + itemId);
+    renderItemDetail(state.item, state.activeRevId);
+    if (state.project) refreshProjectTree();   // Baum zeigt Gewicht je Revision
+  } catch (e) { toast('Fehler: ' + e, 'err'); }
+}
 
 // Einzige Stelle, an der der Verkaufspreis eines bestehenden Items geändert
 // wird — auch bei freigegebener Revision. Der Preis ist kaufmännisch: keine

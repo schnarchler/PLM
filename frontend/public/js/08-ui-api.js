@@ -88,7 +88,7 @@ function _markActiveRow(id) {
 function switchTab(btn, targetId) {
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
-  // data-keep="1" markiert Bloecke, die zu jedem Tab gehoeren (z.B. Varianten)
+  // data-keep="1" markiert Bloecke, die zu jedem Tab gehoeren
   // und beim Wechsel nicht mitversteckt werden duerfen.
   document.querySelectorAll('#dp-body > div').forEach(d => {
     if (d.dataset.keep !== '1') d.style.display = 'none';

@@ -567,44 +567,7 @@ function renderItemDetail(item, activeRevId) {
     ${_itemHintsBanner(item)}
     ${renderItemSheet(item, activeRevId)}
     <div id="it-revs" style="display:none">
-      ${(() => {
-        const bom = rev?.bom || [];
-        const price = revPrice(item, rev), weight = revWeight(item, rev), effW = revEffWeight(item, rev);
-        const weightLock = revWeightLock(item, rev);
-        const revTag = rev ? ` <span style="color:var(--t4);font-family:var(--mono)">rev${esc(rev.rev)}</span>` : '';
-        const bomTotal = item.item_type === 'asm' && bom.length
-          ? bom.reduce((s, b) => s + (b.default_price != null ? b.default_price * b.quantity : 0), 0)
-          : null;
-        const allPriced = item.item_type === 'asm' && bom.length && bom.every(b => b.default_price != null);
-        const bomHint = bomTotal != null && bomTotal > 0
-          ? `<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
-              BOM: <strong style="color:var(--teal);font-family:var(--mono)">${fmtChf(bomTotal)}</strong>
-              ${!allPriced ? '<span style="color:var(--amber);font-size:13px">⚠ unvollständig</span>' : ''}
-              <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:13px" onclick="openPriceModal(${item.id},${bomTotal.toFixed(2)})">übernehmen</button>
-             </span>`
-          : (item.item_type === 'asm' && bom.length ? `<span style="font-size:13px;color:var(--amber)">BOM: ⚠ keine Preise</span>` : '');
-        return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 10px;background:var(--bg2);border-radius:var(--r-sm);margin-bottom:10px">
-          <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
-            VP${revTag}:
-            <span style="font-family:var(--mono);color:${price != null ? 'var(--t1)' : 'var(--t4)'}">${price != null ? fmtChf(price) : '—'}</span>
-            <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis dieser Revision ändern (ohne neue Revision)">✏</button>
-          </span>
-          <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3)">
-            ⚖
-            ${weightLock ? `<span style="font-family:var(--mono);color:${effW != null ? 'var(--t1)' : 'var(--t4)'}" title="${esc(weightLock)}">${effW != null ? fmtN(effW, 1) : '—'}</span>` : `<input id="item-weight-field" type="number" step="0.1" min="0"
-              placeholder="${weight == null && effW != null ? fmtN(effW, 1) : '—'}"
-              title="${isASM ? 'Leer lassen: Summe aus der Stückliste (Teile und Normteile mit Gewicht)' : 'Gewicht in Gramm'} — gilt für diese Revision"
-              value="${weight != null ? weight : ''}"
-              style="width:72px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r-xs);padding:3px 7px;font-size:13px;color:var(--t1);font-family:var(--mono);-moz-appearance:textfield;appearance:textfield"
-              class="no-spin" onblur="saveItemWeight(${item.id},this)" onkeydown="if(event.key==='Enter')this.blur()">`}
-            <span style="color:var(--t4)">g${isASM && weight == null && effW != null ? ' (aus BOM)' : ''}${revTag}${weightLock ? ` <span title="${esc(weightLock)}">🔒</span>` : ''}</span>
-          </span>
-          ${item.source_url ? (safeLinkHost(item.source_url)
-            ? `<a href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:var(--blue);text-decoration:underline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">Quelle ↗</a>`
-            : `<span style="font-size:13px;color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px" title="Kein http/https-Link — nicht anklickbar: ${esc(item.source_url)}">Quelle ⚠</span>`) : ''}
-        </div>`;
-      })()}
-      <div class="sep-label" style="margin-top:4px">Revisionen</div>
+      <div class="sep-label" style="margin-top:0">Revisionen</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;align-items:center">
         ${(item.revisions||[]).map(r => `
           <div class="rev-pill ${r.id === activeRevId ? 'active-rev' : ''}" onclick="switchRev(${item.id}, ${r.id})"
@@ -629,8 +592,7 @@ function renderItemDetail(item, activeRevId) {
     </div>
     <div id="it-erp" style="display:none">
       <div id="it-erp-list"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
-    </div>
-    ${renderVariantsSection(item)}`;
+    </div>`;
   if (keepTab && keepTab !== 'it-sheet') document.querySelector(`#dp-tabs .tab[data-pane="${keepTab}"]`)?.click();
   setTimeout(_initVisibleStl, 0);
 }
@@ -647,7 +609,8 @@ function _releaseMissingBox(rev) {
   const m = rev?.release_missing || [];
   if (!m.length) return '';
   return `<div style="font-size:13px;padding:8px 11px;margin-bottom:12px;background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--r-sm);color:var(--t2)">
-    <span style="color:var(--amber);font-weight:600">Für die Freigabe von rev${esc(rev.rev)} fehlt noch:</span> ${m.map(esc).join(', ')}</div>`;
+    <span style="color:var(--amber);font-weight:600">Für die Freigabe von rev${esc(rev.rev)} fehlt noch:</span> ${m.map(esc).join(', ')}${
+      m.some(x => ['Gewicht', 'Beschreibung', 'Klassifizierung'].includes(x)) ? ' <span style="color:var(--t3)">(Gewicht, Beschreibung und Klassifizierung im Datenblatt)</span>' : ''}</div>`;
 }
 
 // Liest ausschliesslich Felder, die /api/items/:id schon mitliefert —
@@ -831,16 +794,30 @@ function renderItemSheet(item, activeRevId) {
         dimsN > 1 ? ` <span style="color:var(--t3)">+${dimsN - 1}</span>` : ''}</span>`
     : null;
 
+  // Gewicht und Preis der gewählten Revision direkt hier eintragen (✏).
+  // Das Gewicht nur in der offenen Revision, sonst 🔒 mit dem Grund.
+  const btnEdit = (fn, title) => ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="${fn}(${item.id})" title="${esc(title)}">✏</button>`;
+  const weightLock = rev ? revWeightLock(item, rev) : 'Keine Revision';
+  const weightAfter = item.item_type === 'doc' ? ''
+    : weightLock ? ` <span title="${esc(weightLock)}" style="font-size:12px">🔒</span>`
+    : btnEdit('openWeightModal', 'Gewicht dieser Revision eintragen');
+  // Baugruppe: Summe der Stückliste als Preis übernehmen
+  const bomPriceTotal = item.item_type === 'asm'
+    ? (rev?.bom || []).reduce((s, b) => s + (b.default_price != null ? b.default_price * b.quantity : 0), 0) : 0;
+  const bomPriceBtn = bomPriceTotal > 0 && Math.abs(bomPriceTotal - (priceVal ?? 0)) > 0.005
+    ? ` <button class="btn btn-ghost btn-sm" style="padding:0 6px;font-size:12px" onclick="openPriceModal(${item.id},${bomPriceTotal.toFixed(2)})" title="Summe der Stückliste als Verkaufspreis übernehmen">BOM ${fmtChf(bomPriceTotal)} übernehmen</button>`
+    : '';
+
   // Erstellt nur mit Datum — mit Uhrzeit bräche die Zeile in der Spalte um
   const facts = _sheetKv([
     ['Typ', typeCode],
     ['Klassifizierung', item.classification ? _classChip(item.classification, 12) : null, true],
     ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
-    ['Gewicht', weightTxt],
+    ['Gewicht', weightTxt, false, weightAfter],
     ...(item.item_type !== 'doc' ? [['Aussenmasse', dimsCell, true]] : []),
     // Preis gehört zur Revision, braucht aber keine neue — ✏ auch bei freigegebenen Teilen
     ['Verkaufspreis', priceVal != null ? fmtChf(priceVal) : null, false,
-      ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openPriceModal(${item.id})" title="Verkaufspreis dieser Revision ändern (ohne neue Revision)">✏</button>`],
+      btnEdit('openPriceModal', 'Verkaufspreis dieser Revision ändern (ohne neue Revision)') + bomPriceBtn],
     ['Entwicklungszeit', _fmtHours(item.dev_hours)],
     ['Erstellt', item.created_at ? fmtD(item.created_at) : null],
     ['Revisionen', revCount ? String(revCount) : null],
@@ -1068,6 +1045,7 @@ function renderItemSheet(item, activeRevId) {
 
     <div class="sep-label">Letzte Änderung</div>
     ${logBlock}
+    ${renderVariantsSection(item)}
   </div>`;
 }
 
@@ -1187,7 +1165,7 @@ function renderVariantsSection(item) {
         style="background:none;border:none;cursor:pointer;color:var(--t4);font-size:13px;padding:0 0 0 4px;line-height:1" hidden>✕</button>
     </div>`).join('');
 
-  return `<div data-keep="1" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+  return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t4)">Varianten</span>
       <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:1px 7px" onclick="openLinkVariantModal(${item.id})">+ Verknüpfen</button>

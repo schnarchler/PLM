@@ -1,5 +1,7 @@
 # PLM & ERP — Handbuch
 
+> Nur das Wichtigste auf einer Seite: **[Schnellstart](SCHNELLSTART.md)**
+
 Dieses Handbuch erklärt die Bedienung von PLM & ERP. **Kapitel 3 „Erste Schritte“** führt einmal
 durch den ganzen Ablauf, vom ersten Projekt bis zur Rechnung. Die übrigen Kapitel beschreiben die
 einzelnen Bereiche zum Nachschlagen. Was sich nicht findet, steht meist unter
@@ -148,7 +150,7 @@ Funktionen. Details stehen jeweils im verlinkten Kapitel.
    (STL/3MF/STEP → CAD, `.gcode` → GCODE, PDF, Bild …).
 3. Eine hochgeladene **3MF** liefert automatisch die Druckparameter (Schichthöhe, Füllung,
    Temperaturen …).
-4. **Gewicht ⚖** in Gramm neben dem Verkaufspreis eintragen — es wird für die Preiskalkulation gebraucht.
+4. **Gewicht** in Gramm eintragen: Tab **Datenblatt** → **Allgemein** → **✏** neben Gewicht. Es wird für die Preiskalkulation gebraucht.
    Gewicht und Preis gelten für die gewählte Revision (siehe 6.9).
 
 ### 3.4 Freigeben
@@ -367,7 +369,7 @@ dieser Revision (siehe 18). Dokumente haben keinen Kurzcode.
 
 ### 6.9 Gewicht
 
-Das Gewicht ⚖ eines Parts wird direkt in der Detailansicht neben dem Verkaufspreis eingetragen (in Gramm). Es wird für die automatische Materialkostenkalkulation in Angeboten verwendet.
+Das Gewicht eines Parts wird im Tab **Datenblatt** unter **Allgemein** mit **✏** eingetragen (in Gramm), ebenso der Verkaufspreis. Bei einer Baugruppe steht neben dem Preis **BOM … übernehmen**, um die Summe der Stückliste als Preis zu setzen. Es wird für die automatische Materialkostenkalkulation in Angeboten verwendet.
 
 Gewicht und Verkaufspreis gehören zur **Revision**. Eine neue Revision (auch über ECO oder Check-in) übernimmt beide Werte der bisherigen; danach lassen sie sich in der neuen Revision ändern, ohne dass die alte ihren Wert verliert — z. B. wenn ein optimiertes Teil leichter wird. Das **Gewicht** ist nur in der aktuell offenen Revision änderbar: der neusten, solange sie nicht in Review, freigegeben, veraltet oder geliefert ist. Ältere und gesperrte Revisionen zeigen ihr Gewicht mit 🔒 — ein neues Gewicht kommt dort über eine neue Revision. Der **Verkaufspreis** ist kaufmännisch und bleibt in jeder Revision änderbar. Jede Änderung steht in der Historie mit Revision, alt → neu. Angebote, Aufträge, Listen und Kalkulation verwenden die Werte der aktiven Revision (die freigegebene, sonst die neuste). Der **Revisionsvergleich** zeigt Gewicht und Preis mit.
 
@@ -432,7 +434,7 @@ die Stunden selbst aus (auch über Mitternacht). Gleich funktioniert der Tab **Z
 Items, die in mehreren Ausführungen existieren (z.B. `Halterung M3`, `Halterung M4`, `Halterung M5`) können als Varianten verknüpft werden.
 
 **Varianten verknüpfen:**
-1. Item öffnen → Tab **Varianten**
+1. Item öffnen → Tab **Datenblatt** → ganz unten **Varianten**
 2. **+ Verknüpfen** → anderes Item suchen → verknüpfen
 3. Alle verknüpften Items werden als Chips angezeigt
 
@@ -1147,7 +1149,7 @@ Freigegebene oder gelieferte Items, Projekte mit Inhalt und abgeschlossene Auftr
 Admin unter **Einstellungen → Admin**. Das schützt vor versehentlichem Datenverlust.
 
 **Die Preiskalkulation zeigt eine Warnung.**
-Item und Rohmaterial brauchen beide ein Gewicht: am Item **⚖** neben dem Verkaufspreis, am
+Item und Rohmaterial brauchen beide ein Gewicht: am Item im **Datenblatt** unter **Allgemein**, am
 Rohmaterial **Gewicht / Stück**.
 
 **Kein Vorschaubild / keine 3D-Vorschau.**
