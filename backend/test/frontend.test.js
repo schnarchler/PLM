@@ -821,6 +821,11 @@ test('Datenblatt: Druckparameter kompakt, eine Zeile je Wert', () => {
   assert.match(ps, /class="ps-kv"/);
   assert.match(ps, /<span class="ps-kv-label">Düse<\/span><span class="ps-kv-val">0.4 mm<\/span>/);
   assert.match(ps, /Druckdauer[\s\S]*2 h 30 min/);
+  // In Blöcken nach Thema, ohne Revision im Titel (die steht oben)
+  assert.match(h, /class="sep-label">Druckparameter<\/div>/);
+  assert.match(ps, /ps-group-title">Druck<\/div>[\s\S]*?Düse<\/span>/);
+  assert.match(ps, /ps-group-title">Temperatur<\/div>[\s\S]*?Düsentemperatur/);
+  assert.match(ps, /ps-group-title">Material &amp; Gewicht<\/div>/);
   assert.match(ps, /<span class="ps-kv-label">Füllmuster<\/span><span class="ps-kv-val">Gyroid<\/span>/, 'Füllmuster statt Farbe');
   assert.ok(!ps.includes('Farbe') && !ps.includes('Schwarz'));
   assert.ok(!ps.slice(0, ps.indexOf('Naht hinten')).includes('ps-cell'), 'keine Kacheln mehr');
@@ -966,6 +971,8 @@ test('Datenblatt: „Allgemein“ im selben kompakten Stil wie die Druckparamete
   const h = renderItemSheet(item, 31);
   const allg = h.slice(h.indexOf('>Allgemein<'), h.indexOf('>Notizen<'));
   assert.match(allg, /class="ps-kv"/);
+  assert.deepStrictEqual([...allg.matchAll(/ps-group-title">([^<]*)</g)].map(m => m[1]),
+    ['Einordnung', 'Gewicht &amp; Masse', 'Kaufmännisch']);
   assert.ok(!allg.includes('ps-cell'), 'keine Kacheln mehr');
   assert.match(allg, /<span class="ps-kv-label">Gewicht<\/span><span class="ps-kv-val">184\.0 g <button[^>]*onclick="openWeightModal\(7\)"/, 'Gewicht im Datenblatt eintragen');
   assert.match(allg, /<span class="ps-kv-label">Klassifizierung<\/span><span class="ps-kv-val"><span class="chip">Bauteil<\/span><\/span>/, 'Chip als HTML');

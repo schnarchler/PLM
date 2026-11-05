@@ -636,6 +636,14 @@ function _sheetKv(rows) {
   }).join('')}</div>`;
 }
 
+// Tabelle in thematischen Blöcken: [[Titel, Zeilen wie bei _sheetKv], …].
+// Leere Blöcke fallen weg.
+function _sheetGroups(groups) {
+  const html = groups.filter(([, rows]) => rows.length)
+    .map(([title, rows]) => `<div class="ps-group"><div class="ps-group-title">${esc(title)}</div>${_sheetKv(rows)}</div>`);
+  return html.length ? `<div class="ps-groups">${html.join('')}</div>` : '';
+}
+
 function _sheetRows(rows) {
   const keep = rows.filter(([, v]) => v !== null && v !== undefined && v !== '');
   if (!keep.length) return '';
@@ -806,17 +814,23 @@ function renderItemSheet(item, activeRevId) {
     ? ` <button class="btn btn-ghost btn-sm" style="padding:0 6px;font-size:12px" onclick="openPriceModal(${item.id},${bomPriceTotal.toFixed(2)})" title="Summe der Stückliste als Verkaufspreis übernehmen">BOM ${fmtChf(bomPriceTotal)} übernehmen</button>`
     : '';
 
-  // Erstellt nur mit Datum — mit Uhrzeit bräche die Zeile in der Spalte um
-  const facts = _sheetKv([
-    ['Klassifizierung', item.classification ? _classChip(item.classification, 12) : null, true],
-    ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
-    ['Gewicht', weightTxt, false, weightAfter],
-    ...(item.item_type !== 'doc' ? [['Aussenmasse', dimsCell, true]] : []),
-    // Preis gehört zur Revision, braucht aber keine neue — ✏ auch bei freigegebenen Teilen
-    ['Verkaufspreis', priceVal != null ? fmtChf(priceVal) : null, false,
-      btnEdit('openPriceModal', 'Verkaufspreis dieser Revision ändern (ohne neue Revision)') + bomPriceBtn],
-    ['Entwicklungszeit', _fmtHours(item.dev_hours)],
-    ['Erstellt', item.created_at ? fmtD(item.created_at) : null],
+  // In Blöcken nach Thema. Erstellt nur mit Datum — mit Uhrzeit bräche die Zeile um
+  const facts = _sheetGroups([
+    ['Einordnung', [
+      ['Klassifizierung', item.classification ? _classChip(item.classification, 12) : null, true],
+      ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
+      ['Erstellt', item.created_at ? fmtD(item.created_at) : null],
+    ]],
+    ['Gewicht & Masse', [
+      ['Gewicht', weightTxt, false, weightAfter],
+      ...(item.item_type !== 'doc' ? [['Aussenmasse', dimsCell, true]] : []),
+    ]],
+    ['Kaufmännisch', [
+      // Preis gehört zur Revision, braucht aber keine neue — ✏ auch bei freigegebenen Teilen
+      ['Verkaufspreis', priceVal != null ? fmtChf(priceVal) : null, false,
+        btnEdit('openPriceModal', 'Verkaufspreis dieser Revision ändern (ohne neue Revision)') + bomPriceBtn],
+      ['Entwicklungszeit', _fmtHours(item.dev_hours)],
+    ]],
   ]);
 
   // -- Gewählte Revision mit Status, oben neben Kurzcode und Checkout.
@@ -829,13 +843,19 @@ function renderItemSheet(item, activeRevId) {
   let psBlock = '';
   const ps = rev?.print_settings;
   if (ps) {
-    // Bezeichnungen und Einheiten aus PRINT_PARAMS (01-core.js)
-    const cells = PRINT_PARAMS.slice(0, 12)
-      .map(([key, label]) => [label, fmtPrintParam(key, ps[key])])
+    // In Blöcken nach Thema; Bezeichnungen und Einheiten aus PRINT_PARAMS (01-core.js)
+    const label = key => PRINT_PARAMS.find(p => p[0] === key)?.[1] || key;
+    const cells = keys => keys.map(k => [label(k), fmtPrintParam(k, ps[k])])
       .filter(([, v]) => v !== null && v !== undefined && v !== '');
-    if (cells.length) {
-      psBlock = `<div class="sep-label">Druckparameter <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
-        ${_sheetKv(cells)}
+    const groups = _sheetGroups([
+      ['Druck', cells(['nozzle', 'layer_height', 'infill', 'infill_pattern', 'supports'])],
+      ['Temperatur', cells(['print_temp', 'bed_temp'])],
+      ['Material & Gewicht', cells(['material', 'part_weight', 'filament_weight_total'])],
+      ['Drucker & Kosten', cells(['printer', 'print_duration', 'filament_price_kg', 'printer_cost_hr'])],
+    ]);
+    if (groups) {
+      psBlock = `<div class="sep-label">Druckparameter</div>
+        ${groups}
         ${ps.notes ? `<div style="font-size:13px;color:var(--t3);margin-top:7px;white-space:pre-wrap">${esc(ps.notes)}</div>` : ''}`;
     }
   }
@@ -851,7 +871,7 @@ function renderItemSheet(item, activeRevId) {
     const positions = bom.length + std.length;
     const bw = rev?.bom_weight || {};
     if (positions) {
-      bomBlock = `<div class="sep-label">Stückliste <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${rev.rev}</span></div>
+      bomBlock = `<div class="sep-label">Stückliste</div>
         <div class="ps-grid">
           ${_sheetCell('Positionen', String(positions), { mono: true })}
           ${_sheetCell('Eigene Teile', String(bom.length), { mono: true })}
