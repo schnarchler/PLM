@@ -538,7 +538,6 @@ function renderItemDetail(item, activeRevId) {
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(item.name)}">${esc(item.name)}</strong>`
     + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})" title="In anderes Projekt verschieben">↪</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openDocTemplateModal(${item.id})" title="Dokument erstellen">&#128196;</button>`
     + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Mit anderem Item vergleichen">⇄</button>`;
   // Klassifizierung nur im Datenblatt unter „Allgemein“, Mindmap über den Knopf im Datenblatt
 
@@ -1032,7 +1031,7 @@ function renderItemSheet(item, activeRevId) {
         <div class="btn-row">
           ${slicerBtn}
           <button class="btn btn-ghost btn-sm" onclick="openItemMindmap(${item.id})">⌗ Mindmap</button>
-          <button class="btn btn-ghost btn-sm" onclick="window._docTemplateItem=state.item;generateItemTemplate('datenblatt')">&#128196; Als PDF</button>
+          <button class="btn btn-ghost btn-sm" onclick="openDocTemplateModal(${item.id})" title="Datenblatt${item.item_type === 'asm' ? ', Stückliste' : ''} oder Prüfprotokoll">&#128196; Als PDF…</button>
           ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
         </div>
       </div>

@@ -322,7 +322,6 @@ Die Nummern der ERP-Belege stehen unter [26. Nummernkreise](#26-nummernkreise).
 
 **Schaltflächen im Titel:**
 - **↪** — Item in ein anderes Projekt verschieben
-- **📄** — Dokument erstellen (Datenblatt, Stückliste, Prüfprotokoll)
 - **⇄** — Dieses Item mit einem anderen Item vergleichen
 
 **Revisionen im Projektbaum:** Hat ein Item mehr als eine Revision, lässt es sich im Baum links mit **▶** aufklappen — wie eine Baugruppe. Jede Revision steht mit Status, Gewicht und Preis darunter; ein Klick öffnet das Item in genau dieser Revision. Bei Baugruppen stehen die Revisionen über der Stückliste.
@@ -445,7 +444,7 @@ Items, die in mehreren Ausführungen existieren (z.B. `Halterung M3`, `Halterung
 
 ### 6.16 Dokumentvorlagen
 
-**📄** (Dokument-Symbol im Titel) öffnet das Vorlagen-Modal:
+**📄 Als PDF…** im Datenblatt öffnet das Vorlagen-Modal:
 
 | Vorlage | Inhalt |
 |---------|--------|
