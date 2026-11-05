@@ -199,9 +199,11 @@ Damit ist der Ablauf einmal komplett durchlaufen.
 ```
 
 - **Navigation links:** Klick wechselt den Bereich. Die Zahlen neben den Einträgen zeigen die Anzahl.
-- **Listenbereich:** Alle Einträge des aktiven Bereichs
+- **Listenbereich:** Alle Einträge des aktiven Bereichs. Manche Bereiche haben oben Tabs:
+  **Historie** (PLM / ERP), **Lager** (Artikel / Rohmaterial), **Aufträge** (Aufträge / Kalkulation)
 - **Detailbereich:** Tabs mit Informationen des gewählten Eintrags — mit **Escape** schliessen
-- **Zuletzt geöffnet:** Zuletzt geöffnete Items und Belege unten in der Navigation
+- **Zuletzt geöffnet:** Zuletzt geöffnete Items und Belege unten in der Navigation. Ein Klick auf
+  die Überschrift klappt die Liste ein oder aus.
 - **Version:** ganz unten in der Navigation; ein blauer Punkt heisst „Update verfügbar“ (siehe 22)
 
 **Topbar rechts:**
@@ -774,7 +776,7 @@ Umgekehrt: Rohmaterial → Tab **Verwendet in** zeigt je Charge, in welchen Prod
 
 ## 13. Rohmaterial
 
-Navigation → **Rohmaterial** — Filament, Platten, Stangen usw. Sortierbar nach **Material**, **Farbe** oder **Bestand**.
+Navigation → **Lager** → Tab **Rohmaterial** — Filament, Platten, Stangen usw. Sortierbar nach **Material**, **Farbe** oder **Bestand**.
 
 ### Material erfassen
 
@@ -956,7 +958,7 @@ Stücke mit identischer Lot-Nr. werden zu einer gemeinsamen Buchung zusammengefa
 
 ## 17. Kalkulation
 
-Navigation → **Kalkulation** — Übersicht aller Parts und Baugruppen mit Kostenvergleich. Klick auf einen Spaltenkopf sortiert.
+Navigation → **Aufträge** → Tab **Kalkulation** — Übersicht aller Parts und Baugruppen mit Kostenvergleich. Klick auf einen Spaltenkopf sortiert.
 
 | Spalte | Bedeutung |
 |--------|-----------|
@@ -971,7 +973,7 @@ Navigation → **Kalkulation** — Übersicht aller Parts und Baugruppen mit Kos
 
 ## 18. Suche
 
-**Öffnen:** Suchfeld oben — oder `Ctrl+K`, oder Navigation → **Suche**
+**Öffnen:** Suchfeld oben — oder `Ctrl+K`. Ein Klick ins leere Suchfeld öffnet die Suche mit den Filtern nach Klassifizierung.
 
 Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktionsaufträge, Kunden, Rohmaterial, Dateien.
 
@@ -994,15 +996,15 @@ Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktion
 
 ### Historie (PLM)
 
-Navigation → **Historie** — vollständiges Protokoll aller Änderungen im PLM, nach Tag gruppiert. Klick auf die Nummer öffnet das betroffene Item, Projekt, den Auftrag oder Produktionsauftrag. **↺ Aktualisieren** lädt neu.
+Navigation → **Historie** (Tab **PLM**) — vollständiges Protokoll aller Änderungen im PLM, nach Tag gruppiert. Klick auf die Nummer öffnet das betroffene Item, Projekt, den Auftrag oder Produktionsauftrag. **↺ Aktualisieren** lädt neu.
 
 Sind Personen angelegt (Einstellungen → **Benutzer**), steht neben jedem Eintrag, wer ihn gemacht hat — auch in der Historie eines Items oder Projekts und unter „Letzte Änderung“ im Datenblatt. Ältere Einträge haben keinen Namen.
 
 **⬇ CSV** exportiert die Einträge, mit der Person als eigener Spalte.
 
-### Verlauf (ERP, nur Admins)
+### ERP-Verlauf (nur Admins)
 
-Navigation → **Verlauf** — dasselbe für Kunden, Aufträge, Produktionsaufträge, Lieferanten und
+Navigation → **Historie** → Tab **ERP** — dasselbe für Kunden, Aufträge, Produktionsaufträge, Lieferanten und
 Bestellungen. Nur für Admins sichtbar. Den Verlauf eines einzelnen Auftrags, Kunden oder Produktionsauftrags sieht jede
 Person im Tab **Verlauf** dort.
 

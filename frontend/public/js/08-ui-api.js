@@ -133,6 +133,26 @@ function setLeftHeader(title, actionsHtml) {
     document.getElementById('left-title').innerHTML = title;
   }
   document.getElementById('left-actions').innerHTML = actionsHtml||'';
+  // Tabs gehören zur Ansicht, die sie setzt — neue Ansicht: erst einmal keine
+  const tabs = document.getElementById('left-tabs');
+  if (tabs) { tabs.hidden = true; tabs.innerHTML = ''; }
+}
+// Mehrere Ansichten unter einem Menüpunkt: Tabs unter der Kopfzeile.
+// tabs: [[view, Bezeichnung], …]; ein Klick wechselt über gotoView.
+const LEFT_TAB_GROUPS = {
+  changelog: [['changelog', 'PLM'], ['erplog', 'ERP']],
+  inventory: [['inventory', 'Artikel'], ['rawmaterials', 'Rohmaterial']],
+  orders:    [['orders', 'Aufträge'], ['profit', 'Kalkulation']],
+};
+// Welcher Menüpunkt zu einer Ansicht gehört, die als Tab unter einem anderen steht
+const NAV_OF_VIEW = { erplog: 'changelog', rawmaterials: 'inventory', profit: 'orders' };
+function setLeftTabs(group, current) {
+  const el = document.getElementById('left-tabs');
+  if (!el) return;
+  const tabs = LEFT_TAB_GROUPS[group].filter(([v]) => v !== 'erplog' || isAdmin());   // ERP-Verlauf nur für Admins
+  el.innerHTML = tabs.map(([v, label]) =>
+    `<button class="tab${v === current ? ' active' : ''}" onclick="gotoView('${v}')">${label}</button>`).join('');
+  el.hidden = tabs.length < 2;
 }
 // Neuer Inhalt links: die Fusszeile gehört zur vorigen Ansicht (z. B. die
 // Legende der Projektliste) — wer sie braucht, setzt sie danach mit setLeftFooter

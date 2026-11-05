@@ -20,6 +20,7 @@
   <div class="tb-search">
     <svg class="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input id="globalSearch" placeholder="Suche: Nummer, Kurzcode, Name …" oninput="onSearch(this.value)"
+      onclick="if(!this.value && state.view !== 'search') gotoView('search')" title="Klick ins leere Feld: Suche mit Filter nach Klassifizierung"
       onkeydown="if(event.key==='Enter'){event.preventDefault();onSearchEnter(this.value)}">
   </div>
   <div class="tb-right">
@@ -65,14 +66,6 @@
       Änderungen
       <span class="badge" id="badge-ecr">—</span>
     </button>
-    <button class="nav-item" id="ni-search" onclick="gotoView('search')">
-      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      Suche
-    </button>
-    <button class="nav-item" id="ni-changelog" onclick="gotoView('changelog')">
-      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-      Historie
-    </button>
   </div>
   <div class="nav-sep"></div>
   <div class="nav-section">
@@ -86,11 +79,6 @@
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>
       Lager
       <span class="badge" id="badge-inventory">—</span>
-    </button>
-    <button class="nav-item" id="ni-rawmaterials" onclick="gotoView('rawmaterials')">
-      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-      Rohmaterial
-      <span class="badge" id="badge-rawmat">—</span>
     </button>
     <button class="nav-item" id="ni-orders" onclick="gotoView('orders')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -107,25 +95,23 @@
       Einkauf
       <span class="badge" id="badge-purchasing">—</span>
     </button>
-    <button class="nav-item" id="ni-profit" onclick="gotoView('profit')">
-      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-      Kalkulation
-    </button>
-    <button class="nav-item" id="ni-erplog" onclick="gotoView('erplog')" style="display:none" title="Nur für Admins">
-      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-      Verlauf
-    </button>
   </div>
   <div style="flex:1"></div>
   <div id="nav-recent" style="display:none">
     <div class="nav-sep"></div>
     <div class="nav-section">
-      <div class="nav-label">Zuletzt geöffnet</div>
+      <button class="nav-label nav-label-toggle" id="nav-recent-toggle" onclick="_toggleRecent()" title="Ein- oder ausklappen">
+        <span id="nav-recent-arrow">▾</span> Zuletzt geöffnet</button>
       <div id="nav-recent-list"></div>
     </div>
   </div>
   <div class="nav-sep"></div>
   <div class="nav-section">
+    <!-- Historie gilt für PLM und ERP — darum hier, nicht in einer der beiden Gruppen -->
+    <button class="nav-item" id="ni-changelog" onclick="gotoView('changelog')">
+      <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Historie
+    </button>
     <button class="nav-item" id="ni-settings" onclick="gotoView('settings')">
       <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Einstellungen
@@ -143,6 +129,7 @@
       <div class="ph-spacer"></div>
       <div id="left-actions"></div>
     </div>
+    <div class="tabs" id="left-tabs" hidden></div>
     <div class="panel-body" id="left-body">
       <div class="empty"><div class="empty-icon">⬆</div><div class="empty-text">Wird geladen…</div></div>
     </div>

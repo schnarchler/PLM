@@ -26,9 +26,6 @@ function canRelease() { return ['superuser', 'admin'].includes(currentRole()); }
 function isAdmin() { return currentRole() === 'admin'; }
 
 function _renderUserChip() {
-  // ERP-Verlauf nur für Admins
-  const erpLog = document.getElementById('ni-erplog');
-  if (erpLog) erpLog.style.display = isAdmin() ? '' : 'none';
   _renderFeedbackButton();
   const el = document.getElementById('tb-user');
   if (!el) return;
@@ -52,10 +49,11 @@ async function onUserChip() {
 
 // Nach einem Wechsel ändern sich die Rechte — was davon abhängt, neu zeichnen
 function _afterUserChange() {
-  // Kein Admin mehr: ERP-Verlauf schliessen (Ansicht und Tab im Detail)
-  if (!isAdmin() && state.view === 'erplog') return gotoView('dashboard');
+  // Kein Admin mehr: ERP-Tab der Historie schliessen (Ansicht und Tab im Detail)
+  if (!isAdmin() && state.view === 'erplog') return gotoView('changelog');
   if (!isAdmin() && document.querySelector('#od-log, #dd-log, #cd-log, #sd-log, #po-log')) closeDetail();
   if (state.view === 'erplog') renderChangelog('erp');
+  else if (state.view === 'changelog') renderChangelog('plm');   // ERP-Tab ein- oder ausblenden
   else if (state.view === 'settings') renderSettings();
   else if (state.view === 'dashboard') renderDashboard();   // Rückmeldungen nur für Admins
   else if (state.item && document.getElementById('it-sheet')) renderItemDetail(state.item, state.activeRevId);

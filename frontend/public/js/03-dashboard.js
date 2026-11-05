@@ -157,9 +157,11 @@ function _historyOpen(r) {
 // kind 'plm': Historie (Projekte, Items, Revisionen …); 'erp': ERP-Verlauf, nur für Admins
 async function renderChangelog(kind = 'plm') {
   const erp = kind === 'erp';
-  setLeftHeader(erp ? 'ERP-Verlauf' : 'Historie', `
+  setLeftHeader('Historie', `
     <button class="btn btn-ghost btn-sm" onclick="renderChangelog('${kind}')">↺ Aktualisieren</button>
     <button class="btn btn-ghost btn-sm" onclick="exportChangelog()">&#x2B07; CSV</button>`);
+  // Zwei Tabs: PLM für alle, ERP (Belege, Kunden, Einkauf) nur für Admins
+  setLeftTabs('changelog', erp ? 'erplog' : 'changelog');
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px">⏳</div><div class="empty-text">Lade…</div></div>`);
   const rows = await api((erp ? '/api/erp-log' : '/api/changelog') + '?limit=2000');
   _changelogRows = rows;

@@ -404,7 +404,13 @@ function _renderRecent() {
   if (!el) return;
   if (!_recentItems.length) { el.style.display = 'none'; return; }
   el.style.display = '';
-  document.getElementById('nav-recent-list').innerHTML = _recentItems.map(r => {
+  // Eingeklappt: nur die Überschrift — spart Zeilen im Menü (pro Browser gemerkt)
+  const closed = localStorage.getItem('plm_recent_closed') === '1';
+  const list = document.getElementById('nav-recent-list');
+  list.hidden = closed;
+  const arrow = document.getElementById('nav-recent-arrow');
+  if (arrow) arrow.textContent = closed ? '▸' : '▾';
+  list.innerHTML = _recentItems.map(r => {
     const icon = r.type === 'order' ? '📋' : r.type === 'quote' ? '📄' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : r.itemType ? _itemSvg(r.itemType) : '🔩';
     return `<button class="nav-item" style="font-size:13px;padding:4px 12px 4px 16px;gap:6px" onclick="_openRecent(${JSON.stringify(r).replace(/"/g,'&quot;')})">
       <span style="font-size:13px;flex-shrink:0">${icon}</span>
@@ -412,6 +418,11 @@ function _renderRecent() {
       ${r.sub ? `<span style="font-size:13px;color:var(--t4);flex-shrink:0;font-family:var(--mono)">${esc(r.sub)}</span>` : ''}
     </button>`;
   }).join('');
+}
+
+function _toggleRecent() {
+  try { localStorage.setItem('plm_recent_closed', localStorage.getItem('plm_recent_closed') === '1' ? '0' : '1'); } catch {}
+  _renderRecent();
 }
 
 function _openRecent(r) {
@@ -544,7 +555,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 async function gotoView(v) {
   state.view = v;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const ni = document.getElementById('ni-' + v);
+  // Manche Ansichten sind Tabs unter einem anderen Menüpunkt (NAV_OF_VIEW)
+  const ni = document.getElementById('ni-' + (NAV_OF_VIEW[v] || v));
   if (ni) ni.classList.add('active');
   closeDetail();
   _pushHistory({ view: v });

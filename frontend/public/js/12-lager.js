@@ -17,6 +17,7 @@ function _invStockState(i) {
 
 async function renderInventory() {
   setLeftHeader('Lager', `<button class="btn btn-primary btn-sm" onclick="openInventoryModal()">+ Artikel</button>`);
+  setLeftTabs('inventory', 'inventory');
   const items = await api('/api/inventory');
   const badgeInv = document.getElementById('badge-inventory');
   if (badgeInv) badgeInv.textContent = items.length || '—';
@@ -442,7 +443,7 @@ let _rmShowAll = false;
 let _rmQ = '';
 function _rmSetSearch(v) { _rmQ = v; _renderRawMaterialsTable(); }
 async function renderRawMaterials() {
-  setLeftHeader('Rohmaterial', `
+  setLeftHeader('Lager', `
     <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
       <input class="fi" id="rm-search-input" placeholder="Suchen…" value="${esc(_rmQ)}"
         oninput="_rmSetSearch(this.value)" autocomplete="off"
@@ -452,6 +453,7 @@ async function renderRawMaterials() {
       <button class="btn btn-sm ${_rmShowAll?'btn-primary':'btn-ghost'}" onclick="_rmShowAll=!_rmShowAll;renderRawMaterials()" title="Leere anzeigen/ausblenden" style="margin-left:4px">${_rmShowAll?'Alle':'Aktive'}</button>
       <button class="btn btn-primary btn-sm" onclick="openRawMatModal()">+ Material</button>
     </div>`);
+  setLeftTabs('inventory', 'rawmaterials');
   closeDetail();
   setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
   const items = await api('/api/raw-materials');

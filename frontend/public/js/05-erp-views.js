@@ -52,10 +52,11 @@ function _exportProfitCsv() {
 }
 
 async function renderProfitOverview() {
-  setLeftHeader('Kalkulation', `<div style="display:flex;gap:6px">
+  setLeftHeader('Aufträge', `<div style="display:flex;gap:6px">
     <button class="btn btn-ghost btn-sm" onclick="_exportProfitCsv()">↓ CSV</button>
     <button class="btn btn-ghost btn-sm" onclick="renderProfitOverview()">↺</button>
   </div>`);
+  setLeftTabs('orders', 'profit');
   closeDetail();
   _profitData = await api('/api/profit-overview');
   _profitState = { sort: 'number', dir: 1, text: '', margin: '', type: '', project: '', sold: false };
@@ -606,6 +607,7 @@ let _orderFilter = { text:'', status:'', dateFrom:'', dateTo:'' };
 function _clearOrderFilter(){_orderFilter={text:'',status:'',dateFrom:'',dateTo:''};renderOrders();}
 async function renderOrders() {
   setLeftHeader('Aufträge', `<button class="btn btn-primary btn-sm" onclick="openOrderModal()">+ Auftrag</button>`);
+  setLeftTabs('orders', 'orders');
   const orders = await api('/api/orders');
   state.orders = orders;
   if (!orders.length) { setLeftBody(`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Noch keine Aufträge</div></div>`); return; }

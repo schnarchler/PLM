@@ -1142,3 +1142,22 @@ test('Teile: alle Projekte in einer Liste, Filter nach Text und Typ', () => {
     assert.ok(el.innerHTML.indexOf('Winkel') < el.innerHTML.indexOf('Gehäuse'), 'Nr.');
   } finally { global.document = prev; global.state.checkouts = []; }
 });
+
+test('Menü: Tabs unter einem Menüpunkt, ERP-Verlauf nur für Admins', () => {
+  const T = evalPart('js/08-ui-api.js', 'const LEFT_TAB_GROUPS', '// Neuer Inhalt links:', '({ setLeftTabs, NAV_OF_VIEW })');
+  const el = { innerHTML: '', hidden: true };
+  const prev = global.document, prevAdmin = global.isAdmin;
+  global.document = { getElementById: id => id === 'left-tabs' ? el : null };
+  try {
+    global.isAdmin = () => true;
+    T.setLeftTabs('changelog', 'erplog');
+    assert.strictEqual(el.hidden, false);
+    assert.match(el.innerHTML, /class="tab" onclick="gotoView\('changelog'\)">PLM<[\s\S]*class="tab active" onclick="gotoView\('erplog'\)">ERP</);
+    global.isAdmin = () => false;
+    T.setLeftTabs('changelog', 'changelog');
+    assert.strictEqual(el.hidden, true, 'ohne Admin nur PLM — kein einzelner Tab');
+    T.setLeftTabs('inventory', 'rawmaterials');
+    assert.match(el.innerHTML, /Artikel[\s\S]*class="tab active"[^>]*>Rohmaterial/);
+    assert.deepStrictEqual(T.NAV_OF_VIEW, { erplog: 'changelog', rawmaterials: 'inventory', profit: 'orders' });
+  } finally { global.document = prev; global.isAdmin = prevAdmin; }
+});

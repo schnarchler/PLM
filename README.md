@@ -353,7 +353,7 @@ Baugruppen, die es verwenden  ──►  [ Item ]  ──►  Teile, aus denen e
 
 ## Suche und Klassifizierung
 
-Die Suche (`Ctrl+K` oder Navigation → Suche) findet Items, deren Nummer, Name,
+Die Suche (`Ctrl+K` oder Klick ins Suchfeld oben) findet Items, deren Nummer, Name,
 Beschreibung, Notizen oder Klassifizierung **alle** eingegebenen Wörter enthalten:
 „Halter PETG“ findet einen Halter, der in der Beschreibung „PETG“ stehen hat.
 Gross-/Kleinschreibung spielt keine Rolle, auch nicht bei Umlauten.
