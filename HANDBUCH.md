@@ -642,7 +642,7 @@ Bei der Rückfrage: **Als neue Revision hochladen**, **Änderungen verwerfen** (
 
 Ein Angebot ist die erste **Phase eines Auftrags** — kein eigener Datensatz. Navigation → Aufträge → **+ Angebot** (oder **+ Auftrag** mit Status **Angebot**).
 
-Felder: Bezeichnung (Pflicht), Kunde, Angebotsdatum, **Gültig bis**, Gesamtrabatt (%), Zahlungsbedingungen, MwSt. (%), geschätzte Stunden, Notizen. Vorgaben kommen aus Einstellungen → Kalkulation.
+Felder: Bezeichnung (Pflicht), Kunde, Angebotsdatum, **Gültig bis**, Gesamtrabatt (%), Zahlungsbedingungen, MwSt. (%), geschätzte Stunden, Notizen. Vorgaben kommen aus Einstellungen → Kalkulation — bei einem neuen Angebot auch das Datum „Gültig bis“ (heute + „Angebot gültig (Tage)“).
 
 Phasen: `Angebot → Bestätigt → Geliefert → Fakturiert` (oder `Angebot → Abgelehnt`)
 
@@ -671,7 +671,7 @@ Ohne Kalkulation: nur Beschreibung, Menge und Einzelpreis ausfüllen.
 
 ### BOM kalkulieren (Baugruppen)
 
-**📦 Aus BOM kalkulieren** — wähle eine Baugruppe, alle BOM-Teile werden als einzelne Positionen mit automatischen Kosten übernommen (**✓ Alle als Positionen übernehmen**).
+**📦 Aus BOM kalkulieren** (im Auftrag, Tab Positionen — auch in der Angebotsphase) — wähle eine Baugruppe, alle BOM-Teile werden als einzelne Positionen mit automatischen Kosten übernommen (**✓ Alle als Positionen übernehmen**).
 
 ---
 
@@ -1247,8 +1247,7 @@ Projekte:      0001 – 9999
 Baugruppen:    0028-asm-001, 0028-asm-002, …
 Parts:         0028-prt-001 / 0028-asm-001-prt-001
 Dokumente:     0028-doc-001
-Aufträge:      AUF-2026-0001
-Angebote:      ANG-2026-0001
+Aufträge:      AUF-2026-0001   (auch Angebote — sie sind eine Phase des Auftrags)
 Produktionsauftrag: LS-2026-0001
 Einkauf:       EK-2026-0001
 Kunden:        KD-0001

@@ -726,17 +726,15 @@ function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'<br>');
 }
 
-// type: 'quote' (Angebot aus dem Archiv), 'order-quote' (Angebotsphase eines
-// Auftrags) oder 'invoice'. Die Angebotsvarianten liefern dieselbe Datenform,
-// deshalb reicht ein Renderer.
+// type: 'order-quote' (Auftrag in der Angebotsphase) oder 'invoice'.
+// Beide liefern dieselbe Datenform, deshalb reicht ein Renderer.
 async function generateDoc(id, type) {
-  const endpoint = type === 'quote' ? `/api/quotes/${id}/quote-data`
-    : type === 'order-quote' ? `/api/orders/${id}/order-quote-data`
+  const endpoint = type === 'order-quote' ? `/api/orders/${id}/order-quote-data`
     : `/api/orders/${id}/invoice-data`;
   const d = await api(endpoint);
   const s = state.settings;
   const today = new Date().toLocaleDateString('de-CH');
-  const isQuote = type === 'quote' || type === 'order-quote';
+  const isQuote = type === 'order-quote';
   const docLabel = isQuote ? 'Angebot' : 'Rechnung';
   const color = '#1d4ed8';
 

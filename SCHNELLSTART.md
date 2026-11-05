@@ -53,11 +53,11 @@ legt eine neue Revision an und übernimmt Dateien, Stückliste und Druckparamete
 
 | Was | Beispiel | | Was | Beispiel |
 |---|---|---|---|---|
-| Projekt | `0001` | | Angebot | `ANG-2026-0001` |
-| Baugruppe | `0001-asm-001` | | Auftrag | `AUF-2026-0001` |
-| Part | `0001-prt-001` | | Produktionsauftrag | `LS-2026-0001` |
-| Dokument | `0001-doc-001` | | Einkauf | `EK-2026-0001` |
-| Kurzcode zum Aufdrucken | `XHJ-1` (= rev1) | | Kunde / Lieferant | `KD-0001` / `LF-0001` |
+| Projekt | `0001` | | Auftrag / Angebot | `AUF-2026-0001` |
+| Baugruppe | `0001-asm-001` | | Produktionsauftrag | `LS-2026-0001` |
+| Part | `0001-prt-001` | | Einkauf | `EK-2026-0001` |
+| Dokument | `0001-doc-001` | | Kunde / Lieferant | `KD-0001` / `LF-0001` |
+| Kurzcode zum Aufdrucken | `XHJ-1` (= rev1) | | | |
 
 **Status einer Revision**
 

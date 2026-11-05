@@ -177,14 +177,10 @@ async function loadStats() {
     if (bpt) bpt.textContent = s.items || '—';
     document.getElementById('badge-customers').textContent = s.customers||0;
     document.getElementById('badge-orders').textContent = s.orders||0;
-    const el = document.getElementById('badge-quotes');
-    if (el) el.textContent = s.quotes||0;
     const el2 = document.getElementById('badge-deliveries');
     if (el2) el2.textContent = s.deliveries||0;
     const el3 = document.getElementById('badge-inventory');
     if (el3) el3.textContent = s.inventory||0;
-    const br = document.getElementById('badge-rawmat');
-    if (br) br.textContent = s.raw_materials ?? '—';
     const bn = document.getElementById('badge-normteile');
     if (bn) bn.textContent = s.standard_parts ?? '—';
     const bp = document.getElementById('badge-purchasing');

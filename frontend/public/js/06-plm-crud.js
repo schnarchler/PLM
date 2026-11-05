@@ -140,11 +140,9 @@ async function _doSaveAdminSettings() {
   const gi = (id, def) => String(parseInt(document.getElementById(id)?.value)||def);
   const settings = {
     prefix_order:    gv('adm-prefix-order')    || 'AUF',
-    prefix_quote:    gv('adm-prefix-quote')    || 'ANG',
     prefix_delivery: gv('adm-prefix-delivery') || 'LS',
     prefix_customer: gv('adm-prefix-customer') || 'KD',
     pad_order:       gi('adm-pad-order',    3),
-    pad_quote:       gi('adm-pad-quote',    3),
     pad_delivery:    gi('adm-pad-delivery', 3),
     pad_customer:    gi('adm-pad-customer', 3),
     pad_project:     gi('adm-pad-project',  3),
@@ -606,23 +604,19 @@ async function _doResetDesignColors() {
 }
 
 async function _loadDelTab() {
-  const [projects, orders, quotes, deliveries, settings, counters] = await Promise.all([
+  const [projects, orders, deliveries, settings] = await Promise.all([
     api('/api/projects').catch(()=>[]),
     api('/api/orders').catch(()=>[]),
-    api('/api/quotes').catch(()=>[]),
     api('/api/deliveries').catch(()=>[]),
-    api('/api/settings').catch(()=>({})),
-    api('/api/counters').catch(()=>({}))
+    api('/api/settings').catch(()=>({}))
   ]);
 
   // Fill admin settings fields
   const fv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
   fv('adm-prefix-order',    settings.prefix_order    || 'AUF');
-  fv('adm-prefix-quote',    settings.prefix_quote    || 'ANG');
   fv('adm-prefix-delivery', settings.prefix_delivery || 'LS');
   fv('adm-prefix-customer', settings.prefix_customer || 'KD');
   fv('adm-pad-order',       settings.pad_order       || '3');
-  fv('adm-pad-quote',       settings.pad_quote       || '3');
   fv('adm-pad-delivery',    settings.pad_delivery    || '3');
   fv('adm-pad-customer',    settings.pad_customer    || '3');
   fv('adm-pad-project',     settings.pad_project     || '3');
@@ -701,17 +695,6 @@ async function _loadDelTab() {
       : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Aufträge</div>';
   }
 
-  const quoEl = document.getElementById('st-del-quotes');
-  if (quoEl) {
-    const locked = quotes.filter(q => q.status !== 'DRAFT');
-    quoEl.innerHTML = locked.length
-      ? locked.map(q => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
-          <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(q.number)}</span>
-          <span style="flex:1;font-size:13px">${esc(q.title)}</span>
-          <button class="btn btn-red btn-sm" onclick="_forceDelQuote(${q.id},'${esc(q.number)}')">Löschen</button>
-        </div>`).join('')
-      : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Angebote</div>';
-  }
 
   const delEl = document.getElementById('st-del-deliveries');
   if (delEl) {
@@ -739,12 +722,6 @@ async function _forceDelOrder(id, number) {
   if (!confirm(`Auftrag ${number} unwiderruflich löschen?`)) return;
   await api(`/api/orders/${id}`,'DELETE');
   toast('Auftrag gelöscht','ok'); _loadDelTab(); loadStats();
-}
-
-async function _forceDelQuote(id, number) {
-  if (!confirm(`Angebot ${number} unwiderruflich löschen?`)) return;
-  await api(`/api/quotes/${id}`,'DELETE');
-  toast('Angebot gelöscht','ok'); _loadDelTab(); loadStats();
 }
 
 async function _forceDelDelivery(id, number) {
@@ -1567,7 +1544,7 @@ function _buildRmOptions(mats) {
   return opts;
 }
 
-// Searchable raw material picker (for li-rawmat in quotes/orders)
+// Searchable raw material picker (for li-rawmat in Auftragspositionen)
 function _rmSearch(q, resultsId, hiddenId) {
   const res = document.getElementById(resultsId);
   if (!res) return;

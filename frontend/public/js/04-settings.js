@@ -425,8 +425,6 @@ async function renderSettings() {
         <div id="adm-del-auftraege" style="display:none">
           <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Aufträge (nicht Entwurf)</div>
           <div id="st-del-orders" style="display:flex;flex-direction:column;gap:4px"></div>
-          <div style="font-size:13px;color:var(--t3);margin:10px 0 6px">Alte Angebote aus der Zeit vor der Angebotsphase (Archiv)</div>
-          <div id="st-del-quotes" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
         <div id="adm-del-produktion" style="display:none">
           <div style="font-size:13px;color:var(--t3);margin-bottom:6px">Produktionsaufträge (nicht Entwurf)</div>
@@ -437,7 +435,6 @@ async function renderSettings() {
         <div style="font-size:13px;color:var(--t3);margin-bottom:12px">Präfixe für neu angelegte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.</div>
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-prefix-order" placeholder="AUF"></div>
-          <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-prefix-quote" placeholder="ANG"></div>
           <div class="fg"><label class="fl">Produktion</label><input class="fi" id="adm-prefix-delivery" placeholder="LS"></div>
           <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-prefix-customer" placeholder="KD"></div>
         </div>
@@ -445,7 +442,6 @@ async function renderSettings() {
         <div class="sep-label" style="margin-top:20px">Stellen Geschäftsnummern</div>
         <div class="form-row cols2">
           <div class="fg"><label class="fl">Aufträge</label><input class="fi" id="adm-pad-order" type="number" min="1" max="8" placeholder="3"></div>
-          <div class="fg"><label class="fl">Angebote</label><input class="fi" id="adm-pad-quote" type="number" min="1" max="8" placeholder="3"></div>
           <div class="fg"><label class="fl">Produktion</label><input class="fi" id="adm-pad-delivery" type="number" min="1" max="8" placeholder="3"></div>
           <div class="fg"><label class="fl">Kunden</label><input class="fi" id="adm-pad-customer" type="number" min="1" max="8" placeholder="3"></div>
           <div class="fg"><label class="fl">Projekte</label><input class="fi" id="adm-pad-project" type="number" min="1" max="8" placeholder="3"></div>

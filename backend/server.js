@@ -6,6 +6,9 @@ const path     = require('path');
 const fs       = require('fs');
 const crypto   = require('crypto');
 const initSqlJs = require('sql.js');
+const os       = require('os');
+const { spawn, exec, execFile, execFileSync } = require('child_process');
+const { AsyncLocalStorage } = require('async_hooks');
 
 const app  = express();
 
@@ -424,6 +427,9 @@ function applySchema() {
     estimated_print_hours REAL
   )`);
 
+  // quotes/quote_items: früheres, eigenes Angebotsmodul. Heute ist das Angebot
+  // die Phase QUOTE eines Auftrags; die Tabellen bleiben nur für die Migration
+  // 'quotes-as-order-phase-v1' älterer Datenbanken.
   db.run(`CREATE TABLE IF NOT EXISTS quotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     number TEXT UNIQUE NOT NULL,
@@ -506,7 +512,7 @@ function applySchema() {
     key TEXT PRIMARY KEY,
     value INTEGER DEFAULT 0
   )`);
-  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('quote',0),('delivery',0),('supplier',0),('purchase_order',0)`);
+  db.run(`INSERT OR IGNORE INTO counters VALUES ('project',0),('customer',0),('order',0),('delivery',0),('supplier',0),('purchase_order',0)`);
 
   db.run(`CREATE TABLE IF NOT EXISTS purchase_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1203,11 +1209,6 @@ function nextOrderNumber() {
   const pre = getSetting('prefix_order','AUF');
   const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
   return pre + '-' + yr + padN(nextCounter('order'), 'pad_order', 3);
-}
-function nextQuoteNumber() {
-  const pre = getSetting('prefix_quote','ANG');
-  const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
-  return pre + '-' + yr + padN(nextCounter('quote'), 'pad_quote', 3);
 }
 function nextDeliveryNumber() {
   const pre = getSetting('prefix_delivery','LS');
@@ -1933,7 +1934,6 @@ app.use(express.json());
 // bei der nächsten Änderung noch einmal kurz nach. Die Sitzungen liegen nur
 // im Speicher: Die Auswahl gilt, bis der Browser schliesst oder PLM endet.
 // Rollen: user ändert, superuser gibt zusätzlich frei, admin darf alles.
-const { AsyncLocalStorage } = require('node:async_hooks');
 const userContext = new AsyncLocalStorage();   // Person der laufenden Anfrage, für log()
 const ROLES = ['user', 'superuser', 'admin'];
 // Farben der Personen — auf den Kacheln bei „Wer ist dran?" findet man sich
@@ -3352,10 +3352,6 @@ function collectCheckoutDatasets(itemId, types, visited = new Set(), mode = 'lat
   return result;
 }
 
-function removeReadOnly(filePath) {
-  try { fs.chmodSync(filePath, 0o644); } catch {}
-}
-
 function deleteFolderRecursive(dirPath) {
   if (!fs.existsSync(dirPath)) return;
   // Remove read-only from all files first (required before deletion)
@@ -3907,7 +3903,7 @@ function launchProgram(found, file = null) {
     const env = { ...process.env };
     if (process.platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) env.DISPLAY = ':0';
     const args = file ? [...found.args, file] : found.args;
-    const child = require('child_process').spawn(found.cmd, args, { detached: true, stdio: 'ignore', env });
+    const child = spawn(found.cmd, args, { detached: true, stdio: 'ignore', env });
     child.once('error', reject);
     child.once('spawn', () => { child.unref(); resolve(); });
   });
@@ -4505,98 +4501,6 @@ app.put('/api/delivery-items/:id/move', (req, res) => {
 });
 
 // ==============================================================
-// QUOTES (ANGEBOTE)
-// ==============================================================
-app.get('/api/quotes', (req, res) => {
-  const quotes = all('SELECT q.*,COALESCE(c.name,q.customer_name_free) as customer_name FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id ORDER BY q.number DESC');
-  const itemsByQuote = {};
-  all('SELECT * FROM quote_items ORDER BY COALESCE(position,id),id').forEach(i => (itemsByQuote[i.quote_id] ??= []).push(i));
-  quotes.forEach(q => { q.items = itemsByQuote[q.id] || []; });
-  res.json(quotes);
-});
-
-app.post('/api/quotes', (req, res) => {
-  const { customer_id, customer_name_free, title, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours, status } = req.body;
-  if (!title) return res.status(400).json({ error: 'Bezeichnung fehlt' });
-  const number = nextQuoteNumber();
-  const id = runGetId('INSERT INTO quotes (number,customer_id,customer_name_free,title,notes,quote_date,valid_until,tax_rate,discount_pct,payment_terms,include_tax,estimated_hours,include_hours,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [number, customer_id||null, customer_name_free||null, title, notes||'', quote_date||null, valid_until||null, tax_rate??19, discount_pct??0, payment_terms||'30 Tage netto', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, status||'DRAFT']);
-  res.json(get('SELECT * FROM quotes WHERE id=?', [id]));
-});
-
-app.get('/api/quotes/:id', (req, res) => {
-  const q = get(`SELECT q.*,c.name as customer_name,c.email as customer_email,
-    c.street as customer_street,c.postal_code as customer_postal_code,
-    c.city as customer_city,c.country as customer_country,c.number as customer_number
-    FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
-  if (!q) return res.status(404).json({ error: 'Nicht gefunden' });
-  q.items = all('SELECT qi.*,i.item_number,i.item_type,i.default_price,i.weight_g FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
-  q.items.forEach(li => { li.manufacturing_cost = calcLineItemCost(li) || null; });
-  res.json(q);
-});
-
-app.put('/api/quotes/:id', (req, res) => {
-  const { customer_id, customer_name_free, title, status, notes, quote_date, valid_until, tax_rate, discount_pct, payment_terms, include_tax, estimated_hours, include_hours } = req.body;
-  run(`UPDATE quotes SET customer_id=?,customer_name_free=?,title=?,status=?,notes=?,quote_date=?,valid_until=?,
-    tax_rate=?,discount_pct=?,payment_terms=?,include_tax=?,estimated_hours=?,include_hours=?,updated_at=datetime('now') WHERE id=?`,
-    [customer_id||null, customer_name_free||null, title, status, notes, quote_date, valid_until,
-     tax_rate??19, discount_pct??0, payment_terms||'', include_tax?1:0, parseFloat(estimated_hours)||0, include_hours?1:0, req.params.id]);
-  res.json(get('SELECT * FROM quotes WHERE id=?', [req.params.id]));
-});
-
-app.put('/api/quotes/:id/status', (req, res) => {
-  const { status } = req.body;
-  run(`UPDATE quotes SET status=?,updated_at=datetime('now') WHERE id=?`, [status, req.params.id]);
-  res.json({ success: true });
-});
-
-app.delete('/api/quotes/:id', (req, res) => {
-  tx(() => {
-    run('DELETE FROM quote_items WHERE quote_id=?', [req.params.id]);
-    run('DELETE FROM quotes WHERE id=?', [req.params.id]);
-  });
-  res.json({ success: true });
-});
-
-app.post('/api/quotes/:id/items', (req, res) => {
-  const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
-  const id = runGetId('INSERT INTO quote_items (quote_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-    [req.params.id, item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null]);
-  res.json(get('SELECT * FROM quote_items WHERE id=?', [id]));
-});
-
-app.put('/api/quote-items/:id', (req, res) => {
-  const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
-  run('UPDATE quote_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
-    [item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
-  res.json(get('SELECT * FROM quote_items WHERE id=?', [req.params.id]));
-});
-
-app.delete('/api/quote-items/:id', (req, res) => {
-  run('DELETE FROM quote_items WHERE id=?', [req.params.id]);
-  res.json({ success: true });
-});
-
-app.post('/api/quotes/:id/convert', (req, res) => {
-  const q = get('SELECT * FROM quotes WHERE id=?', [req.params.id]);
-  if (!q) return res.status(404).json({ error: 'Nicht gefunden' });
-  const orderId = tx(() => {
-    const number = nextOrderNumber();
-    const id = runGetId(`INSERT INTO orders (number,customer_id,customer_name_free,title,notes,order_date,tax_rate,discount_pct,payment_terms,include_tax)
-      VALUES (?,?,?,?,?,date('now'),?,?,?,?)`,
-      [number, q.customer_id, q.customer_name_free||null, q.title, q.notes||'', q.tax_rate, q.discount_pct, q.payment_terms||'', q.include_tax||0]);
-    const qItems = all('SELECT * FROM quote_items WHERE quote_id=?', [q.id]);
-    qItems.forEach(qi => {
-      run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-        [id, qi.item_id, qi.description, qi.quantity, qi.unit, qi.unit_price, qi.discount_pct, qi.notes||'', qi.raw_material_id||null, qi.estimated_hours||null, qi.printer_name||'', qi.estimated_print_hours||null]);
-    });
-    run("UPDATE quotes SET status='ACCEPTED',updated_at=datetime('now') WHERE id=?", [q.id]);
-    return id;
-  });
-  res.json(get('SELECT * FROM orders WHERE id=?', [orderId]));
-});
-
-// ==============================================================
 // RÜCKVERFOLGUNG
 // ==============================================================
 // Pro Position eines Produktionsauftrags: Revision, verbrauchte Material-
@@ -5005,7 +4909,6 @@ app.get('/api/stats', (req, res) => {
     datasets:   count('SELECT COUNT(*) as c FROM datasets'),
     customers:  count('SELECT COUNT(*) as c FROM customers'),
     orders:     count('SELECT COUNT(*) as c FROM orders'),
-    quotes:     count('SELECT COUNT(*) as c FROM quotes'),
     deliveries: count('SELECT COUNT(*) as c FROM deliveries'),
     inventory:     count('SELECT COUNT(*) as c FROM inventory_items'),
     raw_materials: count('SELECT COUNT(*) as c FROM raw_materials'),
@@ -5844,7 +5747,7 @@ function _archiveStand() {
 const APP_VERSION = (() => {
   const pkg = require('./package.json').version || '0.0.0';
   const info = { version: pkg, commit: null, date: null, dirty: false, source: null };
-  const git = args => require('child_process').execFileSync('git', args, {
+  const git = args => execFileSync('git', args, {
     cwd: REPO_DIR, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
   }).toString().trim();
   try {
@@ -5877,7 +5780,7 @@ let _update = null;
 
 function _gitBg(args, env = {}) {
   return new Promise((resolve, reject) => {
-    const child = require('child_process').execFile('git', args, {
+    const child = execFile('git', args, {
       cwd: REPO_DIR, timeout: 20000, windowsHide: true,
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', ...env },
     }, (err, out, errOut) => err
@@ -6002,7 +5905,7 @@ let _installing = false;
 function _npmInstall() {
   return new Promise((resolve, reject) => {
     // npm ist unter Windows npm.cmd — das startet nur über die Shell
-    require('child_process').exec('npm install --omit=dev --no-audit --no-fund', {
+    exec('npm install --omit=dev --no-audit --no-fund', {
       cwd: path.join(REPO_DIR, 'backend'), timeout: 5 * 60 * 1000, windowsHide: true,
     }, (err, out, errOut) => err
       ? reject(new Error(String(errOut).trim().split('\n').pop() || err.message)) : resolve());
@@ -6054,7 +5957,7 @@ function restartServer() {
   setTimeout(() => {
     if (process.env.PLM_START_SCRIPT === '1') return process.exit(RESTART_EXIT_CODE);
     try { flushDb(); } catch {}
-    require('child_process').spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+    spawn(process.execPath, [path.join(__dirname, 'server.js')], {
       cwd: __dirname, detached: true, stdio: 'ignore', windowsHide: true,
       env: { ...process.env, PLM_OPEN_BROWSER: '', PLM_TAKEOVER: '1' },
     }).unref();
@@ -6578,28 +6481,8 @@ app.get('/api/deliveries/:id/delivery-data', (req, res) => {
 // ==============================================================
 // THERMAL PRINT (Pipsta Classic)
 // ==============================================================
-const { execFile, spawn } = require('child_process');
-const os = require('os');
 // Versuche py (Windows Launcher), dann python, dann python3
 const PYTHON_CMD = process.platform === 'win32' ? 'py' : 'python3';
-
-// Daten via stdin statt --data Argument übergeben (vermeidet Windows Quoting-Probleme)
-function runPrintScript(args, data, timeout, cb) {
-  const child = spawn(PYTHON_CMD, args, { windowsHide: true });
-  let stdout = '', stderr = '';
-  child.stdout.on('data', d => stdout += d);
-  child.stderr.on('data', d => stderr += d);
-  const timer = setTimeout(() => { child.kill(); cb(new Error('Timeout'), stdout, stderr); }, timeout);
-  child.on('close', code => {
-    clearTimeout(timer);
-    if (code !== 0) cb(new Error(`Exit ${code}`), stdout, stderr);
-    else cb(null, stdout, stderr);
-  });
-  child.on('error', err => { clearTimeout(timer); cb(err, stdout, stderr); });
-  // Daten als JSON via stdin
-  child.stdin.write(JSON.stringify(data));
-  child.stdin.end();
-}
 
 app.post('/api/print-receipt', (req, res) => {
   const { delivery_item_id, mode } = req.body;
@@ -6786,8 +6669,7 @@ app.post('/api/print-receipt-delivery', (req, res) => {
     show_item_number: rcptSettings.receipt_show_item_number !== '0',
     show_notes:       rcptSettings.receipt_show_notes !== '0'
   };
-  const scriptPath = require('path').join(__dirname, 'print_receipt.py');
-  const { execFile } = require('child_process');
+  const scriptPath = path.join(__dirname, 'print_receipt.py');
   execFile(PYTHON_CMD, [scriptPath, '--mode', 'multi', '--data', JSON.stringify(printData)],
     { timeout: 20000, encoding: 'utf8', windowsHide: true },
     (error, stdout, stderr) => {
@@ -6879,23 +6761,8 @@ app.get('/api/orders/:id/invoice-data', (req, res) => {
   res.json(o);
 });
 
-// -- QUOTE DATA ------------------------------------------------
-app.get('/api/quotes/:id/quote-data', (req, res) => {
-  const q = get(`SELECT q.*,c.name as customer_name,c.email as customer_email,
-    c.street as customer_street,c.postal_code as customer_postal_code,
-    c.city as customer_city,c.country as customer_country,c.number as customer_number
-    FROM quotes q LEFT JOIN customers c ON q.customer_id=c.id WHERE q.id=?`, [req.params.id]);
-  if (!q) return res.status(404).json({ error: 'Nicht gefunden' });
-  q.positions = all('SELECT qi.*,i.item_number,i.item_type FROM quote_items qi LEFT JOIN items i ON qi.item_id=i.id WHERE qi.quote_id=?', [q.id]);
-  attachSubItems(q.positions);
-  computeTotals(q);
-  const hrRow = get("SELECT value FROM settings WHERE key='hourly_rate'");
-  q.hourly_rate = hrRow ? parseFloat(hrRow.value) || 0 : 0;
-  res.json(q);
-});
-
 // Angebotsdaten aus einem Auftrag in der Phase QUOTE. Gleiche Form wie
-// /api/quotes/:id/quote-data, damit der PDF-Renderer unveraendert bleibt.
+// /invoice-data, damit ein PDF-Renderer für beide Belege reicht.
 app.get('/api/orders/:id/order-quote-data', (req, res) => {
   const o = get(`SELECT o.*,c.name as customer_name,c.email as customer_email,
     c.street as customer_street,c.postal_code as customer_postal_code,
@@ -7879,7 +7746,7 @@ app.post('/api/checkout/normteile', (req, res) => {
   res.json({ copied, errors, dir: normteileDir });
 });
 
-// BOM children with full calc data for quote import
+// Teile einer Baugruppe mit Kalkulationsdaten — für „Aus BOM kalkulieren“ im Auftrag
 app.get('/api/items/:id/bom-for-quote', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Nicht gefunden' });

@@ -566,61 +566,7 @@
   </div>
 </div>
 
-<!-- Quote Modal -->
-<div class="overlay" id="quoteModal">
-  <div class="modal">
-    <div class="modal-head"><div class="modal-title" id="qm-title">Neues Angebot</div><button class="btn btn-icon btn-ghost" onclick="closeModal('quoteModal')">✕</button></div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="fg"><label class="fl">Bezeichnung *</label><input class="fi" id="qm-title-f" placeholder="z.B. Roboterarm v3 – 3 Stück"></div>
-      </div>
-      <div class="form-row cols2">
-        <div class="fg"><label class="fl">Kunde</label>
-          <select class="fs" id="qm-customer" onchange="onCustChange('qm')"><option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option></select>
-          <input class="fi" id="qm-customer-free" placeholder="Kundenname (Freitext)" style="display:none;margin-top:4px">
-        </div>
-        <div class="fg"><label class="fl">Status</label>
-          <select class="fs" id="qm-status">
-            <option value="DRAFT">Entwurf</option><option value="SENT">Versendet</option>
-            <option value="ACCEPTED">Akzeptiert</option><option value="DECLINED">Abgelehnt</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row cols2">
-        <div class="fg"><label class="fl">Angebotsdatum</label><input class="fi" id="qm-date" type="date"></div>
-        <div class="fg"><label class="fl">Gültig bis</label><input class="fi" id="qm-valid" type="date"></div>
-      </div>
-      <div class="form-row cols2">
-        <div class="fg"><label class="fl">Gesamtrabatt (%)</label><input class="fi" id="qm-disc" type="number" step="0.1" value="0" min="0" max="100"></div>
-        <div class="fg"><label class="fl">Zahlungsbedingungen</label><input class="fi" id="qm-terms" placeholder="30 Tage netto"></div>
-      </div>
-      <div class="form-row cols2">
-        <div class="fg"><label class="fl">MwSt. (%)</label><input class="fi" id="qm-tax" type="number" step="0.1" value="8.1"></div>
-        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:20px">
-          <input type="checkbox" id="qm-include-tax" style="width:16px;height:16px;cursor:pointer">
-          <label for="qm-include-tax" class="fl" style="cursor:pointer;margin:0">MwSt. ausweisen</label>
-        </div>
-      </div>
-      <div class="form-row cols2">
-        <div class="fg"><label class="fl">Geschätzte Stunden</label><input class="fi" id="qm-hours" type="number" step="0.25" min="0" placeholder="0"></div>
-        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:20px">
-          <input type="checkbox" id="qm-include-hours" style="width:16px;height:16px;cursor:pointer">
-          <label for="qm-include-hours" class="fl" style="cursor:pointer;margin:0">Stunden einrechnen</label>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="qm-notes" rows="2"></textarea></div>
-      </div>
-      <input type="hidden" id="qm-id">
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="closeModal('quoteModal')">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveQuote()">Speichern</button>
-    </div>
-  </div>
-</div>
-
-<!-- Line Item Modal (shared for orders + quotes) -->
+<!-- Positionsdialog (Auftragspositionen) -->
 <div class="overlay" id="lineItemModal">
   <div class="modal" style="max-width:560px">
     <div class="modal-head"><div class="modal-title" id="li-title">Position hinzufügen</div><button class="btn btn-icon btn-ghost" onclick="closeModal('lineItemModal')">✕</button></div>
@@ -680,7 +626,6 @@
         <div class="fg"><label class="fl">Rabatt (%)</label><input class="fi" id="li-disc" type="number" step="0.1" value="0" min="0" max="100"></div>
         <div class="fg"><label class="fl">Notizen</label><input class="fi" id="li-notes" placeholder="optional"></div>
       </div>
-      <input type="hidden" id="li-parent-type">
       <input type="hidden" id="li-parent-id">
       <input type="hidden" id="li-item-id">
       <input type="hidden" id="li-linked-plm-id">

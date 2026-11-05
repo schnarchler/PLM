@@ -459,11 +459,6 @@ async function renderRawMaterials() {
   const items = await api('/api/raw-materials');
   state.rawMaterials = items;
 
-  // Update badge
-  const low = items.filter(i => i.min_qty > 0 && i.stock_qty <= i.min_qty);
-  const badge = document.getElementById('badge-rawmat');
-  if (badge) badge.textContent = low.length || items.length || '—';
-
   // Sort
   const getPrice = i => (i.lots||[]).filter(l=>l.lot_number).map(l=>l.unit_price??Infinity).sort((a,b)=>a-b)[0] ?? Infinity;
   if (_rmSort === 'color')    items.sort((a,b) => (a.color||'').localeCompare(b.color||'') || (a.material_type||'').localeCompare(b.material_type||''));

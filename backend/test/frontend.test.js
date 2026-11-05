@@ -1161,3 +1161,24 @@ test('Menü: Tabs unter einem Menüpunkt, ERP-Verlauf nur für Admins', () => {
     assert.deepStrictEqual(T.NAV_OF_VIEW, { erplog: 'changelog', rawmaterials: 'inventory', profit: 'orders' });
   } finally { global.document = prev; global.isAdmin = prevAdmin; }
 });
+
+// Ein Baustein für den Tab „Positionen“: Öffnen, Aktualisieren und Verschieben
+// zeigen dasselbe — früher fielen Arbeitszeit und Zeiten nach ▲/▼ weg.
+test('Auftrag: Positionen mit Arbeitszeit, Zeiten und „Aus BOM kalkulieren“', () => {
+  installGlobals();
+  const prev = { r: global.renderLineItems, b: global._renderBillableTimeSection };
+  global.renderLineItems = (items, id) => `<pos n="${items.length}" auftrag="${id}">`;
+  global._renderBillableTimeSection = te => `<zeiten n="${te.length}">`;
+  global.state.settings = { hourly_rate: '80' };
+  try {
+    const { _orderPosHtml } = evalPart('js/05-erp-views.js', 'function _orderPosHtml', 'async function refreshOrderPositionen', '({ _orderPosHtml })');
+    const o = { id: 7, status: 'QUOTE', items: [{ quantity: 2, unit_price: 10 }], estimated_hours: 1.5, include_hours: 1 };
+    const html = _orderPosHtml(o, [{}, {}]);
+    assert.match(html, /<pos n="1" auftrag="7">/);
+    assert.match(html, /Arbeitszeit[\s\S]*CHF 120\.00[\s\S]*eingerechnet/);
+    assert.match(html, /<zeiten n="2">/);
+    assert.match(html, /onclick="openLineItemModal\(7\)">\+ Position/);
+    assert.match(html, /onclick="openBomImport\(7\)"[^>]*>📦 Aus BOM kalkulieren/);
+    assert.doesNotMatch(_orderPosHtml({ id: 8, items: [] }, []), /Arbeitszeit/, 'ohne Stunden kein Block');
+  } finally { global.renderLineItems = prev.r; global._renderBillableTimeSection = prev.b; }
+});

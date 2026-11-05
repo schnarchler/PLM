@@ -716,15 +716,6 @@ function _sheetGroups(groups) {
   return html.length ? `<div class="ps-groups">${html.join('')}</div>` : '';
 }
 
-function _sheetRows(rows) {
-  const keep = rows.filter(([, v]) => v !== null && v !== undefined && v !== '');
-  if (!keep.length) return '';
-  return keep.map(([k, v, raw]) => `<div class="cl-row" style="padding:7px 0">
-    <div style="min-width:104px;flex-shrink:0" class="ps-label">${esc(k)}</div>
-    <div style="font-size:13px;color:var(--t2);line-height:1.6;white-space:pre-wrap;min-width:0">${raw ? v : esc(v)}</div>
-  </div>`).join('');
-}
-
 function _fmtHours(h) {
   const min = Math.round((parseFloat(h) || 0) * 60);
   if (!min) return null;

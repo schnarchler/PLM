@@ -129,15 +129,29 @@ test('Lager: Korrektur setzt den Bestand und bucht die Differenz', async () => {
   await assert.rejects(api(`/api/inventory/${inv.id}/movement`, 'POST', { type: 'in', qty: -3 }), 'negative Menge wird abgelehnt');
 });
 
-test('Angebot → Auftrag konvertieren übernimmt Positionen', async () => {
-  const q = await api('/api/quotes', 'POST', { title: 'Angebotstest' });
-  await api(`/api/quotes/${q.id}/items`, 'POST', { description: 'Halter', quantity: 3, unit: 'Stk', unit_price: 8 });
-  const o = await api(`/api/quotes/${q.id}/convert`, 'POST', {});
+// „Aus BOM kalkulieren“ im Auftrag: die Teile der Baugruppe kommen mit Menge
+// und Kalkulationsdaten, jedes wird eine eigene Position — auch im Angebot.
+test('Aus BOM kalkulieren: Teile einer Baugruppe werden Auftragspositionen', async () => {
+  const p = await api('/api/projects', 'POST', { name: 'BOM-Kalkulation' });
+  const teil = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Halter', item_type: 'prt' });
+  const bg = await api(`/api/projects/${p.id}/items`, 'POST', { name: 'Gerät', item_type: 'asm' });
+  const rev = (await api(`/api/items/${bg.id}`)).revisions.at(-1);
+  await api(`/api/revisions/${rev.id}/bom`, 'POST', { child_item_id: teil.id, quantity: 3, unit: 'Stk' });
+
+  const bom = await api(`/api/items/${bg.id}/bom-for-quote`);
+  assert.deepStrictEqual(bom.map(b => [b.id, b.quantity]), [[teil.id, 3]]);
+  assert.ok('manufacturing_cost' in bom[0], 'Kalkulationsdaten sind dabei');
+
+  const o = await api('/api/orders', 'POST', { title: 'Angebot Gerät', status: 'QUOTE' });
+  for (const b of bom) {
+    await api(`/api/orders/${o.id}/items`, 'POST', { item_id: b.id, description: `${b.item_number} – ${b.name}`,
+      quantity: b.quantity, unit: b.unit, unit_price: 4 });
+  }
   const loaded = await api(`/api/orders/${o.id}`);
-  assert.equal(loaded.items.length, 1);
-  assert.equal(loaded.items[0].unit_price, 8);
-  const quote = await api(`/api/quotes/${q.id}`);
-  assert.equal(quote.status, 'ACCEPTED');
+  assert.strictEqual(loaded.status, 'QUOTE');
+  assert.deepStrictEqual(loaded.items.map(i => [i.item_id, i.quantity, i.unit_price]), [[teil.id, 3, 4]]);
+  // Das frühere, eigene Angebotsmodul gibt es nicht mehr
+  await assert.rejects(api('/api/quotes', 'POST', { title: 'alt' }), /HTTP 404/);
 });
 
 test('Auftrag löschen entfernt auch die Positionen', async () => {

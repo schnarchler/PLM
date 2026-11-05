@@ -6,8 +6,6 @@ const API = '';
 // DRAFT bleibt der Einstieg fuer Auftraege ohne vorheriges Angebot.
 const ORDER_ST_MAP   = {QUOTE:'st-DFT',DRAFT:'st-DFT',CONFIRMED:'st-REV',DELIVERED:'st-REL',INVOICED:'st-ECO',DECLINED:'st-OBS',CANCELLED:'st-OBS'};
 const ORDER_ST_LABEL = {QUOTE:'Angebot',DRAFT:'Entwurf',CONFIRMED:'Bestätigt',DELIVERED:'Geliefert',INVOICED:'Fakturiert',DECLINED:'Abgelehnt',CANCELLED:'Storniert'};
-const QUOTE_ST_MAP   = {DRAFT:'st-DFT',SENT:'st-REV',ACCEPTED:'st-REL',DECLINED:'st-OBS'};
-const QUOTE_ST_LABEL = {DRAFT:'Entwurf',SENT:'Versendet',ACCEPTED:'Akzeptiert',DECLINED:'Abgelehnt'};
 const DELIVERY_ST_MAP   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
 const DELIVERY_ST_LABEL = {DRAFT:'Entwurf',READY:'Bereit',DELIVERED:'Geliefert'};
 // PLM-Status: das Kürzel steht im Badge, die Bezeichnung im Tooltip und im Detail
@@ -59,14 +57,14 @@ function revWeightLock(item, rev) {
 }
 // Statusbadge aus den zentralen Tabellen oben — damit überall dieselben Wörter stehen
 function stBadge(type, status, style = '') {
-  const m = type === 'order' ? ORDER_ST_MAP : type === 'quote' ? QUOTE_ST_MAP : DELIVERY_ST_MAP;
-  const l = type === 'order' ? ORDER_ST_LABEL : type === 'quote' ? QUOTE_ST_LABEL : DELIVERY_ST_LABEL;
+  const m = type === 'order' ? ORDER_ST_MAP : DELIVERY_ST_MAP;
+  const l = type === 'order' ? ORDER_ST_LABEL : DELIVERY_ST_LABEL;
   return `<span class="status ${m[status] || 'st-DFT'}"${style ? ` style="${style}"` : ''}>${l[status] || status}</span>`;
 }
 
 function _stSel(type, id, current) {
-  const maps   = {order:ORDER_ST_MAP,   quote:QUOTE_ST_MAP,   delivery:DELIVERY_ST_MAP  };
-  const labels = {order:ORDER_ST_LABEL, quote:QUOTE_ST_LABEL, delivery:DELIVERY_ST_LABEL};
+  const maps   = {order:ORDER_ST_MAP,   delivery:DELIVERY_ST_MAP  };
+  const labels = {order:ORDER_ST_LABEL, delivery:DELIVERY_ST_LABEL};
   const m = maps[type]||{}; const l = labels[type]||{};
   const opts = Object.keys(m).map(s=>`<option value="${s}"${s===current?' selected':''}>${l[s]||s}</option>`).join('');
   return `<select class="status-sel ${m[current]||''}" title="Status ändern"
@@ -79,10 +77,10 @@ async function setDocStatus(type, id, status, el) {
   try {
     const endpoint = type === 'delivery' ? 'deliveries' : type + 's';
     const r = await api(`/api/${endpoint}/${id}/status`, 'PUT', { status });
-    const m = type==='order' ? ORDER_ST_MAP : type==='quote' ? QUOTE_ST_MAP : DELIVERY_ST_MAP;
+    const m = type==='order' ? ORDER_ST_MAP : DELIVERY_ST_MAP;
     el.className = 'status-sel ' + (m[status]||'');
 
-    const arr = type==='order' ? state.orders : type==='quote' ? state.quotes : state.deliveries;
+    const arr = type==='order' ? state.orders : state.deliveries;
     const rec = arr.find(x => x.id === id);
     if (rec) rec.status = status;
 
@@ -111,7 +109,7 @@ async function setDocStatus(type, id, status, el) {
     toast('Status konnte nicht gespeichert werden', 'err');
   }
 }
-let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], quotes: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [], slicer: null, cad: null };
+let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [], slicer: null, cad: null };
 
 // Laufende Version unten in der Navigation. Den Zustand zeigt allein der Punkt
 // (_markUpdate); nicht committete Änderungen stehen nur im Tooltip.
@@ -389,7 +387,8 @@ function _classChip(cls, size) {
 // ── INIT ──────────────────────────────────────────────────────
 // ── RECENTLY VIEWED ───────────────────────────────────────────
 const _MAX_RECENT = 8;
-let _recentItems = JSON.parse(localStorage.getItem('plm_recent') || '[]');
+// Einträge vom Typ 'quote' stammen aus dem früheren, eigenen Angebotsmodul
+let _recentItems = JSON.parse(localStorage.getItem('plm_recent') || '[]').filter(r => r.type !== 'quote');
 
 function _trackRecent(type, id, label, sub, itemType) {
   _recentItems = _recentItems.filter(r => !(r.type === type && r.id === id));
@@ -411,7 +410,7 @@ function _renderRecent() {
   const arrow = document.getElementById('nav-recent-arrow');
   if (arrow) arrow.textContent = closed ? '▸' : '▾';
   list.innerHTML = _recentItems.map(r => {
-    const icon = r.type === 'order' ? '📋' : r.type === 'quote' ? '📄' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : r.itemType ? _itemSvg(r.itemType) : '🔩';
+    const icon = r.type === 'order' ? '📋' : r.type === 'delivery' ? '🚚' : r.type === 'customer' ? '👤' : r.type === 'project' ? '📁' : r.itemType ? _itemSvg(r.itemType) : '🔩';
     return `<button class="nav-item" style="font-size:13px;padding:4px 12px 4px 16px;gap:6px" onclick="_openRecent(${JSON.stringify(r).replace(/"/g,'&quot;')})">
       <span style="font-size:13px;flex-shrink:0">${icon}</span>
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${esc(r.label)}</span>
@@ -427,7 +426,6 @@ function _toggleRecent() {
 
 function _openRecent(r) {
   if (r.type === 'order') { gotoView('orders'); openOrderDetail(r.id); }
-  else if (r.type === 'quote') { gotoView('quotes'); openQuoteDetail(r.id); }
   else if (r.type === 'delivery') { gotoView('deliveries'); openDeliveryDetail(r.id); }
   else if (r.type === 'customer') { gotoView('customers'); openCustomerDetail(r.id); }
   else if (r.type === 'project') { gotoView('projects'); openProject(r.id); }
@@ -468,7 +466,6 @@ window.addEventListener('popstate', e => {
   const s = e.state;
   if (s.view) gotoView(s.view).then(() => {
     if (s.detailType === 'order') openOrderDetail(s.detailId);
-    else if (s.detailType === 'quote') openQuoteDetail(s.detailId);
     else if (s.detailType === 'delivery') openDeliveryDetail(s.detailId);
     else if (s.detailType === 'customer') openCustomerDetail(s.detailId);
     else if (s.detailType === 'project') openProject(s.detailId);
@@ -565,7 +562,6 @@ async function gotoView(v) {
   else if (v === 'parts') await renderPartsList();
   else if (v === 'dashboard') await renderDashboard();
   else if (v === 'customers') await renderCustomers();
-  else if (v === 'quotes') await renderQuotes();
   else if (v === 'orders') await renderOrders();
   else if (v === 'deliveries') await renderDeliveries();
   else if (v === 'changelog') await renderChangelog();

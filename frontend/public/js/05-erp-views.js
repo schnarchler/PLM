@@ -684,6 +684,48 @@ function _renderBillableTimeSection(timeEntries, taxRate, discountPct, includeTa
   </div>`;
 }
 
+// Inhalt des Tabs „Positionen": Positionen, Arbeitszeit, verrechenbare Zeiten
+// und die Knöpfe. Öffnen, Aktualisieren und Verschieben zeigen damit dasselbe.
+function _orderPosHtml(o, timeEntries) {
+  const id = o.id;
+  const items = o.items || [];
+  const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
+  const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
+  const estHours = o.estimated_hours || 0;
+  const hoursCost = estHours * hourlyRate;
+  const hoursSection = estHours > 0 ? (() => {
+    const discAmt = subtotal * (o.discount_pct||0) / 100;
+    const net = subtotal - discAmt;
+    const grandNet = o.include_hours ? net + hoursCost : net;
+    const tax = o.include_tax ? grandNet * (o.tax_rate||0) / 100 : 0;
+    const grandTotal = grandNet + tax;
+    return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:13px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-weight:600;color:var(--t2)">Arbeitszeit</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:13px" onclick="openOrderModal(${id})">✏️ Ändern</button>
+      </div>
+      <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+        <span style="color:var(--t3)">${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h</span>
+        <span style="font-family:var(--mono);font-weight:600;color:${o.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>
+        <span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${o.include_hours?'rgba(110,222,156,.12)':'var(--bg2)'};color:${o.include_hours?'var(--green)':'var(--t3)'}">${o.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
+      </div>
+      ${o.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
+        <div style="text-align:right;font-size:13px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
+          <span style="font-family:var(--mono);font-weight:700;font-size:13px;color:var(--green);margin-left:8px">${fmtCHF(grandTotal)}</span>
+        </div>
+      </div>` : ''}
+    </div>`;
+  })() : '';
+  return `
+    ${renderLineItems(items, id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
+    ${hoursSection}
+    ${_renderBillableTimeSection(timeEntries, o.tax_rate??0, o.discount_pct||0, !!o.include_tax, subtotal)}
+    <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="openLineItemModal(${id})">+ Position</button>
+      <button class="btn btn-ghost btn-sm" onclick="openBomImport(${id})" title="Alle Teile einer Baugruppe einzeln kalkulieren und als Positionen übernehmen">📦 Aus BOM kalkulieren</button>
+    </div>`;
+}
+
 async function refreshOrderPositionen(orderId) {
   const posDiv = document.getElementById('od-pos');
   if (!posDiv) return;
@@ -691,12 +733,8 @@ async function refreshOrderPositionen(orderId) {
     api(`/api/orders/${orderId}`),
     api(`/api/time-entries?order_id=${orderId}`)
   ]);
-  const items = o.items || [];
-  const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
-  posDiv.innerHTML = `
-    ${renderLineItems(items, 'order', orderId, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
-    ${_renderBillableTimeSection(timeEntries, o.tax_rate??0, o.discount_pct||0, !!o.include_tax, subtotal)}
-    <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('order',${orderId})">+ Position</button>`;
+  const rec = (state.orders||[]).find(x=>x.id===o.id); if (rec) Object.assign(rec, o);
+  posDiv.innerHTML = _orderPosHtml(o, timeEntries);
 }
 
 async function openOrderDetail(id) {
@@ -720,42 +758,12 @@ async function openOrderDetail(id) {
     <button class="tab" onclick="switchTab(this,'od-info')">Details</button>
     <button class="tab" onclick="switchTab(this,'od-time');loadTimeEntries(${id})">Zeiten</button>
     ${o.changelog ? `<button class="tab" onclick="switchTab(this,'od-log')">Verlauf</button>` : ''}`;
-  const items = o.items || [];
-  const subtotal = items.reduce((s,i)=>s+(i.quantity*i.unit_price*(1-(i.discount_pct||0)/100)),0);
   const hourlyRate = parseFloat(state.settings?.hourly_rate) || 0;
   const estHours = o.estimated_hours || 0;
   const hoursCost = estHours * hourlyRate;
-  const orderHoursSection = estHours > 0 ? (() => {
-    const discAmt = subtotal * (o.discount_pct||0) / 100;
-    const net = subtotal - discAmt;
-    const grandNet = o.include_hours ? net + hoursCost : net;
-    const tax = o.include_tax ? grandNet * (o.tax_rate||0) / 100 : 0;
-    const grandTotal = grandNet + tax;
-    return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;font-size:13px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <span style="font-weight:600;color:var(--t2)">Arbeitszeit</span>
-        <button class="btn btn-ghost btn-sm" style="font-size:13px" onclick="openOrderModal(${id})">✏️ Ändern</button>
-      </div>
-      <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
-        <span style="color:var(--t3)">${fmtN(estHours,2)} h × ${fmtCHF(hourlyRate)}/h</span>
-        <span style="font-family:var(--mono);font-weight:600;color:${o.include_hours?'var(--green)':'var(--t3)'}">${fmtCHF(hoursCost)}</span>
-        <span style="font-size:13px;padding:1px 7px;border-radius:10px;background:${o.include_hours?'rgba(110,222,156,.12)':'var(--bg2)'};color:${o.include_hours?'var(--green)':'var(--t3)'}">${o.include_hours?'eingerechnet':'nicht eingerechnet'}</span>
-      </div>
-      ${o.include_hours && items.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;justify-content:flex-end">
-        <div style="text-align:right;font-size:13px;color:var(--t2)">Gesamttotal inkl. Arbeitszeit:
-          <span style="font-family:var(--mono);font-weight:700;font-size:13px;color:var(--green);margin-left:8px">${fmtCHF(grandTotal)}</span>
-        </div>
-      </div>` : ''}
-    </div>`;
-  })() : '';
   document.getElementById('dp-body').innerHTML = `
     <div id="od-log" style="display:none">${renderChangelogList(o.changelog)}</div>
-    <div id="od-pos">
-      ${renderLineItems(items, 'order', id, o.tax_rate??0, o.discount_pct||0, !!o.include_tax)}
-      ${orderHoursSection}
-      ${_renderBillableTimeSection(timeEntries, o.tax_rate??0, o.discount_pct||0, !!o.include_tax, subtotal)}
-      <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openLineItemModal('order',${id})">+ Position</button>
-    </div>
+    <div id="od-pos">${_orderPosHtml(o, timeEntries)}</div>
     <div id="od-fert" style="display:none">
       <div id="od-fert-body"><div style="color:var(--t3);font-size:13px;padding:8px 0">Wird geladen…</div></div>
     </div>
@@ -959,7 +967,6 @@ function _showSearch(q) {
   if (state.view !== 'search') {
     state.view = 'search';
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('ni-search')?.classList.add('active');
     renderSearchView();
     return;
   }

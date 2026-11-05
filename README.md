@@ -53,8 +53,7 @@ Part in Baugruppe:    0028-asm-001-prt-001
 Part im Projekt:      0028-prt-001
 Dokument:             0028-doc-001
 
-Aufträge:             AUF-2026-0001
-Angebote:             ANG-2026-0001
+Aufträge / Angebote:  AUF-2026-0001
 Produktionsauftrag:   LS-2026-0001
 Einkauf:              EK-2026-0001
 Kunden:               KD-0001
@@ -192,7 +191,7 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - **Material** – Bauteilgewicht × Rohmaterialpreis/Gewicht (Lot-spezifisch)
 - **Arbeitszeit** – geschätzte Stunden × Stundenansatz
 - **Druckzeit** – Druckstunden × Drucker CHF/h
-- **Aus BOM** – Button „📦 Aus BOM kalkulieren" expandiert eine Baugruppe in Einzelpositionen
+- **Aus BOM** – Button „📦 Aus BOM kalkulieren" im Auftrag (auch in der Angebotsphase) expandiert eine Baugruppe in Einzelpositionen
 
 ### Rohmaterial
 - Eigene Verwaltung mit Materialtyp, Farbe, Abmessungen, Gewicht, Druckparametern
@@ -397,7 +396,8 @@ Angebot ──► Bestätigt ──► Geliefert ──► Fakturiert
 Form. Sie behalten ihre ANG-Nummer, damit gedruckte Belege zuordenbar bleiben; die
 ursprüngliche Nummer steht zusätzlich im Feld `origin_quote_number`. Angebote, die
 bereits in einen Auftrag umgewandelt waren, werden übersprungen — ihr Auftrag existiert
-ja schon. Die alte Angebotstabelle bleibt als Archiv unverändert liegen.
+ja schon. Die alte Angebotstabelle bleibt nur für diese Migration bestehen — eine
+eigene Ansicht oder API dafür gibt es nicht mehr.
 
 ---
 
