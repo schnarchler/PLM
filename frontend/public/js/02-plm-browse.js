@@ -404,8 +404,8 @@ function openProjectDetail(p) {
     <div id="pt-log" style="display:none">
       ${(p.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
-        <div><div class="cl-action">${esc(cl.action)}${_clUser(cl)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
-        <div class="cl-time">${fmtDate(cl.created_at)}</div></div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>'}
+        <div><div class="cl-action">${esc(cl.action)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
+        ${_clTime(cl)}</div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>'}
     </div>`;
   showDetail();
 }
@@ -536,9 +536,12 @@ function renderItemDetail(item, activeRevId) {
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
     + (item.short_code && !isDOC ? `<span class="chip" style="flex-shrink:0" title="Kurzcode zum Aufdrucken — Datenblatt">${esc(item.short_code)}</span>` : '')
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(item.name)}">${esc(item.name)}</strong>`
-    + (editable ? ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})" title="In anderes Projekt verschieben">↪</button>`
-    + ` <button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Mit anderem Item vergleichen">⇄</button>`;
+    // Knöpfe rechtsbündig, der Name nimmt den Platz dazwischen
+    + `<span style="margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0">`
+    + (editable ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
+    + `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openMoveItemModal(${item.id})" title="In anderes Projekt verschieben">↪</button>`
+    + `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Mit anderem Item vergleichen">⇄</button>`
+    + `</span>`;
   // Klassifizierung nur im Datenblatt unter „Allgemein“, Mindmap über den Knopf im Datenblatt
 
   const tabs = `
@@ -789,7 +792,7 @@ function renderItemSheet(item, activeRevId) {
   // auch wenn das Teil sonst gesperrt ist — die anderen Revisionen bleiben gleich.
   const desc = revDesc(item, rev);
   const descEdit = rev
-    ? ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openDescModal(${item.id})" title="Beschreibung von rev${esc(rev.rev)} ändern — andere Revisionen bleiben, wie sie sind">✏</button>`
+    ? ` <button class="btn btn-ghost btn-sm" style="padding:0 5px;font-size:12px" onclick="openDescModal(${item.id})" title="Beschreibung ändern — andere Revisionen bleiben, wie sie sind">✏</button>`
     : '';
   const descBlock = desc
     ? `<div style="font-size:13px;line-height:1.65;color:var(--t2);white-space:pre-wrap">${esc(desc)}${descEdit}</div>`
@@ -967,10 +970,10 @@ function renderItemSheet(item, activeRevId) {
     ? `<div class="cl-row" style="padding:0;border:none">
         <div class="cl-dot"></div>
         <div class="cl-body">
-          <div class="cl-action">${lastLog.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(lastLog.rev)}</span>` : ''}${esc(lastLog.action)}${_clUser(lastLog)}</div>
+          <div class="cl-action">${lastLog.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(lastLog.rev)}</span>` : ''}${esc(lastLog.action)}</div>
           ${lastLog.details ? `<div class="cl-detail">${esc(lastLog.details)}</div>` : ''}
         </div>
-        <div class="cl-time">${fmtDate(lastLog.created_at)}</div>
+        ${_clTime(lastLog)}
       </div>`
     : '<div style="font-size:13px;color:var(--t3)">Noch keine Einträge.</div>';
 
@@ -1040,7 +1043,7 @@ function renderItemSheet(item, activeRevId) {
 
     ${stlBlock}
 
-    <div class="sep-label"${stlBlock ? '' : ' style="margin-top:0"'}>Beschreibung${rev ? ` <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">rev${esc(rev.rev)}</span>` : ''}</div>
+    <div class="sep-label"${stlBlock ? '' : ' style="margin-top:0"'}>Beschreibung</div>
     ${descBlock}
 
     ${item.source_url || editable ? `<div class="sep-label">Quelle</div>

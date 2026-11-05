@@ -1719,6 +1719,20 @@ const PO_ITEM_HIST = [
   ['description', 'Beschreibung'], ['quantity', 'Menge', 'num'], ['unit', 'Einheit'],
   ['unit_price', 'Preis', 'money'], ['notes', 'Notizen'],
 ];
+// PLM: Projekt, Item, Druckparameter einer Revision, Änderungsantrag
+const PROJECT_HIST = [['name', 'Name'], ['description', 'Beschreibung'], ['customer', 'Kunde'], ['color', 'Farbe']];
+const ITEM_HIST = [
+  ['name', 'Name'], ['source_url', 'Quelle'], ['classification', 'Klassifizierung'], ['notes', 'Notizen'],
+];
+const PRINT_HIST = [
+  ['material', 'Material'], ['color', 'Farbe'], ['nozzle', 'Düse (mm)', 'num'], ['layer_height', 'Schichthöhe (mm)', 'num'],
+  ['infill', 'Füllung (%)', 'num'], ['infill_pattern', 'Füllmuster'], ['supports', 'Stützen', 'bool'],
+  ['print_temp', 'Düsentemperatur (°C)', 'num'], ['bed_temp', 'Betttemperatur (°C)', 'num'], ['printer', 'Drucker'],
+  ['part_weight', 'Teilgewicht (g)', 'num'], ['filament_weight_total', 'Filamentgewicht (g)', 'num'],
+  ['print_duration', 'Druckdauer (h)', 'num'], ['filament_price_kg', 'Filamentpreis (CHF/kg)', 'money'],
+  ['printer_cost_hr', 'Druckerkosten (CHF/h)', 'money'], ['raw_material_id', 'Rohmaterial', 'material'], ['notes', 'Notizen'],
+];
+const ECR_HIST = [['title', 'Titel'], ['reason', 'Grund'], ['description', 'Beschreibung']];
 // Admin bei dieser Anfrage? Allein oder ohne Personen: ja. Nötig etwa für den
 // Verlauf-Tab eines Belegs und die Rückmeldungen auf dem Dashboard.
 const isAdminReq = req => req.plmMode !== 'team' || req.plmUser?.role === 'admin';
@@ -2226,10 +2240,12 @@ app.get('/api/projects/:id', (req, res) => {
 
 app.put('/api/projects/:id', (req, res) => {
   const { name, description, customer, color } = req.body;
+  const before = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
   run("UPDATE projects SET name=?,description=?,customer=?,color=?,updated_at=datetime('now') WHERE id=?",
     [name, description, customer, color||null, req.params.id]);
-  log('project', req.params.id, 'Geändert', name);
-  res.json(get('SELECT * FROM projects WHERE id=?', [req.params.id]));
+  const after = get('SELECT * FROM projects WHERE id=?', [req.params.id]);
+  if (before) logChanges('project', before.id, before, after, PROJECT_HIST);
+  res.json(after);
 });
 
 app.post('/api/projects/:id/pin', (req, res) => {
@@ -2507,10 +2523,10 @@ app.put('/api/items/:id', (req, res) => {
     .map(k => `${labels[k]}: ${oldA[k] || '—'} → ${newA[k] || '—'}`);
   if (attrDiff.length) log('item', req.params.id, 'Eigenschaften geändert', attrDiff.join(' · '));
   const descChanged = !!rev && revDesc !== null && (revBefore.item_description ?? before.description ?? '') !== (revAfterDesc ?? '');
-  if (descChanged) log('item', req.params.id, 'Beschreibung geändert', `rev${rev.rev}: ${revAfterDesc || '—'}`);
-  const otherChanged = ['name', 'source_url', 'classification', 'notes'].some(k => before[k] !== after[k])
-    || (!rev && before.description !== after.description);
-  if (otherChanged || !(priceChanged || weightChanged || descChanged || hintsChanged.length || attrDiff.length)) log('item', req.params.id, 'Geändert', name);
+  const descDiff = descChanged ? histDiff({ d: revBefore.item_description ?? before.description }, { d: revAfterDesc }, [['d', '']]) : '';
+  if (descDiff) log('item', req.params.id, 'Beschreibung geändert', `rev${rev.rev}: ${descDiff.replace(/^: /, '')}`);
+  // Übrige Felder: nur was sich geändert hat, mit alt → neu
+  logChanges('item', before.id, before, after, rev ? ITEM_HIST : [...ITEM_HIST, ['description', 'Beschreibung']]);
   res.json(after);
 });
 
@@ -2536,7 +2552,9 @@ app.post('/api/items/:id/link-variant', (req, res) => {
     groupId = maxRow.next;
     run('UPDATE items SET variant_group_id=? WHERE id IN (?,?)', [groupId, a.id, b.id]);
   }
-  log('item', a.id, 'Variante verknüpft', 'mit Item ' + b.id + ' (Gruppe ' + groupId + ')');
+  const bNum = get('SELECT item_number FROM items WHERE id=?', [b.id])?.item_number || '#' + b.id;
+  log('item', a.id, 'Variante verknüpft', 'mit ' + bNum);
+  log('item', b.id, 'Variante verknüpft', 'mit ' + (get('SELECT item_number FROM items WHERE id=?', [a.id])?.item_number || '#' + a.id));
   res.json({ ok: true, group_id: groupId });
 });
 
@@ -2544,7 +2562,8 @@ app.delete('/api/items/:id/variant-group', (req, res) => {
   const item = get('SELECT id,variant_group_id FROM items WHERE id=?', [req.params.id]);
   if (!item || !item.variant_group_id) return res.status(400).json({ error: 'Item ist in keiner Variantengruppe' });
   run('UPDATE items SET variant_group_id=NULL WHERE id=?', [item.id]);
-  log('item', item.id, 'Variante entfernt', 'aus Gruppe ' + item.variant_group_id);
+  const rest = all('SELECT item_number FROM items WHERE variant_group_id=? ORDER BY item_number', [item.variant_group_id]).map(r => r.item_number);
+  log('item', item.id, 'Variante entfernt', rest.length ? 'nicht mehr verknüpft mit ' + rest.join(', ') : 'aus der Variantengruppe');
   res.json({ ok: true });
 });
 
@@ -3114,7 +3133,7 @@ app.delete('/api/revisions/:id', (req, res) => {
   }
   run('UPDATE delivery_items SET revision_id=NULL, rev_fixed=NULL WHERE revision_id=?', [rev.id]);
   run('DELETE FROM revisions WHERE id=?', [rev.id]);
-  log('revision', rev.id, 'Gelöscht', `DFT rev${rev.rev} von Item ${rev.item_id}`);
+  log('revision', rev.id, 'Gelöscht', `Entwurf rev${rev.rev} von ${get('SELECT item_number FROM items WHERE id=?', [rev.item_id])?.item_number || 'Item #' + rev.item_id}`);
   // If the previous revision is ECO, revert it back to REL
   const ecoRev = get("SELECT id FROM revisions WHERE item_id=? AND status='ECO' ORDER BY CAST(rev AS INTEGER) DESC LIMIT 1", [rev.item_id]);
   if (ecoRev) {
@@ -3131,6 +3150,7 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
   const rev = get('SELECT * FROM revisions WHERE id=?', [req.params.id]);
   if (!rev) return res.status(404).json({ error: 'Nicht gefunden' });
   if (rejectIfLocked(res, rev.id)) return;
+  const psBefore = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]);
   run(`INSERT INTO print_settings (revision_id,material,color,layer_height,infill,infill_pattern,supports,nozzle,print_temp,bed_temp,printer,notes,printer_cost_hr,filament_price_kg,filament_weight_total,part_weight,print_duration,raw_material_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(revision_id) DO UPDATE SET
@@ -3146,8 +3166,9 @@ app.put('/api/revisions/:id/print-settings', (req, res) => {
      nozzle ?? null, print_temp ?? null, bed_temp ?? null, printer ?? null, notes ?? null,
      printer_cost_hr||null, filament_price_kg||null, filament_weight_total||null, part_weight||null, print_duration||null,
      raw_material_id||null]);
-  log('revision', rev.id, 'Druckparameter gespeichert', [material, printer].filter(Boolean).join(', '));
-  res.json(get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]));
+  const psAfter = get('SELECT * FROM print_settings WHERE revision_id=?', [rev.id]);
+  logChanges('revision', rev.id, psBefore || {}, psAfter, PRINT_HIST, 'Druckparameter geändert');   // rev steht als Chip davor
+  res.json(psAfter);
 });
 
 // ==============================================================
@@ -4736,6 +4757,8 @@ app.put('/api/ecrs/:id', (req, res) => {
   if (e.status !== 'OPEN') return res.status(400).json({ error: 'Nur offene Änderungsanträge lassen sich bearbeiten' });
   const f = _ecrFields(req, res);
   if (!f) return;
+  const itemNo = id => get('SELECT item_number FROM items WHERE id=?', [id])?.item_number || '#' + id;
+  const oldItems = all('SELECT item_id, note FROM ecr_items WHERE ecr_id=?', [e.id]);
   tx(() => {
     run('UPDATE ecrs SET title=?, reason=?, description=? WHERE id=?', [f.title, f.reason, f.description, e.id]);
     // Der Stand beim Anlegen bleibt für Teile, die schon dabei waren
@@ -4745,7 +4768,17 @@ app.put('/api/ecrs/:id', (req, res) => {
       run('INSERT INTO ecr_items (ecr_id,item_id,note,rev_before) VALUES (?,?,?,?)', [e.id, x.item_id, x.note,
         before.has(x.item_id) ? before.get(x.item_id) : (getLatestRevision(x.item_id)?.id ?? null)]);
     }
-    log('ecr', e.id, 'Geändert', `${e.number} – ${f.title}`);
+    // Was sich geändert hat: Felder mit alt → neu, Teile dazu/weg, Notizen je Teil
+    const oldBy = new Map(oldItems.map(x => [x.item_id, x.note || '']));
+    const newIds = new Set(f.items.map(x => x.item_id));
+    const added = f.items.filter(x => !oldBy.has(x.item_id)).map(x => itemNo(x.item_id));
+    const removed = oldItems.filter(x => !newIds.has(x.item_id)).map(x => itemNo(x.item_id));
+    const notes = f.items.filter(x => oldBy.has(x.item_id) && (oldBy.get(x.item_id) || '') !== (x.note || ''))
+      .map(x => `Notiz ${itemNo(x.item_id)}: ${histDiff({ n: oldBy.get(x.item_id) }, { n: x.note }, [['n', '']]).replace(/^: /, '')}`);
+    const parts = [histDiff(e, { ...e, ...f }, ECR_HIST),
+      added.length ? 'Teile dazu: ' + added.join(', ') : '', removed.length ? 'Teile entfernt: ' + removed.join(', ') : '', ...notes]
+      .filter(Boolean);
+    if (parts.length) log('ecr', e.id, 'Geändert', `${e.number}: ${parts.join(' · ')}`);
   });
   res.json(_ecrFull(e.id));
 });

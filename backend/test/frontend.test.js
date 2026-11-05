@@ -768,7 +768,10 @@ test('Historie: Name der Person steht dabei, escaped', () => {
   assert.match(_clUser({ user_name: '<i>x</i>' }), /&lt;i&gt;x&lt;\/i&gt;/);
   const item = demoItem({ changelog: [{ action: 'Erstellt', details: '', user_name: 'Anna', created_at: '2026-10-16 10:00:00' }] });
   global.state.item = item;
-  assert.match(renderItemSheet(item, 31), /Erstellt <span class="cl-user">Anna<\/span>/, 'auch unter „Letzte Änderung“');
+  assert.match(_clTime({ user_name: '<i>x</i>', created_at: '2026-10-16 10:00:00' }), /&lt;i&gt;x&lt;\/i&gt;/);
+  // Rechts unter Datum und Uhrzeit, nicht hinter der Aktion
+  assert.match(renderItemSheet(item, 31), /class="cl-time">[^<]*<div><span class="cl-user">Anna<\/span><\/div><\/div>/, 'auch unter „Letzte Änderung“');
+  assert.match(renderChangelogList(item.changelog), /Erstellt<\/div>.*class="cl-time">[^<]*<div><span class="cl-user">Anna/s);
 });
 
 test('Benutzer verwalten: nur Admins, der einzige Admin bleibt Admin', () => {

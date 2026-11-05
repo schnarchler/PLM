@@ -920,12 +920,12 @@ function openDescModal(itemId) {
   const rev = _selRev(itemId);
   if (!rev) return;
   _showDynModal(`<div class="modal" style="max-width:520px">
-    <div class="modal-head"><div class="modal-title">Beschreibung: ${esc(item.item_number)} · rev${esc(rev.rev)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-head"><div class="modal-title">Beschreibung: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
       <div class="form-row">
         <div class="fg"><textarea class="ft" id="dm-desc" rows="6">${esc(revDesc(item, rev))}</textarea></div>
       </div>
-      <div style="font-size:13px;color:var(--t3)">Gilt nur für rev${esc(rev.rev)} und braucht keine neue Revision. Die anderen Revisionen behalten ihren Text; die Änderung steht in der Historie.</div>
+      <div style="font-size:13px;color:var(--t3)">Gilt nur für die geöffnete Revision und braucht keine neue. Die anderen Revisionen behalten ihren Text; die Änderung steht in der Historie.</div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
@@ -973,8 +973,6 @@ async function openEditItemModal(id) {
   // Beschreibung und Gewicht der gewählten Revision
   const selRev = (item.revisions || []).find(r => r.id === state.activeRevId) || (item.revisions || [])[0];
   set('eim-desc', revDesc(item, selRev));
-  const dl = document.getElementById('eim-desc-label');
-  if (dl) dl.textContent = 'Beschreibung' + (selRev ? ' · rev' + selRev.rev : '');
   set('eim-weight', revWeight(item, selRev) ?? '');
   set('eim-rev-id', selRev?.id || '');
   const wl = document.getElementById('eim-weight-label');

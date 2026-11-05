@@ -356,7 +356,7 @@ test('Beschreibung gehört zur Revision: Änderung in rev2 lässt rev1, wie sie 
   assert.strictEqual(it.revisions.find(r => r.id === r1.id).item_description, 'Erster Entwurf');
   assert.strictEqual(it.revisions.find(r => r.id === r2.id).item_description, 'Mit Kabelkanal');
   assert.strictEqual(it.description, 'Mit Kabelkanal');
-  assert.ok(it.changelog.some(c => c.action === 'Beschreibung geändert' && c.details === 'rev2: Mit Kabelkanal'));
+  assert.ok(it.changelog.some(c => c.action === 'Beschreibung geändert' && c.details === 'rev2: Erster Entwurf → Mit Kabelkanal'));
 
   // Auch eine freigegebene/ältere Revision lässt sich beschreiben — ohne die aktive zu ändern
   await api(`/api/items/${teil.id}`, 'PUT', { ...base, description: 'Mit Kabelkanal', rev_description: 'Erste Form, eckig', revision_id: r1.id });
@@ -370,4 +370,35 @@ test('Beschreibung gehört zur Revision: Änderung in rev2 lässt rev1, wie sie 
   it = await item(teil.id);
   assert.strictEqual(it.revisions.find(r => r.id === r1.id).item_description, 'Erste Form, eckig');
   assert.strictEqual(it.revisions.find(r => r.id === r2.id).item_description, 'Mit Kabelkanal');
+});
+
+test('Historie: Änderungen mit alt → neu statt nur „Geändert"', async () => {
+  const proj = await api('/api/projects', 'POST', { name: 'Halter' });
+  await api(`/api/projects/${proj.id}`, 'PUT', { name: 'Halter neu', description: '', customer: 'Müller', color: '' });
+  await api(`/api/projects/${proj.id}`, 'PUT', { name: 'Halter neu', description: '', customer: 'Müller', color: '' });
+  const pLog = (await api(`/api/projects/${proj.id}`)).changelog.filter(c => c.action === 'Geändert');
+  assert.deepStrictEqual(pLog.map(c => c.details), ['Name: Halter → Halter neu · Kunde: — → Müller'], 'unverändert gespeichert: kein Eintrag');
+
+  const teil = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Clip', item_type: 'prt' });
+  const base = { name: 'Clip', description: '', source_url: null, classification: null };
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, name: 'Clip lang', notes: 'Kante brechen' });
+  await api(`/api/items/${teil.id}`, 'PUT', { ...base, name: 'Clip lang' });
+  let it = await item(teil.id);
+  assert.deepStrictEqual(it.changelog.filter(c => c.action === 'Geändert').map(c => c.details),
+    ['Name: Clip → Clip lang · Notizen: — → Kante brechen']);
+
+  const r1 = it.revisions[0];
+  await api(`/api/revisions/${r1.id}/print-settings`, 'PUT', { material: 'PLA', infill: 15 });
+  await api(`/api/revisions/${r1.id}/print-settings`, 'PUT', { material: 'PETG', infill: 15 });
+  it = await item(teil.id);
+  assert.deepStrictEqual(it.changelog.filter(c => c.action === 'Druckparameter geändert').map(c => c.details),
+    ['Material: PLA → PETG', 'Material: — → PLA · Füllung (%): — → 15']);
+
+  const zweit = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Deckel', item_type: 'prt' });
+  const e = await api('/api/ecrs', 'POST', { title: 'Clip stärker', items: [{ item_id: teil.id }] });
+  await api(`/api/ecrs/${e.id}`, 'PUT', { title: 'Clip dicker', reason: '', description: '',
+    items: [{ item_id: teil.id, note: '2 mm' }, { item_id: zweit.id }] });
+  const eLog = (await api('/api/changelog')).find(c => c.entity_type === 'ecr' && c.entity_id === e.id && c.action === 'Geändert');
+  assert.strictEqual(eLog.details,
+    `${e.number}: Titel: Clip stärker → Clip dicker · Teile dazu: ${zweit.item_number} · Notiz ${teil.item_number}: — → 2 mm`);
 });

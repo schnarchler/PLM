@@ -256,6 +256,8 @@ body {
   min-width: 0;
 }
 .panel-title strong { color: var(--t1); font-weight: 600; }
+/* Detailansicht: Titel füllt die Kopfzeile, damit Knöpfe darin rechtsbündig stehen können */
+#dp-title { flex: 1; }
 .ph-spacer { flex: 1; }
 .panel-body { flex: 1; overflow-y: auto; padding: 16px 18px 28px; }
 
@@ -655,7 +657,8 @@ tr.row-active { outline: 1px solid rgba(157,180,255,.30); outline-offset: -1px; 
 .cl-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); flex-shrink: 0; margin-top: 5px; }
 .cl-action { font-size: 13px; font-weight: 500; }
 .cl-detail { font-size: 13px; color: var(--t3); margin-top: 3px; line-height: 1.5; }
-.cl-time { font-family: var(--mono); font-size: 13px; color: var(--t4); margin-left: auto; white-space: nowrap; }
+.cl-time { font-family: var(--mono); font-size: 13px; color: var(--t4); margin-left: auto; white-space: nowrap; text-align: right; }
+.cl-time .cl-user { margin: 4px 0 0; font-family: var(--sans); }
 
 /* ── WORKFLOW BUTTONS ── */
 .wf-strip {
