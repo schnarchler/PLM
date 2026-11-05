@@ -1098,6 +1098,7 @@ test('Datenblatt: Eigenschaften der Klassifizierung, fehlende Pflicht und Hinwei
   const eig = h.slice(h.indexOf('>Eigenschaften'), h.indexOf('>Notizen<'));
   assert.match(eig, /Werkstoff<\/span><span class="ps-kv-val"><span style="color:var\(--amber\)"[^>]*>fehlt \(Pflicht\)/);
   assert.match(eig, /Oberfläche<\/span><span class="ps-kv-val">&lt;eloxiert&gt;</, 'escaped');
+  assert.match(eig, /class="ps-group"><div class="ps-group-title">Bauteil<\/div>/, 'Block mit dem Namen der Klassifizierung');
   assert.match(h, /Für die Freigabe von rev1 fehlt noch:<\/span> CAD-Datei, Werkstoff/);
   assert.ok(!h.includes('/thumb'), 'Vorschaubild nur beim Überfahren der Listen, nicht im Datenblatt');
   global._classFields = {};

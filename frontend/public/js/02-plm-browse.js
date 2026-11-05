@@ -535,7 +535,8 @@ function renderItemDetail(item, activeRevId) {
     `<span style="font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
     // Kurzcode steht im Datenblatt, mit Revision und Kopierknopf
-    + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(item.name)}">${esc(item.name)}</strong>`
+    // Der Name steht gross über den Tabs (dp-subtitle); der Marker hält ihn sichtbar
+    + `<span data-item-title hidden></span>`
     // Knöpfe rechtsbündig, der Name nimmt den Platz dazwischen
     + `<span style="margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0">`
     + (editable ? `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openEditItemModal(${item.id})" title="Bearbeiten">✏</button>` : '')
@@ -543,6 +544,8 @@ function renderItemDetail(item, activeRevId) {
     + `<button class="btn btn-ghost btn-sm" style="font-size:13px;padding:2px 7px;flex-shrink:0" onclick="openItemCompareSearch(${item.id})" title="Mit anderem Item vergleichen">⇄</button>`
     + `</span>`;
   // Klassifizierung nur im Datenblatt unter „Allgemein“, Mindmap über den Knopf im Datenblatt
+  const sub = document.getElementById('dp-subtitle');
+  if (sub) { sub.textContent = item.name; sub.title = item.name; sub.hidden = false; }
 
   const tabs = `
     <button class="tab active" data-pane="it-sheet" onclick="switchTab(this,'it-sheet');_initVisibleStl()">Datenblatt</button>
@@ -999,9 +1002,10 @@ function renderItemSheet(item, activeRevId) {
   // Eigenschaften der Klassifizierung (Einstellungen → PLM)
   const fields = classFieldsOf(item.classification);
   const attrs = item.attributes || {};
-  const attrBlock = fields.length ? `<div class="sep-label">Eigenschaften <span style="color:var(--t3);text-transform:none;letter-spacing:0;font-family:var(--sans)">${esc(item.classification)}</span></div>
-    ${_sheetKv(fields.map(f => [f.label, attrs[f.id] ? esc(attrs[f.id])
-      : f.required ? '<span style="color:var(--amber)" title="Pflicht für die Freigabe">fehlt (Pflicht)</span>' : '', true]))}` : '';
+  // Im selben Block-Stil wie Allgemein und Druckparameter; der Block trägt den Namen der Klassifizierung
+  const attrBlock = fields.length ? `<div class="sep-label">Eigenschaften</div>
+    ${_sheetGroups([[item.classification, fields.map(f => [f.label, attrs[f.id] ? esc(attrs[f.id])
+      : f.required ? '<span style="color:var(--amber)" title="Pflicht für die Freigabe">fehlt (Pflicht)</span>' : '', true])]])}` : '';
 
   return `<div id="it-sheet">
     ${ecrBanner}

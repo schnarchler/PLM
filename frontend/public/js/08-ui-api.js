@@ -2,6 +2,14 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── DETAIL PANEL ──────────────────────────────────────────────
+// Der grosse Item-Name über den Tabs gehört nur zur Item-Ansicht: Setzt eine
+// andere Ansicht (Auftrag, Kunde …) den Titel, verschwindet er.
+document.addEventListener('DOMContentLoaded', () => {
+  const title = document.getElementById('dp-title'), sub = document.getElementById('dp-subtitle');
+  if (!title || !sub) return;
+  new MutationObserver(() => { if (!title.querySelector('[data-item-title]')) sub.hidden = true; })
+    .observe(title, { childList: true });
+});
 function showDetail() { document.getElementById('detail-panel').classList.remove('hidden'); }
 function closeDetail() { document.getElementById('detail-panel').classList.add('hidden'); }
 // Breite des Detail-Panels am linken Rand ziehen; bleibt pro Browser gespeichert.
