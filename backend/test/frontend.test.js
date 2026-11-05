@@ -180,10 +180,18 @@ test('Datenblatt: leeres Teil zeigt Hinweise statt leerer Felder', () => {
   global.state.item = item;
   const h = renderItemSheet(item, null);
   for (const hint of ['Keine Beschreibung hinterlegt', 'Keine Quelle hinterlegt',
-                      'Keine Revision vorhanden', 'Noch keine Dateien']) {
+                      'keine Revision', 'Noch keine Dateien']) {
     assert.match(h, new RegExp(hint));
   }
   assert.ok(!h.includes('undefined') && !h.includes('NaN'));
+});
+
+test('Datenblatt: Revision und Status oben beim Kurzcode, kein Abschnitt „Aktive Revision“', () => {
+  const item = demoItem({ short_code: 'MM3' });
+  global.state.item = item;
+  const h = renderItemSheet(item, 31);
+  assert.match(h, /MM3-2<\/span>[\s\S]*?<span class="status st-DFT"[^>]*>rev2 · DFT<\/span>/);
+  assert.ok(!h.includes('Aktive Revision') && !h.includes('Passung korrigiert'), 'Revisionstext steht im Tab Revisionen');
 });
 
 test('Datenblatt: freigegebene Teile sind nicht bearbeitbar', () => {

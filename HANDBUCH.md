@@ -322,7 +322,8 @@ Die Nummern der ERP-Belege stehen unter [26. Nummernkreise](#26-nummernkreise).
 - Freigabe-Workflow (siehe 8)
 - **Revision löschen** — nur für eine Revision im Entwurf, die nicht geliefert ist
 
-**Schaltflächen im Titel:**
+**Schaltflächen im Titel** (rechts):
+- **✏** — Name, Beschreibung, Quelle, Klassifizierung und Eigenschaften bearbeiten (solange keine Revision freigegeben ist)
 - **↪** — Item in ein anderes Projekt verschieben
 - **⇄** — Dieses Item mit einem anderen Item vergleichen
 
@@ -338,7 +339,9 @@ Der Tab **Datenblatt** zeigt Beschreibung, Quelle, Kennzahlen (Gewicht, Preis), 
 eine Kurzfassung der Stückliste, den Lagerbestand und die letzte Änderung.
 
 - **QR-Code** der Item-Nummer oben rechts — ein Klick zeigt ihn gross
-- **Kurzcode** mit Revision, z. B. `XHJ-1` — **⧉** kopiert ihn (siehe 6.8)
+- **Kurzcode** mit Revision, z. B. `XHJ-1` — **⧉** kopiert ihn (siehe 6.8). Daneben die gewählte
+  Revision mit Status (z. B. `rev1 · DFT`) und, falls ausgecheckt, der Checkout-Ordner.
+  Revisionstext, ECO-Grund und Freigabe stehen im Tab **Revisionen**.
 - **Im Slicer öffnen** — öffnet das Modell der Revision im Slicer (siehe 20, 3D-Druck)
 - **Notizen** — freies Textfeld für alles, was nicht in die Beschreibung gehört (Bezugsquellen,
   Erfahrungen, offene Punkte). Wird beim Verlassen des Feldes gespeichert.

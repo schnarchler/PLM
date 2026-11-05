@@ -534,7 +534,7 @@ function renderItemDetail(item, activeRevId) {
   document.getElementById('dp-title').innerHTML =
     `<span style="font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 6px;border-radius:3px;background:${typeBg};color:${typeColor};flex-shrink:0">${typeLabel}</span>`
     + `<span style="font-family:var(--mono);font-size:13px;color:${typeColor};flex-shrink:0">${item.item_number}</span>`
-    + (item.short_code && !isDOC ? `<span class="chip" style="flex-shrink:0" title="Kurzcode zum Aufdrucken — Datenblatt">${esc(item.short_code)}</span>` : '')
+    // Kurzcode steht im Datenblatt, mit Revision und Kopierknopf
     + `<strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0" title="${esc(item.name)}">${esc(item.name)}</strong>`
     // Knöpfe rechtsbündig, der Name nimmt den Platz dazwischen
     + `<span style="margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0">`
@@ -737,9 +737,6 @@ function showItemQr() {
 
 function renderItemSheet(item, activeRevId) {
   const rev = (item.revisions || []).find(r => r.id === activeRevId) || (item.revisions || [])[0];
-  // Kurzcode wie im Panel-Titel — die Langform kollidiert mit frei
-  // benannten Klassifizierungen ("Bauteil" als Klassifizierung und als Typ).
-  const typeCode = item.item_type === 'asm' ? 'ASM' : item.item_type === 'doc' ? 'DOC' : 'PRT';
   const editable = itemIsEditable(item);
   const ergaenzen = feld => editable
     ? ` <span style="color:var(--blue);cursor:pointer;text-decoration:underline" onclick="openEditItemModal(${item.id})">Jetzt ergänzen</span>`
@@ -747,9 +744,10 @@ function renderItemSheet(item, activeRevId) {
 
   // -- Kopfzeile: Checkout-Status und QR-Code
   const checkout = (state.checkouts || []).find(c => c.item_id === item.id);
+  // Eingecheckt ist der Normalfall — der Knopf oben zeigt ihn schon
   const coBadge = checkout
     ? `<span class="status st-REV" style="background:var(--teal-soft);color:var(--teal)">ausgecheckt</span>`
-    : `<span class="chip">eingecheckt</span>`;
+    : '';
 
   // -- Beschreibung der gewählten Revision. In jeder Revision änderbar (✏),
   // auch wenn das Teil sonst gesperrt ist — die anderen Revisionen bleiben gleich.
@@ -810,7 +808,6 @@ function renderItemSheet(item, activeRevId) {
 
   // Erstellt nur mit Datum — mit Uhrzeit bräche die Zeile in der Spalte um
   const facts = _sheetKv([
-    ['Typ', typeCode],
     ['Klassifizierung', item.classification ? _classChip(item.classification, 12) : null, true],
     ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
     ['Gewicht', weightTxt, false, weightAfter],
@@ -820,25 +817,13 @@ function renderItemSheet(item, activeRevId) {
       btnEdit('openPriceModal', 'Verkaufspreis dieser Revision ändern (ohne neue Revision)') + bomPriceBtn],
     ['Entwicklungszeit', _fmtHours(item.dev_hours)],
     ['Erstellt', item.created_at ? fmtD(item.created_at) : null],
-    ['Revisionen', revCount ? String(revCount) : null],
-    ['Dateien', allDs.length ? allDs.length + ' · ' + fmtSize(dsBytes) : null],
   ]);
 
-  // -- Aktive Revision
-  let revBlock = '<div style="font-size:13px;color:var(--t3)">Keine Revision vorhanden.</div>';
-  if (rev) {
-    const rows = _sheetRows([
-      ['Beschreibung', rev.description],
-      ['ECO-Grund', rev.eco_reason],
-      ['Freigegeben', rev.released_at ? fmtDate(rev.released_at) + (rev.released_by ? ' · ' + rev.released_by : '') : null],
-      ['Angelegt', rev.created_at ? fmtDate(rev.created_at) : null],
-    ]);
-    revBlock = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span class="status st-${rev.status}">rev${rev.rev}</span>
-        <span style="font-size:13px;color:var(--t3)">${rev.status}</span>
-      </div>
-      ${rows || '<div style="font-size:13px;color:var(--t3)">Keine weiteren Angaben zu dieser Revision.</div>'}`;
-  }
+  // -- Gewählte Revision mit Status, oben neben Kurzcode und Checkout.
+  // Revisionstext, ECO-Grund und Freigabe stehen im Tab Revisionen.
+  const revBadge = rev
+    ? `<span class="status st-${rev.status}" title="${esc(PLM_ST_LABEL[rev.status] || rev.status)} — Details im Tab Revisionen">rev${esc(rev.rev)} · ${rev.status}</span>`
+    : '<span class="chip">keine Revision</span>';
 
   // -- Druckparameter der aktiven Revision
   let psBlock = '';
@@ -1005,6 +990,7 @@ function renderItemSheet(item, activeRevId) {
       <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
           ${codeBlock}
+          ${revBadge}
           ${coBadge}
           ${checkout ? `<span style="font-size:13px;color:var(--t3)">${esc(checkout.folder || '')}</span>` : ''}
         </div>
@@ -1012,7 +998,6 @@ function renderItemSheet(item, activeRevId) {
           ${slicerBtn}
           <button class="btn btn-ghost btn-sm" onclick="openItemMindmap(${item.id})">⌗ Mindmap</button>
           <button class="btn btn-ghost btn-sm" onclick="openDocTemplateModal(${item.id})" title="Datenblatt${item.item_type === 'asm' ? ', Stückliste' : ''} oder Prüfprotokoll">&#128196; Als PDF…</button>
-          ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openEditItemModal(${item.id})">✏ Bearbeiten</button>` : ''}
         </div>
       </div>
       ${qr ? `<div onclick="showItemQr()" title="QR-Code vergrössern" style="flex-shrink:0;background:#f4f6f8;padding:3px;border-radius:var(--r-sm);line-height:0;cursor:zoom-in">${qr}</div>` : ''}
@@ -1032,9 +1017,6 @@ function renderItemSheet(item, activeRevId) {
 
     <div class="sep-label">Notizen</div>
     ${notesBlock}
-
-    <div class="sep-label">Aktive Revision</div>
-    ${revBlock}
 
     ${psBlock}
     ${bomBlock}
