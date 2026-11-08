@@ -582,7 +582,7 @@ Einstellungen → PLM → **Vier-Augen-Prinzip: Freigabe durch eine zweite Perso
 
 ### Prüfung vor der Freigabe
 
-Unter **Einstellungen → PLM → Prüfung vor der Freigabe** wählbar, was eine Revision mitbringen muss: mindestens eine Datei, CAD-Datei, Zeichnung als PDF, Beschreibung, Klassifizierung, Gewicht (Parts). Standard: eine Datei und das Gewicht. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Fehlt etwas, steht im Datenblatt und in der Revision „Für die Freigabe fehlt noch: …“, und **✓ Freigeben** ist gesperrt.
+Unter **Einstellungen → PLM → Prüfung vor der Freigabe** wählbar, was eine Revision mitbringen muss: mindestens eine Datei (bei Baugruppen genügen stattdessen Positionen in der Stückliste), CAD-Datei, Zeichnung als PDF, Beschreibung, Klassifizierung, Gewicht (Parts). Standard: eine Datei und das Gewicht. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Fehlt etwas, steht im Datenblatt und in der Revision „Für die Freigabe fehlt noch: …“, und **✓ Freigeben** ist gesperrt.
 
 Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin**.
 

@@ -3019,7 +3019,10 @@ function startEco(rev, reason) {
 // Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung.
 // Dokumente brauchen keine CAD-Datei und kein Gewicht.
 const RELEASE_CHECKS = {
-  file:           { label: 'Datei',          ok: (item, rev) => !!get('SELECT 1 as y FROM datasets WHERE revision_id=? LIMIT 1', [rev.id]) },
+  // Baugruppe: Positionen in der Stückliste zählen gleich wie eine Datei
+  file:           { label: 'Datei',          ok: (item, rev) => !!get('SELECT 1 as y FROM datasets WHERE revision_id=? LIMIT 1', [rev.id])
+    || (item.item_type === 'asm' && !!(get('SELECT 1 as y FROM bom WHERE parent_rev_id=? LIMIT 1', [rev.id])
+      || get('SELECT 1 as y FROM bom_std_parts WHERE parent_rev_id=? LIMIT 1', [rev.id]))) },
   cad:            { label: 'CAD-Datei',      ok: (item, rev) => item.item_type === 'doc' || !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='CAD' LIMIT 1", [rev.id]) },
   drawing:        { label: 'Zeichnung (PDF)', ok: (item, rev) => !!get("SELECT 1 as y FROM datasets WHERE revision_id=? AND ds_type='PDF' LIMIT 1", [rev.id]) },
   description:    { label: 'Beschreibung',   ok: (item, rev) => !!String(rev.item_description ?? item.description ?? '').trim() },
@@ -3030,7 +3033,8 @@ function releaseMissing(item, rev) {
   const on = getSetting('release_checks', '').split(',').map(x => x.trim()).filter(k => RELEASE_CHECKS[k]);
   const attrs = parseAttrs(item.attributes);
   return [
-    ...on.filter(k => !RELEASE_CHECKS[k].ok(item, rev)).map(k => RELEASE_CHECKS[k].label),
+    ...on.filter(k => !RELEASE_CHECKS[k].ok(item, rev))
+      .map(k => k === 'file' && item.item_type === 'asm' ? 'Datei oder Stückliste' : RELEASE_CHECKS[k].label),
     ...classFields(item.classification).filter(f => f.required && !attrs[f.id]).map(f => f.label),
   ];
 }

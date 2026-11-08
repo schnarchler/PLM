@@ -924,6 +924,13 @@ test('Pflicht für die Freigabe: Standard eine Datei und das Gewicht', async () 
     // Dokumente brauchen kein Gewicht
     const doc = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Anleitung', item_type: 'doc' });
     assert.deepStrictEqual((await api(`/api/items/${doc.id}`)).revisions[0].release_missing, ['Datei']);
+
+    // Baugruppe: Positionen in der Stückliste zählen gleich wie eine Datei
+    const bg = await api(`/api/projects/${proj.id}/items`, 'POST', { name: 'Halterung', item_type: 'asm' });
+    const bgRev = (await api(`/api/items/${bg.id}`)).revisions[0].id;
+    assert.deepStrictEqual((await api(`/api/items/${bg.id}`)).revisions[0].release_missing, ['Datei oder Stückliste'], 'leer: beides fehlt');
+    await api(`/api/revisions/${bgRev}/bom`, 'POST', { child_item_id: teil.id, quantity: 2 });
+    assert.deepStrictEqual((await api(`/api/items/${bg.id}`)).revisions[0].release_missing, [], 'Stückliste reicht ohne Datei');
   } finally {
     await api('/api/settings', 'PUT', { release_checks: '' });
   }
