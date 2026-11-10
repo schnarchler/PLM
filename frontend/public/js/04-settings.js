@@ -356,7 +356,9 @@ async function renderSettings() {
         <div id="st-cad-box" style="font-size:13px;color:var(--t3)">Prüft das CAD-Programm…</div>
 
         <div class="sep-label" style="margin-top:20px">Checkout-Verzeichnis</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">Ordner, in den ausgecheckte CAD-Dateien kopiert werden. Leer lassen für Standard: <code style="font-family:var(--mono)">[Datenverzeichnis]/checkout</code></div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:8px;line-height:1.55">Ordner, in den ausgecheckte CAD-Dateien kopiert werden.
+          Gilt nur für diesen PC (steht in <code style="font-family:var(--mono)">plm.config</code>) — liegen die Daten auf einem Netzlaufwerk, hat jeder PC seinen eigenen lokalen Ordner.
+          Leer lassen für Standard: <code style="font-family:var(--mono)">[Datenverzeichnis]/checkout</code></div>
         <div class="form-row">
           <div class="fg">
             <label class="fl">Checkout-Pfad</label>
@@ -367,6 +369,7 @@ async function renderSettings() {
           <button class="btn btn-ghost btn-sm" id="st-checkout-save" onclick="saveCheckoutDir()" disabled>Pfad speichern</button>
           <span id="st-checkout-msg" style="font-size:13px;color:var(--t3)"></span>
         </div>
+        <div id="st-checkout-note" style="font-size:12px;color:var(--t4);margin-top:6px;line-height:1.5"></div>
 
         <div class="sep-label" style="margin-top:24px">Datensicherung</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
@@ -520,18 +523,29 @@ async function renderSettings() {
     document.getElementById('st-data-dir').value = d.data_dir;
     if (!d.configured) _showFirstRunModal(d.data_dir, d.config_file);
   });
-  // Feld und Knopf erst nach dem Laden freigeben: sonst speichert ein früher
-  // Klick (oder einer nach einem Ladefehler) einen leeren Pfad, und PLM sucht
-  // die Checkouts plötzlich im Standardordner
-  api('/api/settings').then(s => {
+  _loadCheckoutDir();
+}
+
+// Checkout-Verzeichnis: steht in plm.config, gilt also nur für diesen PC.
+// Feld und Knopf erst nach dem Laden freigeben: sonst speichert ein früher
+// Klick (oder einer nach einem Ladefehler) einen leeren Pfad, und PLM sucht
+// die Checkouts plötzlich im Standardordner. Ändern nur am PC selbst.
+function _loadCheckoutDir() {
+  return api('/api/checkout-dir').then(c => {
     const el = document.getElementById('st-checkout-dir');
     if (!el) return;
-    el.value = s.checkout_dir || '';
-    el.dataset.loaded = el.value;
-    el.placeholder = 'z.B. /home/user/CAD-Checkout';
-    el.disabled = false;
+    el.value = c.dir;
+    el.dataset.loaded = c.dir;
+    el.placeholder = c.default;
+    el.disabled = !c.local;
     const btn = document.getElementById('st-checkout-save');
-    if (btn) btn.disabled = false;
+    if (btn) btn.disabled = !c.local;
+    const note = document.getElementById('st-checkout-note');
+    if (note) note.innerHTML = [
+      c.legacy_path ? `<span style="color:var(--amber)">Früher für alle PCs eingetragen:
+        <code style="font-family:var(--mono)">${esc(c.legacy_path)}</code> — auf diesem PC nicht vorhanden.</span>` : '',
+      c.local ? '' : 'Ändern geht nur am PC, auf dem das PLM läuft.',
+    ].filter(Boolean).join('<br>');
   }).catch(() => {});
 }
 
@@ -539,7 +553,8 @@ async function renderSettings() {
 // Liste aus backups/ im Datenverzeichnis. Wiederherstellen tauscht die
 // Datenbank im laufenden Betrieb; danach lädt die Oberfläche neu, damit nichts
 // Veraltetes stehen bleibt.
-const BACKUP_KIND_LABEL = { auto: 'täglich', manuell: 'von Hand', 'vor-wiederherstellung': 'vor Wiederherstellung', sonstige: 'Datei' };
+const BACKUP_KIND_LABEL = { auto: 'täglich', manuell: 'von Hand', 'vor-wiederherstellung': 'vor Wiederherstellung',
+  'nicht-gespeichert': 'nicht gespeichert', sonstige: 'Datei' };
 const BACKUP_STAT_LABEL = [['projects', 'Projekte'], ['items', 'Items'], ['revisions', 'Revisionen'], ['datasets', 'Dateien'],
   ['orders', 'Aufträge'], ['deliveries', 'Produktionsaufträge'], ['customers', 'Kunden']];
 let _backupData = null;
@@ -739,12 +754,11 @@ async function saveCheckoutDir() {
   if (changed) await loadCheckouts();
   if (changed && state.checkouts.length && !confirm(`${state.checkouts.length} Checkout(s) liegen im bisherigen Verzeichnis.\n\n`
     + 'Nach dem Wechsel zeigt PLM sie nicht mehr an, bis der alte Pfad wieder eingestellt ist. Trotzdem wechseln?')) return;
-  await api('/api/settings', 'PUT', { checkout_dir: val });
-  el.dataset.loaded = val;
+  await api('/api/checkout-dir', 'PUT', { dir: val });
+  _loadCheckoutDir();
   loadCheckouts();
   const msg = document.getElementById('st-checkout-msg');
   if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
-  state.settings = await api('/api/settings');
 }
 
 // Firmenlogo für Angebote, Rechnungen und Lieferscheine. Wird sofort

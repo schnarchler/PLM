@@ -108,6 +108,39 @@ ihn sich — die Adresse steht dann in der Adresszeile des Browsers auf dem PLM-
 
 **Server beenden:** Oben rechts → **■ Beenden**. Bei aktiven Checkouts wird gefragt ob zuerst eingecheckt werden soll. Danach ist PLM für alle im Netz geschlossen.
 
+### Daten auf einem Netzlaufwerk (mehrere PCs)
+
+Statt von anderen PCs per Browser zuzugreifen, können die Daten auch auf einem Netzlaufwerk
+liegen (NAS, Freigabe, unterwegs über VPN) und PLM auf jedem PC selbst laufen. Dann checkt
+jeder PC in seinen eigenen, lokalen Ordner aus — das CAD arbeitet mit lokalen Dateien.
+
+1. Auf jedem PC in `plm.config` den Datenordner eintragen, so wie er auf diesem PC heisst,
+   z. B. `data_dir=Z:\PLM-Daten` oder `data_dir=/mnt/nas/plm-daten`.
+2. Auf jedem PC einmal das **Checkout-Verzeichnis** setzen (siehe 9). Es gilt nur für diesen PC.
+
+Mit den Daten arbeitet immer nur **ein** PLM zur Zeit — jedes hält die Datenbank im Speicher und
+schreibt sie als Ganzes zurück, ein zweites würde Änderungen überschreiben. Welches PLM die Daten
+gerade hat, steht in `plm.lock` im Datenordner:
+
+- **Start, während PLM auf einem anderen PC noch läuft:** Im Browser erscheint **Die Daten sind in
+  Benutzung** mit dem Namen des PCs. **Übernehmen**, wenn dort niemand mehr arbeitet — oder
+  **PLM hier beenden**.
+- **Am anderen PC** erscheint bei der nächsten Aktion **PLM arbeitet jetzt woanders**; dort wird
+  nichts mehr gespeichert. **Hier weiterarbeiten** lädt den aktuellen Stand und holt die Daten
+  zurück — PLM muss dafür nicht neu gestartet werden.
+- **PC ausgeschaltet oder im Ruhezustand, ohne PLM zu beenden:** Nach 10 Minuten ohne Lebenszeichen
+  gilt die Sperre als verwaist; ein Start auf einem anderen PC übernimmt dann ohne Rückfrage.
+- **Ausgecheckte Dateien** liegen auf dem PC, auf dem ausgecheckt wurde. Vor dem Wechsel einchecken,
+  sonst arbeitet der andere PC mit dem alten Stand.
+
+Ändert etwas `plm.db` an PLM vorbei (z. B. ein Sync-Programm), überschreibt PLM die Datei nicht:
+Es meldet **Daten von aussen geändert** und speichert nichts mehr. Was noch nicht gespeichert war,
+liegt als Sicherung „nicht gespeichert“ vor (siehe 21).
+
+> **Netzlaufwerk statt Sync-Ordner.** Proton Drive, OneDrive & Co. gleichen mit Verzögerung ab —
+> die Sperre kommt dann womöglich zu spät an. Wer trotzdem einen Sync-Ordner nutzt: PLM am alten
+> PC beenden und mit dem Start am anderen warten, bis alles abgeglichen ist.
+
 ---
 
 ## 3. Erste Schritte
@@ -127,7 +160,7 @@ Funktionen. Details stehen jeweils im verlinkten Kapitel.
 4. **Personen:** Einstellungen → **Benutzer** → eigenen Namen eintragen. Arbeiten mehrere Personen
    mit PLM, jede Person anlegen und eine Rolle geben (siehe 20, Benutzer).
 5. **Checkout-Verzeichnis** (falls mit CAD gearbeitet wird): Einstellungen → **Daten** →
-   **Checkout-Verzeichnis** → **Pfad speichern** (siehe 9).
+   **Checkout-Verzeichnis** → **Pfad speichern** (siehe 9). Gilt nur für diesen PC.
 6. **Freigabe-Workflow wählen:** Einstellungen → **PLM** → **Mit Freigabe** (Standard) oder
    **Ohne Freigabe** (siehe 8).
 
@@ -606,7 +639,9 @@ bearbeiten kann. Check-in holt die Änderungen zurück ins PLM.
 ### Einmalig einrichten
 
 1. **Einstellungen → Daten → Checkout-Verzeichnis** → Ordner eintragen → **Pfad speichern**
-   (nur am PLM-PC möglich)
+   (nur am PLM-PC möglich). Der Pfad steht in `plm.config` (`checkout_dir=…`) und gilt nur für
+   diesen PC — liegen die Daten auf einem Netzlaufwerk, hat jeder PC seinen eigenen lokalen
+   Ordner (siehe 2). Leer heisst `[Datenverzeichnis]/checkout`.
 2. In Solid Edge: **Tools → Options → File Locations** → Parts, Assemblies, Drafts → denselben Ordner eintragen.
 
 ### Ablauf
@@ -1058,7 +1093,7 @@ Dazu:
 - **Datenpfad** — Datenbank und Dateispeicher. Ändert nur, wo PLM sucht — vorhandene Daten bleiben am alten Ort
 - **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
 - **CAD-Programm** — zeigt, ob das Programm für den 🖥 CAD-Button gefunden wird (**↻ Neu prüfen**). Der Pfad steht in `plm.config` (`cad_path=…`), nicht in der Oberfläche: Die Einstellungen sind ohne Anmeldung im ganzen Netz erreichbar
-- **Checkout-Verzeichnis** — Zielordner für Checkouts; nur am PC änderbar, auf dem das PLM läuft
+- **Checkout-Verzeichnis** — Zielordner für Checkouts; gilt nur für diesen PC (steht in `plm.config`) und ist nur dort änderbar. War früher ein Ordner eingetragen, den es auf diesem PC nicht gibt, steht er darunter als Hinweis
 - **Datensicherung** — Sicherungen anlegen, wiederherstellen und löschen (siehe 21)
 - **Export** — ZIP-Export aller Daten
 - **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte, auch **Als CSV**
@@ -1101,11 +1136,13 @@ Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Pas
 - **Wiederherstellen** bei einer Sicherung: der Dialog zeigt, was sich ändert (Projekte, Items, Aufträge … jetzt gegen Sicherung). Vorher sichert PLM den jetzigen Stand als „vor Wiederherstellung“ — du kannst also zurück. Danach lädt die Oberfläche neu.
 - **⬆ Aus Datei wiederherstellen…** nimmt eine Sicherung (`.db`) oder einen Gesamtexport (`.zip`).
 - Gelöschte Dateien bleiben 30 Tage im **Papierkorb**; eine wiederhergestellte Sicherung holt sie von dort zurück. Fehlt eine Datei, nennt der Abschlussdialog sie.
+- **nicht gespeichert:** Hat ein anderes PLM die Daten übernommen oder wurde `plm.db` von aussen geändert, bevor alles gespeichert war, legt PLM den Stand von hier als Sicherung ab, statt die Datei zu überschreiben (siehe 2, Daten auf einem Netzlaufwerk). Sie enthält die Änderungen von hier, aber nicht die des anderen — zum Nachschauen, nicht zum blinden Wiederherstellen.
 
 **Gesamtexport:** Einstellungen → Daten → Export → ZIP mit `plm.db` + `files/`, lässt sich über „Aus Datei wiederherstellen“ komplett zurückspielen.
 
-> Die Sicherungen liegen im Datenordner auf demselben PC. Gegen einen Festplattenschaden hilft
-> nur eine Kopie auf einem anderen Datenträger — dafür regelmässig den Gesamtexport ablegen.
+> Die Sicherungen liegen im Datenordner, also auf demselben Datenträger wie die Daten. Gegen einen
+> Festplattenschaden hilft nur eine Kopie auf einem anderen Datenträger — dafür regelmässig den
+> Gesamtexport ablegen.
 
 ---
 
@@ -1181,6 +1218,16 @@ Fehler: **Einstellungen → Daten → Datensicherung → Wiederherstellen** mit 
 
 **Der Browser öffnet sich nach dem Start nicht.**
 Auf dem Startbildschirm **PLM & ERP öffnen** klicken, oder `http://localhost:3000` von Hand eingeben.
+
+**Beim Start erscheint „Die Daten sind in Benutzung“.**
+Auf einem anderen PC läuft PLM noch mit denselben Daten — oder wurde dort nicht beendet, etwa weil
+der PC im Ruhezustand ist. Dort beenden, oder hier **Übernehmen**: Das andere PLM speichert danach
+nichts mehr (siehe 2, Daten auf einem Netzlaufwerk).
+
+**„PLM arbeitet jetzt woanders“ oder „Daten von aussen geändert“.**
+Ein anderes PLM hat die Daten übernommen, oder `plm.db` wurde an PLM vorbei geändert. Hier wird
+nichts mehr gespeichert, damit nichts verloren geht. **Hier weiterarbeiten** lädt den aktuellen
+Stand. Was noch nicht gespeichert war, liegt als Sicherung „nicht gespeichert“ vor (siehe 21).
 
 **Windows warnt „Der Herausgeber konnte nicht verifiziert werden“.**
 Die heruntergeladene ZIP vor dem Entpacken freigeben: rechte Maustaste → **Eigenschaften** →

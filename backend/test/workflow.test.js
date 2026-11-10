@@ -68,7 +68,7 @@ let defaultReleaseChecks;
 before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-wf-'));
   serverProc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT) }, stdio: 'ignore',
+    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT), PLM_CONFIG: path.join(dataDir, 'plm.config') }, stdio: 'ignore',
   });
   let up = false;
   for (let i = 0; i < 60 && !up; i++) {

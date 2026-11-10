@@ -30,7 +30,7 @@ async function api(url, method = 'GET', body = null) {
 before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-test-'));
   serverProc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT) },
+    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT), PLM_CONFIG: path.join(dataDir, 'plm.config') },
     stdio: 'ignore',
   });
   // Warten bis der Server antwortet
@@ -281,7 +281,7 @@ test('Datenbank: nicht mehr verwendete Spalte important_note wird beim Start ent
   old.run("UPDATE items SET important_note='alt'");
   fs.writeFileSync(path.join(dir, 'plm.db'), Buffer.from(old.export()));
   const proc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PLM_DATA_DIR: dir, PLM_PORT: '3989' }, stdio: 'ignore' });
+    env: { ...process.env, PLM_DATA_DIR: dir, PLM_PORT: '3989', PLM_CONFIG: path.join(dir, 'plm.config') }, stdio: 'ignore' });
   try {
     for (let i = 0; i < 50; i++) {
       try { await fetch('http://127.0.0.1:3989/api/stats'); break; }
@@ -303,14 +303,16 @@ test('Datenbank: nicht mehr verwendete Spalte important_note wird beim Start ent
 
 test('Automatisches Backup wurde beim Start angelegt', async () => {
   // Der Testserver startet mit leerer DB — Backup entsteht erst, wenn eine
-  // plm.db existiert. Neustart-Szenario: zweiter Serverstart im selben DATA_DIR.
-  // Erst dem ersten Server eine Schreibpause geben, damit er die DB flusht (Debounce 500ms).
-  for (let i = 0; i < 30 && !fs.existsSync(path.join(dataDir, 'plm.db')); i++) {
-    await new Promise(r => setTimeout(r, 100));
-  }
+  // plm.db existiert. Neustart-Szenario: Der erste Server endet (schreibt
+  // dabei die DB und gibt die Sperre frei), ein zweiter startet im selben
+  // DATA_DIR. Liefe der erste noch, wartete der zweite aufs Übernehmen.
+  const exited = new Promise(r => serverProc.once('exit', r));
+  serverProc.kill();
+  await exited;
+  assert.ok(fs.existsSync(path.join(dataDir, 'plm.db')), 'DB beim Beenden geschrieben');
   // Eigener Port: 3997 gehört workflow.test.js, das parallel laufen kann
   const proc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: '3994' },
+    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: '3994', PLM_CONFIG: path.join(dataDir, 'plm.config') },
     stdio: 'ignore',
   });
   try {

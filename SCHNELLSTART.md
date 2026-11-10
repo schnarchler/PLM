@@ -18,7 +18,9 @@ dauert einmalig etwas länger.
 
 **Datenordner:** steht in `plm.config` (Zeile `data_dir=`), ohne Eintrag `backend/data/`.
 Dort liegen Datenbank, Dateien und Sicherungen. `plm.config` und der Datenordner kommen nie
-ins Git.
+ins Git. Der Datenordner darf auf einem Netzlaufwerk liegen und von mehreren PCs benutzt
+werden — es arbeitet aber immer nur ein PLM zur Zeit damit, ein zweites fragt beim Start, ob
+es übernehmen soll ([Handbuch, Kapitel 2](HANDBUCH.md#daten-auf-einem-netzlaufwerk-mehrere-pcs)).
 
 ## 2. Einmal einrichten
 
@@ -28,7 +30,7 @@ Alles unter **Einstellungen**:
 2. **Kalkulation** — Stundenansatz, MwSt., Zahlungsbedingungen
 3. **3D-Druck** — Drucker (mit CHF/h) und Düsen
 4. **Benutzer** — Personen mit Rolle, wenn mehrere mit PLM arbeiten
-5. **Daten → Checkout-Verzeichnis** — wenn mit CAD gearbeitet wird
+5. **Daten → Checkout-Verzeichnis** — wenn mit CAD gearbeitet wird; gilt nur für diesen PC
 6. **PLM → Freigabe-Workflow** — **Mit Freigabe** (Standard) oder **Ohne Freigabe**
 
 ## 3. Der Ablauf in acht Schritten
@@ -81,6 +83,7 @@ Beschreibung. Eine neue Revision übernimmt sie von der vorherigen.
 | `backups/` | Sicherung beim Start, eine pro Tag (die letzten 14), dazu manuelle |
 | `papierkorb/` | gelöschte Dateien, 30 Tage lang |
 | `checkout/` | ausgecheckte Dateien (wenn kein eigenes Verzeichnis eingestellt ist) |
+| `plm.lock` | welches PLM die Daten gerade hat — nicht von Hand löschen, solange PLM läuft |
 
 ## 5. Täglich gebraucht
 

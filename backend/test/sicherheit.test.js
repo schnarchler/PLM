@@ -194,8 +194,12 @@ test('Ordner öffnen: nur Checkout-Ordner, nur von diesem PC', { skip }, async (
 });
 
 test('Checkout-Verzeichnis lässt sich nur von diesem PC aus ändern', { skip }, async () => {
-  assert.strictEqual(await foreignHost('/api/settings', 'PUT', { checkout_dir: tmp }), 403);
+  assert.strictEqual(await foreignHost('/api/checkout-dir', 'PUT', { dir: tmp }), 403);
+  // Über die Einstellungen geht es gar nicht mehr — der Ordner steht in plm.config
+  await api('/api/settings', 'PUT', { checkout_dir: tmp });
   assert.strictEqual((await api('/api/settings')).checkout_dir ?? '', '');
+  assert.strictEqual((await api('/api/checkout-dir')).effective, coDir);
+  assert.doesNotMatch(fs.readFileSync(cfgFile, 'utf8'), /checkout_dir/);
 });
 
 test('Fremde Webseiten können weder lesen noch schreiben', { skip }, async () => {

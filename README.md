@@ -41,6 +41,28 @@ Wurde schon entpackt, ohne freizugeben: Die Warnung einmal mit **Ausführen** be
 Ohne Warnung von Anfang an geht es auch mit `git clone` statt ZIP-Download — Git markiert
 keine Dateien.
 
+### Daten auf einem Netzlaufwerk (mehrere PCs)
+
+Die Daten können auf einem Netzlaufwerk liegen und PLM auf jedem PC selbst laufen — dann
+checkt jeder PC in einen eigenen, lokalen Ordner aus, und das CAD arbeitet mit lokalen Dateien.
+In `plm.config` jedes PCs:
+
+```
+data_dir=Z:\PLM-Daten              ← der gemeinsame Datenordner, wie er auf diesem PC heisst
+checkout_dir=C:\CAD\Checkout       ← nur dieser PC (auch über Einstellungen → Daten)
+```
+
+Es arbeitet immer nur ein PLM zur Zeit mit den Daten: Jedes hält die Datenbank im Speicher
+und schreibt sie als Ganzes zurück. `plm.lock` im Datenordner sagt, welches PLM sie hat
+(PC, Prozess, Lebenszeichen alle zwei Minuten). Läuft beim Start schon eines, lädt PLM nichts
+und fragt im Browser, ob es übernehmen soll; das andere speichert danach nichts mehr und
+bietet „Hier weiterarbeiten“ an. Eine Sperre ohne Lebenszeichen seit 10 Minuten (PC aus, im
+Ruhezustand) gilt als verwaist. Zusätzlich vergleicht PLM vor jedem Speichern `plm.db` mit dem
+Stand, den es zuletzt gelesen oder geschrieben hat: Hat jemand anderes sie geändert, wird sie
+nicht überschrieben, und Ungespeichertes landet als `…-nicht-gespeichert.db` in `backups/`.
+Ein echtes Netzlaufwerk (SMB/NAS) ist dafür sicherer als ein Sync-Ordner (Proton Drive,
+OneDrive), der verzögert abgleicht. Bedienung siehe [HANDBUCH.md](HANDBUCH.md), Kapitel 2.
+
 ---
 
 ## Nummernschema
@@ -451,7 +473,9 @@ bleiben unberührt. Pro Produktionsauftrag wird nur einmal abgebucht.
 | Assemblies (.asm) | gleicher Pfad |
 | Drafts (.dft) | gleicher Pfad |
 
-Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis**
+Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis** — pro PC, steht in
+`plm.config` als `checkout_dir=` (leer: `[Datenverzeichnis]/checkout`). Früher stand er in
+der Datenbank; gibt es den Ordner auf dem PC, übernimmt PLM ihn beim Start einmalig.
 
 ### Workflow
 
@@ -550,7 +574,8 @@ PLM/
 │       ├── plm.db         ← SQLite-Datenbank
 │       ├── files/         ← hochgeladene Dateien (UUID-Namen)
 │       ├── backups/       ← Sicherungen der Datenbank (siehe Datensicherung)
-│       └── papierkorb/    ← gelöschte Dateien, 30 Tage aufbewahrt
+│       ├── papierkorb/    ← gelöschte Dateien, 30 Tage aufbewahrt
+│       └── plm.lock       ← welches PLM die Daten gerade hat (solange es läuft)
 ├── frontend/
 │   └── public/
 │       ├── index.html     ← HTML-Grundstruktur
@@ -560,7 +585,7 @@ PLM/
 │       │   ├── 15-mindmap.js ← Abhängigkeitsgraph (SVG, Pan/Zoom)
 │       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
 │       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
-├── plm.config             ← Konfiguration dieses PCs: data_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (wird auto-erstellt)
+├── plm.config             ← Konfiguration dieses PCs: data_dir, checkout_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (wird auto-erstellt)
 ├── HANDBUCH.md            ← Handbuch für die Bedienung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 ├── VERKNUEPFUNG-ERSTELLEN.bat ← legt die Desktop-Verknüpfung mit Logo an (Windows)
@@ -579,7 +604,8 @@ Geräte herankommen, entscheidet die Firewall des PCs.
 - Anfragen fremder Webseiten (fremder Origin oder Host) werden abgewiesen, es gibt keine CORS-Freigabe.
 - CAD, Slicer und „Ordner öffnen“ starten ohne Shell und nur für Anfragen vom PC selbst.
   Programmpfade stehen in `plm.config`, nicht in der Oberfläche.
-- Check-in und Import arbeiten nur im Checkout-Verzeichnis, und dieses lässt sich nur am PC ändern.
+- Check-in und Import arbeiten nur im Checkout-Verzeichnis, und dieses lässt sich nur am PC ändern
+  (es steht in `plm.config`). Übernehmen der Datensperre geht ebenfalls nur am PC selbst.
 - Paketlücken prüfen: `cd backend && npm audit --omit=dev`
 
 Die Benutzer (Einstellungen → Benutzer) dienen der Nachvollziehbarkeit, nicht als Schutz:
@@ -657,6 +683,7 @@ Neustart ist nicht nötig.
 | täglich, beim Serverstart | `plm-JJJJ-MM-TT.db` | die letzten 14 |
 | „💾 Jetzt sichern“ | `plm-JJJJ-MM-TT_HHMMSS-manuell.db` | bis du sie löschst |
 | vor jedem Wiederherstellen | `plm-JJJJ-MM-TT_HHMMSS-vor-wiederherstellung.db` | bis du sie löschst |
+| anderes PLM hat übernommen oder `plm.db` von aussen geändert, bevor alles gespeichert war | `plm-JJJJ-MM-TT_HHMMSS-nicht-gespeichert.db` | bis du sie löschst |
 
 **Wiederherstellen:**
 
@@ -688,10 +715,11 @@ cd backend
 npm test
 ```
 
-49 Tests in fünf Dateien:
+Die wichtigsten Testdateien:
 
 | Datei | Inhalt |
 |---|---|
+| `test/sperre.test.js` | geteiltes Datenverzeichnis: Warten und Übernehmen, Änderung von aussen, verwaiste Sperren, Checkout-Verzeichnis pro PC, Sperre beim Verschieben |
 | `test/smoke.test.js` | Aufträge, Preis-Sync Auftrag ↔ Produktion, Lagerbuchungen, Backups |
 | `test/workflow.test.js` | Projektfarben, Klassifizierungs-Ableitung, 3MF-Druckparameter, Revisionsfixierung, einfacher Workflow, Normteil-Einkauf, Materialabzug, Angebotsphase, Kundenlöschung |
 | `test/revisionen.test.js` | gelieferter Stand (Fixieren, Sperre, Lösen, Korrektur, Check-in), Revisionsvergleich, ECO-Übernahme, Suche mit Klassifizierung, Umbenennen von Klassifizierungen |

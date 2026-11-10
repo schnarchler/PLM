@@ -197,6 +197,7 @@ async function api(url, method='GET', body=null, _again=true) {
   const r = await fetch(API+url, opts);
   if (!r.ok) {
     const e = await r.json().catch(() => ({ error: 'HTTP '+r.status }));
+    if (e.lock) { showLockDialog(e.lock); throw new Error(e.error); }
     if (_again && await _askOnUserError(e)) return api(url, method, body, false);
     globalThis._noteError?.(`${method} ${url} → ${r.status} ${e.error || ''}`);   // für Rückmeldungen
     if (r.status !== 404) toast(e.error||'Serverfehler', 'err');
@@ -210,6 +211,7 @@ async function apiForm(url, fd, _again = true) {
   const r = await fetch(API + url, { method: 'POST', body: fd });
   if (!r.ok) {
     const e = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
+    if (e.lock) { showLockDialog(e.lock); throw new Error(e.error); }
     if (_again && await _askOnUserError(e)) return apiForm(url, fd, false);
     toast(e.error || 'Hochladen fehlgeschlagen', 'err');
     throw new Error(e.error || 'HTTP ' + r.status);
@@ -223,6 +225,85 @@ async function _askOnUserError(e) {
   if (!(e.need_user || e.confirm_user) || typeof askWhoIsThere !== 'function') return false;
   return askWhoIsThere(e.confirm_user ? 'confirm' : 'select');
 }
+
+// ── SPERRE ────────────────────────────────────────────────────
+// Die Daten gehören einem anderen PLM: beim Start schon belegt (waiting),
+// inzwischen übernommen oder plm.db von aussen geändert (lost). Der Dialog
+// lässt sich nicht wegklicken — hier geht erst wieder etwas, wenn dieses
+// PLM übernimmt (lädt den aktuellen Stand) oder beendet wird.
+function _agoTxt(iso) {
+  const s = (Date.now() - Date.parse(iso)) / 1000;
+  if (!(s >= 90)) return 'gerade eben';   // auch: Uhr des anderen PCs geht vor
+  if (s < 90 * 60) return `vor ${Math.round(s / 60)} Min.`;
+  if (s < 36 * 3600) return `vor ${Math.round(s / 3600)} Std.`;
+  return `vor ${Math.round(s / 86400)} Tagen`;
+}
+function _lockDialogHtml(l) {
+  const h = l.holder;
+  const pc = h && !h.this_pc && `PLM auf <b style="color:var(--t1)">${esc(h.host)}</b>`;
+  const who = pc || (h ? 'ein anderes PLM auf diesem PC' : 'ein anderes PLM');          // wer arbeitet
+  const byWho = pc || (h ? 'einem anderen PLM auf diesem PC' : 'einem anderen PLM');   // von wem übernommen
+  const code = t => `<code style="font-family:var(--mono);user-select:all">${esc(t)}</code>`;
+  let title, text, go;
+  if (l.mode === 'waiting' || l.mode === 'loading') {
+    title = h ? 'Die Daten sind in Benutzung' : 'Die Daten sind wieder frei';
+    text = h ? `Gerade arbeitet ${who} damit (zuletzt aktiv ${_agoTxt(h.beat)}). Damit nichts überschrieben wird,
+        arbeitet immer nur ein PLM mit den Daten.<br><br><b style="color:var(--t1)">Übernehmen</b>, wenn dort niemand
+        mehr arbeitet — das andere PLM speichert danach nichts mehr.`
+      : 'Das andere PLM wurde inzwischen beendet.';
+    go = h ? 'Übernehmen' : 'Starten';
+  } else {
+    title = l.reason === 'takeover' ? 'PLM arbeitet jetzt woanders' : 'Daten von aussen geändert';
+    // Wann der andere übernommen hat (seine Sperre), nicht wann es hier auffiel
+    text = (l.reason === 'takeover' ? `Die Daten wurden ${_agoTxt(h?.since || l.at)} von ${byWho} übernommen.`
+        : 'plm.db wurde von einem anderen PC oder Programm geändert, z.B. von einem Sync-Programm.')
+      + ' Hier wird nichts mehr gespeichert, der angezeigte Stand ist nicht mehr aktuell.'
+      + (l.saved_as ? `<br><br>Was hier noch nicht gespeichert war, liegt als Sicherung ${code(l.saved_as)} vor
+          (Einstellungen → Daten → Datensicherung).` : '')
+      + `<br><br><b style="color:var(--t1)">Hier weiterarbeiten</b> lädt den aktuellen Stand`
+      + (l.reason === 'takeover' ? ' — das andere PLM speichert danach nichts mehr.' : '.');
+    go = 'Hier weiterarbeiten';
+  }
+  return `<div class="modal" style="max-width:480px">
+    <div class="modal-head"><div class="modal-title" style="color:var(--amber)">${title}</div></div>
+    <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2);line-height:1.6">${text}
+      ${l.local ? '' : '<div style="margin-top:10px;color:var(--t3)">Übernehmen geht nur am PC, auf dem dieses PLM läuft.</div>'}
+    </div>
+    <div class="modal-foot" style="gap:6px">
+      <button class="btn btn-ghost" onclick="_doShutdown(false)">PLM hier beenden</button>
+      ${l.local ? `<button class="btn btn-primary" onclick="_takeOverData(this)"${l.mode === 'loading' ? ' disabled' : ''}>${go}</button>` : ''}
+    </div>
+  </div>`;
+}
+let _lockShown = '';
+function showLockDialog(l) {
+  let ov = document.getElementById('lockModal');
+  if (!l || l.mode === 'own') { ov?.remove(); _lockShown = ''; return; }
+  const key = JSON.stringify([l.mode, l.reason, l.holder?.host, l.holder?.beat, l.saved_as, l.local]);
+  if (ov && key === _lockShown) return;
+  _lockShown = key;
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'overlay open'; ov.id = 'lockModal'; ov.style.zIndex = '1000';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = _lockDialogHtml(l);
+}
+async function _takeOverData(btn) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Übernimmt…';
+  const r = await fetch('/api/lock/takeover', { method: 'POST' }).catch(() => null);
+  if (r?.ok) return location.reload();
+  const e = await r?.json().catch(() => null);
+  toast(e?.error || 'Übernehmen fehlgeschlagen', 'err');
+  btn.disabled = false; btn.textContent = label;
+}
+// Zurück an diesem PC (Tab wieder sichtbar, Laptop aus dem Ruhezustand):
+// gleich nachsehen, ob die Daten inzwischen ein anderes PLM hat
+async function checkDataLock() {
+  try { const r = await fetch('/api/lock'); if (r.ok) showLockDialog(await r.json()); } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDataLock(); });
 
 // ── UTILS ─────────────────────────────────────────────────────
 const V = id => document.getElementById(id)?.value||'';

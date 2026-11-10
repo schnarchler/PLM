@@ -78,15 +78,19 @@ let saveTimer;
 let dbDirty = false;
 
 // Atomar schreiben (tmp + rename), damit ein Absturz mitten im
-// Schreiben die plm.db nicht korrumpiert.
+// Schreiben die plm.db nicht korrumpiert. Vorher nachsehen, ob die Daten
+// noch diesem PLM gehören (siehe SPERRE) — sonst nichts überschreiben.
 function flushDb() {
-  if (!dbDirty || !db) return;
+  if (!dbDirty || !db || !_mayWrite()) return;
   clearTimeout(saveTimer);
+  if (!stillOurs()) return;
+  const buf = Buffer.from(db.export());
   const tmpPath = DB_PATH + '.tmp';
-  fs.writeFileSync(tmpPath, Buffer.from(db.export()));
+  fs.writeFileSync(tmpPath, buf);
   if (_replaceFile(tmpPath, DB_PATH) === 'copied') {
     console.warn('  plm.db war gesperrt (Sync-Programm, Virenscanner?) - direkt geschrieben statt umbenannt.');
   }
+  _rememberDb(buf);
   dbDirty = false;
 }
 
@@ -113,6 +117,173 @@ function _replaceFile(tmpPath, destPath, { tries = 8, sleep = _sleepSync } = {})
 }
 // ── ENDE DATEI ERSETZEN
 
+// ── SPERRE ────────────────────────────────────────────────────
+// Das Datenverzeichnis darf auf einem Netzlaufwerk liegen und von
+// verschiedenen PCs aus benutzt werden — aber nur von einem PLM zur Zeit:
+// Jedes hält die ganze Datenbank im Speicher und schreibt sie als Ganzes
+// zurück, ein zweites überschriebe still, was das erste geändert hat.
+// plm.lock im Datenverzeichnis sagt, welches PLM die Daten hat; es meldet
+// sich dort alle zwei Minuten. Gehört die Sperre beim Start einem laufenden
+// PLM, lädt dieses hier nichts und fragt im Browser, ob es übernehmen soll.
+// Das andere merkt das spätestens vor der nächsten Änderung und speichert
+// danach nichts mehr. Zusätzlich vergleicht flushDb plm.db mit dem Stand,
+// den PLM zuletzt gelesen oder geschrieben hat — das schützt auch, wenn die
+// Sperre zu spät ankommt (Sync-Ordner) oder jemand sie gelöscht hat.
+const LOCK_BEAT_MS = 2 * 60 * 1000;
+const LOCK_STALE_MS = 10 * 60 * 1000;   // so lange still: abgestürzt, PC aus oder im Ruhezustand
+const LOCK_GRACE_MS = 1500;             // nach dem Übernehmen: ein Speichern, das beim anderen gerade läuft, ankommen lassen
+const LOCK_ID = crypto.randomBytes(8).toString('hex');
+const _lockFile = () => path.join(DATA_DIR, 'plm.lock');
+const _thisPc = () => os.hostname();
+const _isThisPc = host => String(host || '').toLowerCase() === _thisPc().toLowerCase();
+// mode — own: Die Daten gehören diesem PLM. waiting: Beim Start hatte sie
+// ein anderes, die Datenbank ist noch nicht geladen. loading: wird gerade
+// übernommen. lost: Ein anderes PLM hat übernommen (reason 'takeover') oder
+// plm.db wurde von aussen geändert ('changed') — der Stand hier ist alt.
+const lockState = { mode: 'own', reason: null, holder: null, at: null, saved_as: null };
+const _mayWrite = () => lockState.mode === 'own' || lockState.mode === 'loading';
+let _lockSince = null;
+let _dbOnDisk = null;   // plm.db, wie PLM sie zuletzt gelesen oder geschrieben hat
+
+// Unlesbar (halb geschrieben, Netzlaufwerk weg) gilt nicht als fremde Sperre
+function readLock(file = _lockFile()) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (err) { return err.code === 'ENOENT' ? null : { unreadable: true }; }
+}
+const _foreign = lock => !!lock && !lock.unreadable && lock.id !== LOCK_ID;
+function writeLock() {
+  const now = new Date().toISOString();
+  _lockSince = _lockSince || now;
+  const tmp = `${_lockFile()}.${LOCK_ID}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ id: LOCK_ID, host: _thisPc(), pid: process.pid, port: PORT,
+    version: APP_VERSION.version, since: _lockSince, beat: now }, null, 1));
+  _replaceFile(tmp, _lockFile());
+}
+// Beim Beenden freigeben — nur, solange die Sperre diesem PLM gehört
+function releaseLock(file = _lockFile()) {
+  try { if (readLock(file)?.id === LOCK_ID) fs.unlinkSync(file); } catch {}
+}
+// Läuft das PLM, dem die Sperre gehört, noch? Länger still als
+// LOCK_STALE_MS: nein. Auf diesem PC zählt zudem, ob der Prozess noch lebt.
+function lockAlive(lock) {
+  if (!_foreign(lock)) return false;
+  if (!(Date.now() - Date.parse(lock.beat) < LOCK_STALE_MS)) return false;
+  if (_isThisPc(lock.host)) {
+    if (lock.pid === process.pid) return false;
+    try { process.kill(lock.pid, 0); } catch (err) { if (err.code === 'ESRCH') return false; }
+  }
+  return true;
+}
+const lockHolder = lock => _foreign(lock) ? { host: lock.host, since: lock.since, beat: lock.beat,
+  port: lock.port, version: lock.version, this_pc: _isThisPc(lock.host) } : null;
+
+// plm.db zum Vergleichen merken: Grösse, Änderungszeit, Datei-Nr. und Prüfsumme
+const _sha1 = buf => crypto.createHash('sha1').update(buf).digest('hex');
+function _dbStat() {
+  try { const st = fs.statSync(DB_PATH); return { size: st.size, mtimeMs: st.mtimeMs, ino: st.ino }; }
+  catch (err) { if (err.code === 'ENOENT') return null; throw err; }
+}
+function _rememberDb(buf) {
+  let st = null;
+  try { st = _dbStat(); } catch {}
+  // Ohne Angaben zur Datei vergleicht der nächste Blick den Inhalt
+  _dbOnDisk = { ...(st || { size: -1, mtimeMs: -1, ino: -1 }), hash: _sha1(buf) };
+}
+// Was jetzt auf der Platte liegt, gilt als eigener Stand (nach dem Verschieben)
+function _adoptDbOnDisk() {
+  try { const st = _dbStat(); _dbOnDisk = st && { ...st, hash: _sha1(fs.readFileSync(DB_PATH)) }; }
+  catch { _dbOnDisk = null; }
+}
+// Hat seit dem Lesen oder dem letzten eigenen Speichern jemand anderes
+// plm.db geschrieben? Gleiche Grösse, Zeit und Datei-Nr.: nein. Sonst
+// entscheidet der Inhalt — Sync-Programme fassen Dateien auch nur an.
+function dbChangedOnDisk() {
+  let now;
+  try { now = _dbStat(); } catch { return false; }   // Netzlaufwerk weg: Speichern scheitert ohnehin
+  if (!now) return false;                            // gelöscht: Speichern legt sie wieder an
+  if (!_dbOnDisk) return true;                       // beim Laden gab es sie nicht, jetzt schon
+  if (now.size === _dbOnDisk.size && now.mtimeMs === _dbOnDisk.mtimeMs && now.ino === _dbOnDisk.ino) return false;
+  let hash;
+  try { hash = _sha1(fs.readFileSync(DB_PATH)); } catch { return false; }
+  if (hash !== _dbOnDisk.hash) return true;
+  _dbOnDisk = { ...now, hash };
+  return false;
+}
+
+// Gehören die Daten noch diesem PLM? Wenn nicht, ab sofort nichts mehr
+// speichern (loseLock).
+function stillOurs() {
+  if (!_mayWrite()) return false;
+  const lock = readLock();
+  if (_foreign(lock)) { loseLock('takeover', lockHolder(lock)); return false; }
+  if (db && dbChangedOnDisk()) { loseLock('changed', null); return false; }
+  return true;
+}
+// Was hier noch nicht gespeichert war, kommt als Sicherung nach backups/ —
+// so geht nichts verloren, und überschrieben wird auch nichts.
+function loseLock(reason, holder) {
+  if (!_mayWrite()) return;
+  Object.assign(lockState, { mode: 'lost', reason, holder, at: new Date().toISOString(), saved_as: null });
+  clearTimeout(saveTimer);
+  if (dbDirty && db) {
+    try {
+      fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      const name = timestampName('nicht-gespeichert');
+      fs.writeFileSync(path.join(BACKUP_DIR, name), Buffer.from(db.export()));
+      lockState.saved_as = name;
+    } catch (err) { console.error('  Nicht gespeicherte Aenderungen liessen sich nicht sichern: ' + err.message); }
+  }
+  dbDirty = false;
+  console.warn('\n  ' + (reason === 'takeover'
+    ? `PLM auf ${holder?.host || 'einem anderen PC'} hat die Daten uebernommen`
+    : 'plm.db wurde von aussen geaendert (anderer PC, Sync-Programm?)')
+    + ' - hier wird nichts mehr gespeichert.'
+    + (lockState.saved_as ? '\n  Nicht gespeicherte Aenderungen: backups/' + lockState.saved_as : '') + '\n');
+}
+
+// Beim Start: frei, verwaist oder von einem abgestürzten PLM auf diesem PC
+// → nehmen. Gehört sie einem laufenden PLM, wartet dieses hier (waiting).
+function claimLockAtStart() {
+  const lock = readLock();
+  if (lockAlive(lock)) {
+    Object.assign(lockState, { mode: 'waiting', holder: lockHolder(lock) });
+    return false;
+  }
+  if (_foreign(lock)) console.log(`  Sperre von PLM auf ${lock.host} war verwaist (zuletzt aktiv ${lock.beat}) - uebernommen.`);
+  try { writeLock(); } catch (err) { console.warn('  Sperrdatei nicht schreibbar: ' + err.message); }
+  return true;
+}
+// Übernehmen (Knopf im Browser): Sperre setzen, kurz warten, dann plm.db
+// lesen — nach dem Start zum ersten Mal, sonst den Stand, den das andere
+// PLM hinterlassen hat. Klappt das Lesen nicht, bleibt alles, wie es war.
+async function takeOverLock() {
+  const before = lockState.mode, old = db;
+  lockState.mode = 'loading';
+  try {
+    writeLock();
+    await new Promise(r => setTimeout(r, LOCK_GRACE_MS));
+    dbDirty = false;
+    await initDb();
+  } catch (err) {
+    if (db && db !== old) try { db.close(); } catch {}
+    db = old;
+    lockState.mode = before;
+    releaseLock();
+    throw err;
+  }
+  if (old && old !== db) try { old.close(); } catch {}
+  Object.assign(lockState, { mode: 'own', reason: null, holder: null, at: null, saved_as: null });
+  afterDbLoaded();
+}
+function startLockBeat() {
+  setInterval(() => {
+    if (lockState.mode !== 'own' || dataMove.running) return;   // Verschieben vergleicht Dateien
+    try { if (stillOurs()) writeLock(); }
+    catch (err) { console.error('  Sperre nicht erneuert: ' + err.message); }
+  }, LOCK_BEAT_MS).unref();
+}
+// ── ENDE SPERRE
+
 // Debounce 500ms — aber spätestens nach 5s flushen, damit ununterbrochene
 // Schreibvorgänge das Speichern nicht endlos hinauszögern.
 const MAX_FLUSH_DELAY = 5000;
@@ -138,7 +309,7 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.exit(0);
   });
 }
-process.on('exit', () => { try { flushDb(); } catch {} });
+process.on('exit', () => { try { flushDb(); } catch {} releaseLock(); });
 
 function run(sql, params = []) {
   db.run(sql, params);
@@ -246,19 +417,30 @@ function autoBackupDb() {
 }
 
 let SQL;
+// Beim Start und nach dem Übernehmen der Sperre
 async function initDb() {
-  SQL = await initSqlJs();
+  SQL = SQL || await initSqlJs();
   try { autoBackupDb(); }
   catch (err) { console.error('DB-Backup fehlgeschlagen:', err.message); }
   try { purgeTrash(); }
   catch (err) { console.error('Papierkorb aufräumen fehlgeschlagen:', err.message); }
   if (fs.existsSync(DB_PATH)) {
+    // Erst die Angaben, dann der Inhalt: Schreibt jemand dazwischen, zeigt
+    // der nächste Vergleich eine Änderung, und es entscheidet der Inhalt
+    const st = _dbStat();
     const fileBuffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(fileBuffer);
+    _dbOnDisk = st && { ...st, hash: _sha1(fileBuffer) };
   } else {
     db = new SQL.Database();
+    _dbOnDisk = null;
   }
   applySchema();
+}
+// Was die geladene Datenbank braucht: frühere Einträge nach plm.config
+function afterDbLoaded() {
+  migrateCadPath();
+  migrateCheckoutDir();
 }
 
 // Hinweise am Teil: Spalte → Bezeichnung (fürs Protokoll). Konstruktion und
@@ -1926,6 +2108,59 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 
+// Gehören die Daten einem anderen PLM (siehe SPERRE), geht nur das Nötigste:
+// Sperre abfragen und übernehmen, beenden, Version, Datenpfad (danach fragt
+// ein weiterer Start) und der Update-Hinweis. Ob die Daten noch diesem PLM
+// gehören — ein anderes könnte übernommen haben —, wird vor jeder Änderung
+// nachgesehen, beim Lesen höchstens alle zwei Sekunden: Sonst zeigte die
+// Oberfläche nach dem Zurückkommen an den PC den alten Stand.
+const LOCK_FREE = ['GET /api/lock', 'POST /api/lock/takeover', 'POST /api/shutdown', 'GET /api/version',
+  'GET /api/data-path', 'GET /api/update'];
+const LOCK_READ_CHECK_MS = 2000;
+let _lockCheckedAt = 0;
+function lockInfo(req) {
+  return { mode: lockState.mode, reason: lockState.reason, holder: lockState.holder, at: lockState.at,
+    saved_as: lockState.saved_as, this_pc: _thisPc(), local: _isLocalRequest(req) };
+}
+function lockError() {
+  const where = h => h ? (h.this_pc ? 'einem anderen PLM auf diesem PC' : 'PLM auf ' + h.host) : 'einem anderen PLM';
+  if (lockState.mode === 'loading') return 'PLM übernimmt gerade die Daten — einen Moment.';
+  if (lockState.mode === 'waiting') return `Die Daten sind in Benutzung: von ${where(lockState.holder)}.`;
+  return (lockState.reason === 'takeover' ? `Die Daten wurden von ${where(lockState.holder)} übernommen`
+    : 'plm.db wurde von aussen geändert') + ' — hier wird nichts mehr gespeichert.';
+}
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/') || LOCK_FREE.includes(req.method + ' ' + req.path)) return next();
+  const reading = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (lockState.mode === 'own' && (!reading || Date.now() - _lockCheckedAt > LOCK_READ_CHECK_MS)) {
+    _lockCheckedAt = Date.now();
+    stillOurs();
+  }
+  if (lockState.mode === 'own') return next();
+  res.status(lockState.mode === 'loading' ? 503 : 409).json({ error: lockError(), lock: lockInfo(req) });
+});
+// Die Oberfläche fragt, wenn der Tab wieder sichtbar wird — zurück am PC,
+// Laptop aus dem Ruhezustand: gleich nachsehen. Beim Warten: Ist die Sperre
+// inzwischen frei, zeigt der Dialog das an.
+app.get('/api/lock', (req, res) => {
+  if (lockState.mode === 'own') stillOurs();
+  if (lockState.mode === 'waiting') {
+    const lock = readLock();
+    lockState.holder = lockAlive(lock) ? lockHolder(lock) : null;
+  }
+  res.json(lockInfo(req));
+});
+app.post('/api/lock/takeover', async (req, res) => {
+  if (!_isLocalRequest(req)) return res.status(403).json({ error: 'Übernehmen geht nur am PC, auf dem dieses PLM läuft.' });
+  if (lockState.mode === 'loading') return res.status(409).json({ error: 'Wird bereits übernommen' });
+  if (lockState.mode !== 'own') {
+    try { await takeOverLock(); }
+    catch (err) { return res.status(500).json({ error: 'Übernehmen fehlgeschlagen: ' + err.message }); }
+    console.log('  Daten uebernommen - PLM arbeitet jetzt hier.');
+  }
+  res.json(lockInfo(req));
+});
+
 // ── BENUTZER ──────────────────────────────────────────────────
 // Nachvollziehbarkeit, keine Sicherheit: Wer am PC sitzt, wählt sich aus —
 // ohne Passwort, Admins auf Wunsch mit PIN. Allein (0–1 Personen) gibt es
@@ -2013,7 +2248,7 @@ const ADMIN_ONLY = [
   /^PUT \/api\/settings$/,
   /^(PUT|DELETE) \/api\/feedback\/\d+$/,
   /^(POST|PUT) \/api\/users(\/\d+)?$/,
-  /^(PUT|POST) \/api\/data-path(\/move)?$/,
+  /^(PUT|POST) \/api\/data-path(\/move)?$/, /^PUT \/api\/checkout-dir$/,
   /^POST \/api\/backups\/(restore-upload|[^/]+\/restore)$/, /^DELETE \/api\/backups\/[^/]+$/,
   /^PUT \/api\/counters$/, /^POST \/api\/classifications\/rename$/,
   /^(POST|PUT|DELETE) \/api\/(printers|nozzles|material-presets)(\/\d+)?$/,
@@ -2035,7 +2270,8 @@ function requiredRole(req) {
 const ROLE_ERROR = { superuser: 'Freigeben dürfen nur Superuser und Admins.', admin: 'Das dürfen nur Admins.' };
 
 app.use((req, res, next) => {
-  if (!req.path.startsWith('/api/')) return next();
+  // Ohne geladene Datenbank (Sperre, siehe oben) kommen nur Anfragen ohne Benutzer an
+  if (!req.path.startsWith('/api/') || !db) return next();
   const { mode, user, session } = resolveUser(req);
   req.plmUser = user;
   req.plmMode = mode;
@@ -3312,11 +3548,45 @@ app.post('/api/revisions/:revId/datasets', upload.single('file'), (req, res) => 
 });
 
 // ── CHECKOUT ──────────────────────────────────────────────────
+// Der Checkout-Ordner gehört zum PC, nicht zu den Daten: Teilen sich
+// mehrere PCs ein Datenverzeichnis (Netzlaufwerk), hat jeder seinen eigenen.
+// Er steht deshalb in plm.config (checkout_dir=…); leer heisst
+// [Datenverzeichnis]/checkout.
 function getCheckoutDir() {
-  const row = get("SELECT value FROM settings WHERE key='checkout_dir'");
-  const dir = (row?.value || '').trim() || path.join(DATA_DIR, 'checkout');
-  return path.resolve(dir);
+  const dir = (loadConfig().checkout_dir || '').trim();
+  return path.resolve(dir || path.join(DATA_DIR, 'checkout'));
 }
+const _isDir = p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+// Früher stand der Ordner in der Datenbank, bei geteilten Daten also einer
+// für alle PCs. Steht in plm.config schon etwas (auch leer), gilt das.
+function _legacyCheckoutDir() {
+  if ('checkout_dir' in loadConfig()) return null;
+  return (getSetting('checkout_dir', '') || '').trim() || null;
+}
+// Gibt es den früheren Ordner (oder den darüber) auf diesem PC, wandert er
+// einmalig nach plm.config — der Pfad eines anderen PCs bleibt draussen.
+function migrateCheckoutDir() {
+  const old = _legacyCheckoutDir();
+  if (!old || !path.isAbsolute(old) || !(_isDir(old) || _isDir(path.dirname(old)))) return;
+  saveConfig({ checkout_dir: old });
+  console.log('  Checkout-Verzeichnis nach plm.config uebernommen: ' + old);
+}
+function checkoutDirInfo(req) {
+  return { dir: (loadConfig().checkout_dir || '').trim(), effective: getCheckoutDir(),
+    default: path.join(DATA_DIR, 'checkout'), legacy_path: _legacyCheckoutDir(),
+    config_file: PLM_CONFIG_PATH, local: _isLocalRequest(req) };
+}
+app.get('/api/checkout-dir', (req, res) => res.json(checkoutDirInfo(req)));
+// Nur vom PC aus: Der Ordner bestimmt, wo der Check-in löscht
+app.put('/api/checkout-dir', (req, res) => {
+  if (!_isLocalRequest(req)) return res.status(403).json({ error: 'Das Checkout-Verzeichnis lässt sich nur auf dem PC ändern, auf dem das PLM läuft.' });
+  const dir = String(req.body?.dir ?? '').trim();
+  if (dir && !path.isAbsolute(dir)) {
+    return res.status(400).json({ error: 'Bitte den vollständigen Pfad angeben, z.B. C:\\CAD\\Checkout oder /home/user/CAD-Checkout' });
+  }
+  saveConfig({ checkout_dir: dir });
+  res.json(checkoutDirInfo(req));
+});
 
 function collectCheckoutDatasets(itemId, types, visited = new Set(), mode = 'latest') {
   if (visited.has(itemId)) return [];
@@ -5455,16 +5725,12 @@ app.delete('/api/settings/logo', (req, res) => {
   res.json(_publicSettings());
 });
 
-// Bestimmt, wo der Check-in Ordner löscht — nur vom PC aus änderbar
-const LOCAL_ONLY_SETTINGS = ['checkout_dir'];
+// Nicht hierüber: das Logo (/api/settings/logo) und das Checkout-Verzeichnis
+// (/api/checkout-dir — es steht in plm.config, pro PC)
+const SETTINGS_ELSEWHERE = [...LOGO_KEYS, 'checkout_dir'];
 
 app.put('/api/settings', (req, res) => {
-  const changed = LOCAL_ONLY_SETTINGS.filter(k => k in req.body && String(req.body[k] ?? '') !== getSetting(k, ''));
-  if (changed.length && !_isLocalRequest(req)) {
-    return res.status(403).json({ error: 'Das Checkout-Verzeichnis lässt sich nur auf dem PC ändern, auf dem das PLM läuft.' });
-  }
-  // Das Logo kommt nur über /api/settings/logo
-  Object.entries(req.body).filter(([k]) => !LOGO_KEYS.includes(k)).forEach(([k, v]) => {
+  Object.entries(req.body).filter(([k]) => !SETTINGS_ELSEWHERE.includes(k)).forEach(([k, v]) => {
     db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, String(v??'')]);
   });
   // Entfernte Eigenschaften: ihre Werte an den Items gleich mit löschen
@@ -5559,9 +5825,14 @@ async function runDataMove(target, keepSource, targetExisted) {
     const cfg = loadConfig();
     cfg.data_dir = target;
     saveConfig(cfg);
+    const oldLock = _lockFile();
     setDataDir(target);
+    // Sperre und plm.db am neuen Ort gehören diesem PLM — es hat sie eben kopiert
+    try { writeLock(); } catch {}
+    _adoptDbOnDisk();
     dbDirty = true;
     flushDb();                                  // DB aus dem Speicher an den neuen Ort schreiben
+    if (keepSource) releaseLock(oldLock);       // die alte Kopie darf ein anderes PLM wieder nehmen
 
     if (!keepSource) {
       dataMove.phase = 'cleanup';
@@ -6935,6 +7206,7 @@ function backupKind(name) {
   if (/^plm-\d{4}-\d{2}-\d{2}\.db$/.test(name)) return 'auto';
   if (name.includes('-vor-wiederherstellung')) return 'vor-wiederherstellung';
   if (name.includes('-manuell')) return 'manuell';
+  if (name.includes('-nicht-gespeichert')) return 'nicht-gespeichert';
   return 'sonstige';
 }
 function timestampName(suffix) {
@@ -7922,8 +8194,12 @@ async function choosePort() {
   return port;
 }
 
-choosePort().then(p => { PORT = p; }).then(initDb).then(() => {
-  migrateCadPath();
+// Die Datenbank lädt erst, wenn die Sperre diesem PLM gehört. Hat sie ein
+// anderes, startet der Server trotzdem: Im Browser lässt sich übernehmen.
+choosePort().then(p => { PORT = p; }).then(async () => {
+  if (claimLockAtStart()) { await initDb(); afterDbLoaded(); }
+}).then(() => {
+  startLockBeat();
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('  PLM & ERP ' + APP_VERSION.version + (APP_VERSION.commit ? ' (' + APP_VERSION.commit
@@ -7931,6 +8207,12 @@ choosePort().then(p => { PORT = p; }).then(initDb).then(() => {
       + (APP_VERSION.source === 'zip' ? ', ZIP-Download' : '') + ')' : ''));
     console.log('  laeuft auf http://localhost:' + PORT);
     console.log('  Datenpfad: ' + DATA_DIR);
+    const h = lockState.holder;
+    if (lockState.mode === 'waiting') {
+      console.log(`\n  Die Daten sind in Benutzung: PLM auf ${h.this_pc ? 'diesem PC' : h.host}`
+        + ` (zuletzt aktiv ${new Date(h.beat).toLocaleString('de-CH')}).`);
+      console.log('  Im Browser uebernehmen oder dieses Fenster schliessen.');
+    }
     console.log('');
     openBrowser(PORT);
     // Vom Startskript gestartet: gleich prüfen, damit die Antwort schon da

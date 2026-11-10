@@ -57,7 +57,7 @@ before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-kc-'));
   await writeOldDatabase(path.join(dataDir, 'plm.db'));
   serverProc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT) }, stdio: 'ignore',
+    env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(PORT), PLM_CONFIG: path.join(dataDir, 'plm.config') }, stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {
     try { await fetch(BASE + '/api/stats'); return; }
