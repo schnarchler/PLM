@@ -131,11 +131,23 @@ gerade hat, steht in `plm.lock` im Datenordner:
 - **PC ausgeschaltet oder im Ruhezustand, ohne PLM zu beenden:** Nach 10 Minuten ohne Lebenszeichen
   gilt die Sperre als verwaist; ein Start auf einem anderen PC übernimmt dann ohne Rückfrage.
 - **Ausgecheckte Dateien** liegen auf dem PC, auf dem ausgecheckt wurde. Vor dem Wechsel einchecken,
-  sonst arbeitet der andere PC mit dem alten Stand.
+  sonst arbeitet der andere PC mit dem alten Stand. Damit das nicht vergessen geht, sehen alle PCs,
+  was wo ausgecheckt ist (siehe 9); der Dialog beim Übernehmen nennt es ebenfalls.
 
 Ändert etwas `plm.db` an PLM vorbei (z. B. ein Sync-Programm), überschreibt PLM die Datei nicht:
 Es meldet **Daten von aussen geändert** und speichert nichts mehr. Was noch nicht gespeichert war,
 liegt als Sicherung „nicht gespeichert“ vor (siehe 21).
+
+**Netzlaufwerk nicht verbunden:** Fehlt der eingetragene Datenordner oder liegt darin keine
+Datenbank, legt PLM nicht still eine neue, leere an. Im Browser erscheint **Datenordner nicht
+gefunden** (bzw. **Keine Datenbank im Datenordner**): Laufwerk verbinden (NAS, VPN) und **Erneut
+versuchen**. **Neue Datenbank anlegen** nur, wenn wirklich neu begonnen werden soll. Ein leerer
+Ordner gilt als neu eingerichtet — dort legt PLM die Datenbank wie gewohnt selbst an.
+
+**Unterschiedliche PLM-Versionen:** Jeder PC aktualisiert PLM für sich (siehe 22). Die Datenbank
+merkt sich, mit welchem Stand sie zuletzt geöffnet wurde. Startet ein älterer, erscheint **Daten
+von einem neueren PLM**: zuerst **Aktualisieren…**, nur im Notfall **Trotzdem öffnen** — ein
+älterer Stand kennt die Umstellungen des neueren nicht.
 
 > **Netzlaufwerk statt Sync-Ordner.** Proton Drive, OneDrive & Co. gleichen mit Verzögerung ab —
 > die Sperre kommt dann womöglich zu spät an. Wer trotzdem einen Sync-Ordner nutzt: PLM am alten
@@ -666,6 +678,14 @@ Bei der Rückfrage: **Als neue Revision hochladen**, **Änderungen verwerfen** (
 **Neue Dateien:** PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht (**⬆ Checkouts**):
 - Im Unterordner eines Items → **⬇ Zum Item hinzufügen**
 - Im Hauptordner → **+ Als neues Item anlegen (mit Datei)** oder **+ An Item anhängen**
+
+**Mehrere PCs:** Jeder Checkout ist zusätzlich mit dem Namen des PCs in der Datenbank vermerkt.
+Am Item steht dann z. B. **ausgecheckt auf LAPTOP** (auch für die Unterteile einer ausgecheckten
+Baugruppe), die Checkout-Übersicht listet sie unter **Auf anderen PCs ausgecheckt**. Wer ein solches
+Item hier auscheckt, wird zuerst gefragt — was dort bearbeitet wird, ist hier nicht dabei.
+Eingecheckt wird an dem PC, auf dem ausgecheckt wurde. Gibt es den PC oder den Ordner dort nicht
+mehr, entfernt **Vermerk entfernen** den Eintrag; Dateien werden dabei keine gelöscht. Ordner, die
+auf diesem PC von Hand gelöscht wurden, trägt PLM beim nächsten Öffnen der Übersicht selbst aus.
 
 **Aufräumen:** Dateien im Hauptordner, die schon in PLM sind (als Item angelegt oder angehängt), bleiben zunächst liegen — falls eine Baugruppe im CAD noch auf sie verweist. Die Checkout-Übersicht listet sie unter „… sind schon in PLM“; **🧹 Aufräumen** löscht sie. Gelöscht wird nur, was inhaltlich gleich in PLM liegt (Prüfsumme). Geänderte oder unbekannte Dateien und die Ordner der Checkouts bleiben.
 
@@ -1228,6 +1248,15 @@ nichts mehr (siehe 2, Daten auf einem Netzlaufwerk).
 Ein anderes PLM hat die Daten übernommen, oder `plm.db` wurde an PLM vorbei geändert. Hier wird
 nichts mehr gespeichert, damit nichts verloren geht. **Hier weiterarbeiten** lädt den aktuellen
 Stand. Was noch nicht gespeichert war, liegt als Sicherung „nicht gespeichert“ vor (siehe 21).
+
+**Beim Start erscheint „Datenordner nicht gefunden“.**
+Der Ordner aus `plm.config` (`data_dir=`) ist nicht erreichbar — meist ist das Netzlaufwerk nicht
+verbunden oder der Sync-Ordner noch nicht abgeglichen. Verbinden, dann **Erneut versuchen**. Stimmt
+der Pfad nicht, in `plm.config` korrigieren und PLM neu starten.
+
+**Beim Start erscheint „Daten von einem neueren PLM“.**
+Auf einem anderen PC läuft eine neuere Version und hat die Daten schon geöffnet. Hier zuerst
+aktualisieren (**Aktualisieren…** im Dialog), danach startet PLM normal.
 
 **Windows warnt „Der Herausgeber konnte nicht verifiziert werden“.**
 Die heruntergeladene ZIP vor dem Entpacken freigeben: rechte Maustaste → **Eigenschaften** →

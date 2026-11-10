@@ -60,16 +60,20 @@ const _config = loadConfig();
 // Die Datenpfade sind veränderbar: /api/data-path/move schaltet den laufenden
 // Server nach dem Verschieben ohne Neustart auf das neue Verzeichnis um.
 let DATA_DIR, DB_PATH, FILES_DIR, TRASH_DIR, BACKUP_DIR;
-function setDataDir(dir) {
+function setDataDir(dir, create = true) {
   DATA_DIR   = path.resolve(dir);
   DB_PATH    = path.join(DATA_DIR, 'plm.db');
   FILES_DIR  = path.join(DATA_DIR, 'files');
   TRASH_DIR  = path.join(DATA_DIR, 'papierkorb');
   BACKUP_DIR = path.join(DATA_DIR, 'backups');
+  if (!create) return;
   fs.mkdirSync(DATA_DIR,  { recursive: true });
   fs.mkdirSync(FILES_DIR, { recursive: true });
 }
-setDataDir(process.env.PLM_DATA_DIR || _config.data_dir || path.join(__dirname, 'data'));
+// Angelegt wird erst beim Start (openData) — ein eingetragener Ordner, den
+// es nicht gibt, ist meist ein nicht verbundenes Netzlaufwerk
+const DEFAULT_DATA_DIR = path.join(__dirname, 'data');
+setDataDir(process.env.PLM_DATA_DIR || _config.data_dir || DEFAULT_DATA_DIR, false);
 const FRONTEND_DIR = path.join(__dirname, '..', 'frontend', 'public');
 
 // -- sql.js wrapper (synchronous-style API) ---------------------
@@ -138,9 +142,11 @@ const _thisPc = () => os.hostname();
 const _isThisPc = host => String(host || '').toLowerCase() === _thisPc().toLowerCase();
 // mode — own: Die Daten gehören diesem PLM. waiting: Beim Start hatte sie
 // ein anderes, die Datenbank ist noch nicht geladen. loading: wird gerade
-// übernommen. lost: Ein anderes PLM hat übernommen (reason 'takeover') oder
+// geladen. lost: Ein anderes PLM hat übernommen (reason 'takeover') oder
 // plm.db wurde von aussen geändert ('changed') — der Stand hier ist alt.
-const lockState = { mode: 'own', reason: null, holder: null, at: null, saved_as: null };
+// missing: Im eingetragenen Datenordner liegt keine Datenbank ('no-dir',
+// 'no-db'). version: Die Daten stammen von einem neueren PLM-Stand (newer).
+const lockState = { mode: 'own', reason: null, holder: null, at: null, saved_as: null, newer: null, checkouts: null };
 const _mayWrite = () => lockState.mode === 'own' || lockState.mode === 'loading';
 let _lockSince = null;
 let _dbOnDisk = null;   // plm.db, wie PLM sie zuletzt gelesen oder geschrieben hat
@@ -246,34 +252,97 @@ function loseLock(reason, holder) {
 function claimLockAtStart() {
   const lock = readLock();
   if (lockAlive(lock)) {
-    Object.assign(lockState, { mode: 'waiting', holder: lockHolder(lock) });
+    Object.assign(lockState, { mode: 'waiting', reason: null, holder: lockHolder(lock) });
     return false;
   }
   if (_foreign(lock)) console.log(`  Sperre von PLM auf ${lock.host} war verwaist (zuletzt aktiv ${lock.beat}) - uebernommen.`);
   try { writeLock(); } catch (err) { console.warn('  Sperrdatei nicht schreibbar: ' + err.message); }
   return true;
 }
+
+// Liegt im eingetragenen Datenordner keine Datenbank, legt PLM nicht still
+// eine neue, leere an: Meist ist das Netzlaufwerk nicht verbunden oder der
+// Sync-Ordner noch nicht abgeglichen. Ein leerer Ordner gilt als neu
+// eingerichtet, der Standardordner backend/data ebenso.
+const _isDir = p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+function dataDirProblem() {
+  if (_samePath(DATA_DIR, DEFAULT_DATA_DIR)) return null;   // auch Windows: c:\ = C:\
+  if (!_isDir(DATA_DIR)) return 'no-dir';
+  if (fs.existsSync(DB_PATH)) return null;
+  let files = [];
+  try { files = fs.readdirSync(FILES_DIR); } catch {}
+  return files.length || _isDir(BACKUP_DIR) || _isDir(TRASH_DIR) ? 'no-db' : null;
+}
+// Datenordner prüfen, Sperre nehmen, Datenbank laden — beim Start und nach
+// „Erneut versuchen“ oder „Neue Datenbank anlegen“ im Browser (missing)
+async function openData(create = false) {
+  const problem = create ? null : dataDirProblem();
+  if (problem) { Object.assign(lockState, { mode: 'missing', reason: problem, holder: null }); return; }
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(FILES_DIR, { recursive: true });
+  if (claimLockAtStart()) await loadData();
+  else lockState.checkouts = await _checkoutsInDbFile(lockState.holder);
+}
+// Laden: beim Start, nach dem Übernehmen, nach „Trotzdem öffnen“. Stammen
+// die Daten von einem neueren PLM-Stand, erst nachfragen (version, siehe
+// DATENSTAND). Scheitert das Laden, bleibt alles, wie es war.
+async function loadData(olderOk = false) {
+  const before = lockState.mode, old = db;
+  lockState.mode = 'loading';
+  let newer;
+  try { newer = await initDb(olderOk); }
+  catch (err) {
+    if (db && db !== old) try { db.close(); } catch {}
+    db = old;
+    lockState.mode = before;
+    throw err;
+  }
+  if (newer) { Object.assign(lockState, { mode: 'version', reason: null, newer }); return; }
+  if (old && old !== db) try { old.close(); } catch {}
+  Object.assign(lockState, { mode: 'own', reason: null, holder: null, at: null, saved_as: null, newer: null, checkouts: null });
+  afterDbLoaded();
+}
 // Übernehmen (Knopf im Browser): Sperre setzen, kurz warten, dann plm.db
 // lesen — nach dem Start zum ersten Mal, sonst den Stand, den das andere
-// PLM hinterlassen hat. Klappt das Lesen nicht, bleibt alles, wie es war.
+// PLM hinterlassen hat.
 async function takeOverLock() {
-  const before = lockState.mode, old = db;
+  const before = lockState.mode;
   lockState.mode = 'loading';
   try {
     writeLock();
     await new Promise(r => setTimeout(r, LOCK_GRACE_MS));
-    dbDirty = false;
-    await initDb();
+    await loadData();
   } catch (err) {
-    if (db && db !== old) try { db.close(); } catch {}
-    db = old;
     lockState.mode = before;
     releaseLock();
     throw err;
   }
-  if (old && old !== db) try { old.close(); } catch {}
-  Object.assign(lockState, { mode: 'own', reason: null, holder: null, at: null, saved_as: null });
-  afterDbLoaded();
+}
+// Für den Dialog beim Warten: Was ist beim anderen PC noch ausgecheckt?
+// Die Datenbank ist hier noch nicht geladen — nur kurz hineinschauen.
+async function _checkoutsInDbFile(holder) {
+  if (!holder || holder.this_pc || !fs.existsSync(DB_PATH)) return [];
+  try {
+    SQL = SQL || await initSqlJs();
+    const d = new SQL.Database(fs.readFileSync(DB_PATH));
+    try {
+      const st = d.prepare(`SELECT DISTINCT i.item_number, i.name AS item_name FROM checkouts c
+        JOIN items i ON i.id=c.root_item_id WHERE LOWER(c.host)=LOWER(?) ORDER BY i.item_number`);
+      st.bind([holder.host]);
+      const rows = [];
+      while (st.step()) rows.push(st.getAsObject());
+      st.free();
+      return rows;
+    } finally { d.close(); }
+  } catch { return []; }   // ältere Datenbank ohne Vermerke
+}
+// Auf diesem PC noch ausgecheckt (Ordner im Checkout-Verzeichnis) — dafür
+// braucht es die Datenbank nicht
+function _localCheckoutCount() {
+  try {
+    const dir = getCheckoutDir();
+    return fs.readdirSync(dir).filter(n => fs.existsSync(path.join(dir, n, '.checkout.json'))).length;
+  } catch { return 0; }
 }
 function startLockBeat() {
   setInterval(() => {
@@ -417,25 +486,56 @@ function autoBackupDb() {
 }
 
 let SQL;
-// Beim Start und nach dem Übernehmen der Sperre
-async function initDb() {
+// Über loadData (siehe SPERRE). Gibt den Datenstand zurück, wenn die Daten
+// von einem neueren PLM stammen — dann bleibt die Datenbank ungeladen.
+async function initDb(olderOk = false) {
   SQL = SQL || await initSqlJs();
   try { autoBackupDb(); }
   catch (err) { console.error('DB-Backup fehlgeschlagen:', err.message); }
   try { purgeTrash(); }
   catch (err) { console.error('Papierkorb aufräumen fehlgeschlagen:', err.message); }
+  let next, st = null, fileBuffer = null;
   if (fs.existsSync(DB_PATH)) {
     // Erst die Angaben, dann der Inhalt: Schreibt jemand dazwischen, zeigt
     // der nächste Vergleich eine Änderung, und es entscheidet der Inhalt
-    const st = _dbStat();
-    const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
-    _dbOnDisk = st && { ...st, hash: _sha1(fileBuffer) };
+    st = _dbStat();
+    fileBuffer = fs.readFileSync(DB_PATH);
+    next = new SQL.Database(fileBuffer);
   } else {
-    db = new SQL.Database();
-    _dbOnDisk = null;
+    next = new SQL.Database();
   }
+  const newer = olderOk ? null : _newerStand(next);
+  if (newer) { next.close(); return newer; }
+  db = next;
+  _dbOnDisk = st && { ...st, hash: _sha1(fileBuffer) };
   applySchema();
+  _recordStand();
+  return null;
+}
+
+// ── DATENSTAND ────────────────────────────────────────────────
+// Jeder PC aktualisiert PLM für sich. Ein älterer Stand kennt die
+// Umstellungen eines neueren nicht und schriebe Daten womöglich im alten
+// Format — darum merkt sich die Datenbank, welcher Stand sie zuletzt
+// geöffnet hat, und ein älterer fragt erst nach. Verglichen wird das Datum
+// des Commits: Die Versionsnummer zählt Commits und taugt über Branches
+// hinweg nicht, eine ZIP-Kopie kennt sie oft erst nach der Prüfung bei GitHub.
+function _standOf(d) {
+  try { return JSON.parse(d.exec("SELECT value FROM settings WHERE key='data_stand'")[0]?.values?.[0]?.[0] || 'null'); }
+  catch { return null; }   // ältere Datenbank ohne Eintrag
+}
+const _standTime = s => Date.parse(s?.date || '') || 0;
+function _newerStand(d) {
+  const s = _standOf(d), mine = _standTime(APP_VERSION);
+  return mine && _standTime(s) > mine ? s : null;
+}
+// Nur vorwärts: Wer trotz Rückfrage mit einem älteren Stand öffnet, wird
+// beim nächsten Start wieder gefragt
+function _recordStand() {
+  const mine = _standTime(APP_VERSION);
+  if (!mine || _standTime(_standOf(db)) >= mine) return;
+  run("INSERT INTO settings (key,value) VALUES ('data_stand',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+    [JSON.stringify({ version: APP_VERSION.version, date: APP_VERSION.date, commit: APP_VERSION.commit })]);
 }
 // Was die geladene Datenbank braucht: frühere Einträge nach plm.config
 function afterDbLoaded() {
@@ -504,6 +604,18 @@ function applySchema() {
     version TEXT DEFAULT '1',
     notes TEXT,
     uploaded_at TEXT DEFAULT (datetime('now'))
+  )`);
+
+  // Wo ist was ausgecheckt? Eine Zeile je Item und Checkout-Ordner — bei
+  // einer Baugruppe auch für die Unterteile im selben Ordner. Den Ordner
+  // sieht nur der PC, auf dem er liegt; dieser Vermerk sehen alle.
+  db.run(`CREATE TABLE IF NOT EXISTS checkouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    root_item_id INTEGER NOT NULL,
+    host TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    created_at TEXT NOT NULL
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS bom (
@@ -2114,18 +2226,23 @@ app.use(express.json());
 // gehören — ein anderes könnte übernommen haben —, wird vor jeder Änderung
 // nachgesehen, beim Lesen höchstens alle zwei Sekunden: Sonst zeigte die
 // Oberfläche nach dem Zurückkommen an den PC den alten Stand.
-const LOCK_FREE = ['GET /api/lock', 'POST /api/lock/takeover', 'POST /api/shutdown', 'GET /api/version',
-  'GET /api/data-path', 'GET /api/update'];
+const LOCK_FREE = ['GET /api/lock', 'POST /api/lock/takeover', 'POST /api/lock/open', 'POST /api/shutdown',
+  'GET /api/version', 'GET /api/data-path', 'GET /api/update', 'POST /api/update/install'];
 const LOCK_READ_CHECK_MS = 2000;
 let _lockCheckedAt = 0;
 function lockInfo(req) {
   return { mode: lockState.mode, reason: lockState.reason, holder: lockState.holder, at: lockState.at,
-    saved_as: lockState.saved_as, this_pc: _thisPc(), local: _isLocalRequest(req) };
+    saved_as: lockState.saved_as, newer: lockState.newer, checkouts: lockState.checkouts || [],
+    local_checkouts: lockState.mode === 'lost' ? _localCheckoutCount() : 0, data_dir: DATA_DIR,
+    stand: { version: APP_VERSION.version, date: APP_VERSION.date }, this_pc: _thisPc(), local: _isLocalRequest(req) };
 }
 function lockError() {
   const where = h => h ? (h.this_pc ? 'einem anderen PLM auf diesem PC' : 'PLM auf ' + h.host) : 'einem anderen PLM';
-  if (lockState.mode === 'loading') return 'PLM übernimmt gerade die Daten — einen Moment.';
+  if (lockState.mode === 'loading') return 'PLM lädt gerade die Daten — einen Moment.';
   if (lockState.mode === 'waiting') return `Die Daten sind in Benutzung: von ${where(lockState.holder)}.`;
+  if (lockState.mode === 'missing') return (lockState.reason === 'no-dir' ? 'Datenordner nicht gefunden: '
+    : 'Keine Datenbank im Datenordner: ') + DATA_DIR;
+  if (lockState.mode === 'version') return `Die Daten stammen von einem neueren PLM (${lockState.newer?.version || '?'}).`;
   return (lockState.reason === 'takeover' ? `Die Daten wurden von ${where(lockState.holder)} übernommen`
     : 'plm.db wurde von aussen geändert') + ' — hier wird nichts mehr gespeichert.';
 }
@@ -2153,10 +2270,26 @@ app.get('/api/lock', (req, res) => {
 app.post('/api/lock/takeover', async (req, res) => {
   if (!_isLocalRequest(req)) return res.status(403).json({ error: 'Übernehmen geht nur am PC, auf dem dieses PLM läuft.' });
   if (lockState.mode === 'loading') return res.status(409).json({ error: 'Wird bereits übernommen' });
-  if (lockState.mode !== 'own') {
+  if (lockState.mode === 'waiting' || lockState.mode === 'lost') {
     try { await takeOverLock(); }
     catch (err) { return res.status(500).json({ error: 'Übernehmen fehlgeschlagen: ' + err.message }); }
     console.log('  Daten uebernommen - PLM arbeitet jetzt hier.');
+  }
+  res.json(lockInfo(req));
+});
+// Datenordner fehlt (missing): erneut nachsehen oder bewusst neu anlegen.
+// Daten von einem neueren PLM (version): trotzdem öffnen. Anlegen und
+// Öffnen nur am PC selbst, nachsehen darf jeder.
+app.post('/api/lock/open', async (req, res) => {
+  const create = !!req.body?.create, olderOk = !!req.body?.older_ok;
+  if ((create || olderOk) && !_isLocalRequest(req)) {
+    return res.status(403).json({ error: 'Das geht nur am PC, auf dem dieses PLM läuft.' });
+  }
+  try {
+    if (lockState.mode === 'missing') await openData(create);
+    else if (lockState.mode === 'version' && olderOk) await loadData(true);
+  } catch (err) {
+    return res.status(500).json({ error: (create ? 'Anlegen fehlgeschlagen: ' : 'Öffnen fehlgeschlagen: ') + err.message });
   }
   res.json(lockInfo(req));
 });
@@ -3556,7 +3689,6 @@ function getCheckoutDir() {
   const dir = (loadConfig().checkout_dir || '').trim();
   return path.resolve(dir || path.join(DATA_DIR, 'checkout'));
 }
-const _isDir = p => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 // Früher stand der Ordner in der Datenbank, bei geteilten Daten also einer
 // für alle PCs. Steht in plm.config schon etwas (auch leer), gilt das.
 function _legacyCheckoutDir() {
@@ -3683,6 +3815,11 @@ app.post('/api/items/:id/checkout', (req, res) => {
     const datasets = collectCheckoutDatasets(item.id, types && types.length ? types : null, new Set(), revMode);
     if (!datasets.length) return res.json({ folder: null, files: [], warning: 'Keine Dateien gefunden — sind Dateien in den Revisionen hochgeladen?' });
 
+    // Hat ein anderer PC das Teil (oder ein Unterteil) ausgecheckt? Erst fragen
+    const covered = _coveredItemIds(item.id, datasets.map(d => d.item_number));
+    const elsewhere = _checkoutsElsewhere(covered);
+    if (elsewhere.length && !req.body.force) return res.json({ ask: 'elsewhere', elsewhere });
+
     const safe = item.item_number.replace(/[^a-zA-Z0-9_-]/g, '_');
     const outDir = path.join(checkoutDir, safe);
     fs.mkdirSync(outDir, { recursive: true });
@@ -3724,6 +3861,7 @@ app.post('/api/items/:id/checkout', (req, res) => {
       item_type: item.item_type, checked_out: new Date().toISOString(), files: copied,
       rev_status: activeRev?.status || null
     }, null, 2));
+    _recordCheckout(safe, item.id, covered);
 
     const nonRel = copied.filter(f => !f.readonly);
     if (nonRel.length) {
@@ -3904,7 +4042,70 @@ app.get('/api/checkout/list', (req, res) => {
       return { ...m, folder: path.join(checkoutDir, name), folder_name: name };
     } catch { return null; }
   }).filter(Boolean);
+  _syncCheckouts(entries);
   res.json(entries.sort((a, b) => b.checked_out.localeCompare(a.checked_out)));
+});
+
+// ── CHECKOUT-VERMERKE ─────────────────────────────────────────
+// Den Checkout-Ordner sieht nur der PC, auf dem er liegt. Damit die anderen
+// wissen, was dort in Arbeit ist, steht jeder Checkout zusätzlich in der
+// Datenbank (Tabelle checkouts): Item, PC, Ordner, Zeitpunkt.
+function _coveredItemIds(rootId, itemNumbers) {
+  const ids = new Set([rootId]);
+  for (const n of new Set(itemNumbers)) {
+    const id = get('SELECT id FROM items WHERE item_number=?', [n])?.id;
+    if (id) ids.add(id);
+  }
+  return [...ids];
+}
+function _recordCheckout(folder, rootId, itemIds, at = new Date().toISOString()) {
+  run('DELETE FROM checkouts WHERE host=? AND folder=?', [_thisPc(), folder]);
+  for (const id of itemIds) {
+    run('INSERT INTO checkouts (item_id, root_item_id, host, folder, created_at) VALUES (?,?,?,?,?)', [id, rootId, _thisPc(), folder, at]);
+  }
+}
+function _checkoutsElsewhere(itemIds) {
+  if (!itemIds.length) return [];
+  return all(`SELECT c.host, c.created_at, i.item_number, i.name AS item_name FROM checkouts c
+    JOIN items i ON i.id=c.item_id
+    WHERE LOWER(c.host)<>LOWER(?) AND c.item_id IN (${itemIds.map(() => '?').join(',')})
+    ORDER BY c.created_at`, [_thisPc(), ...itemIds]);
+}
+// Die Vermerke dieses PCs an seinen Checkout-Ordner angleichen: Ordner von
+// vor den Vermerken eintragen, von Hand gelöschte oder nach einem Wechsel
+// des Checkout-Verzeichnisses nicht mehr sichtbare austragen
+function _syncCheckouts(entries) {
+  const host = _thisPc();
+  const known = new Set(all('SELECT DISTINCT folder FROM checkouts WHERE host=?', [host]).map(r => r.folder));
+  const onDisk = new Set(entries.map(e => e.folder_name));
+  for (const f of known) if (!onDisk.has(f)) run('DELETE FROM checkouts WHERE host=? AND folder=?', [host, f]);
+  for (const e of entries) {
+    if (known.has(e.folder_name) || !get('SELECT id FROM items WHERE id=?', [e.item_id])) continue;
+    _recordCheckout(e.folder_name, e.item_id, _coveredItemIds(e.item_id, (e.files || []).map(f => f.item_number)),
+      e.checked_out || new Date().toISOString());
+  }
+}
+// Auf anderen PCs ausgecheckt — je Ordner eine Zeile mit allen Items darin
+app.get('/api/checkout/elsewhere', (req, res) => {
+  const rows = all(`SELECT c.host, c.folder, c.item_id, c.root_item_id, c.created_at, r.item_number, r.name AS item_name, r.item_type
+    FROM checkouts c JOIN items r ON r.id=c.root_item_id WHERE LOWER(c.host)<>LOWER(?) ORDER BY c.created_at DESC`, [_thisPc()]);
+  const groups = new Map();
+  for (const r of rows) {
+    const key = r.host + '/' + r.folder;
+    if (!groups.has(key)) groups.set(key, { host: r.host, folder: r.folder, item_id: r.root_item_id, item_number: r.item_number,
+      item_name: r.item_name, item_type: r.item_type, checked_out: r.created_at, item_ids: [] });
+    groups.get(key).item_ids.push(r.item_id);
+  }
+  res.json([...groups.values()]);
+});
+// Vermerk eines anderen PCs entfernen — der PC ist ausgemustert oder der
+// Ordner dort längst gelöscht. Checkt er später ein, schadet das nicht.
+app.post('/api/checkout/forget', (req, res) => {
+  const { host, folder } = req.body || {};
+  if (!host || !folder) return res.status(400).json({ error: 'PC und Ordner fehlen' });
+  if (_isThisPc(host)) return res.status(400).json({ error: 'Checkouts dieses PCs: einchecken statt entfernen' });
+  run('DELETE FROM checkouts WHERE host=? AND folder=?', [String(host), String(folder)]);
+  res.json({ success: true });
 });
 
 // Im Checkout bearbeitet? Gleiches Änderungsdatum und gleiche Grösse wie beim
@@ -4023,6 +4224,7 @@ app.post('/api/checkout/checkin', (req, res) => {
 
     // Delete folder
     deleteFolderRecursive(folder);
+    run('DELETE FROM checkouts WHERE host=? AND folder=?', [_thisPc(), path.basename(folder)]);
     if (meta) log('item', meta.item_id, 'Eingecheckt', `${uploaded.length} Datei(en) hochgeladen, `
       + (discarded ? `${discarded} geänderte verworfen, ` : '') + 'Ordner gelöscht');
     res.json({ success: true, uploaded, revisions, discarded });
@@ -5725,9 +5927,9 @@ app.delete('/api/settings/logo', (req, res) => {
   res.json(_publicSettings());
 });
 
-// Nicht hierüber: das Logo (/api/settings/logo) und das Checkout-Verzeichnis
-// (/api/checkout-dir — es steht in plm.config, pro PC)
-const SETTINGS_ELSEWHERE = [...LOGO_KEYS, 'checkout_dir'];
+// Nicht hierüber: das Logo (/api/settings/logo), das Checkout-Verzeichnis
+// (/api/checkout-dir — es steht in plm.config, pro PC) und der Datenstand
+const SETTINGS_ELSEWHERE = [...LOGO_KEYS, 'checkout_dir', 'data_stand'];
 
 app.put('/api/settings', (req, res) => {
   Object.entries(req.body).filter(([k]) => !SETTINGS_ELSEWHERE.includes(k)).forEach(([k, v]) => {
@@ -8194,11 +8396,10 @@ async function choosePort() {
   return port;
 }
 
-// Die Datenbank lädt erst, wenn die Sperre diesem PLM gehört. Hat sie ein
-// anderes, startet der Server trotzdem: Im Browser lässt sich übernehmen.
-choosePort().then(p => { PORT = p; }).then(async () => {
-  if (claimLockAtStart()) { await initDb(); afterDbLoaded(); }
-}).then(() => {
+// Die Datenbank lädt erst, wenn der Datenordner da ist, die Sperre diesem
+// PLM gehört und die Daten nicht von einem neueren PLM stammen. Sonst
+// startet der Server trotzdem: Im Browser lässt sich entscheiden.
+choosePort().then(p => { PORT = p; }).then(() => openData()).then(() => {
   startLockBeat();
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('');
@@ -8212,6 +8413,14 @@ choosePort().then(p => { PORT = p; }).then(async () => {
       console.log(`\n  Die Daten sind in Benutzung: PLM auf ${h.this_pc ? 'diesem PC' : h.host}`
         + ` (zuletzt aktiv ${new Date(h.beat).toLocaleString('de-CH')}).`);
       console.log('  Im Browser uebernehmen oder dieses Fenster schliessen.');
+    }
+    if (lockState.mode === 'missing') {
+      console.log(`\n  ${lockState.reason === 'no-dir' ? 'Datenordner nicht gefunden' : 'Keine Datenbank im Datenordner'}`
+        + ' - Netzlaufwerk verbunden? Im Browser erneut versuchen oder neu anlegen.');
+    }
+    if (lockState.mode === 'version') {
+      console.log(`\n  Die Daten stammen von einem neueren PLM (${lockState.newer.version} vom `
+        + `${new Date(lockState.newer.date).toLocaleDateString('de-CH')}) - zuerst aktualisieren.`);
     }
     console.log('');
     openBrowser(PORT);

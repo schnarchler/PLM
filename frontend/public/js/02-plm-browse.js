@@ -815,10 +815,13 @@ function renderItemSheet(item, activeRevId) {
 
   // -- Kopfzeile: Checkout-Status und QR-Code
   const checkout = (state.checkouts || []).find(c => c.item_id === item.id);
+  // Auf einem anderen PC ausgecheckt — auch als Unterteil einer Baugruppe
+  const elsewhere = (state.checkoutsElsewhere || []).filter(c => c.item_ids.includes(item.id));
   // Eingecheckt ist der Normalfall — der Knopf oben zeigt ihn schon
-  const coBadge = checkout
+  const coBadge = (checkout
     ? `<span class="status st-REV" style="background:var(--teal-soft);color:var(--teal)">ausgecheckt</span>`
-    : '';
+    : '') + elsewhere.map(c => `<span class="status st-REV" style="background:var(--amber-soft);color:var(--amber)"
+      title="seit ${esc(fmtDate(c.checked_out))}${c.item_id !== item.id ? ' · mit ' + esc(c.item_number) : ''}">ausgecheckt auf ${esc(c.host)}</span>`).join(' ');
 
   // -- Beschreibung der gewählten Revision. In jeder Revision änderbar (✏),
   // auch wenn das Teil sonst gesperrt ist — die anderen Revisionen bleiben gleich.

@@ -417,7 +417,17 @@ async function doCheckout(itemId) {
   if (btn) { btn.textContent = '⏳ Wird kopiert…'; btn.disabled = true; }
 
   try {
-    const r = await api(`/api/items/${itemId}/checkout`, 'POST', { types, mode });
+    let r = await api(`/api/items/${itemId}/checkout`, 'POST', { types, mode });
+    // Schon auf einem anderen PC ausgecheckt: dort Bearbeitetes wäre hier nicht dabei
+    if (r.ask === 'elsewhere') {
+      const lines = r.elsewhere.map(c => `• ${c.item_number} ${c.item_name} — auf ${c.host} seit ${fmtDate(c.checked_out || c.created_at)}`);
+      if (!confirm(`Schon ausgecheckt auf einem anderen PC:\n\n${lines.join('\n')}\n\n`
+        + 'Was dort bearbeitet wird, ist hier nicht dabei — am besten dort zuerst einchecken. Trotzdem auschecken?')) {
+        if (btn) { btn.textContent = orig; btn.disabled = false; }
+        return;
+      }
+      r = await api(`/api/items/${itemId}/checkout`, 'POST', { types, mode, force: true });
+    }
     _hideDynModal();
     if (r.warning) { toast(r.warning, 'err'); return; }
     await loadCheckouts();
@@ -601,9 +611,22 @@ async function cleanupCheckoutDir(btn) {
   showCheckoutList();
 }
 
+// Vermerk eines anderen PCs entfernen (der Ordner dort bleibt, wie er ist)
+async function _coForget(i, btn) {
+  const c = state.checkoutsElsewhere[i];
+  if (!c || !confirm(`Vermerk „${c.item_number} auf ${c.host}“ entfernen?\n\nNur sinnvoll, wenn es den Checkout dort nicht mehr gibt `
+    + '(PC ausgemustert, Ordner gelöscht). Die Dateien auf dem anderen PC bleiben unberührt.')) return;
+  btn.disabled = true;
+  try { await api('/api/checkout/forget', 'POST', { host: c.host, folder: c.folder }); }
+  catch { btn.disabled = false; return; }
+  showCheckoutList();
+  if (state.item) renderItemDetail(state.item, state.activeRevId);
+}
+
 async function showCheckoutList() {
   await loadCheckouts();
   const list = state.checkouts;
+  const elsewhere = state.checkoutsElsewhere || [];
   _coFolders = list.map(c => c.folder);
   const totalFiles = list.reduce((s, c) => s + (c.files?.length || 0), 0);
   const newCount = _scanNewCount();
@@ -675,7 +698,24 @@ async function showCheckoutList() {
             </div>`;
           }).join('')}
         </div>
-      </div>` : (!newCount ? `<div style="color:var(--t3);font-size:13px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>` : '')}
+      </div>` : (!newCount && !elsewhere.length ? `<div style="color:var(--t3);font-size:13px;padding:16px 0;text-align:center">Keine aktiven Checkouts</div>` : '')}
+
+      ${elsewhere.length ? `<div>
+        <div style="font-size:13px;font-weight:600;color:var(--t3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Auf anderen PCs ausgecheckt</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${elsewhere.map((c, i) => `<div style="background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                ${_itemChip(c.item_type,18)}
+                <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(c.item_number)}</span>
+                <span style="font-size:13px;font-weight:500;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.item_name)}</span>
+                <span style="font-size:13px;color:var(--amber);flex-shrink:0">auf ${esc(c.host)}</span>
+                <span style="font-size:13px;color:var(--t4);flex-shrink:0">${fmtDate(c.checked_out)}</span>
+                <button class="btn btn-ghost btn-sm" title="Nur den Vermerk entfernen — z.B. wenn es den PC nicht mehr gibt" onclick="_coForget(${i},this)">Vermerk entfernen</button>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="font-size:12px;color:var(--t4);margin-top:6px">Eingecheckt wird an dem PC, auf dem ausgecheckt wurde.</div>
+      </div>` : ''}
 
     </div>
     <div class="modal-foot">

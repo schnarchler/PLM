@@ -261,6 +261,8 @@ async function loadSlicerStatus() {
 async function loadCheckouts() {
   try {
     state.checkouts = await api('/api/checkout/list');
+    // Auf anderen PCs ausgecheckt (Vermerk in der Datenbank)
+    state.checkoutsElsewhere = await api('/api/checkout/elsewhere').catch(() => []);
     await _scanCheckoutFolder();
     _updateCheckoutBadge();
   } catch {}

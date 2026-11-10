@@ -18,8 +18,8 @@ const BASE_PORT = 4200;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-sperre-'));
 const procs = [];
 
-function start(dataDir, port, cfg = dataDir + '.config') {
-  fs.mkdirSync(dataDir, { recursive: true });
+function start(dataDir, port, cfg = dataDir + '.config', { mkdir = true } = {}) {
+  if (mkdir) fs.mkdirSync(dataDir, { recursive: true });
   const proc = spawn('node', [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PLM_DATA_DIR: dataDir, PLM_PORT: String(port), PLM_CONFIG: cfg, PLM_OPEN_BROWSER: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -52,6 +52,15 @@ async function ok(s, url, method = 'GET', body) {
   return r.body;
 }
 const names = async s => (await ok(s, '/api/projects')).map(p => p.name).sort();
+// Ein Teil mit einer Datei — zum Auschecken
+async function partWithFile(s, projectId, name) {
+  const item = await ok(s, `/api/projects/${projectId}/items`, 'POST', { name, item_type: 'prt' });
+  const rev = (await ok(s, `/api/items/${item.id}`)).revisions[0].id;
+  const form = new FormData();
+  form.append('file', new Blob([`solid ${name}\nendsolid ${name}\n`]), name + '.stl');
+  assert.ok((await fetch(`${s.base}/api/revisions/${rev}/datasets`, { method: 'POST', body: form })).ok);
+  return item;
+}
 async function until(fn, ms = 5000) {
   for (let t = 0; t < ms; t += 50) { const v = await fn(); if (v) return v; await new Promise(r => setTimeout(r, 50)); }
   return fn();
@@ -66,6 +75,11 @@ async function printed(s, re) {
 // plm.db direkt lesen und ändern — wie ein anderer PC über das Netzlaufwerk
 let SQL;
 const sqlJs = async () => SQL || (SQL = await require('sql.js')());
+async function dbRows(file, sql) {
+  const db = new (await sqlJs()).Database(fs.readFileSync(file));
+  try { const r = db.exec(sql)[0]; return r ? r.values.map(v => Object.fromEntries(r.columns.map((c, i) => [c, v[i]]))) : []; }
+  finally { db.close(); }
+}
 async function dbNames(file) {
   const db = new (await sqlJs()).Database(fs.readFileSync(file));
   try { return (db.exec('SELECT name FROM projects')[0]?.values || []).map(r => r[0]).sort(); }
@@ -92,7 +106,8 @@ test('Sperre: ein zweites PLM wartet, Übernehmen lädt den aktuellen Stand, das
   const dir = path.join(tmp, 'geteilt');
   const dbFile = path.join(dir, 'plm.db');
   const a = await up(start(dir, BASE_PORT));
-  await ok(a, '/api/projects', 'POST', { name: 'Von A' });
+  const projA = await ok(a, '/api/projects', 'POST', { name: 'Von A' });
+  await ok(a, `/api/items/${(await partWithFile(a, projA.id, 'Halter')).id}/checkout`, 'POST', {});
   await until(async () => fs.existsSync(dbFile) && (await dbNames(dbFile)).includes('Von A'));
 
   const b = await up(start(dir, BASE_PORT + 1, path.join(tmp, 'geteilt-b.config')));
@@ -113,6 +128,7 @@ test('Sperre: ein zweites PLM wartet, Übernehmen lädt den aktuellen Stand, das
   assert.deepStrictEqual([read.status, read.body.lock.mode], [409, 'lost']);
   const lost = await ok(a, '/api/lock');
   assert.deepStrictEqual([lost.mode, lost.reason, lost.holder.port], ['lost', 'takeover', b.port]);
+  assert.strictEqual(lost.local_checkouts, 1, 'erinnert ans Einchecken');
   const refused = await call(a, '/api/projects', 'POST', { name: 'Zu spät' });
   assert.deepStrictEqual([refused.status, refused.body.lock.mode], [409, 'lost']);
 
@@ -182,7 +198,12 @@ test('Sperre beim Start: verwaist oder abgestürzt wird genommen, ein anderer PC
   lock(os.hostname(), dead.pid, 1000);
   s = await up(start(dir, BASE_PORT + 3));
   assert.strictEqual((await call(s, '/api/stats')).status, 200);
+  const proj = await ok(s, '/api/projects', 'POST', { name: 'Werkstatt' });
+  const teil = await ok(s, `/api/projects/${proj.id}/items`, 'POST', { name: 'Deckel', item_type: 'prt' });
   await stop(s);
+  // Auf dem anderen PC ist noch etwas ausgecheckt (Vermerk wie von dort)
+  await editDb(path.join(dir, 'plm.db'), `INSERT INTO checkouts (item_id, root_item_id, host, folder, created_at)
+    VALUES (${teil.id}, ${teil.id}, 'ANDERER-PC', '${teil.item_number}', '2026-11-01T08:00:00.000Z')`);
 
   // Anderer PC, eben noch aktiv: warten, bis hier jemand übernimmt
   lock('ANDERER-PC', 4242, 1000);
@@ -190,6 +211,7 @@ test('Sperre beim Start: verwaist oder abgestürzt wird genommen, ein anderer PC
   await printed(s, /Die Daten sind in Benutzung: PLM auf ANDERER-PC/);
   const l = await ok(s, '/api/lock');
   assert.deepStrictEqual([l.mode, l.holder.host, l.holder.this_pc, l.local], ['waiting', 'ANDERER-PC', false, true]);
+  assert.deepStrictEqual(l.checkouts, [{ item_number: teil.item_number, item_name: 'Deckel' }], 'dort noch ausgecheckt');
   assert.strictEqual((await call(s, '/api/projects')).status, 409);
   assert.strictEqual((await ok(s, '/api/lock/takeover', 'POST')).mode, 'own');
   assert.strictEqual((await call(s, '/api/stats')).status, 200);
@@ -259,4 +281,112 @@ test('Daten verschieben: Sperre und plm.db am neuen Ort gehören weiter diesem P
   assert.ok(!fs.existsSync(path.join(from, 'plm.lock')), 'die alte Kopie ist wieder frei');
   await stop(s);
   assert.ok(!fs.existsSync(path.join(to, 'plm.lock')));
+});
+
+test('Datenordner fehlt (Netzlaufwerk nicht verbunden): nichts still anlegen, sondern nachfragen', async () => {
+  // Die Daten, wie sie auf dem NAS liegen
+  const quelle = path.join(tmp, 'quelle');
+  let s = await up(start(quelle, BASE_PORT + 6));
+  await ok(s, '/api/projects', 'POST', { name: 'Auf dem NAS' });
+  await stop(s);
+
+  const dir = path.join(tmp, 'nas', 'plm-daten');
+  s = await up(start(dir, BASE_PORT + 6, path.join(tmp, 'nas.config'), { mkdir: false }));
+  await printed(s, /Datenordner nicht gefunden - Netzlaufwerk verbunden\?/);
+  let l = await ok(s, '/api/lock');
+  assert.deepStrictEqual([l.mode, l.reason, l.data_dir], ['missing', 'no-dir', dir]);
+  assert.strictEqual((await call(s, '/api/stats')).status, 409);
+  assert.strictEqual((await ok(s, '/api/lock/open', 'POST', {})).mode, 'missing', 'noch nicht verbunden');
+  assert.ok(!fs.existsSync(dir), 'nichts angelegt');
+
+  // Verbunden: Erneut versuchen lädt die Daten von dort
+  fs.mkdirSync(dir, { recursive: true });
+  fs.copyFileSync(path.join(quelle, 'plm.db'), path.join(dir, 'plm.db'));
+  assert.strictEqual((await ok(s, '/api/lock/open', 'POST', {})).mode, 'own');
+  assert.deepStrictEqual(await names(s), ['Auf dem NAS']);
+  await stop(s);
+
+  // Ordner und Dateien da, die Datenbank nicht (Sync-Ordner noch nicht fertig)
+  const halb = path.join(tmp, 'sync-halb');
+  fs.mkdirSync(path.join(halb, 'files'), { recursive: true });
+  fs.writeFileSync(path.join(halb, 'files', '1700000000000-abcd1234.stl'), 'solid x\nendsolid x\n');
+  s = await up(start(halb, BASE_PORT + 6));
+  l = await ok(s, '/api/lock');
+  assert.deepStrictEqual([l.mode, l.reason], ['missing', 'no-db']);
+  assert.ok(!fs.existsSync(path.join(halb, 'plm.db')));
+  // Bewusst neu beginnen
+  assert.strictEqual((await ok(s, '/api/lock/open', 'POST', { create: true })).mode, 'own');
+  assert.deepStrictEqual(await names(s), []);
+  await stop(s);
+  assert.ok(fs.existsSync(path.join(halb, 'plm.db')));
+});
+
+test('Checkout-Vermerke: andere PCs sehen, was wo ausgecheckt ist', async () => {
+  const dir = path.join(tmp, 'vermerk');
+  const dbFile = path.join(dir, 'plm.db');
+  let s = await up(start(dir, BASE_PORT + 7));
+  const proj = await ok(s, '/api/projects', 'POST', { name: 'Vorrichtung' });
+  const hier = await partWithFile(s, proj.id, 'Platte');
+  const dort = await partWithFile(s, proj.id, 'Winkel');
+  const co = await ok(s, `/api/items/${hier.id}/checkout`, 'POST', {});
+  await stop(s);
+  assert.deepStrictEqual(await dbRows(dbFile, 'SELECT host, folder, item_id FROM checkouts'),
+    [{ host: os.hostname(), folder: path.basename(co.folder), item_id: hier.id }], 'mit diesem PC vermerkt');
+
+  // Auf dem Laptop ist der Winkel ausgecheckt (Vermerk wie von dort)
+  await editDb(dbFile, `INSERT INTO checkouts (item_id, root_item_id, host, folder, created_at)
+    VALUES (${dort.id}, ${dort.id}, 'LAPTOP', '${dort.item_number}', '2026-11-01T08:00:00.000Z')`);
+  s = await up(start(dir, BASE_PORT + 7));
+  const elsewhere = await ok(s, '/api/checkout/elsewhere');
+  assert.deepStrictEqual(elsewhere.map(c => [c.host, c.item_number, c.item_ids]), [['LAPTOP', dort.item_number, [dort.id]]]);
+
+  // Hier auschecken fragt zuerst und legt nichts an
+  const ask = await ok(s, `/api/items/${dort.id}/checkout`, 'POST', {});
+  assert.deepStrictEqual([ask.ask, ask.elsewhere.map(c => c.host)], ['elsewhere', ['LAPTOP']]);
+  assert.ok(!fs.existsSync(path.join(dir, 'checkout', dort.item_number)));
+  const co2 = await ok(s, `/api/items/${dort.id}/checkout`, 'POST', { force: true });
+  assert.ok(fs.existsSync(co2.folder), 'trotzdem ausgecheckt');
+
+  // Einchecken trägt den eigenen Vermerk aus; ein von Hand gelöschter Ordner
+  // verschwindet beim nächsten Blick in die Liste; der Laptop bleibt vermerkt
+  await ok(s, '/api/checkout/checkin', 'POST', { folder: co2.folder });
+  fs.rmSync(co.folder, { recursive: true, force: true });
+  assert.deepStrictEqual(await ok(s, '/api/checkout/list'), []);
+  assert.strictEqual((await ok(s, '/api/checkout/elsewhere')).length, 1);
+
+  // Den Laptop gibt es nicht mehr: Vermerk entfernen
+  assert.strictEqual((await call(s, '/api/checkout/forget', 'POST', { host: os.hostname(), folder: 'x' })).status, 400);
+  await ok(s, '/api/checkout/forget', 'POST', { host: 'LAPTOP', folder: dort.item_number });
+  assert.deepStrictEqual(await ok(s, '/api/checkout/elsewhere'), []);
+  await stop(s);
+  assert.deepStrictEqual(await dbRows(dbFile, 'SELECT * FROM checkouts'), []);
+});
+
+test('Datenstand: Daten von einem neueren PLM öffnet ein älteres erst nach Rückfrage', async t => {
+  const dir = path.join(tmp, 'stand');
+  const dbFile = path.join(dir, 'plm.db');
+  let s = await up(start(dir, BASE_PORT + 8));
+  const v = await ok(s, '/api/version');
+  if (!v.date) { await stop(s); return t.skip('Stand ohne Commit-Datum (weder Git noch version.json)'); }
+  await ok(s, '/api/projects', 'POST', { name: 'Bestand' });
+  await stop(s);
+  const stand = async () => JSON.parse((await dbRows(dbFile, "SELECT value FROM settings WHERE key='data_stand'"))[0].value);
+  assert.deepStrictEqual([(await stand()).date, (await stand()).version], [v.date, v.version], 'vermerkt');
+
+  // Ein anderer PC mit neuerem PLM hat die Daten geöffnet
+  const newer = { version: '9.9.999', date: '2099-01-01T12:00:00+01:00', commit: 'abcdef0' };
+  await editDb(dbFile, `UPDATE settings SET value='${JSON.stringify(newer)}' WHERE key='data_stand'`);
+  s = await up(start(dir, BASE_PORT + 8));
+  await printed(s, /Die Daten stammen von einem neueren PLM \(9\.9\.999 vom 1\.1\.2099\)/);
+  const l = await ok(s, '/api/lock');
+  assert.deepStrictEqual([l.mode, l.newer.version, l.stand.version], ['version', '9.9.999', v.version]);
+  assert.strictEqual((await call(s, '/api/projects')).status, 409);
+  assert.strictEqual((await call(s, '/api/lock/open', 'POST', {})).body.mode, 'version', 'ohne Rückfrage nicht');
+
+  // Trotzdem öffnen: geht, der neuere Stand bleibt vermerkt — beim nächsten Start wird wieder gefragt
+  assert.strictEqual((await ok(s, '/api/lock/open', 'POST', { older_ok: true })).mode, 'own');
+  assert.deepStrictEqual(await names(s), ['Bestand']);
+  await ok(s, '/api/projects', 'POST', { name: 'Trotzdem' });
+  await stop(s);
+  assert.strictEqual((await stand()).version, '9.9.999');
 });

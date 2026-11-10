@@ -60,6 +60,13 @@ bietet „Hier weiterarbeiten“ an. Eine Sperre ohne Lebenszeichen seit 10 Minu
 Ruhezustand) gilt als verwaist. Zusätzlich vergleicht PLM vor jedem Speichern `plm.db` mit dem
 Stand, den es zuletzt gelesen oder geschrieben hat: Hat jemand anderes sie geändert, wird sie
 nicht überschrieben, und Ungespeichertes landet als `…-nicht-gespeichert.db` in `backups/`.
+Fehlt der eingetragene Datenordner oder liegt darin keine `plm.db` (Netzlaufwerk nicht
+verbunden, Sync noch nicht fertig), legt PLM nicht still eine leere Datenbank an, sondern fragt
+im Browser (erneut versuchen / neu anlegen); ein leerer Ordner und `backend/data` gelten als neu.
+Den Ordner legt deshalb nicht mehr `START-PLM.bat` an, sondern der Server. Jeder Checkout steht
+zusätzlich mit dem PC-Namen in der Tabelle `checkouts`, damit die anderen PCs ihn sehen. Und die
+Datenbank merkt sich in `settings.data_stand`, welcher PLM-Stand sie zuletzt geöffnet hat
+(verglichen wird das Commit-Datum): Ein älterer Stand öffnet sie erst nach Rückfrage.
 Ein echtes Netzlaufwerk (SMB/NAS) ist dafür sicherer als ein Sync-Ordner (Proton Drive,
 OneDrive), der verzögert abgleicht. Bedienung siehe [HANDBUCH.md](HANDBUCH.md), Kapitel 2.
 
@@ -719,7 +726,7 @@ Die wichtigsten Testdateien:
 
 | Datei | Inhalt |
 |---|---|
-| `test/sperre.test.js` | geteiltes Datenverzeichnis: Warten und Übernehmen, Änderung von aussen, verwaiste Sperren, Checkout-Verzeichnis pro PC, Sperre beim Verschieben |
+| `test/sperre.test.js` | geteiltes Datenverzeichnis: Warten und Übernehmen, Änderung von aussen, verwaiste Sperren, Checkout-Verzeichnis pro PC, Sperre beim Verschieben, fehlender Datenordner, Checkout-Vermerke, Datenstand |
 | `test/smoke.test.js` | Aufträge, Preis-Sync Auftrag ↔ Produktion, Lagerbuchungen, Backups |
 | `test/workflow.test.js` | Projektfarben, Klassifizierungs-Ableitung, 3MF-Druckparameter, Revisionsfixierung, einfacher Workflow, Normteil-Einkauf, Materialabzug, Angebotsphase, Kundenlöschung |
 | `test/revisionen.test.js` | gelieferter Stand (Fixieren, Sperre, Lösen, Korrektur, Check-in), Revisionsvergleich, ECO-Übernahme, Suche mit Klassifizierung, Umbenennen von Klassifizierungen |

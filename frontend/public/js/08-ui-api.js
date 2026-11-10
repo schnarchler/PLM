@@ -244,14 +244,37 @@ function _lockDialogHtml(l) {
   const who = pc || (h ? 'ein anderes PLM auf diesem PC' : 'ein anderes PLM');          // wer arbeitet
   const byWho = pc || (h ? 'einem anderen PLM auf diesem PC' : 'einem anderen PLM');   // von wem übernommen
   const code = t => `<code style="font-family:var(--mono);user-select:all">${esc(t)}</code>`;
-  let title, text, go;
+  const pathCode = t => `<code style="font-family:var(--mono);user-select:all;word-break:break-all">${esc(t)}</code>`;
+  const strong = t => `<b style="color:var(--t1)">${t}</b>`;
+  const day = d => d ? new Date(d).toLocaleDateString('de-CH') : '?';
+  // Knöpfe: [Beschriftung, Aufruf, nur am PC selbst?]
+  let title, text, buttons = [];
   if (l.mode === 'waiting' || l.mode === 'loading') {
     title = h ? 'Die Daten sind in Benutzung' : 'Die Daten sind wieder frei';
     text = h ? `Gerade arbeitet ${who} damit (zuletzt aktiv ${_agoTxt(h.beat)}). Damit nichts überschrieben wird,
-        arbeitet immer nur ein PLM mit den Daten.<br><br><b style="color:var(--t1)">Übernehmen</b>, wenn dort niemand
-        mehr arbeitet — das andere PLM speichert danach nichts mehr.`
+        arbeitet immer nur ein PLM mit den Daten.`
+        + (l.checkouts?.length ? `<br><br>Dort noch ausgecheckt: ${l.checkouts.map(c => `${code(c.item_number)} ${esc(c.item_name)}`).join(', ')}
+          — am besten dort zuerst einchecken, sonst fehlt hier, was dort bearbeitet wird.` : '')
+        + `<br><br>${strong('Übernehmen')}, wenn dort niemand mehr arbeitet — das andere PLM speichert danach nichts mehr.`
       : 'Das andere PLM wurde inzwischen beendet.';
-    go = h ? 'Übernehmen' : 'Starten';
+    buttons.push([h ? 'Übernehmen' : 'Starten', '_takeOverData(this)', true]);
+  } else if (l.mode === 'missing') {
+    title = l.reason === 'no-dir' ? 'Datenordner nicht gefunden' : 'Keine Datenbank im Datenordner';
+    text = `${l.reason === 'no-dir' ? `Den Datenordner ${pathCode(l.data_dir)} gibt es nicht.`
+      : `Im Datenordner ${pathCode(l.data_dir)} liegt keine Datenbank (${code('plm.db')}).`}
+      Ist das Netzlaufwerk verbunden (NAS, VPN)? Liegt der Ordner in einem Sync-Ordner, ist er vielleicht noch nicht
+      fertig abgeglichen.<br><br>${strong('Erneut versuchen')}, sobald er erreichbar ist. ${strong('Neue Datenbank anlegen')}
+      nur, wenn hier wirklich neu begonnen werden soll — der Pfad steht in ${code('plm.config')} (${code('data_dir=')}).`;
+    buttons.push(['Neue Datenbank anlegen', '_openData(this, { create: true })', true],
+      ['Erneut versuchen', '_openData(this, {})', false]);
+  } else if (l.mode === 'version') {
+    title = 'Daten von einem neueren PLM';
+    text = `Die Daten wurden zuletzt mit PLM ${esc(l.newer?.version || '?')} vom ${day(l.newer?.date)} geöffnet, hier läuft
+      ${esc(l.stand?.version || '?')} vom ${day(l.stand?.date)}. Ein älterer Stand kennt die Umstellungen des neueren nicht
+      und könnte Daten im alten Format schreiben.<br><br>Zuerst ${strong('aktualisieren')}. ${strong('Trotzdem öffnen')}
+      nur, wenn es nicht anders geht.`;
+    buttons.push(['Trotzdem öffnen', '_openData(this, { older_ok: true })', true],
+      ['Aktualisieren…', '_updateFromLock()', true]);
   } else {
     title = l.reason === 'takeover' ? 'PLM arbeitet jetzt woanders' : 'Daten von aussen geändert';
     // Wann der andere übernommen hat (seine Sperre), nicht wann es hier auffiel
@@ -260,18 +283,22 @@ function _lockDialogHtml(l) {
       + ' Hier wird nichts mehr gespeichert, der angezeigte Stand ist nicht mehr aktuell.'
       + (l.saved_as ? `<br><br>Was hier noch nicht gespeichert war, liegt als Sicherung ${code(l.saved_as)} vor
           (Einstellungen → Daten → Datensicherung).` : '')
-      + `<br><br><b style="color:var(--t1)">Hier weiterarbeiten</b> lädt den aktuellen Stand`
+      + (l.local_checkouts ? `<br><br>Auf diesem PC ${l.local_checkouts === 1 ? 'ist noch 1 Teil' : `sind noch ${l.local_checkouts} Teile`}
+          ausgecheckt. Zum Einchecken hier weiterarbeiten.` : '')
+      + `<br><br>${strong('Hier weiterarbeiten')} lädt den aktuellen Stand`
       + (l.reason === 'takeover' ? ' — das andere PLM speichert danach nichts mehr.' : '.');
-    go = 'Hier weiterarbeiten';
+    buttons.push(['Hier weiterarbeiten', '_takeOverData(this)', true]);
   }
-  return `<div class="modal" style="max-width:480px">
+  const shown = buttons.filter(([, , localOnly]) => l.local || !localOnly);
+  return `<div class="modal" style="max-width:560px">
     <div class="modal-head"><div class="modal-title" style="color:var(--amber)">${title}</div></div>
     <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2);line-height:1.6">${text}
-      ${l.local ? '' : '<div style="margin-top:10px;color:var(--t3)">Übernehmen geht nur am PC, auf dem dieses PLM läuft.</div>'}
+      ${shown.length < buttons.length ? '<div style="margin-top:10px;color:var(--t3)">Entscheiden lässt sich das nur am PC, auf dem dieses PLM läuft.</div>' : ''}
     </div>
-    <div class="modal-foot" style="gap:6px">
+    <div class="modal-foot" style="gap:6px;flex-wrap:wrap">
       <button class="btn btn-ghost" onclick="_doShutdown(false)">PLM hier beenden</button>
-      ${l.local ? `<button class="btn btn-primary" onclick="_takeOverData(this)"${l.mode === 'loading' ? ' disabled' : ''}>${go}</button>` : ''}
+      ${shown.map(([label, call], i) => `<button class="btn ${i === shown.length - 1 ? 'btn-primary' : 'btn-ghost'}"
+        onclick="${call}"${l.mode === 'loading' ? ' disabled' : ''}>${label}</button>`).join('')}
     </div>
   </div>`;
 }
@@ -279,7 +306,7 @@ let _lockShown = '';
 function showLockDialog(l) {
   let ov = document.getElementById('lockModal');
   if (!l || l.mode === 'own') { ov?.remove(); _lockShown = ''; return; }
-  const key = JSON.stringify([l.mode, l.reason, l.holder?.host, l.holder?.beat, l.saved_as, l.local]);
+  const key = JSON.stringify([l.mode, l.reason, l.holder?.host, l.holder?.beat, l.saved_as, l.local, l.checkouts?.length, l.local_checkouts]);
   if (ov && key === _lockShown) return;
   _lockShown = key;
   if (!ov) {
@@ -289,14 +316,28 @@ function showLockDialog(l) {
   }
   ov.innerHTML = _lockDialogHtml(l);
 }
-async function _takeOverData(btn) {
+// Knopf im Dialog: Anfrage stellen; ist danach alles da, Seite neu laden,
+// sonst zeigt der Dialog den neuen Zustand (z.B. jetzt in Benutzung)
+async function _lockAction(btn, url, body, busy) {
   const label = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Übernimmt…';
-  const r = await fetch('/api/lock/takeover', { method: 'POST' }).catch(() => null);
-  if (r?.ok) return location.reload();
-  const e = await r?.json().catch(() => null);
-  toast(e?.error || 'Übernehmen fehlgeschlagen', 'err');
+  btn.disabled = true; btn.textContent = busy;
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}) }).catch(() => null);
+  const d = await r?.json().catch(() => null);
+  if (r?.ok && d?.mode === 'own') return location.reload();
   btn.disabled = false; btn.textContent = label;
+  if (!r?.ok) return toast(d?.error || 'Das hat nicht geklappt', 'err');
+  if (d?.mode === 'missing') toast('Noch immer nicht gefunden', 'err');
+  showLockDialog(d);
+}
+function _takeOverData(btn) { return _lockAction(btn, '/api/lock/takeover', {}, 'Übernimmt…'); }
+function _openData(btn, body) { return _lockAction(btn, '/api/lock/open', body, body.create ? 'Legt an…' : 'Sucht…'); }
+// Neuerer Datenstand: Update-Dialog über den Sperr-Dialog legen
+async function _updateFromLock() {
+  document.getElementById('lockModal')?.remove();
+  _lockShown = '';
+  await checkUpdate(true);
+  showUpdateDialog();
 }
 // Zurück an diesem PC (Tab wieder sichtbar, Laptop aus dem Ruhezustand):
 // gleich nachsehen, ob die Daten inzwischen ein anderes PLM hat

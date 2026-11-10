@@ -65,17 +65,9 @@ if not exist "%PLM_DIR%\node_modules" (
     )
 )
 
-:: Datenverzeichnis anlegen
-if not exist "%PLM_DATA_DIR%" (
-    mkdir "%PLM_DATA_DIR%"
-    if %errorlevel% neq 0 (
-        echo FEHLER: Datenverzeichnis konnte nicht erstellt werden: %PLM_DATA_DIR%
-        echo Bitte Pfad pruefen oder als Administrator ausfuehren.
-        pause
-        exit /b 1
-    )
-)
-if not exist "%PLM_DATA_DIR%\files" mkdir "%PLM_DATA_DIR%\files"
+:: Das Datenverzeichnis legt der Server an - fehlt ein eingetragener Ordner
+:: (Netzlaufwerk nicht verbunden?), fragt er im Browser nach, statt still
+:: eine leere Datenbank anzulegen.
 
 :: Info
 echo.
