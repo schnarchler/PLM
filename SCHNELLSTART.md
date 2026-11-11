@@ -53,7 +53,7 @@ legt eine neue Revision an und übernimmt Dateien, Stückliste und Druckparamete
 
 ## 4. Die wichtigsten Daten
 
-**Nummern** (Präfixe unter Einstellungen → Nummern änderbar)
+**Nummern** (Präfixe unter Einstellungen → Nummerierung änderbar)
 
 | Was | Beispiel | | Was | Beispiel |
 |---|---|---|---|---|

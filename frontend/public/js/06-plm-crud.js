@@ -116,7 +116,7 @@ function _admPreview() {
 
 async function saveAdminSettings() {
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">${_t('Nummern speichern')}</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Nummerierung speichern')}</div></div>
     <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2)">
       ${_t('Änderungen an Präfixen und Nummernformat gelten nur für <b>neu angelegte</b> Datensätze.')}<br><br>
       ${_t('Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.')}<br><br>
@@ -153,7 +153,7 @@ async function _doSaveAdminSettings() {
   };
   await api('/api/settings', 'PUT', settings);
   state.settings = await api('/api/settings');
-  toast(_t('Nummern gespeichert'), 'ok');
+  toast(_t('Nummerierung gespeichert'), 'ok');
 }
 
 const DEFAULT_CLASSIFICATIONS = [

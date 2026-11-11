@@ -169,8 +169,8 @@ Funktionen. Details stehen jeweils im verlinkten Kapitel.
    Zahlungsbedingungen, Angebotsgültigkeit.
 3. **3D-Druck** (falls genutzt): Einstellungen → **3D-Druck** → **+ Drucker hinzufügen**
    (mit CHF/h), **+ Düse hinzufügen**.
-4. **Personen:** Einstellungen → **Personen** → eigenen Namen eintragen. Arbeiten mehrere Personen
-   mit PLM, jede Person anlegen und eine Rolle geben (siehe 20, Personen).
+4. **Benutzer:** Einstellungen → **Benutzer** → eigenen Namen eintragen. Arbeiten mehrere Personen
+   mit PLM, jede Person anlegen und eine Rolle geben (siehe 20, Benutzer).
 5. **Checkout-Verzeichnis** (falls mit CAD gearbeitet wird): Einstellungen → **CAD & Checkout** →
    **Pfad speichern** (siehe 9). Gilt nur für diesen PC.
 6. **Freigabe-Workflow wählen:** Einstellungen → **Freigabe** → **Mit Freigabe** (Standard) oder
@@ -1053,7 +1053,7 @@ Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktion
 
 Navigation → **Historie** (Tab **PLM**) — vollständiges Protokoll aller Änderungen im PLM, nach Tag gruppiert. Klick auf die Nummer öffnet das betroffene Item, Projekt, den Auftrag oder Produktionsauftrag. **↺ Aktualisieren** lädt neu.
 
-Sind Personen angelegt (Einstellungen → **Personen**), steht neben jedem Eintrag, wer ihn gemacht hat — auch in der Historie eines Items oder Projekts und unter „Letzte Änderung“ im Datenblatt. Ältere Einträge haben keinen Namen.
+Sind Personen angelegt (Einstellungen → **Benutzer**), steht neben jedem Eintrag, wer ihn gemacht hat — auch in der Historie eines Items oder Projekts und unter „Letzte Änderung“ im Datenblatt. Ältere Einträge haben keinen Namen.
 
 **⬇ CSV** exportiert die Einträge, mit der Person als eigener Spalte.
 
@@ -1078,13 +1078,13 @@ nächsten Öffnen erscheint die zuletzt gewählte Seite.
 | Gruppe | Seite | Inhalt |
 |---|---|---|
 | Allgemein | **Darstellung** | Sprache, Schriftgrösse, Farbdesign |
-| | **Personen** | wer mit PLM arbeitet, Rollen, PIN |
+| | **Benutzer** | wer mit PLM arbeitet, Rollen, PIN |
 | Daten | **Sicherung & Export** | Sicherungen, Export, Datei-Index (siehe 21) |
 | | **Speicherort** | Speicherbelegung, Datenpfad, Daten verschieben |
 | Firma & Belege | **Firma** | Briefkopf, Logo, Bankangaben |
 | | **Belege & Preise** | MwSt., Angebotsgültigkeit, Zahlungsbedingungen, Stundensatz, Sprache der Belege, Fusszeilen |
 | | **Bon & Etiketten** | Kassabon und Rohmaterial-Etikett (Thermodrucker) |
-| | **Nummern** | Präfixe und Stellen der Nummern, Revisionsformat |
+| | **Nummerierung** | Präfixe und Stellen der Nummern, Revisionsformat |
 | PLM | **Klassifizierungen** | Liste, Eigenschaften, Standard für neue Teile |
 | | **Freigabe** | Freigabe-Workflow, Vier-Augen-Prinzip, Prüfung vor der Freigabe |
 | | **Prüfprotokoll** | Vorlage für das Prüfprotokoll |
@@ -1096,7 +1096,7 @@ nächsten Öffnen erscheint die zuletzt gewählte Seite.
 Sprache der Oberfläche, Schriftgrösse (Klein bis Sehr gross) und Farbdesign (**Standard** oder
 **Helleres Design**). Wird auf dem Server gespeichert und gilt für alle.
 
-### Personen
+### Benutzer
 Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Passwort.
 
 - **Allein:** Namen eintragen („Dein Name“). PLM fragt nie, wer dran ist; der Name steht in der Historie und bei Freigaben.
@@ -1110,7 +1110,7 @@ Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Pas
   | **Admin** | alles: Einstellungen, Personen, Stammdaten löschen, Sicherungen zurückspielen, ERP-Verlauf |
 
 - **PIN:** Jede Person kann unter Einstellungen eine eigene PIN setzen, ändern oder entfernen (mit der bisherigen PIN). Sie wird beim Wechsel zu dieser Person abgefragt, nicht beim Weitermachen nach einer Pause. Admins können PINs aller Personen setzen oder entfernen, z. B. wenn jemand seine vergessen hat.
-- **Farbe:** Jede Person bekommt automatisch eine eigene Farbe. Sie erscheint auf der Kachel bei **Wer ist dran?** (Streifen oben, Kreis mit den Initialen) und oben beim Namen — so findet man sich schneller. Ändern: unter Einstellungen → Personen auf den farbigen Kreis klicken (nur Admins).
+- **Farbe:** Jede Person bekommt automatisch eine eigene Farbe. Sie erscheint auf der Kachel bei **Wer ist dran?** (Streifen oben, Kreis mit den Initialen) und oben beim Namen — so findet man sich schneller. Ändern: unter Einstellungen → Benutzer auf den farbigen Kreis klicken (nur Admins).
 - **Deaktivieren** statt löschen: Die Person bleibt in der Historie, steht aber nicht mehr zur Auswahl. Es braucht immer mindestens einen aktiven Admin.
 - **Rückmeldung (ab zwei Personen):** Das Sprechblasen-Symbol oben rechts meldet einen **Fehler** oder reicht eine **Idee** ein. Mitgeschickt werden Name, aktuelle Ansicht, geöffnetes Item, Version, Browser und die letzten Fehlermeldungen. Admins sehen offene Rückmeldungen oben auf dem **Dashboard**; ein Klick zeigt die Details, dort **✓ Erledigt** oder **Löschen**. **Liste →** zeigt alle, auch die erledigten — sind alle erledigt, steht dafür eine Zeile „Rückmeldungen: alle … erledigt · Liste →“ auf dem Dashboard.
 
@@ -1135,7 +1135,7 @@ Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen, Angeboten, Lie
 Einstellungen für den Pipsta-Thermodrucker: Fusszeile und Aufbau des **Kassabons** (Zeilenbreite,
 Datum, Kunde, Item-Nummer, Notizen) und das **Rohmaterial-Etikett** (z. B. **QR-Code auf Etikett drucken**).
 
-### Nummern
+### Nummerierung
 Präfixe und Stellen für Aufträge, Produktion, Kunden und Projekte, Jahreszahl in der Nummer,
 Aufbau der Item-Nummern (Kürzel, Stellen, Trennzeichen) und Revisionsformat (1, 2, 3 oder A, B, C).
 Die **Vorschau** zeigt, wie neue Nummern aussehen. Gilt nur für neu angelegte Datensätze;
@@ -1297,7 +1297,7 @@ danach warnt `START-PLM.bat` nicht mehr.
 
 **„Wer ist dran?“ erscheint jedes Mal.**
 Das ist so gewollt, sobald zwei oder mehr Personen angelegt sind. Allein arbeiten: die übrigen
-Personen unter Einstellungen → Personen deaktivieren.
+Personen unter Einstellungen → Benutzer deaktivieren.
 
 **Die Farben der Klassifizierungen passen nach einem Update nicht.**
 **Einstellungen → Klassifizierungen → Standardfarben.**
@@ -1362,7 +1362,7 @@ Kunden:        KD-0001
 Lieferanten:   LF-0001
 ```
 
-Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Nummern** konfigurierbar.
+Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Nummerierung** konfigurierbar.
 
 ---
 

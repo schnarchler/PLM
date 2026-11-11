@@ -7,9 +7,9 @@
 // Funktionen lesen ihre Felder per ID, auch die von anderen Seiten.
 const ST_PAGE_KEY = 'plm.settingsPage';
 const ST_NAV = () => [
-  [_t('Allgemein'), [['darstellung', _t('Darstellung')], ['benutzer', _t('Personen')]]],
+  [_t('Allgemein'), [['darstellung', _t('Darstellung')], ['benutzer', _t('Benutzer')]]],
   [_t('Daten'), [['sicherung', _t('Sicherung & Export')], ['speicherort', _t('Speicherort')]]],
-  [_t('Firma & Belege'), [['firma', _t('Firma')], ['belege', _t('Belege & Preise')], ['bon', _t('Bon & Etiketten')], ['nummern', _t('Nummern')]]],
+  [_t('Firma & Belege'), [['firma', _t('Firma')], ['belege', _t('Belege & Preise')], ['bon', _t('Bon & Etiketten')], ['nummern', _t('Nummerierung')]]],
   ['PLM', [['klass', _t('Klassifizierungen')], ['freigabe', _t('Freigabe')], ['pruef', _t('Prüfprotokoll')]]],
   [_t('Werkstatt'), [['druck3d', _t('3D-Druck')], ['pc', _t('CAD & Checkout')]]],
   ['Admin', [['loeschen', _t('Datensätze löschen')]]],
@@ -112,7 +112,7 @@ async function renderSettings(page) {
     _stPage('darstellung', _t('Darstellung'), _t('Gilt für alle, die mit diesem PLM arbeiten.'),
       _stCard('', '', _appearanceHtml(s))),
 
-    _stPage('benutzer', _t('Personen'), _t('Wer mit PLM arbeitet und was die Person darf.'),
+    _stPage('benutzer', _t('Benutzer'), _t('Wer mit PLM arbeitet und was die Person darf.'),
       _stCard('', '', `<div id="st-users-box" class="st-muted">${_t('Lädt…')}</div>`)),
 
     // ── Daten
@@ -214,7 +214,7 @@ async function renderSettings(page) {
       + _stCard(_t('Rohmaterial-Etikett'), '', fck('label_show_qr',_t('QR-Code auf Etikett drucken'),s.label_show_qr ?? '1'))
       + _stSave('saveSettings()')),
 
-    _stPage('nummern', _t('Nummern'), _t('Gilt nur für neu angelegte Datensätze — bestehende Nummern bleiben, wie sie sind.'),
+    _stPage('nummern', _t('Nummerierung'), _t('Gilt nur für neu angelegte Datensätze — bestehende Nummern bleiben, wie sie sind.'),
       _stCard(_t('Geschäftsnummern'), '', `
         <div class="st-grid3">
           <span></span><span class="fl">${_t('Präfix')}</span><span class="fl">${_t('Stellen')}</span>

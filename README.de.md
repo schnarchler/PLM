@@ -129,7 +129,7 @@ Kunden:               KD-0001
 Lieferanten:          LF-0001
 ```
 
-Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Nummern** konfigurierbar.
+Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Nummerierung** konfigurierbar.
 
 ---
 
@@ -300,12 +300,12 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 ### Einstellungen
 Links die Bereiche nach Thema, rechts die Seite; jede Seite mit Eingaben hat ihren eigenen
 Speichern-Knopf. Beim Öffnen erscheint die zuletzt gewählte Seite.
-- **Allgemein** – **Darstellung** (Sprache, Schriftgrösse, Design), **Personen** (User, Superuser,
+- **Allgemein** – **Darstellung** (Sprache, Schriftgrösse, Design), **Benutzer** (User, Superuser,
   Admin; Namen in Historie und Freigabe)
 - **Daten** – **Sicherung & Export** (Sicherungen anlegen, herunterladen, wiederherstellen; Export,
   Datei-Index), **Speicherort** (Datenpfad, Daten verschieben)
 - **Firma & Belege** – **Firma** (Briefkopf, Logo, Bank), **Belege & Preise** (MwSt., Stundensatz,
-  Sprache der Belege, Fusszeilen), **Bon & Etiketten**, **Nummern** (Präfixe, Stellen, Revisionsformat)
+  Sprache der Belege, Fusszeilen), **Bon & Etiketten**, **Nummerierung** (Präfixe, Stellen, Revisionsformat)
 - **PLM** – **Klassifizierungen** (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items),
   **Freigabe** (Workflow, Vier-Augen-Prinzip, Prüfung vor der Freigabe), **Prüfprotokoll**
 - **Werkstatt** – **3D-Druck** (Slicer, Drucker, Düsen, Materialprofile), **CAD & Checkout** (pro PC)
@@ -708,9 +708,9 @@ Geräte herankommen, entscheidet die Firewall des PCs.
   (es steht in `plm.config`). Übernehmen der Datensperre geht ebenfalls nur am PC selbst.
 - Paketlücken prüfen: `cd backend && npm audit --omit=dev`
 
-Die Benutzer (Einstellungen → Personen) dienen der Nachvollziehbarkeit, nicht als Schutz:
+Die Benutzer (Einstellungen → Benutzer) dienen der Nachvollziehbarkeit, nicht als Schutz:
 gewählt wird ohne Passwort; jede Person kann ihre Kachel mit einer PIN schützen. Bedienung siehe
-[HANDBUCH.md](HANDBUCH.md), Kapitel Einstellungen → Personen.
+[HANDBUCH.md](HANDBUCH.md), Kapitel Einstellungen → Benutzer.
 
 ---
 

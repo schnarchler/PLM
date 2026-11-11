@@ -146,7 +146,7 @@ Suppliers:             LF-0001
 ```
 
 Prefixes, digit counts and the revision format can be configured under
-**Settings → Numbers**.
+**Settings → Numbering**.
 
 ---
 
@@ -330,12 +330,12 @@ When adding a line, the following costs can be calculated automatically:
 ### Settings
 Sections by topic on the left, the page on the right; every page with inputs has its own Save
 button. Settings reopen on the page used last.
-- **General**: **Appearance** (language, font size, design), **People** (user, superuser, admin;
+- **General**: **Appearance** (language, font size, design), **Users** (user, superuser, admin;
   names in history and release)
 - **Data**: **Backup & export** (create, download and restore backups; export, file index),
   **Storage location** (data path, moving the data)
 - **Company & documents**: **Company** (letterhead, logo, bank), **Documents & prices** (VAT, hourly
-  rate, document language, footers), **Receipts & labels**, **Numbers** (prefixes, digits, revision format)
+  rate, document language, footers), **Receipts & labels**, **Numbering** (prefixes, digits, revision format)
 - **PLM**: **Classifications** (name + colour, drag & drop; renaming carries over to the items),
   **Release** (workflow, two-person approval, checks before release), **Inspection report**
 - **Workshop**: **3D printing** (slicer, printers, nozzles, material profiles), **CAD & checkout** (per PC)
@@ -651,7 +651,7 @@ the reference for the English translation of the interface.
 
 Number prefixes: existing databases keep their prefixes (AUF, LS, EK, KD, LF). New
 installations with the English interface start with English defaults (ORD, PRD, PO, CUS, SUP).
-Prefixes remain configurable under Settings → Numbers.
+Prefixes remain configurable under Settings → Numbering.
 
 ---
 
@@ -751,9 +751,9 @@ devices can reach it is decided by the PC's firewall.
   works on the PC itself.
 - Check for package vulnerabilities: `cd backend && npm audit --omit=dev`
 
-Users (Settings → People) are for traceability, not for protection: they are selected
+Users (Settings → Users) are for traceability, not for protection: they are selected
 without a password; each person can protect their tile with a PIN. Usage: see
-[HANDBUCH.md](HANDBUCH.md), chapter Settings → People.
+[HANDBUCH.md](HANDBUCH.md), chapter Settings → Users.
 
 ---
 

@@ -58,7 +58,7 @@ new revision and carries over files, BOM and print parameters.
 
 ## 4. The most important data
 
-**Numbers** (prefixes can be changed under Settings → Numbers)
+**Numbers** (prefixes can be changed under Settings → Numbering)
 
 | What | Example | | What | Example |
 |---|---|---|---|---|
