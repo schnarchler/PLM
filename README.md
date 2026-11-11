@@ -14,9 +14,11 @@ Runs locally on Linux and Windows: no internet connection, no cloud, no account.
 - **3D printing:** print parameters read straight from `.3mf` files (PrusaSlicer, OrcaSlicer,
   Bambu Studio, SuperSlicer), cost calculation from part weight, print time and labour
 
-> **Language:** the user interface is available in **English and German** (Settings →
+> **🚀 [Quick start](QUICKSTART.md)** — the essentials on one page
+>
+> **Language:** the user interface is available in **English and German** (Settings → Data →
 > Appearance), printed documents have their own language (Settings → Company). The
-> [manual](HANDBUCH.md) and the [quick start](SCHNELLSTART.md) are currently in German.
+> step-by-step [manual](HANDBUCH.md) is currently only available in German.
 
 ---
 
@@ -677,6 +679,7 @@ PLM/
 │       └── styles.css     ← design system (dark theme, high-contrast palette)
 ├── plm.config             ← configuration of this PC: data_dir, checkout_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (created automatically)
 ├── HANDBUCH.md            ← user manual (German)
+├── QUICKSTART.md          ← quick start (English)
 ├── SCHNELLSTART.md        ← quick start (German)
 ├── START-PLM.bat          ← launcher for Windows
 ├── VERKNUEPFUNG-ERSTELLEN.bat ← creates the desktop shortcut with logo (Windows)
@@ -830,3 +833,12 @@ The server tests each start their own server (own port) with an empty throwaway 
 This project is developed in my spare time and is free to use. If it saves you work, I'd be happy about a coffee:
 
 [![ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/schnarchler)
+
+---
+
+## License
+
+[MIT](LICENSE) — © 2026 Schnarchler
+
+Free to use, modify and distribute, including commercially. The copyright notice must be kept.
+The software is provided without any warranty.

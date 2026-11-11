@@ -32,6 +32,7 @@ function installGlobals() {
   global.fmtChf = v => global.fmtCHF(parseFloat(v) || 0);
   global.fmtDate = d => (d ? '01.01.2026, 00:00' : '—');
   global.fmtD = d => d || '—';
+  global.fmtDocD = global.fmtD;
   global.fmtSize = b => (!b ? '—' : b < 1024 ? b + 'B' : (b / 1024).toFixed(1) + 'KB');
   global._classChip = c => `<span class="chip">${global.esc(c)}</span>`;
   global.fileLabel = (n, t) => t;

@@ -431,7 +431,7 @@ function generateItemTemplate(type, opts = {}) {
       [_d('Aussenmasse'), !dims.length ? null : dimsOne ? dims[0].txt : dims.map(d => d.name + ': ' + d.txt).join(' · '), !dimsOne],
       [_d('Verkaufspreis'), revPrice(item, rev) != null ? fmtChf(revPrice(item, rev)) : null],
       [_d('Entwicklungszeit'), _fmtHours(item.dev_hours)],
-      [_d('Erstellt'), fmtD(item.created_at, null)],
+      [_d('Erstellt'), fmtDocD(item.created_at, null)],
       [_d('Quelle'), item.source_url, true],
     ]);
 
@@ -445,8 +445,8 @@ function generateItemTemplate(type, opts = {}) {
     if (rev) {
       body += `<div class="sec">${_d('Revision rev{rev}', { rev: escHtml(rev.rev) })}</div>` + kvTable([
         ['Status', rev.status + (_dSt('plm', rev.status) !== rev.status ? ' · ' + _dSt('plm', rev.status) : '')],
-        [_d('Angelegt'), fmtD(rev.created_at, null)],
-        [_d('Freigegeben'), rev.released_at ? fmtD(rev.released_at) + (rev.released_by ? ' · ' + rev.released_by : '') : null],
+        [_d('Angelegt'), fmtDocD(rev.created_at, null)],
+        [_d('Freigegeben'), rev.released_at ? fmtDocD(rev.released_at) + (rev.released_by ? ' · ' + rev.released_by : '') : null],
         [_d('Beschreibung'), rev.description, true],
         [_d('ECO-Grund'), rev.eco_reason, true],
       ]);
@@ -501,8 +501,8 @@ function generateItemTemplate(type, opts = {}) {
           <td style="font-family:monospace;font-weight:700">rev${escHtml(r.rev)}</td>
           <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">${escHtml(r.status)}</span></td>
           <td>${escHtml(r.description||'')}</td>
-          <td style="color:#6b7280;font-size:12px">${fmtD(r.created_at,'')}</td>
-          <td style="color:#6b7280;font-size:12px">${fmtD(r.released_at,'')}${r.released_by ? ' · ' + escHtml(r.released_by) : ''}</td>
+          <td style="color:#6b7280;font-size:12px">${fmtDocD(r.created_at,'')}</td>
+          <td style="color:#6b7280;font-size:12px">${fmtDocD(r.released_at,'')}${r.released_by ? ' · ' + escHtml(r.released_by) : ''}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
@@ -516,7 +516,7 @@ function generateItemTemplate(type, opts = {}) {
           <td style="color:#6b7280">${escHtml(fileLabel(d.original_name, d.ds_type))}</td>
           <td style="font-family:monospace;font-size:12px">${escHtml(d.original_name||d.filename)}</td>
           <td style="color:#6b7280;white-space:nowrap">${fmtSize(d.file_size)}</td>
-          <td style="color:#6b7280;font-size:12px">${fmtD(d.uploaded_at,'')}</td>
+          <td style="color:#6b7280;font-size:12px">${fmtDocD(d.uploaded_at,'')}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
@@ -866,9 +866,9 @@ async function generateDoc(id, type) {
     <div style="font-family:monospace;font-size:13px;color:${color}">${d.number}</div>
     <div class="meta">
       ${_d('Datum:')} ${today}<br>
-      ${isQuote && d.valid_until ? _d('Gültig bis:') + ' ' +fmtD(d.valid_until)+'<br>' : ''}
-      ${!isQuote && d.order_date ? _d('Auftragsdatum:') + ' ' +fmtD(d.order_date)+'<br>' : ''}
-      ${!isQuote && d.delivery_date ? _d('Lieferdatum:') + ' ' +fmtD(d.delivery_date)+'<br>' : ''}
+      ${isQuote && d.valid_until ? _d('Gültig bis:') + ' ' +fmtDocD(d.valid_until)+'<br>' : ''}
+      ${!isQuote && d.order_date ? _d('Auftragsdatum:') + ' ' +fmtDocD(d.order_date)+'<br>' : ''}
+      ${!isQuote && d.delivery_date ? _d('Lieferdatum:') + ' ' +fmtDocD(d.delivery_date)+'<br>' : ''}
       ${d.payment_terms ? _d('Zahlung:') + ' ' +escHtml(d.payment_terms) : ''}
     </div>
   </div>
@@ -1143,8 +1143,8 @@ async function generateDeliveryDoc(id) {
     <div style="font-family:monospace;font-size:13px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
     <div class="meta">
       ${_d('Erstellt:')} ${today}<br>
-      ${d.delivery_date?_d('Lieferdatum:') + ' ' +fmtD(d.delivery_date)+'<br>':''}
-      ${d.manufacture_date?_d('Herstellungsdatum:') + ' ' +fmtD(d.manufacture_date)+'<br>':''}
+      ${d.delivery_date?_d('Lieferdatum:') + ' ' +fmtDocD(d.delivery_date)+'<br>':''}
+      ${d.manufacture_date?_d('Herstellungsdatum:') + ' ' +fmtDocD(d.manufacture_date)+'<br>':''}
       ${d.order_number?_d('Auftrag:') + ' ' +escHtml(d.order_number):''}
     </div>
     <span class="badge" style="background:#dbeafe;color:#1d4ed8;margin-top:4px">${_dSt('delivery', d.status)}</span>
@@ -1204,7 +1204,7 @@ function partLabelHtml(d, it) {
       <div class="name">${escHtml(it.item_name || it.description || '')}</div>
       ${it.item_number ? `<div class="num">${escHtml(it.item_number)}${rev ? ' · rev' + escHtml(rev) : ''}</div>` : ''}
       <div class="meta">${escHtml(String(it.quantity ?? ''))} ${escHtml(_dunit(it.unit))}${material ? ' · ' + escHtml(material) : ''}</div>
-      <div class="meta">${escHtml(d.number)}${date ? ' · ' + fmtD(date) : ''}</div>
+      <div class="meta">${escHtml(d.number)}${date ? ' · ' + fmtDocD(date) : ''}</div>
     </div>
     ${qr ? `<div class="qr">${qr}</div>` : ''}
   </div>`;

@@ -356,11 +356,15 @@ const parseDbDate = d => {
   return new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s) ? s.replace(' ', 'T') + 'Z' : s);
 };
 const fmtDate = d => d ? parseDbDate(d).toLocaleDateString(LOCALE,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-// Nur Datum, TT.MM.JJJJ — string-basiert, damit ISO-Datumswerte nicht durch Zeitzonen verschoben werden
-const fmtD = (d, empty='—') => {
+// Nur Datum, Tag zuerst: TT.MM.JJJJ (Deutsch) bzw. TT/MM/JJJJ (Englisch) — string-basiert,
+// damit ISO-Datumswerte nicht durch Zeitzonen verschoben werden
+const _DATE_SEP = { de: '.', en: '/' };
+const fmtD = (d, empty='—', lang = LANG) => {
   const m = String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}.${m[2]}.${m[1]}` : (d ? String(d) : empty);
+  return m ? [m[3], m[2], m[1]].join(_DATE_SEP[lang] || '.') : (d ? String(d) : empty);
 };
+// Dasselbe für Belege, in der Sprache der Belege
+const fmtDocD = (d, empty='—') => fmtD(d, empty, _docLang());
 // Datum + Uhrzeit, TT.MM.JJJJ HH:MM (für ISO-Timestamps aus der DB)
 const fmtDT = (d, empty='—') => {
   if (!d) return empty;

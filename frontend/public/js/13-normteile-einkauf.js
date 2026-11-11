@@ -330,7 +330,7 @@ async function generatePoDoc(id) {
       <div style="font-family:monospace;font-size:14px;color:#1d4ed8;margin-bottom:4px">${escHtml(po.number)}</div>
       <div class="meta">
         ${_d('Datum:')} ${today}<br>
-        ${po.expected_date ? _d('Lieferdatum bis:') + ' <strong>' + fmtD(po.expected_date) + '</strong><br>' : ''}
+        ${po.expected_date ? _d('Lieferdatum bis:') + ' <strong>' + fmtDocD(po.expected_date) + '</strong><br>' : ''}
       </div>
     </div>
   </div>

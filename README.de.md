@@ -793,3 +793,12 @@ und ohne Browser.
 Das Projekt entsteht in der Freizeit und ist kostenlos nutzbar. Wenn es dir Arbeit abnimmt, freue ich mich über einen Kaffee:
 
 [![ko-fi](https://img.shields.io/badge/Ko--fi-Kaffee%20spendieren-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/schnarchler)
+
+---
+
+## Lizenz
+
+[MIT](LICENSE) — © 2026 Schnarchler
+
+Nutzung, Änderung und Weitergabe sind frei, auch kommerziell. Der Copyright-Hinweis muss erhalten
+bleiben. Die Software wird ohne jede Gewährleistung bereitgestellt.

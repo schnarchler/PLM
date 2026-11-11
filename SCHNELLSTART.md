@@ -1,5 +1,7 @@
 # PLM & ERP — Schnellstart
 
+**Deutsch** · [English](QUICKSTART.md)
+
 Das Wichtigste auf einer Seite. Ausführlich steht alles im **[Handbuch](HANDBUCH.md)**.
 
 ---
