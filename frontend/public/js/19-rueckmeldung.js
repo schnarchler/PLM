@@ -7,7 +7,7 @@
 // Rückmeldungen auf dem Dashboard.
 
 const FEEDBACK_KIND = {
-  BUG:  { label: _t('Fehler'), icon: '🐞', color: 'var(--red)' },
+  BUG:  { label: _t('@feedback:Fehler'), icon: '🐞', color: 'var(--red)' },
   IDEA: { label: _t('Idee'),   icon: '💡', color: 'var(--amber)' },
 };
 
