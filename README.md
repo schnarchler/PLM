@@ -6,13 +6,22 @@ A self-hosted PLM and ERP system for small workshops, makers and 3D-printing sho
 inspired by Teamcenter.  
 Runs locally on Linux and Windows: no internet connection, no cloud, no account.
 
-- **PLM:** projects, assemblies, parts and documents with revisions, BOMs, release
-  workflow (Draft → Released → ECO), change requests, CAD check-out/check-in, 3D preview
-  for STL and STEP
-- **ERP:** customers, quotes and orders, production orders with delivery notes, invoices,
-  inventory, raw material with lot tracking, purchasing, traceability
-- **3D printing:** print parameters read straight from `.3mf` files (PrusaSlicer, OrcaSlicer,
-  Bambu Studio, SuperSlicer), cost calculation from part weight, print time and labour
+## What sets it apart
+
+- **🔌 Your PC, your data** — runs entirely offline on one PC, no cloud, no account, no
+  subscription. Several PCs can share the data on a network drive.
+- **🖨 Made for 3D printing** — drop in a `.3mf` and PLM takes over layer height, infill,
+  temperatures, material and printer, and calculates costs from weight and print time.
+- **🏷 A short code on every part** — print `9U7-1` on the part; typing or scanning it opens
+  exactly that part in exactly that revision.
+- **🚚 Knows what each customer received** — on delivery, PLM pins the revision of every part,
+  down to the full assembly structure: "which customer has which revision?" is one click.
+- **🔎 Traceability for recalls** — which material lot went into which production order,
+  customer and part, and back again.
+- **📐 CAD check-out / check-in** (built for Solid Edge) — only changed files come back,
+  released revisions stay locked, changes go through an ECO.
+- **📄 PLM and ERP in one** — from part to quote, order, production, delivery note and invoice.
+  Interface in English or German, documents in their own language.
 
 ![Project tree and data sheet with 3D preview, short code and print parameters](docs/images/en/item.png)
 
@@ -34,6 +43,16 @@ Runs locally on Linux and Windows: no internet connection, no cloud, no account.
     <td align="center"><sub>Invoice, generated as PDF</sub></td>
   </tr>
 </table>
+
+**What it covers**
+
+- **PLM:** projects, assemblies, parts and documents with revisions, BOMs, release
+  workflow (Draft → Released → ECO), change requests, CAD check-out/check-in, 3D preview
+  for STL and STEP
+- **ERP:** customers, quotes and orders, production orders with delivery notes, invoices,
+  inventory, raw material with lot tracking, purchasing, traceability
+- **3D printing:** print parameters read straight from `.3mf` files (PrusaSlicer, OrcaSlicer,
+  Bambu Studio, SuperSlicer), cost calculation from part weight, print time and labour
 
 > **🚀 [Quick start](QUICKSTART.md)** — the essentials on one page
 >

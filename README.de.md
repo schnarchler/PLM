@@ -5,6 +5,23 @@
 Teamcenter-inspiriertes PLM- und ERP-System.  
 Läuft lokal auf Linux/Windows – kein Internet, kein Cloud-Zwang.
 
+## Was es besonders macht
+
+- **🔌 Dein PC, deine Daten** — läuft komplett offline auf einem PC, ohne Cloud, Konto oder
+  Abo. Mehrere PCs können die Daten auf einem Netzlaufwerk teilen.
+- **🖨 Für den 3D-Druck gemacht** — eine `.3mf` hochladen, und PLM übernimmt Schichthöhe,
+  Füllung, Temperaturen, Material und Drucker und rechnet die Kosten aus Gewicht und Druckzeit.
+- **🏷 Ein Kurzcode auf jedem Teil** — `9U7-1` aufs Teil drucken; eintippen oder scannen öffnet
+  genau dieses Teil in genau dieser Revision.
+- **🚚 Weiss, was jeder Kunde bekommen hat** — beim Liefern hält PLM die Revision jedes Teils
+  fest, bis in die ganze Baugruppe: „Welcher Kunde hat welchen Stand?“ ist ein Klick.
+- **🔎 Rückverfolgung für den Rückruf** — welche Material-Charge in welchem Produktionsauftrag,
+  bei welchem Kunden und in welchem Teil steckt, und umgekehrt.
+- **📐 CAD auschecken / einchecken** (für Solid Edge gebaut) — nur geänderte Dateien kommen
+  zurück, freigegebene Revisionen bleiben gesperrt, Änderungen laufen über einen ECO.
+- **📄 PLM und ERP in einem** — vom Teil über Angebot, Auftrag und Produktion bis zu Lieferschein
+  und Rechnung. Oberfläche Deutsch oder Englisch, Belege in eigener Sprache.
+
 ![Projektbaum und Datenblatt mit 3D-Vorschau, Kurzcode und Druckparametern](docs/images/de/item.png)
 
 <table>
