@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/schnarchler/PLM.git"
+    "url": "https://github.com/schnarchler/self-hosted-plm.git"
   },
   "scripts": {
     "start": "node server.js",

@@ -191,7 +191,7 @@ test('Update: ZIP-Download aktuell — Stand aus version.json, Nummer von GitHub
   const u = await update(base);
   assert.strictEqual(u.fetched, true, u.error);
   assert.strictEqual(u.available, false);
-  assert.strictEqual(u.upstream, 'github.com/schnarchler/PLM');
+  assert.strictEqual(u.upstream, 'github.com/schnarchler/self-hosted-plm');
   assert.ok(gh.seen.some(s => s.includes(`/compare/${SHA}...HEAD`)), 'fragt mit dem Commit aus version.json');
 
   const v = await (await fetch(base + '/api/version')).json();
@@ -214,7 +214,7 @@ test('Update: ZIP-Download hinter GitHub — neue Commits, Version und ZIP-Link'
   assert.deepStrictEqual(u.commits.map(c => c.subject), ['Fehler behoben', 'Neue Funktion']);
   assert.strictEqual(u.commits[0].commit, '2222222');
   assert.strictEqual(u.version, '2.1.314', 'Major.Minor aus der neuen package.json');
-  assert.strictEqual(u.download, 'https://github.com/schnarchler/PLM/archive/HEAD.zip');
+  assert.strictEqual(u.download, 'https://github.com/schnarchler/self-hosted-plm/archive/HEAD.zip');
 
   const v = await (await fetch(base + '/api/version')).json();
   assert.match(v.version, /\.312$/, 'eigene Nummer = neuster Stand minus neue Commits');
