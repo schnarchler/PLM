@@ -2,10 +2,10 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html. Lädt nach lang/en.js und vor allen anderen.
 //
-// Schlüssel ist der deutsche Text: t('Speichern') gibt auf Deutsch den Text
+// Schlüssel ist der deutsche Text: _t('Speichern') gibt auf Deutsch den Text
 // selbst zurück, auf Englisch die Übersetzung aus lang/en.js. Fehlt sie, bleibt
 // der deutsche Text stehen — so lässt sich Datei für Datei umstellen.
-// Platzhalter in geschweiften Klammern: t('{n} neue Commits', { n: 3 }).
+// Platzhalter in geschweiften Klammern: _t('{n} neue Commits', { n: 3 }).
 // Begriffe: Glossar im README (Abschnitt Terminology).
 //
 // Die Sprache steht auf dem Server (Einstellung ui_lang), wie das Design. Die
@@ -27,11 +27,15 @@ function _detectLang() {
 let LANG = _detectLang();
 const LOCALE = LOCALES[LANG];
 
-function t(s, vars) {
+function _t(s, vars) {
   let r = (LANG !== 'de' && I18N[LANG]?.[s]) || s;
   if (vars) r = r.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   return r;
 }
+
+// Einheit für die Anzeige. Gespeichert bleibt der deutsche Wert („Stk“), den
+// darum nie übersetzt an den Server schicken — nur zum Anzeigen hierdurch.
+function _unit(u) { return _t(u || 'Stk'); }
 
 // Statisches HTML aus index.html einmal beim Laden übersetzen: Textknoten und
 // title/placeholder, die genau einem Eintrag entsprechen. Nur beim Start —

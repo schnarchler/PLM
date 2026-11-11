@@ -9,14 +9,14 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 // Farben zum schnellen Wiederfinden in der Projektliste — bewusst wenige,
 // damit sie unterscheidbar bleiben, und aus der Palette der App.
 const PROJECT_COLORS = [
-  { v: '',        name: 'ohne' },
-  { v: '#9db4ff', name: 'Blau' },
-  { v: '#79dde3', name: 'Türkis' },
-  { v: '#6ede9c', name: 'Grün' },
-  { v: '#f5c061', name: 'Amber' },
-  { v: '#ff8e8e', name: 'Rot' },
-  { v: '#c4a2ff', name: 'Violett' },
-  { v: '#9aa3b2', name: 'Grau' },
+  { v: '',        name: _t('ohne') },
+  { v: '#9db4ff', name: _t('Blau') },
+  { v: '#79dde3', name: _t('Türkis') },
+  { v: '#6ede9c', name: _t('Grün') },
+  { v: '#f5c061', name: _t('Amber') },
+  { v: '#ff8e8e', name: _t('Rot') },
+  { v: '#c4a2ff', name: _t('Violett') },
+  { v: '#9aa3b2', name: _t('Grau') },
 ];
 
 function _renderProjectColors(sel) {
@@ -43,14 +43,14 @@ function openNewProjectModal() {
 }
 
 async function saveProject() {
-  const name = V('pm-name'); if (!name) return toast('Name fehlt','err');
+  const name = V('pm-name'); if (!name) return toast(_t('Name fehlt'),'err');
   const body = { name, description: V('pm-desc'), customer: V('pm-customer'), color: V('pm-color') || null };
   if (editingProjectId) {
     await api(`/api/projects/${editingProjectId}`, 'PUT', body);
-    toast('Projekt aktualisiert','ok');
+    toast(_t('Projekt aktualisiert'),'ok');
   } else {
     await api('/api/projects','POST',body);
-    toast('Projekt angelegt','ok');
+    toast(_t('Projekt angelegt'),'ok');
   }
   closeModal('projectModal'); editingProjectId=null;
   gotoView('projects'); loadStats();
@@ -66,15 +66,15 @@ async function editProject(id) {
 
 async function deleteProject(id) {
   const p = await api(`/api/projects/${id}`);
-  if (!confirm(`Projekt "${p.name}" löschen?`)) return;
+  if (!confirm(_t('Projekt "{name}" löschen?', { name: p.name }))) return;
   await api(`/api/projects/${id}`,'DELETE');
-  toast('Projekt gelöscht','ok'); closeDetail(); gotoView('projects'); loadStats();
+  toast(_t('Projekt gelöscht'),'ok'); closeDetail(); gotoView('projects'); loadStats();
 }
 
 async function _forceDeleteProject(id, name) {
-  if (!confirm(`Projekt "${name}" und ALLE Inhalte unwiderruflich löschen?`)) return;
+  if (!confirm(_t('Projekt "{name}" und ALLE Inhalte unwiderruflich löschen?', { name }))) return;
   await api(`/api/projects/${id}`,'DELETE');
-  toast('Projekt gelöscht','ok'); closeDetail(); gotoView('projects'); loadStats();
+  toast(_t('Projekt gelöscht'),'ok'); closeDetail(); gotoView('projects'); loadStats();
   _loadDelTab();
 }
 
@@ -111,25 +111,25 @@ function _admPreview() {
   const el = document.getElementById('adm-preview');
   if (!el) return;
   el.innerHTML =
-    `<span style="color:var(--t4)">Auftrag: </span>${pre}-${yr}${'1'.padStart(padO,'0')}\n` +
-    `<span style="color:var(--t4)">Projekt: </span>${proj}\n` +
-    `<span style="color:var(--t4)">Baugruppe: </span>${proj}${sep}${sa}${sep}${'1'.padStart(padA,'0')}\n` +
-    `<span style="color:var(--t4)">Part in BG: </span>${proj}${sep}${sa}${sep}${'1'.padStart(padA,'0')}${sep}${sp}${sep}${'1'.padStart(padT,'0')}\n` +
-    `<span style="color:var(--t4)">Dokument: </span>${proj}${sep}${sd}${sep}${'1'.padStart(padD,'0')}\n` +
-    `<span style="color:var(--t4)">Revision: </span>rev${rev1} → rev${rev2}`;
+    `<span style="color:var(--t4)">${_t('Auftrag:')} </span>${pre}-${yr}${'1'.padStart(padO,'0')}\n` +
+    `<span style="color:var(--t4)">${_t('Projekt:')} </span>${proj}\n` +
+    `<span style="color:var(--t4)">${_t('Baugruppe:')} </span>${proj}${sep}${sa}${sep}${'1'.padStart(padA,'0')}\n` +
+    `<span style="color:var(--t4)">${_t('Part in BG:')} </span>${proj}${sep}${sa}${sep}${'1'.padStart(padA,'0')}${sep}${sp}${sep}${'1'.padStart(padT,'0')}\n` +
+    `<span style="color:var(--t4)">${_t('Dokument:')} </span>${proj}${sep}${sd}${sep}${'1'.padStart(padD,'0')}\n` +
+    `<span style="color:var(--t4)">${_t('Revision:')} </span>rev${rev1} → rev${rev2}`;
 }
 
 async function saveAdminSettings() {
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title" style="color:var(--red)">⚠ Admin-Einstellungen speichern</div></div>
+    <div class="modal-head"><div class="modal-title" style="color:var(--red)">${_t('⚠ Admin-Einstellungen speichern')}</div></div>
     <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2)">
-      Änderungen an Präfixen und Nummernformat gelten nur für <b>neu angelegte</b> Datensätze.<br><br>
-      Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.<br><br>
-      Wirklich speichern?
+      ${_t('Änderungen an Präfixen und Nummernformat gelten nur für <b>neu angelegte</b> Datensätze.')}<br><br>
+      ${_t('Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.')}<br><br>
+      ${_t('Wirklich speichern?')}
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-red" onclick="_doSaveAdminSettings()">Ja, speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-red" onclick="_doSaveAdminSettings()">${_t('Ja, speichern')}</button>
     </div>
   </div>`);
 }
@@ -158,7 +158,7 @@ async function _doSaveAdminSettings() {
   };
   await api('/api/settings', 'PUT', settings);
   state.settings = await api('/api/settings');
-  toast('Admin-Einstellungen gespeichert', 'ok');
+  toast(_t('Admin-Einstellungen gespeichert'), 'ok');
 }
 
 const DEFAULT_CLASSIFICATIONS = [
@@ -212,11 +212,11 @@ function _renderClassOrphans() {
   const orphans = (_classUsage.usage || []).filter(u => !inList.has(u.name.toLowerCase())
     && !_classRemovals.some(r => r.name.toLowerCase() === u.name.toLowerCase()));
   el.innerHTML = orphans.length ? `
-    <div style="font-size:13px;color:var(--amber);margin-bottom:6px">An Items gesetzt, aber nicht in der Liste:</div>
+    <div style="font-size:13px;color:var(--amber);margin-bottom:6px">${_t('An Items gesetzt, aber nicht in der Liste:')}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px">${orphans.map(o => `
       <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 9px;border:1px dashed var(--line3);border-radius:12px;font-size:12px;color:var(--t2)">
         <span style="font-family:var(--mono)">${esc(o.name)}</span><span style="color:var(--t4)">${o.count}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:1px 7px" data-cls="${esc(o.name)}" onclick="_adoptClass(this.dataset.cls)">＋ übernehmen</button>
+        <button class="btn btn-ghost btn-sm" style="padding:1px 7px" data-cls="${esc(o.name)}" onclick="_adoptClass(this.dataset.cls)">${_t('＋ übernehmen')}</button>
       </span>`).join('')}</div>` : '';
 }
 function _adoptClass(name) {
@@ -228,13 +228,10 @@ function _adoptClass(name) {
 
 // ── PLM-VOREINSTELLUNGEN: Workflow und Standard-Klassifizierung ──
 const WORKFLOW_MODES = [
-  { id: 'full', title: 'Mit Freigabe',
-    desc: 'DFT → REL → ECO. Revisionen werden freigegeben, freigegebene Stände sind gesperrt. '
-        + 'Neue Revisionen entstehen über einen ECO. Mit Vier-Augen-Prinzip (unten) zusätzlich über In Review (REV).' },
-  { id: 'simple', title: 'Ohne Freigabe',
-    desc: 'Alle Revisionen bleiben Entwurf (DFT) und bearbeitbar. Eine neue Revision '
-        + 'legst du direkt an — Dateien, Druckparameter und Stückliste werden übernommen. '
-        + 'Für die Arbeit allein, ohne Prüfschritt.' },
+  { id: 'full', title: _t('Mit Freigabe'),
+    desc: _t('DFT → REL → ECO. Revisionen werden freigegeben, freigegebene Stände sind gesperrt. Neue Revisionen entstehen über einen ECO. Mit Vier-Augen-Prinzip (unten) zusätzlich über In Review (REV).') },
+  { id: 'simple', title: _t('Ohne Freigabe'),
+    desc: _t('Alle Revisionen bleiben Entwurf (DFT) und bearbeitbar. Eine neue Revision legst du direkt an — Dateien, Druckparameter und Stückliste werden übernommen. Für die Arbeit allein, ohne Prüfschritt.') },
 ];
 
 function _renderWorkflowOptions(current) {
@@ -247,7 +244,7 @@ function _renderWorkflowOptions(current) {
       background:${sel ? 'var(--blue-glow)' : 'var(--bg2)'}">
       <span style="color:var(--blue);flex-shrink:0">${sel ? '●' : '○'}</span>
       <div style="min-width:0">
-        <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(m.title)}${m.id === 'full' ? ' <span class="chip" style="font-weight:400">Standard</span>' : ''}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(m.title)}${m.id === 'full' ? ' <span class="chip" style="font-weight:400">' + _t('Standard') + '</span>' : ''}</div>
         <div style="font-size:12.5px;color:var(--t3);margin-top:2px;line-height:1.5">${esc(m.desc)}</div>
       </div>
     </div>`;
@@ -285,19 +282,18 @@ function _fourEyesHint() {
   const el = document.getElementById('st-four-eyes-hint');
   if (!el) return;
   el.textContent = (state.session?.users || []).length < 2
-    ? 'Wirkt erst ab zwei Personen — allein gibst du direkt frei.'
-    : 'Revisionen gehen erst in Review (REV) und sind dort gesperrt; freigeben darf eine andere Person als die, '
-      + 'die sie in Review gesetzt hat. Admins dürfen auch selbst freigeben.';
+    ? _t('Wirkt erst ab zwei Personen — allein gibst du direkt frei.')
+    : _t('Revisionen gehen erst in Review (REV) und sind dort gesperrt; freigeben darf eine andere Person als die, die sie in Review gesetzt hat. Admins dürfen auch selbst freigeben.');
 }
 
 // Prüfung vor der Freigabe: [Schlüssel wie im Server, Bezeichnung, für wen]
 const RELEASE_CHECKS = [
-  ['file', 'Mindestens eine Datei hochgeladen', ''],
-  ['cad', 'CAD-Datei vorhanden', 'Parts und Baugruppen'],
-  ['drawing', 'Zeichnung als PDF vorhanden', ''],
-  ['description', 'Beschreibung ausgefüllt', ''],
-  ['classification', 'Klassifizierung gesetzt', ''],
-  ['weight', 'Gewicht eingetragen', 'Parts'],
+  ['file', _t('Mindestens eine Datei hochgeladen'), ''],
+  ['cad', _t('CAD-Datei vorhanden'), _t('Parts und Baugruppen')],
+  ['drawing', _t('Zeichnung als PDF vorhanden'), ''],
+  ['description', _t('Beschreibung ausgefüllt'), ''],
+  ['classification', _t('Klassifizierung gesetzt'), ''],
+  ['weight', _t('Gewicht eingetragen'), 'Parts'],
 ];
 
 async function _savePlmPrefs() {
@@ -310,8 +306,8 @@ async function _savePlmPrefs() {
   });
   state.settings = await api('/api/settings');
   const msg = document.getElementById('st-plmprefs-msg');
-  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2000); }
-  toast('Einstellungen gespeichert', 'ok');
+  if (msg) { msg.textContent = _t('Gespeichert'); msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2000); }
+  toast(_t('Einstellungen gespeichert'), 'ok');
   if (state.item) renderItemDetail(state.item, state.activeRevId);
 }
 
@@ -339,15 +335,15 @@ function _renderClassList(list) {
     return `<div class="cls-row" data-idx="${i}" data-orig="${esc(c.orig || '')}" data-fields="${esc(JSON.stringify(c.fields || []))}" draggable="true"
       style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);transition:opacity .15s">
       <span class="cls-handle" style="cursor:grab;color:var(--t4);font-size:16px;line-height:1;flex-shrink:0">⠿</span>
-      <input type="color" class="cls-color" value="${col}" title="Farbe wählen"
+      <input type="color" class="cls-color" value="${col}" title="${_t('Farbe wählen')}"
         style="width:28px;height:28px;padding:2px;border:1px solid var(--line);border-radius:4px;background:var(--bg3);cursor:pointer;flex-shrink:0"
         oninput="_onClassColorChange()">
       <span class="cls-preview" style="font-family:var(--mono);font-size:13px;padding:2px 8px;border-radius:3px;background:${bg};color:${col};flex-shrink:0">${esc(c.name)}</span>
       <input class="fi cls-name" value="${esc(c.name)}" style="flex:1;font-size:13px;padding:3px 7px;height:28px" oninput="_onClassNameInput(this)">
-      <span class="cls-used" style="font-size:12px;color:var(--t4);white-space:nowrap;flex-shrink:0" title="Items mit dieser Klassifizierung">${used ? used + ' Item' + (used === 1 ? '' : 's') : 'unbenutzt'}</span>
-      <span class="cls-renamed" style="font-size:12px;color:var(--amber);white-space:nowrap;flex-shrink:0;${renamed ? '' : 'display:none'}">war „${esc(c.orig || '')}"</span>
-      <button class="btn btn-ghost btn-sm" onclick="_editClassFields(this.closest('.cls-row'))" title="Felder wie Werkstoff, Oberfläche, Hersteller">Eigenschaften${nFields ? ` (${nFields})` : ''}</button>
-      <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})" title="Aus der Liste entfernen">✕</button>
+      <span class="cls-used" style="font-size:12px;color:var(--t4);white-space:nowrap;flex-shrink:0" title="${_t('Items mit dieser Klassifizierung')}">${used ? _t(used === 1 ? '1 Item' : '{n} Items', { n: used }) : _t('unbenutzt')}</span>
+      <span class="cls-renamed" style="font-size:12px;color:var(--amber);white-space:nowrap;flex-shrink:0;${renamed ? '' : 'display:none'}">${_t('war „{name}"', { name: esc(c.orig || '') })}</span>
+      <button class="btn btn-ghost btn-sm" onclick="_editClassFields(this.closest('.cls-row'))" title="${_t('Felder wie Werkstoff, Oberfläche, Hersteller')}">${_t('Eigenschaften')}${nFields ? ` (${nFields})` : ''}</button>
+      <button class="btn btn-red btn-icon btn-sm" onclick="_removeClass(${i})" title="${_t('Aus der Liste entfernen')}">✕</button>
     </div>`;
   }).join('');
   _renderClassOrphans();
@@ -416,21 +412,20 @@ function _editClassFields(row) {
   _cfDraft = { row, fields: fields.map(f => ({ ...f })) };
   const name = row.querySelector('.cls-name')?.value.trim() || '';
   _showDynModal(`<div class="modal" style="max-width:520px;width:95vw">
-    <div class="modal-head"><div class="modal-title">Eigenschaften: ${esc(name)}</div>
+    <div class="modal-head"><div class="modal-title">${_t('Eigenschaften: {name}', { name: esc(name) })}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body">
-      <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">Felder, die Items mit dieser Klassifizierung
-        bekommen — z. B. Werkstoff, Oberfläche oder Hersteller. Sie stehen im Datenblatt, auf der PDF und sind durchsuchbar.
-        <b>Pflicht</b> heisst: Ohne Wert lässt sich keine Revision freigeben.</div>
+      <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">${_t('Felder, die Items mit dieser Klassifizierung bekommen — z. B. Werkstoff, Oberfläche oder Hersteller. Sie stehen im Datenblatt, auf der PDF und sind durchsuchbar.')}
+        ${_t('<b>Pflicht</b> heisst: Ohne Wert lässt sich keine Revision freigeben.')}</div>
       <div id="cf-list" style="display:flex;flex-direction:column;gap:6px"></div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <input class="fi" id="cf-new" placeholder="Neues Feld, z. B. Werkstoff" onkeydown="if(event.key==='Enter')_cfAdd()">
-        <button class="btn btn-ghost btn-sm" onclick="_cfAdd()">+ Feld</button>
+        <input class="fi" id="cf-new" placeholder="${_t('Neues Feld, z. B. Werkstoff')}" onkeydown="if(event.key==='Enter')_cfAdd()">
+        <button class="btn btn-ghost btn-sm" onclick="_cfAdd()">${_t('+ Feld')}</button>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="_cfApply()">Übernehmen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="_cfApply()">${_t('Übernehmen')}</button>
     </div>
   </div>`);
   _cfRender();
@@ -441,13 +436,13 @@ function _cfRender() {
   if (!el) return;
   const f = _cfDraft.fields;
   el.innerHTML = f.map((x, i) => `<div style="display:flex;align-items:center;gap:8px">
-      <button class="btn btn-icon btn-ghost btn-sm" onclick="_cfMove(${i},-1)" ${i ? '' : 'disabled'} title="Nach oben">↑</button>
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="_cfMove(${i},-1)" ${i ? '' : 'disabled'} title="${_t('Nach oben')}">↑</button>
       <input class="fi" style="flex:1" value="${esc(x.label)}" maxlength="40" oninput="_cfDraft.fields[${i}].label=this.value">
       <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);white-space:nowrap;cursor:pointer">
         <input type="checkbox" ${x.required ? 'checked' : ''} onchange="_cfDraft.fields[${i}].required=this.checked"
-          style="width:15px;height:15px;accent-color:var(--blue)"> Pflicht</label>
-      <button class="btn btn-icon btn-ghost btn-sm" onclick="_cfDraft.fields.splice(${i},1);_cfRender()" title="Entfernen — die Werte an den Items werden beim Speichern gelöscht">✕</button>
-    </div>`).join('') || '<div style="font-size:13px;color:var(--t3)">Noch keine Felder</div>';
+          style="width:15px;height:15px;accent-color:var(--blue)"> ${_t('Pflicht')}</label>
+      <button class="btn btn-icon btn-ghost btn-sm" onclick="_cfDraft.fields.splice(${i},1);_cfRender()" title="${_t('Entfernen — die Werte an den Items werden beim Speichern gelöscht')}">✕</button>
+    </div>`).join('') || '<div style="font-size:13px;color:var(--t3)">' + _t('Noch keine Felder') + '</div>';
 }
 function _cfMove(i, d) {
   const f = _cfDraft.fields;
@@ -457,7 +452,7 @@ function _cfMove(i, d) {
 function _cfAdd() {
   const label = V('cf-new').trim();
   if (!label) return;
-  if (_cfDraft.fields.some(f => f.label.trim().toLowerCase() === label.toLowerCase())) return toast('Feld gibt es schon', 'err');
+  if (_cfDraft.fields.some(f => f.label.trim().toLowerCase() === label.toLowerCase())) return toast(_t('Feld gibt es schon'), 'err');
   _cfDraft.fields.push({ id: 'a_' + Math.random().toString(36).slice(2, 10), label, required: false });
   set('cf-new', '');
   _cfRender();
@@ -468,7 +463,7 @@ function _cfApply() {
   _cfDraft.row.dataset.fields = JSON.stringify(fields);
   _hideDynModal();
   _renderClassList(_getCurrentClassList());
-  toast('Übernommen — mit „Speichern" unter den Klassifizierungen sichern', 'ok');
+  toast(_t('Übernommen — mit „Speichern" unter den Klassifizierungen sichern'), 'ok');
 }
 
 function _addClass() {
@@ -476,7 +471,7 @@ function _addClass() {
   const val = inp?.value.trim();
   if (!val) return;
   const list = _getCurrentClassList();
-  if (list.some(c => c.name.toLowerCase() === val.toLowerCase())) { toast('Bereits vorhanden', 'err'); return; }
+  if (list.some(c => c.name.toLowerCase() === val.toLowerCase())) { toast(_t('Bereits vorhanden'), 'err'); return; }
   // Steht der Name schon an Items, gilt er als übernommen statt neu
   const known = (_classUsage.usage || []).find(u => u.name.toLowerCase() === val.toLowerCase());
   list.push({ name: known ? known.name : val, color: '#9db4ff', orig: known ? known.name : '' });
@@ -493,14 +488,14 @@ function _removeClass(idx) {
   const used = c.orig ? _classCount(c.orig) : 0;
   if (!used) { list.splice(idx, 1); _renderClassList(list); return; }
   _showDynModal(`<div class="modal" style="max-width:440px">
-    <div class="modal-head"><div class="modal-title">Klassifizierung entfernen</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Klassifizierung entfernen')}</div></div>
     <div class="modal-body" style="font-size:13px;color:var(--t2);line-height:1.55">
-      „${esc(c.orig)}" ist an <strong>${used} Item${used === 1 ? '' : 's'}</strong> gesetzt. Was soll beim Speichern mit diesen Items passieren?
+      ${_t(used === 1 ? '„{name}" ist an <strong>1 Item</strong> gesetzt. Was soll beim Speichern mit diesem Item passieren?' : '„{name}" ist an <strong>{n} Items</strong> gesetzt. Was soll beim Speichern mit diesen Items passieren?', { name: esc(c.orig), n: used })}
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-ghost" onclick="_confirmRemoveClass(${idx},false)">An den Items lassen</button>
-      <button class="btn btn-red" onclick="_confirmRemoveClass(${idx},true)">An den Items entfernen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-ghost" onclick="_confirmRemoveClass(${idx},false)">${_t('An den Items lassen')}</button>
+      <button class="btn btn-red" onclick="_confirmRemoveClass(${idx},true)">${_t('An den Items entfernen')}</button>
     </div>
   </div>`);
 }
@@ -515,7 +510,7 @@ function _confirmRemoveClass(idx, clear) {
 async function _saveClassifications() {
   const list = _getCurrentClassList();
   const lower = list.map(c => c.name.toLowerCase());
-  if (lower.some((n, i) => lower.indexOf(n) !== i)) { toast('Ein Name kommt doppelt vor', 'err'); return; }
+  if (lower.some((n, i) => lower.indexOf(n) !== i)) { toast(_t('Ein Name kommt doppelt vor'), 'err'); return; }
   // Umbenannte Einträge und „an den Items entfernen" gehen an die Items
   const renames = [
     ...list.filter(c => c.orig && c.orig !== c.name).map(c => ({ from: c.orig, to: c.name })),
@@ -529,9 +524,9 @@ async function _saveClassifications() {
   await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color, fields }) => ({ name, color, fields }))) });
   state.settings = await api('/api/settings');
   const msg = document.getElementById('st-class-msg');
-  const text = moved ? `Gespeichert · ${moved} Item${moved === 1 ? '' : 's'} angepasst` : 'Gespeichert';
+  const text = moved ? _t('Gespeichert') + ' · ' + _t(moved === 1 ? '1 Item angepasst' : '{n} Items angepasst', { n: moved }) : _t('Gespeichert');
   if (msg) { msg.textContent = text; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 3000); }
-  toast('Klassifizierungen gespeichert' + (moved ? ` · ${moved} Item${moved === 1 ? '' : 's'} angepasst` : ''), 'ok');
+  toast(_t('Klassifizierungen gespeichert') + (moved ? ' · ' + _t(moved === 1 ? '1 Item angepasst' : '{n} Items angepasst', { n: moved }) : ''), 'ok');
   _loadPlmTab();
 }
 
@@ -556,7 +551,7 @@ function _classListForReset() {
 
 function resetDesignColors() {
   const list = _classListForReset();
-  if (!list.length) { toast('Keine Klassifizierungen vorhanden', 'err'); return; }
+  if (!list.length) { toast(_t('Keine Klassifizierungen vorhanden'), 'err'); return; }
 
   const preview = list.map((c, i) => {
     const to = _defaultColorFor(c.name, i);
@@ -564,14 +559,13 @@ function resetDesignColors() {
     return { name: c.name, from, to, changed: from.toLowerCase() !== to.toLowerCase() };
   });
   const changedCount = preview.filter(p => p.changed).length;
-  if (!changedCount) { toast('Farben sind bereits aktuell', 'ok'); return; }
+  if (!changedCount) { toast(_t('Farben sind bereits aktuell'), 'ok'); return; }
 
   _showDynModal(`<div class="modal" style="max-width:470px">
-    <div class="modal-head"><div class="modal-title">Design zurücksetzen</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Design zurücksetzen')}</div></div>
     <div class="modal-body" style="font-size:13px;color:var(--t2)">
       <div style="margin-bottom:12px">
-        ${changedCount} von ${list.length} Klassifizierungen bekommen die Standardfarbe der
-        aktuellen Palette. Namen und Reihenfolge bleiben unverändert.
+        ${_t('{n} von {total} Klassifizierungen bekommen die Standardfarbe der aktuellen Palette. Namen und Reihenfolge bleiben unverändert.', { n: changedCount, total: list.length })}
       </div>
       <div style="display:flex;flex-direction:column;gap:5px">
         ${preview.map(p => `
@@ -579,13 +573,13 @@ function resetDesignColors() {
             <span style="font-family:var(--mono);font-size:13px;padding:1px 7px;border-radius:3px;background:${p.from}20;color:${p.from}">${esc(p.name)}</span>
             <span style="color:var(--t4)">→</span>
             <span style="font-family:var(--mono);font-size:13px;padding:1px 7px;border-radius:3px;background:${p.to}20;color:${p.to}">${esc(p.name)}</span>
-            ${p.changed ? '' : '<span style="font-size:11px;color:var(--t4);margin-left:auto">unverändert</span>'}
+            ${p.changed ? '' : '<span style="font-size:11px;color:var(--t4);margin-left:auto">' + _t('unverändert') + '</span>'}
           </div>`).join('')}
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="_doResetDesignColors()">Farben übernehmen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="_doResetDesignColors()">${_t('Farben übernehmen')}</button>
     </div>
   </div>`);
 }
@@ -599,8 +593,8 @@ async function _doResetDesignColors() {
   _renderClassList(list);
 
   const msg = document.getElementById('st-design-msg');
-  if (msg) { msg.textContent = 'Zurückgesetzt'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2500); }
-  toast('Design-Farben zurückgesetzt', 'ok');
+  if (msg) { msg.textContent = _t('Zurückgesetzt'); msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2500); }
+  toast(_t('Design-Farben zurückgesetzt'), 'ok');
 }
 
 async function _loadDelTab() {
@@ -649,23 +643,23 @@ async function _loadDelTab() {
   // Released items
   const itemsEl = document.getElementById('st-del-items');
   if (itemsEl) {
-    itemsEl.innerHTML = '<div style="font-size:13px;color:var(--t3)">Lädt…</div>';
+    itemsEl.innerHTML = '<div style="font-size:13px;color:var(--t3)">' + _t('Lädt…') + '</div>';
     let relItems = [], loadErr = false;
     try { relItems = await api('/api/items-released'); }
     catch(e) { loadErr = true; }
     if (loadErr) {
-      itemsEl.innerHTML = '<div style="font-size:13px;color:var(--amber)">⚠ Endpunkt nicht verfügbar — Server neu starten</div>';
+      itemsEl.innerHTML = '<div style="font-size:13px;color:var(--amber)">' + _t('⚠ Endpunkt nicht verfügbar — Server neu starten') + '</div>';
     } else {
       itemsEl.innerHTML = relItems.length
         ? relItems.map(i => `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
             ${_itemChip(i.item_type,15)}
             <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(i.item_number)}</span>
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.name)}</span>
-            ${i.delivered ? '<span class="chip" title="Wurde geliefert — der Nachweis in den Produktionsaufträgen verliert den Verweis">geliefert</span>' : ''}
+            ${i.delivered ? '<span class="chip" title="' + _t('Wurde geliefert — der Nachweis in den Produktionsaufträgen verliert den Verweis') + '">' + _t('geliefert') + '</span>' : ''}
             <span style="font-size:13px;color:var(--t3)">${esc(i.project_number||'')}</span>
-            <button class="btn btn-red btn-sm" onclick="_forceDelItem(${i.id},'${esc(i.item_number)}')">Löschen</button>
+            <button class="btn btn-red btn-sm" onclick="_forceDelItem(${i.id},'${esc(i.item_number)}')">${_t('Löschen')}</button>
           </div>`).join('')
-        : '<div style="font-size:13px;color:var(--t3)">Keine freigegebenen oder gelieferten Items</div>';
+        : '<div style="font-size:13px;color:var(--t3)">' + _t('Keine freigegebenen oder gelieferten Items') + '</div>';
     }
   }
 
@@ -676,10 +670,10 @@ async function _loadDelTab() {
       ? withContent.map(p => `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
           <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(p.number)}</span>
           <span style="flex:1;font-size:13px">${esc(p.name)}</span>
-          <span style="font-size:13px;color:var(--t3)">${p.item_count} Items</span>
-          <button class="btn btn-red btn-sm" onclick="_forceDeleteProject(${p.id},'${esc(p.name)}')">Löschen</button>
+          <span style="font-size:13px;color:var(--t3)">${_t('{n} Items', { n: p.item_count })}</span>
+          <button class="btn btn-red btn-sm" onclick="_forceDeleteProject(${p.id},'${esc(p.name)}')">${_t('Löschen')}</button>
         </div>`).join('')
-      : '<div style="font-size:13px;color:var(--t3)">Keine Projekte mit Inhalten</div>';
+      : '<div style="font-size:13px;color:var(--t3)">' + _t('Keine Projekte mit Inhalten') + '</div>';
   }
 
   const ordEl = document.getElementById('st-del-orders');
@@ -690,15 +684,15 @@ async function _loadDelTab() {
           <span class="status st-${ORDER_ST_MAP[o.status]?.replace('st-','')}" style="font-size:13px">${ORDER_ST_LABEL[o.status]||o.status}</span>
           <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(o.number)}</span>
           <span style="flex:1;font-size:13px">${esc(o.title)}</span>
-          <button class="btn btn-red btn-sm" onclick="_forceDelOrder(${o.id},'${esc(o.number)}')">Löschen</button>
+          <button class="btn btn-red btn-sm" onclick="_forceDelOrder(${o.id},'${esc(o.number)}')">${_t('Löschen')}</button>
         </div>`).join('')
-      : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Aufträge</div>';
+      : '<div style="font-size:13px;color:var(--t3)">' + _t('Keine gesperrten Aufträge') + '</div>';
   }
 
 
   const delEl = document.getElementById('st-del-deliveries');
   if (delEl) {
-    const DST = { DRAFT:'Entwurf', READY:'Bereit', DELIVERED:'Geliefert' };
+    const DST = { DRAFT:_t('Entwurf'), READY:_t('Bereit'), DELIVERED:_t('Geliefert') };
     const DST_CLS = { DRAFT:'st-DFT', READY:'st-REV', DELIVERED:'st-REL' };
     const locked = deliveries.filter(d => d.status !== 'DRAFT');
     delEl.innerHTML = locked.length
@@ -706,28 +700,28 @@ async function _loadDelTab() {
           <span class="status ${DST_CLS[d.status]||'st-DFT'}" style="font-size:13px">${DST[d.status]||d.status}</span>
           <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(d.number)}</span>
           <span style="flex:1;font-size:13px">${esc(d.title)}</span>
-          <button class="btn btn-red btn-sm" onclick="_forceDelDelivery(${d.id},'${esc(d.number)}')">Löschen</button>
+          <button class="btn btn-red btn-sm" onclick="_forceDelDelivery(${d.id},'${esc(d.number)}')">${_t('Löschen')}</button>
         </div>`).join('')
-      : '<div style="font-size:13px;color:var(--t3)">Keine gesperrten Produktionsaufträge</div>';
+      : '<div style="font-size:13px;color:var(--t3)">' + _t('Keine gesperrten Produktionsaufträge') + '</div>';
   }
 }
 
 async function _forceDelItem(id, number) {
-  if (!confirm(`Item ${number} unwiderruflich löschen? Alle Revisionen und Dateien werden entfernt — auch wenn es schon geliefert wurde.`)) return;
+  if (!confirm(_t('Item {number} unwiderruflich löschen? Alle Revisionen und Dateien werden entfernt — auch wenn es schon geliefert wurde.', { number }))) return;
   await api(`/api/items/${id}?force=1`,'DELETE');
   toast(`${number} gelöscht`,'ok'); _loadDelTab();
 }
 
 async function _forceDelOrder(id, number) {
-  if (!confirm(`Auftrag ${number} unwiderruflich löschen?`)) return;
+  if (!confirm(_t('Auftrag {number} unwiderruflich löschen?', { number }))) return;
   await api(`/api/orders/${id}`,'DELETE');
-  toast('Auftrag gelöscht','ok'); _loadDelTab(); loadStats();
+  toast(_t('Auftrag gelöscht'),'ok'); _loadDelTab(); loadStats();
 }
 
 async function _forceDelDelivery(id, number) {
-  if (!confirm(`Produktionsauftrag ${number} unwiderruflich löschen?`)) return;
+  if (!confirm(_t('Produktionsauftrag {number} unwiderruflich löschen?', { number }))) return;
   await api(`/api/deliveries/${id}`,'DELETE');
-  toast('Produktionsauftrag gelöscht','ok'); _loadDelTab(); loadStats();
+  toast(_t('Produktionsauftrag gelöscht'),'ok'); _loadDelTab(); loadStats();
 }
 
 // ── ITEM MOVE ─────────────────────────────────────────────────
@@ -737,7 +731,7 @@ async function openMoveItemModal(itemId) {
     [item, projects] = await Promise.all([api('/api/items/' + itemId), api('/api/projects')]);
   } catch(e) { return toast('Fehler: ' + e, 'err'); }
   const others = projects.filter(p => p.id !== item.project_id);
-  if (!others.length) return toast('Keine anderen Projekte vorhanden', 'err');
+  if (!others.length) return toast(_t('Keine anderen Projekte vorhanden'), 'err');
 
   const opts = others.map(p => `<option value="${p.id}">${p.number} – ${esc(p.name)}</option>`).join('');
   const overlay = document.createElement('div');
@@ -745,22 +739,22 @@ async function openMoveItemModal(itemId) {
   overlay.id = 'moveItemOverlay';
   overlay.innerHTML = `<div class="modal" style="max-width:400px">
     <div class="modal-header">
-      <div class="modal-title">↪ Verschieben: ${esc(item.item_number)}</div>
+      <div class="modal-title">↪ ${_t('Verschieben: {number}', { number: esc(item.item_number) })}</div>
       <button class="btn btn-icon btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">✕</button>
     </div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t2);margin-bottom:14px">
-        <strong style="color:var(--t1)">${esc(item.name)}</strong> in ein anderes Projekt verschieben.<br>
-        <span style="font-size:13px;color:var(--t3);margin-top:4px;display:block">Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items (Kinder) werden mitgenommen.</span>
+        ${_t('{name} in ein anderes Projekt verschieben.', { name: `<strong style="color:var(--t1)">${esc(item.name)}</strong>` })}<br>
+        <span style="font-size:13px;color:var(--t3);margin-top:4px;display:block">${_t('Die Item-Nummer wird automatisch neu vergeben. Untergeordnete Items (Kinder) werden mitgenommen.')}</span>
       </div>
       <div class="fg">
-        <label class="fl">Zielprojekt</label>
+        <label class="fl">${_t('Zielprojekt')}</label>
         <select class="fi" id="move-target-project">${opts}</select>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="confirmMoveItem(${itemId})">Verschieben</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('moveItemOverlay').remove()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="confirmMoveItem(${itemId})">${_t('Verschieben')}</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -775,12 +769,12 @@ async function confirmMoveItem(itemId) {
   try {
     await api('/api/items/' + itemId + '/move', 'PUT', { target_project_id: parseInt(targetId) });
     overlay?.remove();
-    toast('Item verschoben', 'ok');
+    toast(_t('Item verschoben'), 'ok');
     closeDetail();
     if (state.project) openProject(state.project.id);
     else if (state.view === 'parts') renderPartsList();
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Verschieben'; }
+    if (btn) { btn.disabled = false; btn.textContent = _t('Verschieben'); }
     toast('Fehler: ' + e, 'err');
   }
 }
@@ -816,18 +810,18 @@ function openWeightModal(itemId) {
   const isASM = item.item_type === 'asm';
   const w = revWeight(item, rev), effW = revEffWeight(item, rev);
   _showDynModal(`<div class="modal" style="max-width:400px">
-    <div class="modal-head"><div class="modal-title">Gewicht: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-head"><div class="modal-title">${_t('Gewicht: {number}', { number: esc(item.item_number) })}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="fg"><label class="fl">Gewicht (g)</label><input class="fi" id="wm-weight" type="number" step="0.1" min="0"
-          placeholder="${isASM && effW != null ? fmtN(effW, 1) + ' (aus Stückliste)' : 'z.B. 45.5'}"
+        <div class="fg"><label class="fl">${_t('Gewicht (g)')}</label><input class="fi" id="wm-weight" type="number" step="0.1" min="0"
+          placeholder="${isASM && effW != null ? fmtN(effW, 1) + ' ' + _t('(aus Stückliste)') : _t('z.B. 45.5')}"
           value="${w != null ? w : ''}" onkeydown="if(event.key==='Enter')saveWeightModal(${item.id})"></div>
       </div>
-      <div style="font-size:13px;color:var(--t3)">Gilt für die geöffnete Revision.${isASM ? ' Leer lassen: Summe aus der Stückliste.' : ''}</div>
+      <div style="font-size:13px;color:var(--t3)">${_t('Gilt für die geöffnete Revision.')}${isASM ? ' ' + _t('Leer lassen: Summe aus der Stückliste.') : ''}</div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveWeightModal(${item.id})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveWeightModal(${item.id})">${_t('Speichern')}</button>
     </div>
   </div>`);
   document.getElementById('wm-weight')?.select();
@@ -836,13 +830,13 @@ function openWeightModal(itemId) {
 async function saveWeightModal(itemId) {
   const val = V('wm-weight').trim();
   const weight = val === '' ? null : parseFloat(val);
-  if (weight != null && (isNaN(weight) || weight < 0)) return toast('Ungültiges Gewicht', 'err');
+  if (weight != null && (isNaN(weight) || weight < 0)) return toast(_t('Ungültiges Gewicht'), 'err');
   const rev = _selRev(itemId);
   if (!rev) return;
   try {
     await _putItemPatch(itemId, { weight_g: weight, revision_id: rev.id });
     _hideDynModal();
-    toast('Gewicht gespeichert', 'ok');
+    toast(_t('Gewicht gespeichert'), 'ok');
     // Neu zeichnen: Freigabe-Hinweis („fehlt noch: Gewicht“) und Datenblatt
     state.item = await api('/api/items/' + itemId);
     renderItemDetail(state.item, state.activeRevId);
@@ -861,21 +855,21 @@ function openPriceModal(itemId, preset) {
   const rev = _selRev(itemId);
   const price = preset != null ? preset : revPrice(item, rev);
   _showDynModal(`<div class="modal" style="max-width:400px">
-    <div class="modal-head"><div class="modal-title">Verkaufspreis: ${esc(item.item_number)}${rev ? ' · rev' + esc(rev.rev) : ''}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-head"><div class="modal-title">${_t('Verkaufspreis: {number}', { number: esc(item.item_number) })}${rev ? ' · rev' + esc(rev.rev) : ''}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="fg"><label class="fl">Verkaufspreis (CHF)</label><input class="fi" id="pm-price" type="number" step="0.01" min="0" placeholder="0.00"
+        <div class="fg"><label class="fl">${_t('Verkaufspreis (CHF)')}</label><input class="fi" id="pm-price" type="number" step="0.01" min="0" placeholder="0.00"
           value="${price != null ? price : ''}" onkeydown="if(event.key==='Enter')savePriceModal(${item.id})"></div>
       </div>
       <div class="form-row">
-        <div class="fg"><label class="fl">Grund (optional)</label><input class="fi" id="pm-reason" placeholder="z.B. Zulieferer teurer"
-          value="${preset != null ? 'Aus BOM übernommen' : ''}" onkeydown="if(event.key==='Enter')savePriceModal(${item.id})"></div>
+        <div class="fg"><label class="fl">${_t('Grund (optional)')}</label><input class="fi" id="pm-reason" placeholder="${_t('z.B. Zulieferer teurer')}"
+          value="${preset != null ? _t('Aus BOM übernommen') : ''}" onkeydown="if(event.key==='Enter')savePriceModal(${item.id})"></div>
       </div>
-      <div style="font-size:13px;color:var(--t3)">Gilt für ${rev ? 'rev' + esc(rev.rev) : 'die aktive Revision'} und braucht keine neue Revision. Die Änderung steht im Protokoll; bestehende Angebote und Aufträge behalten ihren Preis.</div>
+      <div style="font-size:13px;color:var(--t3)">${_t('Gilt für {rev} und braucht keine neue Revision. Die Änderung steht im Protokoll; bestehende Angebote und Aufträge behalten ihren Preis.', { rev: rev ? 'rev' + esc(rev.rev) : _t('die aktive Revision') })}</div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="savePriceModal(${item.id})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="savePriceModal(${item.id})">${_t('Speichern')}</button>
     </div>
   </div>`);
   document.getElementById('pm-price')?.select();
@@ -887,17 +881,17 @@ function openItemHintsModal(itemId) {
   const item = state.item;
   if (!item || item.id !== itemId) return;
   _showDynModal(`<div class="modal" style="max-width:480px">
-    <div class="modal-head"><div class="modal-title">⚠ Hinweise: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-head"><div class="modal-title">⚠ ${_t('Hinweise: {number}', { number: esc(item.item_number) })}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
       ${HINT_KINDS.map(([k, label, where, ph]) => `<div class="form-row">
         <div class="fg"><label class="fl" style="color:var(--red)">${label} <span class="important-note-sub">· ${where}</span></label>
           <textarea class="ft" id="ihm-${k}" rows="2" placeholder="${esc(ph)}">${esc(item[k] || '')}</textarea></div>
       </div>`).join('')}
-      <div style="font-size:13px;color:var(--t3)">Alle Hinweise stehen über den Tabs des Teils, auf Datenblatt und Prüfprotokoll. Leer lassen entfernt einen Hinweis.</div>
+      <div style="font-size:13px;color:var(--t3)">${_t('Alle Hinweise stehen über den Tabs des Teils, auf Datenblatt und Prüfprotokoll. Leer lassen entfernt einen Hinweis.')}</div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveItemHints(${item.id})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveItemHints(${item.id})">${_t('Speichern')}</button>
     </div>
   </div>`);
   document.getElementById('ihm-hint_design')?.focus();
@@ -908,7 +902,7 @@ async function saveItemHints(itemId) {
   try {
     await _putItemPatch(itemId, patch);
     _hideDynModal();
-    toast('Hinweise gespeichert', 'ok');
+    toast(_t('Hinweise gespeichert'), 'ok');
     const item = await api('/api/items/' + itemId);
     state.item = item;
     renderItemDetail(item, state.activeRevId);
@@ -923,16 +917,16 @@ function openDescModal(itemId) {
   const rev = _selRev(itemId);
   if (!rev) return;
   _showDynModal(`<div class="modal" style="max-width:520px">
-    <div class="modal-head"><div class="modal-title">Beschreibung: ${esc(item.item_number)}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
+    <div class="modal-head"><div class="modal-title">${_t('Beschreibung: {number}', { number: esc(item.item_number) })}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">&#x2715;</button></div>
     <div class="modal-body">
       <div class="form-row">
         <div class="fg"><textarea class="ft" id="dm-desc" rows="6">${esc(revDesc(item, rev))}</textarea></div>
       </div>
-      <div style="font-size:13px;color:var(--t3)">Gilt nur für die geöffnete Revision und braucht keine neue. Die anderen Revisionen behalten ihren Text; die Änderung steht in der Historie.</div>
+      <div style="font-size:13px;color:var(--t3)">${_t('Gilt nur für die geöffnete Revision und braucht keine neue. Die anderen Revisionen behalten ihren Text; die Änderung steht in der Historie.')}</div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveDescModal(${item.id})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveDescModal(${item.id})">${_t('Speichern')}</button>
     </div>
   </div>`);
   document.getElementById('dm-desc')?.focus();
@@ -944,7 +938,7 @@ async function saveDescModal(itemId) {
   try {
     await _putItemPatch(itemId, { rev_description: V('dm-desc'), revision_id: rev.id });
     _hideDynModal();
-    toast('Beschreibung gespeichert', 'ok');
+    toast(_t('Beschreibung gespeichert'), 'ok');
     const item = await api('/api/items/' + itemId);
     state.item = item;
     renderItemDetail(item, state.activeRevId);
@@ -954,12 +948,12 @@ async function saveDescModal(itemId) {
 async function savePriceModal(itemId) {
   const val = V('pm-price').trim();
   const price = val === '' ? null : parseFloat(val);
-  if (price != null && (isNaN(price) || price < 0)) return toast('Ungültiger Preis', 'err');
+  if (price != null && (isNaN(price) || price < 0)) return toast(_t('Ungültiger Preis'), 'err');
   try {
     const rev = _selRev(itemId);
     await _putItemPatch(itemId, { default_price: price, price_reason: V('pm-reason').trim(), ...(rev ? { revision_id: rev.id } : {}) });
     _hideDynModal();
-    toast('Verkaufspreis gespeichert', 'ok');
+    toast(_t('Verkaufspreis gespeichert'), 'ok');
     const item = await api('/api/items/' + itemId);
     state.item = item;
     renderItemDetail(item, state.activeRevId);
@@ -980,7 +974,7 @@ async function openEditItemModal(id) {
   set('eim-weight', revWeight(item, selRev) ?? '');
   set('eim-rev-id', selRev?.id || '');
   const wl = document.getElementById('eim-weight-label');
-  if (wl) wl.textContent = 'Gewicht (g)' + (selRev ? ' · rev' + selRev.rev : '');
+  if (wl) wl.textContent = _t('Gewicht (g)') + (selRev ? ' · rev' + selRev.rev : '');
   // Nur in der offenen Revision änderbar — sonst nur anzeigen
   const wLock = revWeightLock(item, selRev);
   const wIn = document.getElementById('eim-weight');
@@ -991,14 +985,14 @@ async function openEditItemModal(id) {
   // er beim Speichern stillschweigend verloren
   const classNames = getClassifications().map(c => c.name);
   const orphan = item.classification && !classNames.some(n => n.toLowerCase() === item.classification.toLowerCase());
-  clSel.innerHTML = '<option value="">— keine —</option>'
+  clSel.innerHTML = '<option value="">' + _t('— keine —') + '</option>'
     + classNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
-    + (orphan ? `<option value="${esc(item.classification)}">${esc(item.classification)} (nicht in der Liste)</option>` : '');
+    + (orphan ? `<option value="${esc(item.classification)}">${esc(item.classification)} ${_t('(nicht in der Liste)')}</option>` : '');
   clSel.value = item.classification || '';
   _eimAttrs = { ...(item.attributes || {}) };
   document.getElementById('eim-attrs').innerHTML = '';
   _renderEditAttrs();
-  document.getElementById('eim-title').textContent = 'Bearbeiten: ' + item.item_number;
+  document.getElementById('eim-title').textContent = _t('Bearbeiten: {number}', { number: item.item_number });
   openModal('editItemModal');
 }
 
@@ -1011,15 +1005,15 @@ function _renderEditAttrs() {
   box.querySelectorAll('[data-attr]').forEach(i => { _eimAttrs[i.dataset.attr] = i.value; });
   const fields = classFieldsOf(document.getElementById('eim-classification').value);
   box.innerHTML = fields.length ? `<div class="form-row cols2">${fields.map(f => `<div class="fg">
-      <label class="fl">${esc(f.label)}${f.required ? ' <span style="color:var(--amber)" title="Pflicht für die Freigabe">*</span>' : ''}</label>
+      <label class="fl">${esc(f.label)}${f.required ? ` <span style="color:var(--amber)" title="${_t('Pflicht für die Freigabe')}">*</span>` : ''}</label>
       <input class="fi" data-attr="${esc(f.id)}" value="${esc(_eimAttrs[f.id] || '')}" maxlength="200"></div>`).join('')}</div>
-    ${fields.some(f => f.required) ? '<div style="font-size:12px;color:var(--t4);margin-top:-4px">* Pflicht für die Freigabe</div>' : ''}` : '';
+    ${fields.some(f => f.required) ? `<div style="font-size:12px;color:var(--t4);margin-top:-4px">* ${_t('Pflicht für die Freigabe')}</div>` : ''}` : '';
 }
 
 async function saveEditItem() {
   const id = V('eim-id');
   const name = V('eim-name');
-  if (!name) return toast('Name fehlt', 'err');
+  if (!name) return toast(_t('Name fehlt'), 'err');
   const attributes = {};
   document.querySelectorAll('#eim-attrs [data-attr]').forEach(i => { attributes[i.dataset.attr] = i.value; });
   // Preis bleibt unberührt — der läuft über openPriceModal.
@@ -1034,7 +1028,7 @@ async function saveEditItem() {
     classification: document.getElementById('eim-classification').value || null,
     attributes
   });
-  toast('Name gespeichert', 'ok');
+  toast(_t('Name gespeichert'), 'ok');
   closeModal('editItemModal');
   const item = await api('/api/items/' + id);
   state.item = item;
@@ -1054,7 +1048,7 @@ async function openItemModal(projectId, parentId, type) {
     if (!projectId) {
       const projects = await api('/api/projects').catch(() => []);
       const sel = document.getElementById('im-project-sel');
-      sel.innerHTML = '<option value="">— Projekt wählen —</option>'
+      sel.innerHTML = '<option value="">' + _t('— Projekt wählen —') + '</option>'
         + projects.map(p => `<option value="${p.id}">${esc(p.number)} · ${esc(p.name)}</option>`).join('');
       // Vorschlag: Projekt des offenen Teils, sonst das zuletzt gewählte
       const guess = String(state.item?.project_id || localStorage.getItem('plm_last_item_project') || '');
@@ -1063,42 +1057,42 @@ async function openItemModal(projectId, parentId, type) {
   }
   set('im-parent-id', parentId||'');
   document.getElementById('im-type').value = type||'prt';
-  document.getElementById('im-title').textContent = type==='asm' ? 'Neue Baugruppe' : type==='doc' ? 'Neues Dokument' : 'Neues Part';
+  document.getElementById('im-title').textContent = type==='asm' ? _t('Neue Baugruppe') : type==='doc' ? _t('Neues Dokument') : _t('Neues Part');
   openModal('itemModal');
 }
 
 async function saveItem() {
-  const name = V('im-name'); if (!name) return toast('Name fehlt','err');
+  const name = V('im-name'); if (!name) return toast(_t('Name fehlt'),'err');
   const projectId = V('im-project-id') || V('im-project-sel');
-  if (!projectId) return toast('Bitte ein Projekt wählen — die Nummer hängt daran', 'err');
+  if (!projectId) return toast(_t('Bitte ein Projekt wählen — die Nummer hängt daran'), 'err');
   if (!V('im-project-id')) try { localStorage.setItem('plm_last_item_project', projectId); } catch {}
   const parentId = V('im-parent-id');
   const body = { name, description: V('im-desc'), item_type: V('im-type'), parent_id: parentId||null, source_url: V('im-url')||null, default_price: V('im-price') ? parseFloat(V('im-price')) : null };
   const newItem = await api(`/api/projects/${projectId}/items`,'POST',body);
-  toast('Item angelegt','ok'); closeModal('itemModal');
+  toast(_t('Item angelegt'),'ok'); closeModal('itemModal');
   if (state.view === 'parts') await renderPartsList(); else await openProject(projectId);
   loadStats();
   if (newItem?.id) openItemDetail(newItem.id);
 }
 
 async function deleteItem(id) {
-  if (!confirm('Item und alle Revisionen / Dateien löschen?')) return;
+  if (!confirm(_t('Item und alle Revisionen / Dateien löschen?'))) return;
   const item = state.item;
   await api(`/api/items/${id}`,'DELETE');
-  toast('Item gelöscht','ok'); closeDetail();
+  toast(_t('Item gelöscht'),'ok'); closeDetail();
   if (state.project) openProject(state.project.id);
   else if (state.view === 'parts') renderPartsList();
 }
 
 async function deleteRevision(revId, itemId) {
-  if (!confirm('Diese Revision (DFT) und alle zugehörigen Dateien löschen?')) return;
+  if (!confirm(_t('Diese Revision (DFT) und alle zugehörigen Dateien löschen?'))) return;
   try {
     await api(`/api/revisions/${revId}`, 'DELETE');
-    toast('Revision gelöscht', 'ok');
+    toast(_t('Revision gelöscht'), 'ok');
     const fresh = await api(`/api/items/${itemId}`);
     openItemDetail(fresh.id);
   } catch(e) {
-    toast(e.message || 'Fehler beim Löschen', 'err');
+    toast(e.message || _t('Fehler beim Löschen'), 'err');
   }
 }
 
@@ -1112,17 +1106,17 @@ async function createNextRevision(itemId) {
     state.activeRevId = rev.id;
     renderItemDetail(fresh, rev.id);
   } catch (e) {
-    toast(e.message || 'Revision konnte nicht angelegt werden', 'err');
+    toast(e.message || _t('Revision konnte nicht angelegt werden'), 'err');
   }
 }
 
 // ── REVISION / STATUS ─────────────────────────────────────────
 const statusHints = {
-  REV: 'Revision geht in Review und ist bis zur Freigabe gesperrt. Freigeben muss danach eine zweite Person (oder ein Admin).',
-  DFT: 'Revision zurück auf Entwurf setzen.',
-  REL: 'Revision freigeben. Alle vorherigen REL-Revisionen werden auf OBS gesetzt.',
-  ECO: 'Änderung (ECO) starten. Die aktuelle Revision wird gesperrt (ECO). Eine neue DFT-Revision wird automatisch angelegt und übernimmt Dateien, Stückliste und Druckparameter.',
-  OBS: 'Revision als veraltet markieren.'
+  REV: _t('Revision geht in Review und ist bis zur Freigabe gesperrt. Freigeben muss danach eine zweite Person (oder ein Admin).'),
+  DFT: _t('Revision zurück auf Entwurf setzen.'),
+  REL: _t('Revision freigeben. Alle vorherigen REL-Revisionen werden auf OBS gesetzt.'),
+  ECO: _t('Änderung (ECO) starten. Die aktuelle Revision wird gesperrt (ECO). Eine neue DFT-Revision wird automatisch angelegt und übernimmt Dateien, Stückliste und Druckparameter.'),
+  OBS: _t('Revision als veraltet markieren.')
 };
 
 async function openStatusModal(revId, targetStatus) {
@@ -1166,7 +1160,7 @@ function openUploadModal(revId, itemNumber, rev) {
   document.getElementById('upInput').value='';
   // Show auto-rename hint
   const hint = document.getElementById('up-rename-hint');
-  if (hint) hint.textContent = itemNumber ? 'Dateien werden umbenannt zu: ' + itemNumber + '_rev' + rev + '_NNN.ext' : '';
+  if (hint) hint.textContent = itemNumber ? _t('Dateien werden umbenannt zu: {name}', { name: itemNumber + '_rev' + rev + '_NNN.ext' }) : '';
   openModal('uploadModal');
 }
 
@@ -1203,11 +1197,11 @@ function buildUploadName(originalName, itemNumber, rev, index) {
 }
 
 async function doUpload() {
-  if (!upFiles.length) return toast('Keine Datei ausgewählt','err');
+  if (!upFiles.length) return toast(_t('Keine Datei ausgewählt'),'err');
   const revId = V('up-rev-id');
   const itemNumber = state.uploadItemNumber || '';
   const rev = state.uploadRev || '';
-  document.getElementById('upBtn').textContent = 'Hochladen...';
+  document.getElementById('upBtn').textContent = _t('Hochladen...');
   try {
     for (let i = 0; i < upFiles.length; i++) {
       const f = upFiles[i];
@@ -1221,11 +1215,11 @@ async function doUpload() {
       await apiForm('/api/revisions/'+revId+'/datasets', fd);
     }
   } catch {   // apiForm meldet den Fehler
-    document.getElementById('upBtn').textContent = 'Hochladen';
+    document.getElementById('upBtn').textContent = _t('Hochladen');
     return;
   }
-  document.getElementById('upBtn').textContent = 'Hochladen';
-  toast(upFiles.length+' Datei(en) hochgeladen','ok');
+  document.getElementById('upBtn').textContent = _t('Hochladen');
+  toast(_t(upFiles.length === 1 ? '1 Datei hochgeladen' : '{n} Dateien hochgeladen', { n: upFiles.length }),'ok');
   closeModal('uploadModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
 }
@@ -1237,14 +1231,14 @@ function openEditDatasetModal(id, name, notes) {
 async function saveDatasetEdit() {
   const id = V('dsed-id');
   await api(`/api/datasets/${id}`, 'PUT', { original_name: V('dsed-name'), notes: V('dsed-notes') });
-  toast('Gespeichert', 'ok'); closeModal('datasetEditModal');
+  toast(_t('Gespeichert'), 'ok'); closeModal('datasetEditModal');
   if (state.item) { const item = await api(`/api/items/${state.item.id}`); state.item = item; renderItemDetail(item, state.activeRevId); }
 }
 
 async function delDataset(dsId, revId) {
-  if (!confirm('Datei löschen?')) return;
+  if (!confirm(_t('Datei löschen?'))) return;
   await api(`/api/datasets/${dsId}`,'DELETE');
-  toast('Datei gelöscht','ok');
+  toast(_t('Datei gelöscht'),'ok');
   if (state.item) await switchRev(state.item.id, revId);
 }
 
@@ -1268,7 +1262,7 @@ async function _bomItemSearch(q) {
     const items = await api('/api/items-for-bom?q=' + encodeURIComponent(q)).catch(() => []);
     items.forEach(i => { window._bomSearchCache[i.id] = i; });
     if (!items.length) {
-      res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>';
+      res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">' + _t('Keine Treffer') + '</div>';
       res.style.display = 'block'; return;
     }
     res.innerHTML = items.map(i => {
@@ -1303,8 +1297,8 @@ function _bomSelectItem(itemId) {
 function _bomAddStdToBasket() {
   const sel = document.getElementById('bom-std-id');
   const id = parseInt(sel.value);
-  if (!id) return toast('Normteil wählen', 'err');
-  if (window._bomBasket.some(b => b.type === 'std' && b.id === id)) return toast('Bereits in der Liste', 'err');
+  if (!id) return toast(_t('Normteil wählen'), 'err');
+  if (window._bomBasket.some(b => b.type === 'std' && b.id === id)) return toast(_t('Bereits in der Liste'), 'err');
   const text = sel.options[sel.selectedIndex]?.text || '';
   window._bomBasket.push({ type: 'std', id, name: text, quantity: 1, unit: 'pcs' });
   sel.value = '';
@@ -1320,9 +1314,9 @@ function _renderBomBasket() {
   if (!el) return;
   const btn = document.getElementById('bom-save-btn');
   const n = window._bomBasket.length;
-  if (btn) btn.textContent = n ? `Alle hinzufügen (${n})` : 'Hinzufügen';
+  if (btn) btn.textContent = n ? _t('Alle hinzufügen ({n})', { n }) : _t('Hinzufügen');
   if (!n) {
-    el.innerHTML = '<div style="font-size:13px;color:var(--t4);text-align:center;padding:12px 0;border:1px dashed var(--line2);border-radius:var(--r)">Noch keine Positionen — oben suchen und auswählen</div>';
+    el.innerHTML = '<div style="font-size:13px;color:var(--t4);text-align:center;padding:12px 0;border:1px dashed var(--line2);border-radius:var(--r)">' + _t('Noch keine Positionen — oben suchen und auswählen') + '</div>';
     return;
   }
   const units = ['pcs','set','m','mm','g','kg'];
@@ -1352,7 +1346,7 @@ async function openBomModal(revId, projectId) {
   document.getElementById('bom-child-search').value = '';
   document.getElementById('bom-child-results').style.display = 'none';
   const stdParts = await api('/api/standard-parts');
-  document.getElementById('bom-std-id').innerHTML = '<option value="">— Normteil wählen —</option>' +
+  document.getElementById('bom-std-id').innerHTML = '<option value="">' + _t('— Normteil wählen —') + '</option>' +
     stdParts.map(s=>`<option value="${s.id}">${esc(s.designation)}${s.material?' · '+esc(s.material):''}</option>`).join('');
   setBomTab('item');
   _renderBomBasket();
@@ -1360,7 +1354,7 @@ async function openBomModal(revId, projectId) {
 }
 
 async function doBomAdd() {
-  if (!window._bomBasket.length) return toast('Keine Positionen ausgewählt', 'err');
+  if (!window._bomBasket.length) return toast(_t('Keine Positionen ausgewählt'), 'err');
   const revId = V('bom-rev-id');
   let added = 0;
   for (const b of window._bomBasket) {
@@ -1372,10 +1366,10 @@ async function doBomAdd() {
       }
       added++;
     } catch(e) {
-      toast(`Fehler bei "${b.item_number || b.name}": ${e.message || 'unbekannt'}`, 'err');
+      toast(_t('Fehler bei "{name}": {error}', { name: b.item_number || b.name, error: e.message || _t('unbekannt') }), 'err');
     }
   }
-  if (added) toast(`${added} Position${added > 1 ? 'en' : ''} hinzugefügt`, 'ok');
+  if (added) toast(_t(added === 1 ? '1 Position hinzugefügt' : '{n} Positionen hinzugefügt', { n: added }), 'ok');
   closeModal('bomModal');
   if (state.item) await switchRev(state.item.id, parseInt(revId));
   refreshProjectTree();
@@ -1383,45 +1377,44 @@ async function doBomAdd() {
 
 async function delBom(bomId, itemId, revId) {
   await api(`/api/bom/${bomId}`,'DELETE');
-  toast('Position entfernt','ok');
+  toast(_t('Position entfernt'),'ok');
   if (state.item) await switchRev(itemId, revId);
   refreshProjectTree();
 }
 
 async function delBomStd(bomStdId, itemId, revId) {
   await api(`/api/bom-std/${bomStdId}`,'DELETE');
-  toast('Position entfernt','ok');
+  toast(_t('Position entfernt'),'ok');
   if (state.item) await switchRev(itemId, revId);
   refreshProjectTree();
 }
 
 function openStepBomImport(revId, projectId) {
   _showDynModal(`
-    <div class="modal-head"><div class="modal-title">📐 BOM aus STEP-Datei importieren</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('📐 BOM aus STEP-Datei importieren')}</div></div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t3);margin-bottom:14px">
-        Baugruppe in Solid Edge als STEP exportieren (<em>Datei → Exportieren → STEP AP214/AP242</em>)
-        und hier hochladen. PLM liest die Bauteilstruktur automatisch aus.
+        ${_t('Baugruppe in Solid Edge als STEP exportieren ({menu}) und hier hochladen. PLM liest die Bauteilstruktur automatisch aus.', { menu: `<em>${_t('Datei → Exportieren → STEP AP214/AP242')}</em>` })}
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="file" id="step-file-in" accept=".stp,.step"
           style="flex:1;font-size:13px;color:var(--t2);background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 8px">
-        <button class="btn btn-primary btn-sm" onclick="doParseStep(${revId},${projectId})">📤 Analysieren</button>
+        <button class="btn btn-primary btn-sm" onclick="doParseStep(${revId},${projectId})">${_t('📤 Analysieren')}</button>
       </div>
       <div id="step-result" style="margin-top:16px"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
       <button class="btn btn-primary" id="step-import-btn" style="display:none"
-        onclick="doStepBomImport(${revId})">✓ BOM übernehmen</button>
+        onclick="doStepBomImport(${revId})">${_t('✓ BOM übernehmen')}</button>
     </div>`);
 }
 
 async function doParseStep(revId, projectId) {
   const input = document.getElementById('step-file-in');
-  if (!input?.files?.length) return toast('Bitte STEP-Datei auswählen', 'err');
+  if (!input?.files?.length) return toast(_t('Bitte STEP-Datei auswählen'), 'err');
   const el = document.getElementById('step-result');
-  el.innerHTML = '<div style="color:var(--t3);font-size:13px">Analysiere …</div>';
+  el.innerHTML = '<div style="color:var(--t3);font-size:13px">' + _t('Analysiere …') + '</div>';
   const fd = new FormData();
   fd.append('file', input.files[0]);
   let tree;
@@ -1435,7 +1428,7 @@ async function doParseStep(revId, projectId) {
   }
   const children = tree.children || [];
   if (!children.length) {
-    el.innerHTML = '<div style="color:var(--amber);font-size:13px">⚠ Keine Unterbauteile gefunden — ist das eine Baugruppe?</div>';
+    el.innerHTML = '<div style="color:var(--amber);font-size:13px">' + _t('⚠ Keine Unterbauteile gefunden — ist das eine Baugruppe?') + '</div>';
     return;
   }
   const items = await api(`/api/projects/${projectId}/items-for-bom`);
@@ -1451,7 +1444,7 @@ async function doParseStep(revId, projectId) {
         style="width:58px;font-size:13px;background:var(--bg2);color:var(--t1);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 5px"></td>
       <td>
         <select id="sm-${i}" style="font-size:13px;background:var(--bg2);color:var(--t1);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px 6px;width:100%">
-          <option value="">— überspringen —</option>
+          <option value="">${_t('— überspringen —')}</option>
           ${items.map(it => `<option value="${it.id}" ${it.id===match?.id?'selected':''}>${it.item_number} · ${esc(it.name)}</option>`).join('')}
         </select>
       </td>
@@ -1459,13 +1452,13 @@ async function doParseStep(revId, projectId) {
     </tr>`;
   }).join('');
   el.innerHTML = `
-    <div class="sep-label" style="margin-top:0">${children.length} Position${children.length!==1?'en':''} in „${esc(tree.name)}"</div>
+    <div class="sep-label" style="margin-top:0">${_t(children.length === 1 ? '1 Position in „{name}"' : '{n} Positionen in „{name}"', { n: children.length, name: esc(tree.name) })}</div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>STEP-Name</th><th>Menge</th><th>PLM-Bauteil</th><th></th></tr></thead>
+      <thead><tr><th>${_t('STEP-Name')}</th><th>${_t('Menge')}</th><th>${_t('PLM-Bauteil')}</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
     <div style="font-size:11px;color:var(--t4);margin-top:6px">
-      ✓ automatisch erkannt · ? bitte manuell zuordnen · „überspringen" = nicht importieren
+      ${_t('✓ automatisch erkannt · ? bitte manuell zuordnen · „überspringen" = nicht importieren')}
     </div>`;
   document.getElementById('step-import-btn').style.display = '';
 }
@@ -1478,9 +1471,9 @@ async function doStepBomImport(revId) {
     const qty = parseFloat(document.getElementById(`sq-${i}`)?.value) || 1;
     if (id) entries.push({ child_item_id: parseInt(id), quantity: qty, unit: 'pcs' });
   }
-  if (!entries.length) return toast('Keine Zuordnungen ausgewählt', 'err');
+  if (!entries.length) return toast(_t('Keine Zuordnungen ausgewählt'), 'err');
   const r = await api(`/api/revisions/${revId}/bom-bulk`, 'POST', { entries });
-  toast(`${r.count} Position${r.count!==1?'en':''} in BOM übernommen`, 'ok');
+  toast(_t(r.count === 1 ? '1 Position in BOM übernommen' : '{n} Positionen in BOM übernommen', { n: r.count }), 'ok');
   _hideDynModal();
   if (state.item) await switchRev(state.item.id, revId);
   refreshProjectTree();
@@ -1516,10 +1509,10 @@ async function applyDimRawMat(val) {
   }
   // Multiple different prices → ask user
   _showDynModal(`<div class="modal" style="max-width:380px">
-    <div class="modal-head"><div class="modal-title">Einkaufspreis wählen</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Einkaufspreis wählen')}</div></div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
-        Mehrere Einkaufspreise für dieses Material vorhanden. Welchen möchtest du verwenden?
+        ${_t('Mehrere Einkaufspreise für dieses Material vorhanden. Welchen möchtest du verwenden?')}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${prices.map(p => `
@@ -1529,14 +1522,14 @@ async function applyDimRawMat(val) {
             <span style="font-size:11px;color:var(--t4)">${fmtD(p.created_at,'')}${p.notes?' · '+esc(p.notes):''}</span>
           </button>`).join('')}
         <button class="btn btn-ghost" style="text-align:left;color:var(--t4)"
-          onclick="_hideDynModal()">— Kein Preis übernehmen</button>
+          onclick="_hideDynModal()">${_t('— Kein Preis übernehmen')}</button>
       </div>
     </div>
   </div>`);
 }
 function _buildRmOptions(mats) {
   // Legacy: used for dim-rawmat select (Produktion)
-  let opts = '<option value="">— kein Rohmaterial —</option>';
+  let opts = '<option value="">' + _t('— kein Rohmaterial —') + '</option>';
   for (const m of mats) {
     const label = [m.color, m.material_type, m.brand].filter(Boolean).join(' · ') || m.name;
     opts += `<option value="${m.id}">${esc(label)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`;
@@ -1557,12 +1550,12 @@ function _rmSearch(q, resultsId, hiddenId) {
         || (m.brand||'').toLowerCase().includes(ql))
     : mats;
   if (!filtered.length) {
-    res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>';
+    res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">' + _t('Keine Treffer') + '</div>';
     res.style.display = 'block';
     return;
   }
   res.innerHTML = [
-    '<div onclick="_rmSelectItem(\'\',\'\',\''+resultsId+'\',\''+hiddenId+'\')" style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--t4)" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">— kein Rohmaterial —</div>',
+    '<div onclick="_rmSelectItem(\'\',\'\',\''+resultsId+'\',\''+hiddenId+'\')" style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--t4)" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">' + _t('— kein Rohmaterial —') + '</div>',
     ...filtered.map(m => {
       const label = [m.color, m.material_type, m.brand].filter(Boolean).join(' · ') || m.name;
       const stock = `${fmtN(m.stock_qty,0)} ${m.unit}`;
@@ -1618,10 +1611,10 @@ async function _onRmSelect(val) {
 
 function _showLotPicker(mat, lots) {
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">Lot wählen</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Lot wählen')}</div></div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
-        Mehrere aktive Lots für <strong>${esc(mat.name)}</strong>. Welches Lot verwenden?
+        ${_t('Mehrere aktive Lots für {name}. Welches Lot verwenden?', { name: `<strong>${esc(mat.name)}</strong>` })}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${lots.map(l => {
@@ -1634,7 +1627,7 @@ function _showLotPicker(mat, lots) {
             <span style="color:var(--teal);font-family:var(--mono)">${price}</span>
           </button>`;
         }).join('')}
-        <button class="btn btn-ghost" style="color:var(--t4)" onclick="_selectLot(null)">— ohne Lot-Zuordnung</button>
+        <button class="btn btn-ghost" style="color:var(--t4)" onclick="_selectLot(null)">${_t('— ohne Lot-Zuordnung')}</button>
       </div>
     </div>
   </div>`);
@@ -1649,7 +1642,7 @@ function _selectLot(lot) {
 // Same helpers exposed for delivery item manual entry
 function _populateDimSelects() {
   const rmSel = document.getElementById('dim-rawmat');
-  if (rmSel) rmSel.innerHTML = '<option value="">— kein Rohmaterial —</option>' +
+  if (rmSel) rmSel.innerHTML = '<option value="">' + _t('— kein Rohmaterial —') + '</option>' +
     (state.rawMaterials||[]).map(m => {
       const label = [m.material_type, m.color, m.dimensions].filter(Boolean).join(' · ');
       return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}" data-unit="${esc(m.unit)}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${m.unit}</option>`;
@@ -1658,7 +1651,7 @@ function _populateDimSelects() {
   if (nozSel) nozSel.innerHTML = '<option value="">—</option>' +
     state.nozzles.map(n=>`<option value="${n.size}">${n.size} mm</option>`).join('');
   const prSel = document.getElementById('dim-man-printer');
-  if (prSel) prSel.innerHTML = '<option value="">— kein —</option>' +
+  if (prSel) prSel.innerHTML = '<option value="">' + _t('— kein —') + '</option>' +
     state.printers.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
 }
 function dimTab(tab) {

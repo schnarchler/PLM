@@ -1,5 +1,5 @@
 // Tests für die Übersetzung der Oberfläche (frontend/public/js/00-i18n.js und
-// lang/en.js): Jeder Text, der im Code mit t('…') steht, hat eine englische
+// lang/en.js): Jeder Text, der im Code mit _t('…') steht, hat eine englische
 // Übersetzung; jede Übersetzung wird noch gebraucht; Platzhalter stimmen.
 //
 // Ausführen:  npm test   (im backend/-Ordner)
@@ -19,12 +19,12 @@ const EN = (0, eval)(EN_SRC + '; I18N_EN');
 const unquote = lit => (0, eval)(lit);
 const placeholders = s => [...s.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
 
-// Alle t('…')-Aufrufe mit festem Text, auch t(a ? '…' : '…')
+// Alle _t('…')-Aufrufe mit festem Text, auch _t(a ? '…' : '…')
 function tKeys(src) {
   src = src.replace(/^\s*\/\/.*$/gm, '');   // Kommentare
   const keys = [];
   const LIT = String.raw`'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"`;
-  const re = new RegExp(String.raw`\bt\(\s*(?:[^'"()]*?\?\s*)?(${LIT})(?:\s*:\s*(${LIT}))?`, 'g');
+  const re = new RegExp(String.raw`(?<![\w$.])_t\(\s*(?:(?:[^'"()?,]|${LIT})*?\?\s*)?(${LIT})(?:\s*:\s*(${LIT}))?`, 'g');
   for (const m of src.matchAll(re)) for (const lit of [m[1], m[2]]) if (lit) keys.push(unquote(lit));
   return keys;
 }
@@ -42,7 +42,7 @@ test('i18n: Übersetzungen nicht leer, Platzhalter wie im Deutschen', () => {
   assert.deepStrictEqual(bad, []);
 });
 
-test('i18n: jeder Text mit t() hat eine englische Übersetzung', () => {
+test('i18n: jeder Text mit _t() hat eine englische Übersetzung', () => {
   const missing = [];
   for (const f of JS) for (const k of tKeys(read(f))) if (!(k in EN)) missing.push(`${f}: ${k}`);
   assert.deepStrictEqual([...new Set(missing)], [], 'in lang/en.js ergänzen');
@@ -58,16 +58,22 @@ test('i18n: jede Übersetzung wird noch gebraucht', () => {
   assert.deepStrictEqual(unused, [], 'nicht mehr gebraucht — aus lang/en.js entfernen');
 });
 
-test('i18n: t() setzt Platzhalter ein und fällt auf Deutsch zurück', () => {
-  const I = (0, eval)(read('js/00-i18n.js') + '; ({ t, I18N, setLangForTest: l => { LANG = l; } })');
-  assert.strictEqual(I.t('Speichern'), 'Speichern');
-  assert.strictEqual(I.t('… und {n} weitere', { n: 3 }), '… und 3 weitere');
+test('i18n: _t() setzt Platzhalter ein und fällt auf Deutsch zurück', () => {
+  const I = (0, eval)(read('js/00-i18n.js') + '; ({ _t, I18N, setLangForTest: l => { LANG = l; } })');
+  assert.strictEqual(I._t('Speichern'), 'Speichern');
+  assert.strictEqual(I._t('… und {n} weitere', { n: 3 }), '… und 3 weitere');
   I.I18N.en = EN;
   I.setLangForTest('en');
-  assert.strictEqual(I.t('Speichern'), 'Save');
-  assert.strictEqual(I.t('… und {n} weitere', { n: 3 }), '… and 3 more');
-  assert.strictEqual(I.t('Noch nicht übersetzt'), 'Noch nicht übersetzt');
-  assert.strictEqual(I.t('{x} bleibt', {}), '{x} bleibt', 'fehlender Wert lässt den Platzhalter stehen');
+  assert.strictEqual(I._t('Speichern'), 'Save');
+  assert.strictEqual(I._t('… und {n} weitere', { n: 3 }), '… and 3 more');
+  assert.strictEqual(I._t('Noch nicht übersetzt'), 'Noch nicht übersetzt');
+  assert.strictEqual(I._t('{x} bleibt', {}), '{x} bleibt', 'fehlender Wert lässt den Platzhalter stehen');
+});
+
+test('i18n: keine Variable heisst _t — sie würde die Übersetzung verdecken', () => {
+  const decl = /(?:\b(?:const|let|var|function)\s+_t\b(?!\(s, vars\))|[(,]\s*_t\s*[,)=]|\b_t\s*=>)/;
+  const bad = JS.filter(f => decl.test(read(f).replace(/^function _t\(s, vars\)/m, '')));
+  assert.deepStrictEqual(bad, []);
 });
 
 test('i18n: Sprachdatei lädt vor 00-i18n.js, das vor allen anderen Scripts', () => {

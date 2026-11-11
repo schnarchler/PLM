@@ -614,15 +614,17 @@ The interface language is chosen under **Settings → Appearance** (stored on th
 the colour scheme). Without a choice, PLM follows the browser language; installations that
 already had data before the translation keep German.
 
-The German text is the key: code writes `t('Speichern')`, and
+The German text is the key: code writes `_t('Speichern')`, and
 [`frontend/public/lang/en.js`](frontend/public/lang/en.js) maps it to `'Save'`.
-Placeholders use braces: `t('… und {n} weitere', { n: 3 })`. A missing entry simply shows
+Placeholders use braces: `_t('… und {n} weitere', { n: 3 })`. A missing entry simply shows
 the German text, so the interface can be translated file by file. Static text in
 `index.html` (text, `title`, `placeholder`) is translated once on load without any markup;
-`data-no-i18n` excludes an element. `npm test` checks that every `t('…')` has an entry.
+`data-no-i18n` excludes an element. `npm test` checks that every `_t('…')` has an entry.
 
-Status of the English interface: navigation, start-up, updates, print parameters and
-appearance settings are done; the remaining views follow step by step. Contributions
+Status of the English interface: navigation, dashboard and the whole PLM area (projects,
+items, data sheet, BOM, revisions, change requests, mind map, check-out/check-in, time
+tracking) are done. ERP views, settings, server messages and history entries follow step
+by step. Contributions
 are welcome, please use the terms from the table above.
 
 ---
@@ -646,7 +648,7 @@ PLM/
 │       ├── index.html     ← HTML skeleton
 │       ├── lang/en.js     ← English translation (German text → English)
 │       ├── js/            ← single-page app, split by domain
-│       │   ├── 00-i18n.js    ← interface language: t(), language switch
+│       │   ├── 00-i18n.js    ← interface language: _t(), language switch
 │       │   ├── 01-core.js …  13-normteile-einkauf.js
 │       │   ├── 14-qr.js      ← QR encoder (standalone, no external library)
 │       │   ├── 15-mindmap.js ← dependency graph (SVG, pan/zoom)
@@ -794,7 +796,7 @@ The most important test files:
 | `test/revisionen.test.js` | as-delivered configuration (pinning, locking, releasing, correction, check-in), revision comparison, ECO carry-over, search with classification, renaming classifications |
 | `test/backup.test.js` | creating and restoring backups (list, `.db`, ZIP), trash, schema update of older backups |
 | `test/frontend.test.js` | QR encoder (against the ISO reference values), URL sanitising, data sheet, BOM revision display, mind map layout, workflow switching, revision badges in production, revision comparison |
-| `test/i18n.test.js` | translation: every `t('…')` text has an English entry, no unused entries, placeholders match, language default for new and existing installations |
+| `test/i18n.test.js` | translation: every `_t('…')` text has an English entry, no unused entries, placeholders match, language default for new and existing installations |
 | `test/anonym.test.js` | everything in Git is anonymous: no real e-mail addresses, user paths, IBANs or phone numbers |
 
 The server tests each start their own server (own port) with an empty throwaway database;

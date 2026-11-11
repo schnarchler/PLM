@@ -5,21 +5,21 @@ const API = '';
 // Das Angebot ist die erste Phase eines Auftrags, kein eigener Datensatz mehr.
 // DRAFT bleibt der Einstieg fuer Auftraege ohne vorheriges Angebot.
 const ORDER_ST_MAP   = {QUOTE:'st-DFT',DRAFT:'st-DFT',CONFIRMED:'st-REV',DELIVERED:'st-REL',INVOICED:'st-ECO',DECLINED:'st-OBS',CANCELLED:'st-OBS'};
-const ORDER_ST_LABEL = {QUOTE:t('Angebot'),DRAFT:t('Entwurf'),CONFIRMED:t('Bestätigt'),DELIVERED:t('Geliefert'),INVOICED:t('Fakturiert'),DECLINED:t('Abgelehnt'),CANCELLED:t('Storniert')};
+const ORDER_ST_LABEL = {QUOTE:_t('Angebot'),DRAFT:_t('Entwurf'),CONFIRMED:_t('Bestätigt'),DELIVERED:_t('Geliefert'),INVOICED:_t('Fakturiert'),DECLINED:_t('Abgelehnt'),CANCELLED:_t('Storniert')};
 const DELIVERY_ST_MAP   = {DRAFT:'st-DFT',READY:'st-REV',DELIVERED:'st-REL'};
-const DELIVERY_ST_LABEL = {DRAFT:t('Entwurf'),READY:t('Bereit'),DELIVERED:t('Geliefert')};
+const DELIVERY_ST_LABEL = {DRAFT:_t('Entwurf'),READY:_t('Bereit'),DELIVERED:_t('Geliefert')};
 // PLM-Status: das Kürzel steht im Badge, die Bezeichnung im Tooltip und im Detail
-const PLM_ST_LABEL = {DFT:t('Entwurf'),REV:t('In Review'),REL:t('Freigegeben'),ECO:t('Änderung (ECO)'),OBS:t('Veraltet')};
+const PLM_ST_LABEL = {DFT:_t('Entwurf'),REV:_t('In Review'),REL:_t('Freigegeben'),ECO:_t('Änderung (ECO)'),OBS:_t('Veraltet')};
 // Hinweise am Teil: [Feld, Bezeichnung, wo er erscheint, Platzhalter].
 // Konstruktion und Fertigung sind intern — nur der Kundenhinweis steht auf
 // dem Lieferschein. Darstellung überall gleich: _hintHtml unten.
 const HINT_KINDS = [
-  ['hint_design',     t('Konstruktionshinweis'), t('intern, nicht im Produktionsauftrag'),
-    t('z.B. Nicht für tragende Anwendungen')],
-  ['hint_production', t('Fertigungshinweis'),    t('intern, im Produktionsauftrag'),
-    t('z.B. Nur mit PETG drucken, Stützstrukturen innen entfernen')],
-  ['hint_customer',   t('Kundenhinweis'),        t('im Produktionsauftrag und auf dem Lieferschein'),
-    t('z.B. Max. 60 °C — nicht in der Spülmaschine reinigen')],
+  ['hint_design',     _t('Konstruktionshinweis'), _t('intern, nicht im Produktionsauftrag'),
+    _t('z.B. Nicht für tragende Anwendungen')],
+  ['hint_production', _t('Fertigungshinweis'),    _t('intern, im Produktionsauftrag'),
+    _t('z.B. Nur mit PETG drucken, Stützstrukturen innen entfernen')],
+  ['hint_customer',   _t('Kundenhinweis'),        _t('im Produktionsauftrag und auf dem Lieferschein'),
+    _t('z.B. Max. 60 °C — nicht in der Spülmaschine reinigen')],
 ];
 const itemHints = item => HINT_KINDS.filter(([k]) => item?.[k])
   .map(([k, label, where]) => ({ key: k, label, where, text: item[k] }));
@@ -41,7 +41,7 @@ function revEffWeight(item, rev) { return (_revHas(rev, 'effective_weight_g') ? 
 function revWeightTxt(item, rev) {
   const eff = revEffWeight(item, rev);
   return eff != null
-    ? fmtN(eff, 1) + ' g' + (revWeight(item, rev) == null && item.item_type === 'asm' ? ' ' + t('(aus BOM)') : '')
+    ? fmtN(eff, 1) + ' g' + (revWeight(item, rev) == null && item.item_type === 'asm' ? ' ' + _t('(aus BOM)') : '')
     : null;
 }
 // Das Gewicht ändert sich nur in der offenen Revision: der neusten, solange sie
@@ -50,9 +50,9 @@ function revWeightTxt(item, rev) {
 function revWeightLock(item, rev) {
   if (!rev) return null;
   const latest = (item.revisions || [])[0];
-  if (latest && latest.id !== rev.id) return t('Gewicht nur in der aktuellen Revision rev{rev} änderbar', { rev: latest.rev });
-  if (['REV', 'REL', 'ECO', 'OBS'].includes(rev.status)) return t('Revision {status} — Gewicht gesperrt, Änderung in einer neuen Revision', { status: PLM_ST_LABEL[rev.status] || rev.status });
-  if ((rev.delivered || []).length) return t('Revision geliefert — Gewicht gesperrt, Änderung in einer neuen Revision');
+  if (latest && latest.id !== rev.id) return _t('Gewicht nur in der aktuellen Revision rev{rev} änderbar', { rev: latest.rev });
+  if (['REV', 'REL', 'ECO', 'OBS'].includes(rev.status)) return _t('Revision {status} — Gewicht gesperrt, Änderung in einer neuen Revision', { status: PLM_ST_LABEL[rev.status] || rev.status });
+  if ((rev.delivered || []).length) return _t('Revision geliefert — Gewicht gesperrt, Änderung in einer neuen Revision');
   return null;
 }
 // Statusbadge aus den zentralen Tabellen oben — damit überall dieselben Wörter stehen
@@ -67,7 +67,7 @@ function _stSel(type, id, current) {
   const labels = {order:ORDER_ST_LABEL, delivery:DELIVERY_ST_LABEL};
   const m = maps[type]||{}; const l = labels[type]||{};
   const opts = Object.keys(m).map(s=>`<option value="${s}"${s===current?' selected':''}>${l[s]||s}</option>`).join('');
-  return `<select class="status-sel ${m[current]||''}" title="${t('Status ändern')}"
+  return `<select class="status-sel ${m[current]||''}" title="${_t('Status ändern')}"
     onclick="event.stopPropagation()"
     onchange="setDocStatus('${type}',${id},this.value,this)">${opts}</select>`;
 }
@@ -97,7 +97,7 @@ async function setDocStatus(type, id, status, el) {
       // If all deliveries for an order are now delivered, reload orders list
       if (status === 'DELIVERED') { await renderOrders(); }
     }
-    toast(t('Status gespeichert'), 'ok');
+    toast(_t('Status gespeichert'), 'ok');
     // Beim Abschliessen das verbrauchte Rohmaterial anbieten — mit Dialog,
     // damit Mengen und Lot vorher geprueft werden koennen.
     if (type === 'delivery' && status === 'DELIVERED') offerMaterialConsumption(id);
@@ -106,7 +106,7 @@ async function setDocStatus(type, id, status, el) {
     // Revert dropdown on failure
     el.value = prevValue;
     el.className = prevClass;
-    toast(t('Status konnte nicht gespeichert werden'), 'err');
+    toast(_t('Status konnte nicht gespeichert werden'), 'err');
   }
 }
 let state = { view: 'projects', projects: [], project: null, item: null, activeRevId: null, customers: [], orders: [], deliveries: [], searchResults: null, settings: {}, printers: [], nozzles: [], materialPresets: [], _psConfigLoaded: false, checkouts: [], slicer: null, cad: null };
@@ -120,9 +120,9 @@ async function loadVersion() {
     const v = state.version = await api('/api/version');
     const ohneNummer = v.source === 'zip' && v.version.split('.').length < 3;
     el.textContent = 'v' + v.version + (ohneNummer ? ' · ' + v.commit : '');
-    el.dataset.title = [v.date ? t('Stand {date}', { date: new Date(v.date).toLocaleDateString(LOCALE) }) : '', v.commit,
-      v.source === 'zip' ? t('ZIP-Download ohne Git') : '',
-      v.dirty ? t('mit Änderungen, die noch nicht committet sind') : ''].filter(Boolean).join(' · ');
+    el.dataset.title = [v.date ? _t('Stand {date}', { date: new Date(v.date).toLocaleDateString(LOCALE) }) : '', v.commit,
+      v.source === 'zip' ? _t('ZIP-Download ohne Git') : '',
+      v.dirty ? _t('mit Änderungen, die noch nicht committet sind') : ''].filter(Boolean).join(' · ');
     _markUpdate();
   } catch {}
 }
@@ -138,10 +138,10 @@ function _markUpdate() {
   el.classList.toggle('has-update', on);
   el.classList.toggle('up-to-date', current);
   el.classList.toggle('update-unknown', unknown);
-  el.title = [on ? t(u.behind === 1 ? 'Update: Version {v} verfügbar (1 neuer Commit)' : 'Update: Version {v} verfügbar ({n} neue Commits)', { v: u.version, n: u.behind })
-    : current ? t('Aktuelle Version — nichts Neueres auf {upstream}', { upstream: u.upstream })
-    : u?.error ? t('Update-Prüfung nicht möglich: {error}', { error: u.error }) : '',
-    el.dataset.title || '', t('Klicken: jetzt nach Updates suchen')].filter(Boolean).join('\n');
+  el.title = [on ? _t(u.behind === 1 ? 'Update: Version {v} verfügbar (1 neuer Commit)' : 'Update: Version {v} verfügbar ({n} neue Commits)', { v: u.version, n: u.behind })
+    : current ? _t('Aktuelle Version — nichts Neueres auf {upstream}', { upstream: u.upstream })
+    : u?.error ? _t('Update-Prüfung nicht möglich: {error}', { error: u.error }) : '',
+    el.dataset.title || '', _t('Klicken: jetzt nach Updates suchen')].filter(Boolean).join('\n');
 }
 
 // Neuere Commits auf dem Git-Remote: kein Dialog beim Öffnen, nur der Punkt
@@ -168,10 +168,10 @@ async function checkUpdateNow() {
   try { ok = await checkUpdate(true); }
   finally { _updateChecking = false; el?.classList.remove('update-checking'); }
   const u = state.update;
-  if (!ok || !u) return toast(t('Update-Prüfung fehlgeschlagen — PLM nicht erreichbar'), 'err');
+  if (!ok || !u) return toast(_t('Update-Prüfung fehlgeschlagen — PLM nicht erreichbar'), 'err');
   if (u.available) return showUpdateDialog();
-  if (u.fetched) return toast(t('Aktuell — v{v} ist die neuste Version', { v: state.version?.version || '' }), 'ok');
-  toast(t('Update-Prüfung nicht möglich') + (u.error ? ': ' + u.error : ''), 'warn');
+  if (u.fetched) return toast(_t('Aktuell — v{v} ist die neuste Version', { v: state.version?.version || '' }), 'ok');
+  toast(_t('Update-Prüfung nicht möglich') + (u.error ? ': ' + u.error : ''), 'warn');
 }
 
 function showUpdateDialog() {
@@ -179,9 +179,9 @@ function showUpdateDialog() {
   if (!u?.available) return;
   const more = u.behind - u.commits.length;
   _showDynModal(`<div class="modal" style="max-width:580px;width:95vw">
-    <div class="modal-head"><div class="modal-title" style="color:var(--blue)">${t('Neue Version verfügbar: v{v}', { v: esc(u.version) })}</div></div>
+    <div class="modal-head"><div class="modal-title" style="color:var(--blue)">${_t('Neue Version verfügbar: v{v}', { v: esc(u.version) })}</div></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--t2)">
-      <div>${t(u.behind === 1 ? 'Auf {upstream} gibt es einen neuen Commit seit dem laufenden Stand:' : 'Auf {upstream} gibt es {n} neue Commits seit dem laufenden Stand:',
+      <div>${_t(u.behind === 1 ? 'Auf {upstream} gibt es einen neuen Commit seit dem laufenden Stand:' : 'Auf {upstream} gibt es {n} neue Commits seit dem laufenden Stand:',
         { upstream: `<span style="font-family:var(--mono)">${esc(u.upstream)}</span>`, n: u.behind })}</div>
       <div style="display:flex;flex-direction:column;gap:5px;max-height:240px;overflow-y:auto">
         ${u.commits.map(c => `<div style="display:flex;gap:10px;align-items:baseline">
@@ -189,25 +189,25 @@ function showUpdateDialog() {
           <span style="flex:1;min-width:0">${esc(c.subject)}</span>
           <span style="font-family:var(--mono);font-size:11px;color:var(--t4);flex-shrink:0">${c.date ? new Date(c.date).toLocaleDateString(LOCALE) : ''}</span>
         </div>`).join('')}
-        ${more > 0 ? `<div style="color:var(--t4)">${t('… und {n} weitere', { n: more })}</div>` : ''}
+        ${more > 0 ? `<div style="color:var(--t4)">${_t('… und {n} weitere', { n: more })}</div>` : ''}
       </div>
       <div style="color:var(--t3);line-height:1.6">${u.installable
-        ? t('„Jetzt installieren" lädt den neuen Stand herunter und startet PLM neu — das dauert meist nur ein paar Sekunden.')
-          + ' ' + t('Daten und {file} bleiben dabei erhalten.', { file: '<code style="font-family:var(--mono)">plm.config</code>' })
+        ? _t('„Jetzt installieren" lädt den neuen Stand herunter und startet PLM neu — das dauert meist nur ein paar Sekunden.')
+          + ' ' + _t('Daten und {file} bleiben dabei erhalten.', { file: '<code style="font-family:var(--mono)">plm.config</code>' })
         : u.download
-        ? t('Zum Aktualisieren PLM beenden, die {link} herunterladen, den Inhalt des entpackten Ordners über den bisherigen PLM-Ordner kopieren (Dateien ersetzen) und neu starten.',
-            { link: `<a href="${esc(u.download)}" target="_blank" rel="noopener noreferrer">${t('neue Version als ZIP')}</a>` })
-          + ' ' + t('Daten und {file} bleiben dabei erhalten.', { file: '<code style="font-family:var(--mono)">plm.config</code>' })
-        : t('Zum Aktualisieren PLM beenden, im PLM-Ordner {cmd} ausführen und neu starten.', { cmd: '<code style="font-family:var(--mono)">git pull</code>' })}
-        ${t('Bis dahin läuft die bisherige Version ganz normal weiter.')}</div>
-      ${!u.installable && !u.local ? `<div style="color:var(--t4)">${t('Installieren geht nur auf dem PC, auf dem das PLM läuft.')}</div>` : ''}
-      ${u.fetched ? '' : `<div style="color:var(--t4)">${t('Das Remote war gerade nicht erreichbar — Stand vom letzten Abruf.')}</div>`}
+        ? _t('Zum Aktualisieren PLM beenden, die {link} herunterladen, den Inhalt des entpackten Ordners über den bisherigen PLM-Ordner kopieren (Dateien ersetzen) und neu starten.',
+            { link: `<a href="${esc(u.download)}" target="_blank" rel="noopener noreferrer">${_t('neue Version als ZIP')}</a>` })
+          + ' ' + _t('Daten und {file} bleiben dabei erhalten.', { file: '<code style="font-family:var(--mono)">plm.config</code>' })
+        : _t('Zum Aktualisieren PLM beenden, im PLM-Ordner {cmd} ausführen und neu starten.', { cmd: '<code style="font-family:var(--mono)">git pull</code>' })}
+        ${_t('Bis dahin läuft die bisherige Version ganz normal weiter.')}</div>
+      ${!u.installable && !u.local ? `<div style="color:var(--t4)">${_t('Installieren geht nur auf dem PC, auf dem das PLM läuft.')}</div>` : ''}
+      ${u.fetched ? '' : `<div style="color:var(--t4)">${_t('Das Remote war gerade nicht erreichbar — Stand vom letzten Abruf.')}</div>`}
       <div id="upd-msg" style="display:none;line-height:1.6"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal();shutdownServer()">${t('PLM beenden')}</button>
-      <button class="btn ${u.installable ? 'btn-ghost' : 'btn-primary'}" onclick="_hideDynModal()">${t('Mit dieser Version weiterfahren')}</button>
-      ${u.installable ? `<button class="btn btn-primary" id="upd-install" onclick="installUpdate()">${t('Jetzt installieren')}</button>` : ''}
+      <button class="btn btn-ghost" onclick="_hideDynModal();shutdownServer()">${_t('PLM beenden')}</button>
+      <button class="btn ${u.installable ? 'btn-ghost' : 'btn-primary'}" onclick="_hideDynModal()">${_t('Mit dieser Version weiterfahren')}</button>
+      ${u.installable ? `<button class="btn btn-primary" id="upd-install" onclick="installUpdate()">${_t('Jetzt installieren')}</button>` : ''}
     </div>
   </div>`);
 }
@@ -218,16 +218,16 @@ async function installUpdate() {
   const msg = document.getElementById('upd-msg');
   const show = (text, color) => { msg.style.display = ''; msg.style.color = color; msg.textContent = text; };
   document.querySelectorAll('.modal-foot .btn').forEach(b => { b.disabled = true; });
-  show(t('Update wird heruntergeladen und installiert …'), 'var(--blue)');
+  show(_t('Update wird heruntergeladen und installiert …'), 'var(--blue)');
   const old = state.version?.commit;
   try {
     await api('/api/update/install', 'POST', {});
   } catch (e) {
-    show(t('Update fehlgeschlagen: {error} — die bisherige Version läuft weiter.', { error: e.message }), 'var(--red)');
+    show(_t('Update fehlgeschlagen: {error} — die bisherige Version läuft weiter.', { error: e.message }), 'var(--red)');
     document.querySelectorAll('.modal-foot .btn').forEach(b => { b.disabled = false; });
     return;
   }
-  show(t('Installiert — PLM startet neu …'), 'var(--blue)');
+  show(_t('Installiert — PLM startet neu …'), 'var(--blue)');
   for (let i = 0; i < 90; i++) {
     await new Promise(r => setTimeout(r, 1000));
     try {
@@ -235,7 +235,7 @@ async function installUpdate() {
       if (v.commit && v.commit !== old) return location.reload();
     } catch {}   // während des Neustarts antwortet niemand
   }
-  show(t('PLM hat nicht neu gestartet. Bitte beenden und von Hand starten — der neue Stand ist bereits installiert.'), 'var(--amber)');
+  show(_t('PLM hat nicht neu gestartet. Bitte beenden und von Hand starten — der neue Stand ist bereits installiert.'), 'var(--amber)');
   document.querySelectorAll('.modal-foot .btn').forEach(b => { b.disabled = false; });
 }
 
@@ -245,11 +245,11 @@ async function loadCadStatus() {
   const btn = document.getElementById('tb-cad-btn');
   if (!btn) return;
   const c = state.cad;
-  const why = !c?.configured ? '' : !c.local ? t('Nur auf dem PC möglich, auf dem das PLM läuft')
-    : !c.found ? t('CAD-Programm nicht gefunden: {where}', { where: c.where }) : '';
+  const why = !c?.configured ? '' : !c.local ? _t('Nur auf dem PC möglich, auf dem das PLM läuft')
+    : !c.found ? _t('CAD-Programm nicht gefunden: {where}', { where: c.where }) : '';
   btn.style.display = c?.configured ? '' : 'none';
   btn.disabled = !!why;
-  btn.title = why || t('CAD-Programm starten');
+  btn.title = why || _t('CAD-Programm starten');
 }
 
 // Für „Im Slicer öffnen": gewählter Slicer, ob installiert, ob dieser PC
@@ -286,7 +286,7 @@ function _updateCheckoutBadge() {
   if (!btn) return;
   let badges = '';
   if (total > 0) badges += `<span style="background:var(--teal);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:11px;padding:1px 6px;margin-left:3px">${total}</span>`;
-  if (newCount > 0) badges += `<span style="background:var(--amber);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:11px;padding:1px 6px;margin-left:3px">+${newCount} ${t('neu')}</span>`;
+  if (newCount > 0) badges += `<span style="background:var(--amber);color:var(--bg0);border-radius:8px;font-family:var(--mono);font-size:11px;padding:1px 6px;margin-left:3px">+${newCount} ${_t('neu')}</span>`;
   btn.innerHTML = `⬆ Checkouts${badges}`;
   btn.style.color = newCount > 0 ? 'var(--amber)' : total > 0 ? 'var(--teal)' : '';
   btn.style.borderColor = newCount > 0 ? 'var(--amber-line)' : total > 0 ? 'var(--teal-line)' : '';
@@ -316,22 +316,22 @@ function fmtCHF(v) { return 'CHF ' + fmtN(rnd5(v)); }
 // Revisionsvergleich, damit beide dieselben Wörter und Einheiten zeigen.
 // Die ersten zwölf erscheinen im Datenblatt.
 const PRINT_PARAMS = [
-  ['nozzle',                t('Düse'),            v => v + ' mm'],
-  ['layer_height',          t('Schichthöhe'),     v => fmtN(v, 2) + ' mm'],
-  ['material',              t('Material')],
-  ['infill',                t('Füllung'),         v => v + ' %'],
-  ['infill_pattern',        t('Füllmuster'),      v => fmtInfillPattern(v)],
-  ['supports',              t('Stützen'),         v => Number(v) ? t('ja') : t('nein')],
-  ['print_temp',            t('Düsentemperatur'), v => v + ' °C'],
-  ['bed_temp',              t('Betttemperatur'),  v => v + ' °C'],
-  ['printer',               t('Drucker')],
-  ['part_weight',           t('Teilgewicht'),     v => fmtN(v, 1) + ' g'],
-  ['filament_weight_total', t('Filamentgewicht'), v => fmtN(v, 1) + ' g'],
-  ['print_duration',        t('Druckdauer'),      v => _fmtHours(v)],
-  ['filament_price_kg',     t('Filamentpreis'),   v => fmtN(v, 2) + ' CHF/kg'],
-  ['printer_cost_hr',       t('Druckerkosten'),   v => fmtN(v, 2) + ' CHF/h'],
-  ['raw_material_id',       t('Rohmaterial')],
-  ['notes',                 t('Notizen')],
+  ['nozzle',                _t('Düse'),            v => v + ' mm'],
+  ['layer_height',          _t('Schichthöhe'),     v => fmtN(v, 2) + ' mm'],
+  ['material',              _t('Material')],
+  ['infill',                _t('Füllung'),         v => v + ' %'],
+  ['infill_pattern',        _t('Füllmuster'),      v => fmtInfillPattern(v)],
+  ['supports',              _t('Stützen'),         v => Number(v) ? _t('ja') : _t('nein')],
+  ['print_temp',            _t('Düsentemperatur'), v => v + ' °C'],
+  ['bed_temp',              _t('Betttemperatur'),  v => v + ' °C'],
+  ['printer',               _t('Drucker')],
+  ['part_weight',           _t('Teilgewicht'),     v => fmtN(v, 1) + ' g'],
+  ['filament_weight_total', _t('Filamentgewicht'), v => fmtN(v, 1) + ' g'],
+  ['print_duration',        _t('Druckdauer'),      v => _fmtHours(v)],
+  ['filament_price_kg',     _t('Filamentpreis'),   v => fmtN(v, 2) + ' CHF/kg'],
+  ['printer_cost_hr',       _t('Druckerkosten'),   v => fmtN(v, 2) + ' CHF/h'],
+  ['raw_material_id',       _t('Rohmaterial')],
+  ['notes',                 _t('Notizen')],
 ];
 function printParamLabel(key) { return PRINT_PARAMS.find(p => p[0] === key)?.[1] || key; }
 // Aussenmasse einer STL, vom Server als [x, y, z] in mm → "42.0 × 42.0 × 6.5 mm"
@@ -350,12 +350,12 @@ function fmtPrintParam(key, v) {
 // Füllmuster: Schlüssel aus PrusaSlicer, Orca und Bambu → Name wie im Slicer.
 // Bambu und Orca nennen „Geradlinig“ intern zig-zag. Unbekannte bleiben, wie sie sind.
 const INFILL_PATTERNS = {
-  rectilinear: t('Geradlinig'), 'zig-zag': t('Geradlinig'), alignedrectilinear: t('Geradlinig ausgerichtet'),
-  grid: t('Gitter'), triangles: t('Dreiecke'), stars: t('Sterne'), 'tri-hexagon': 'Tri-Hexagon',
-  cubic: t('Kubisch'), adaptivecubic: t('Adaptiv kubisch'), supportcubic: t('Stützkubisch'), quartercubic: t('Viertelkubisch'),
-  line: t('Linie'), concentric: t('Konzentrisch'), honeycomb: t('Bienenwabe'), '3dhoneycomb': t('3D-Bienenwabe'),
-  gyroid: 'Gyroid', hilbertcurve: t('Hilbertkurve'), archimedeanchords: t('Archimedische Akkorde'),
-  octagramspiral: t('Oktagramm-Spirale'), lightning: t('Blitz'), crosshatch: t('Kreuzschraffur'),
+  rectilinear: _t('Geradlinig'), 'zig-zag': _t('Geradlinig'), alignedrectilinear: _t('Geradlinig ausgerichtet'),
+  grid: _t('Gitter'), triangles: _t('Dreiecke'), stars: _t('Sterne'), 'tri-hexagon': 'Tri-Hexagon',
+  cubic: _t('Kubisch'), adaptivecubic: _t('Adaptiv kubisch'), supportcubic: _t('Stützkubisch'), quartercubic: _t('Viertelkubisch'),
+  line: _t('Linie'), concentric: _t('Konzentrisch'), honeycomb: _t('Bienenwabe'), '3dhoneycomb': _t('3D-Bienenwabe'),
+  gyroid: 'Gyroid', hilbertcurve: _t('Hilbertkurve'), archimedeanchords: _t('Archimedische Akkorde'),
+  octagramspiral: _t('Oktagramm-Spirale'), lightning: _t('Blitz'), crosshatch: _t('Kreuzschraffur'),
 };
 function fmtInfillPattern(v) {
   const s = String(v).trim();

@@ -105,7 +105,7 @@ function _mmNodeSvg(n) {
     ${n.status ? `<circle cx="${n._x + _MM.NODE_W - 11}" cy="${n._y + 13}" r="4"
       style="fill:${_mmStatusColor(n.status)}"><title>rev${esc(n.rev)} · ${esc(n.status)}</title></circle>` : ''}
     ${n.kind === 'std' ? `<text x="${n._x + _MM.NODE_W - 9}" y="${n._y + 17}" text-anchor="end"
-      style="font-family:var(--mono);font-size:9.5px;fill:var(--t4)">NORM</text>` : ''}
+      style="font-family:var(--mono);font-size:9.5px;fill:var(--t4)">${_t('NORM')}</text>` : ''}
   </g>`;
 }
 
@@ -174,7 +174,7 @@ function _mmRender() {
   const data = _MM.data;
 
   if (!data.nodes.length) {
-    host.innerHTML = '<div class="empty"><div class="empty-text">Keine Verknüpfungen</div></div>';
+    host.innerHTML = '<div class="empty"><div class="empty-text">' + _t('Keine Verknüpfungen') + '</div></div>';
     return;
   }
   const L = _mmLayout(data);
@@ -305,7 +305,7 @@ function _mmClose() {
 
 async function _mmLoad() {
   const host = document.getElementById('mm-canvas');
-  if (host) host.innerHTML = '<div class="empty"><div class="empty-text">Wird geladen…</div></div>';
+  if (host) host.innerHTML = '<div class="empty"><div class="empty-text">' + _t('Wird geladen…') + '</div></div>';
   // Nur die letzte Anfrage zählt — beim schnellen Weiterklicken können
   // Antworten in anderer Reihenfolge zurückkommen
   const seq = ++_MM.seq;
@@ -313,7 +313,7 @@ async function _mmLoad() {
   try {
     data = await api(`/api/items/${_MM.rootId}/graph?up=${_MM.up}&down=${_MM.down}`);
   } catch (e) {
-    if (host && seq === _MM.seq) host.innerHTML = '<div class="empty"><div class="empty-text">Graph konnte nicht geladen werden</div></div>';
+    if (host && seq === _MM.seq) host.innerHTML = '<div class="empty"><div class="empty-text">' + _t('Graph konnte nicht geladen werden') + '</div></div>';
     return;
   }
   if (seq !== _MM.seq) return;
@@ -336,13 +336,13 @@ function _mmInfo() {
   const upN = d.nodes.filter(n => n.level < 0).length;
   const downN = d.nodes.filter(n => n.level > 0).length;
   const warn = [];
-  if (d.truncated?.up)   warn.push('oben abgeschnitten');
-  if (d.truncated?.down) warn.push('unten abgeschnitten');
+  if (d.truncated?.up)   warn.push(_t('oben abgeschnitten'));
+  if (d.truncated?.down) warn.push(_t('unten abgeschnitten'));
   el.innerHTML = `
-    <span>${upN} verwenden es</span><span style="color:var(--line2)">│</span>
-    <span>${downN} enthalten</span><span style="color:var(--line2)">│</span>
-    <span>${items} Teile${std ? ` + ${std} Normteile` : ''}</span>
-    ${d.historic_up ? `<span style="color:var(--line2)">│</span><span style="color:var(--amber)">${d.historic_up} nur in älteren Revisionen</span>` : ''}
+    <span>${_t('{n} verwenden es', { n: upN })}</span><span style="color:var(--line2)">│</span>
+    <span>${_t('{n} enthalten', { n: downN })}</span><span style="color:var(--line2)">│</span>
+    <span>${_t('{n} Teile', { n: items })}${std ? ' + ' + _t('{n} Normteile', { n: std }) : ''}</span>
+    ${d.historic_up ? `<span style="color:var(--line2)">│</span><span style="color:var(--amber)">${_t('{n} nur in älteren Revisionen', { n: d.historic_up })}</span>` : ''}
     ${warn.length ? `<span style="color:var(--line2)">│</span><span style="color:var(--amber)">⚠ ${warn.join(', ')}</span>` : ''}`;
 }
 
@@ -358,7 +358,7 @@ function openItemMindmap(itemId) {
   _MM.rootId = itemId;
   _MM.scale = 1; _MM.tx = 0; _MM.ty = 0;
   const it = state.item;
-  const title = it && it.id === itemId ? `${it.item_number} · ${it.name}` : 'Abhängigkeiten';
+  const title = it && it.id === itemId ? `${it.item_number} · ${it.name}` : _t('Abhängigkeiten');
 
   document.getElementById('mindmapOverlay')?.remove();
   const ov = document.createElement('div');
@@ -367,16 +367,16 @@ function openItemMindmap(itemId) {
   ov.innerHTML = `<div class="modal" style="max-width:min(1500px,96vw);width:96vw;height:90vh;display:flex;flex-direction:column">
     <div class="modal-head" style="gap:12px;flex-wrap:wrap">
       <div class="modal-title" style="display:flex;align-items:center;gap:9px;min-width:0">
-        <span>⌗ Mindmap</span>
+        <span>${_t('⌗ Mindmap')}</span>
         <span id="mm-title" style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap">
-        <span style="font-size:11px;font-family:var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:.8px">Verwendung</span>
+        <span style="font-size:11px;font-family:var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:.8px">${_t('Verwendung')}</span>
         <button class="btn btn-ghost btn-sm" onclick="_mmSetDepth('up',-1)">−</button>
         <span id="mm-up" style="font-family:var(--mono);font-size:13px;min-width:14px;text-align:center">${_MM.up}</span>
         <button class="btn btn-ghost btn-sm" onclick="_mmSetDepth('up',1)">+</button>
         <span style="color:var(--line2)">│</span>
-        <span style="font-size:11px;font-family:var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:.8px">Bestandteile</span>
+        <span style="font-size:11px;font-family:var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:.8px">${_t('Bestandteile')}</span>
         <button class="btn btn-ghost btn-sm" onclick="_mmSetDepth('down',-1)">−</button>
         <span id="mm-down" style="font-family:var(--mono);font-size:13px;min-width:14px;text-align:center">${_MM.down}</span>
         <button class="btn btn-ghost btn-sm" onclick="_mmSetDepth('down',1)">+</button>
@@ -384,7 +384,7 @@ function openItemMindmap(itemId) {
         <button class="btn btn-ghost btn-sm" onclick="_mmZoom(1/1.2)">−</button>
         <span id="mm-zoom" style="font-family:var(--mono);font-size:13px;min-width:38px;text-align:center;color:var(--t3)">100%</span>
         <button class="btn btn-ghost btn-sm" onclick="_mmZoom(1.2)">+</button>
-        <button class="btn btn-ghost btn-sm" onclick="_mmFit()">Einpassen</button>
+        <button class="btn btn-ghost btn-sm" onclick="_mmFit()">${_t('Einpassen')}</button>
         <button class="btn btn-ghost btn-sm" onclick="_mmClose()">✕</button>
       </div>
     </div>
@@ -392,12 +392,12 @@ function openItemMindmap(itemId) {
     <div style="display:flex;align-items:center;gap:10px;padding:9px 20px;border-top:1px solid var(--line);flex-wrap:wrap;background:var(--bg1);border-radius:0 0 var(--r-xl) var(--r-xl)">
       <div id="mm-info" style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--t3);flex-wrap:wrap"></div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:12px;font-size:11px;color:var(--t4);flex-wrap:wrap">
-        ${[['Baugruppe','var(--blue)'],['Bauteil','var(--teal)'],['Dokument','var(--purple)'],['Normteil','var(--amber)']]
+        ${[[_t('Baugruppe'),'var(--blue)'],[_t('Bauteil'),'var(--teal)'],[_t('Dokument'),'var(--purple)'],[_t('Normteil'),'var(--amber)']]
           .map(([l,c]) => `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${c}"></span>${l}</span>`).join('')}
         <span style="color:var(--line2)">│</span>
-        <span style="display:inline-flex;align-items:center;gap:5px"><span style="font-family:var(--mono);color:var(--amber)">rev1</span> feste Revision</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="font-family:var(--mono);color:var(--amber)">rev1</span> ${_t('feste Revision')}</span>
         <span style="color:var(--line2)">│</span>
-        <span>Ziehen zum Verschieben · Rad zum Zoomen · Klick: Mindmap dieses Teils · Doppelklick: Teil öffnen</span>
+        <span>${_t('Ziehen zum Verschieben · Rad zum Zoomen · Klick: Mindmap dieses Teils · Doppelklick: Teil öffnen')}</span>
       </div>
     </div>
   </div>`;
