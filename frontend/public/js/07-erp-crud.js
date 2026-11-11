@@ -9,33 +9,33 @@ async function openCustomerModal(id) {
     const c = state.customers.find(x=>x.id===id) || await api(`/api/customers/${id}`);
     set('cm-name',c.name); set('cm-email',c.email); set('cm-phone',c.phone);
     set('cm-street',c.street||''); set('cm-plz',c.postal_code||'');
-    set('cm-city',c.city||''); set('cm-country',c.country||'Schweiz');
+    set('cm-city',c.city||''); set('cm-country',c.country||_t('Schweiz'));
     set('cm-notes',c.notes||'');
-    document.getElementById('cm-title').textContent='Kunde bearbeiten';
+    document.getElementById('cm-title').textContent=_t('Kunde bearbeiten');
   } else {
     ['cm-name','cm-email','cm-phone','cm-street','cm-plz','cm-city','cm-notes'].forEach(f=>set(f,''));
-    set('cm-country','Schweiz');
-    document.getElementById('cm-title').textContent='Neuer Kunde';
+    set('cm-country',_t('Schweiz'));
+    document.getElementById('cm-title').textContent=_t('Neuer Kunde');
   }
   set('cm-id',id||''); openModal('customerModal');
 }
 
 async function saveCustomer() {
-  const name=V('cm-name'); if(!name) return toast('Name fehlt','err');
+  const name=V('cm-name'); if(!name) return toast(_t('Name fehlt'),'err');
   const body={name,email:V('cm-email'),phone:V('cm-phone'),
-    street:V('cm-street'),postal_code:V('cm-plz'),city:V('cm-city'),country:V('cm-country')||'Schweiz',
+    street:V('cm-street'),postal_code:V('cm-plz'),city:V('cm-city'),country:V('cm-country')||_t('Schweiz'),
     notes:V('cm-notes')};
   const c = editingCustomerId
     ? await api(`/api/customers/${editingCustomerId}`,'PUT',body)
     : await api('/api/customers','POST',body);
-  toast('Gespeichert','ok'); closeModal('customerModal');
+  toast(_t('Gespeichert'),'ok'); closeModal('customerModal');
   await renderCustomers(); openCustomerDetail(c.id); loadStats();
 }
 
 async function delCustomer(id) {
   const c = (state.customers||[]).find(x => x.id === id);
-  if(!confirm(`Kunde ${c ? c.number+' '+c.name : ''} löschen?\nBestehende Aufträge behalten den Kundennamen.`)) return;
-  await api(`/api/customers/${id}`,'DELETE'); toast('Gelöscht','ok');
+  if(!confirm(_t('Kunde {name} löschen?', { name: c ? c.number+' '+c.name : '' }) + '\n' + _t('Bestehende Aufträge behalten den Kundennamen.'))) return;
+  await api(`/api/customers/${id}`,'DELETE'); toast(_t('Gelöscht'),'ok');
   if (state.customerDetailId === id) { closeDetail(); state.customerDetailId = null; }
   renderCustomers(); loadStats();
 }
@@ -70,10 +70,10 @@ async function searchCustomerForOrder(q) {
     const ql = q.toLowerCase();
     const matches = all.filter(c => c.name.toLowerCase().includes(ql) || (c.number||'').toLowerCase().includes(ql));
     if (!matches.length) {
-      res.innerHTML = `<div style="padding:9px 12px;font-size:13px;color:var(--t3)">Keine Treffer</div>`
+      res.innerHTML = `<div style="padding:9px 12px;font-size:13px;color:var(--t3)">${_t('Keine Treffer')}</div>`
         + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:13px;border-top:1px solid var(--line)"
             onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-            ✏ "${esc(q)}" als Freitext verwenden</div>`;
+            ✏ ${_t('"{q}" als Freitext verwenden', { q: esc(q) })}</div>`;
     } else {
       res.innerHTML = matches.map(c =>
         `<div onclick="selectOrderCustomer(${c.id},'${esc(c.number)} ${esc(c.name)}')"
@@ -84,7 +84,7 @@ async function searchCustomerForOrder(q) {
         </div>`).join('')
         + `<div onclick="selectOrderCustomerFree('${esc(q)}')" style="padding:9px 12px;cursor:pointer;font-size:13px;color:var(--t3);border-top:1px solid var(--line)"
             onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-            ✏ "${esc(q)}" als Freitext verwenden</div>`;
+            ✏ ${_t('"{q}" als Freitext verwenden', { q: esc(q) })}</div>`;
     }
     res.style.display = 'block';
   }, 150);
@@ -151,7 +151,7 @@ async function openOrderModal(id, preset = {}) {
     document.getElementById('om-include-tax').checked = !!o.include_tax;
     set('om-hours', o.estimated_hours||0);
     document.getElementById('om-include-hours').checked = !!o.include_hours;
-    document.getElementById('om-title').textContent='Auftrag bearbeiten';
+    document.getElementById('om-title').textContent=_t('Auftrag bearbeiten');
   } else {
     ['om-title-f','om-date','om-delivery','om-valid','om-notes','om-terms'].forEach(f=>set(f,''));
     document.getElementById('om-status').value=preset.status||'DRAFT';
@@ -163,7 +163,7 @@ async function openOrderModal(id, preset = {}) {
     set('om-hours', 0);
     document.getElementById('om-include-tax').checked = false;
     document.getElementById('om-include-hours').checked = false;
-    document.getElementById('om-title').textContent='Neuer Auftrag';
+    document.getElementById('om-title').textContent=_t('Neuer Auftrag');
   }
   set('om-id',id||'');
   _syncOrderQuoteFields();
@@ -186,7 +186,7 @@ function _syncOrderQuoteFields() {
 }
 
 async function saveOrder() {
-  const title=V('om-title-f'); if(!title) return toast('Bezeichnung fehlt','err');
+  const title=V('om-title-f'); if(!title) return toast(_t('Bezeichnung fehlt'),'err');
   const body={title,...getCustBody('om'),status:document.getElementById('om-status').value,
     notes:V('om-notes'),order_date:V('om-date')||null,delivery_date:V('om-delivery')||null,
     valid_until:V('om-valid')||null,
@@ -195,11 +195,11 @@ async function saveOrder() {
     estimated_hours:parseFloat(V('om-hours'))||0, include_hours:document.getElementById('om-include-hours').checked?1:0};
   if (editingOrderId) {
     await api(`/api/orders/${editingOrderId}`,'PUT',body);
-    toast('Gespeichert','ok'); closeModal('orderModal');
+    toast(_t('Gespeichert'),'ok'); closeModal('orderModal');
     openOrderDetail(editingOrderId);
   } else {
     const o = await api('/api/orders','POST',body);
-    toast('Auftrag angelegt','ok'); closeModal('orderModal');
+    toast(_t('Auftrag angelegt'),'ok'); closeModal('orderModal');
     await renderOrders(); openOrderDetail(o.id);
   }
   loadStats();
@@ -207,8 +207,8 @@ async function saveOrder() {
 
 async function delOrder(id) {
   const o = state.orders.find(x => x.id === id) || await api(`/api/orders/${id}`);
-  if(!confirm(`Auftrag ${o.number} löschen?`)) return;
-  await api(`/api/orders/${id}`,'DELETE'); toast('Gelöscht','ok'); closeDetail(); renderOrders(); loadStats();
+  if(!confirm(_t('Auftrag {number} löschen?', { number: o.number }))) return;
+  await api(`/api/orders/${id}`,'DELETE'); toast(_t('Gelöscht'),'ok'); closeDetail(); renderOrders(); loadStats();
 }
 
 // ── AUFTRAGSPOSITIONEN ────────────────────────────────────────
@@ -220,14 +220,14 @@ function renderLineItems(items, orderId, taxRate, discountPct, includeTax) {
   const total = net + tax;
   const hasLineDiscount = items.some(i=>(i.discount_pct||0)>0);
   const showDiscount = hasLineDiscount || discountPct > 0;
-  if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">Noch keine Positionen</div>`;
+  if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">${_t('Noch keine Positionen')}</div>`;
   return `<div style="background:var(--bg0);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px">
     <table style="width:100%">
       <thead><tr>
-        <th style="text-align:left;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line)">Beschreibung</th>
-        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Menge</th>
-        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Preis</th>
-        ${showDiscount?`<th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Rab.</th>`:''}
+        <th style="text-align:left;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line)">${_t('Beschreibung')}</th>
+        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">${_t('Menge')}</th>
+        <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">${_t('Preis')}</th>
+        ${showDiscount?`<th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">${_t('Rab.')}</th>`:''}
         <th style="text-align:right;padding:7px 8px;font-family:var(--mono);font-size:11px;color:var(--t3);border-bottom:1px solid var(--line);white-space:nowrap">Total</th>
         <th style="border-bottom:1px solid var(--line)"></th>
       </tr></thead>
@@ -241,14 +241,14 @@ function renderLineItems(items, orderId, taxRate, discountPct, includeTax) {
           const marginPct = (margin != null && costTotal > 0) ? (margin / costTotal * 100) : null;
           const marginColor = margin == null ? '' : margin < 0 ? 'color:var(--red)' : marginPct != null && marginPct < 15 ? 'color:var(--amber)' : 'color:var(--green)';
           const breakdown = mc ? [
-            mc.material > 0 ? `Mat. ${fmtChf(mc.material)}` : '',
-            mc.machine  > 0 ? `Druck ${fmtChf(mc.machine)}` : '',
-            mc.work     > 0 ? `Arbeit ${fmtChf(mc.work)}` : '',
+            mc.material > 0 ? _t('Mat. {price}', { price: fmtChf(mc.material) }) : '',
+            mc.machine  > 0 ? _t('Druck {price}', { price: fmtChf(mc.machine) }) : '',
+            mc.work     > 0 ? _t('Arbeit {price}', { price: fmtChf(mc.work) }) : '',
           ].filter(Boolean).join(' + ') : '';
           const costHint = mc ? `<div style="font-size:11px;margin-top:3px;color:var(--t3)">
-            Herst./Stk.: <span style="font-family:var(--mono)">${fmtChf(mc.total)}</span>${breakdown ? ` <span style="color:var(--t4)">(${breakdown})</span>` : ''}
-            ${i.quantity>1 ? ` · Total: <span style="font-family:var(--mono)">${fmtChf(costTotal)}</span>` : ''}
-            · Marge: <span style="font-family:var(--mono);font-weight:600;${marginColor}">${fmtChf(margin)}${marginPct != null ? ` (${marginPct.toFixed(0)}%)` : ''}</span>
+            ${_t('Herst./Stk.:')} <span style="font-family:var(--mono)">${fmtChf(mc.total)}</span>${breakdown ? ` <span style="color:var(--t4)">(${breakdown})</span>` : ''}
+            ${i.quantity>1 ? ` · ${_t('Total:')} <span style="font-family:var(--mono)">${fmtChf(costTotal)}</span>` : ''}
+            · ${_t('Marge:')} <span style="font-family:var(--mono);font-weight:600;${marginColor}">${fmtChf(margin)}${marginPct != null ? ` (${marginPct.toFixed(0)}%)` : ''}</span>
           </div>` : '';
           return `<tr style="border-bottom:1px solid var(--line)" onclick="openLineItemModal(${orderId},${i.id})">
             <td style="padding:3px 4px;width:28px" onclick="event.stopPropagation()">
@@ -277,11 +277,11 @@ function renderLineItems(items, orderId, taxRate, discountPct, includeTax) {
     <div style="padding:10px 12px;border-top:1px solid var(--line);font-size:13px">
       <div style="display:flex;justify-content:flex-end;gap:24px">
         <div style="text-align:right">
-          ${discountPct>0?`<div style="color:var(--t3)">Zwischentotal: <span style="font-family:var(--mono)">${fmtChf(subtotal)}</span></div>
-          <div style="color:var(--amber)">Rabatt ${discountPct}%: <span style="font-family:var(--mono)">-${fmtChf(discAmt)}</span></div>`:''}
-          <div style="color:var(--t2)">Netto: <span style="font-family:var(--mono)">${fmtChf(net)}</span></div>
-          ${includeTax?`<div style="color:var(--t3)">MwSt. ${taxRate}%: <span style="font-family:var(--mono)">${fmtChf(tax)}</span></div>`:''}
-          <div style="font-size:13px;font-weight:600;margin-top:4px;color:var(--green)">Total: <span style="font-family:var(--mono)">${fmtChf(total)}</span></div>
+          ${discountPct>0?`<div style="color:var(--t3)">${_t('Zwischentotal:')} <span style="font-family:var(--mono)">${fmtChf(subtotal)}</span></div>
+          <div style="color:var(--amber)">${_t('Rabatt {pct}%:', { pct: discountPct })} <span style="font-family:var(--mono)">-${fmtChf(discAmt)}</span></div>`:''}
+          <div style="color:var(--t2)">${_t('Netto:')} <span style="font-family:var(--mono)">${fmtChf(net)}</span></div>
+          ${includeTax?`<div style="color:var(--t3)">${_t('MwSt. {rate}%:', { rate: taxRate })} <span style="font-family:var(--mono)">${fmtChf(tax)}</span></div>`:''}
+          <div style="font-size:13px;font-weight:600;margin-top:4px;color:var(--green)">${_t('Total:')} <span style="font-family:var(--mono)">${fmtChf(total)}</span></div>
         </div>
       </div>
     </div>
@@ -295,7 +295,7 @@ async function searchItemsForLine(q) {
   if (!q || q.length < 1) { res.style.display='none'; return; }
   _liSearchTimer = setTimeout(async () => {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
-    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">' + _t('Keine Treffer') + '</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const rev = i.latest_revision;
       const icon = _itemChip(i.item_type, 18);
@@ -323,7 +323,7 @@ async function selectLinkedItem(itemId) {
   document.getElementById('li-plm-badge').innerHTML = _itemChip(item.item_type, 15) + ' <span style="font-family:var(--mono)">' + esc(item.item_number) + '</span>';
   const dispWeight = item.effective_weight_g ?? item.weight_g;
   const extras = [];
-  if (dispWeight != null) extras.push(`⚖ ${fmtN(dispWeight, 1)} g${item.effective_weight_g != null && item.weight_g == null ? ' (BOM)' : ''}`);
+  if (dispWeight != null) extras.push(`⚖ ${fmtN(dispWeight, 1)} g${item.effective_weight_g != null && item.weight_g == null ? ' ' + _t('(BOM)') : ''}`);
   if (item.default_price != null) extras.push(`VP: ${fmtCHF(item.default_price)}`);
   document.getElementById('li-plm-name').textContent = item.name + (item.project?.name ? ' · ' + item.project.name : '') + (extras.length ? ' · ' + extras.join(' · ') : '');
   sel.style.display = 'flex';
@@ -351,15 +351,15 @@ async function openBomImport(orderId) {
   }
   _showDynModal(`<div class="modal" style="max-width:780px;width:96vw">
     <div class="modal-head">
-      <div class="modal-title">📦 Aus BOM kalkulieren</div>
+      <div class="modal-title">${_t('📦 Aus BOM kalkulieren')}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
-        Baugruppe wählen → alle BOM-Teile werden einzeln kalkuliert und als Positionen übernommen.
+        ${_t('Baugruppe wählen → alle BOM-Teile werden einzeln kalkuliert und als Positionen übernommen.')}
       </div>
       <div style="position:relative;margin-bottom:14px">
-        <input class="fi" id="bqm-search" placeholder="Baugruppe suchen (ASM)…" oninput="_bqmSearch(this.value)" autocomplete="off">
+        <input class="fi" id="bqm-search" placeholder="${_t('Baugruppe suchen (ASM)…')}" oninput="_bqmSearch(this.value)" autocomplete="off">
         <div id="bqm-results" style="display:none;position:absolute;z-index:300;left:0;right:0;top:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:200px;overflow-y:auto"></div>
       </div>
       <div id="bqm-asm-badge" style="display:none;background:var(--bg3);border:1px solid var(--blue);border-radius:var(--r);padding:7px 12px;margin-bottom:14px;font-size:13px;align-items:center;gap:8px">
@@ -367,25 +367,25 @@ async function openBomImport(orderId) {
         <span id="bqm-asm-name" style="flex:1"></span>
       </div>
       <div class="form-row cols2" style="margin-bottom:12px">
-        <div class="fg"><label class="fl">Rohmaterial (für alle Teile, optional)</label>
+        <div class="fg"><label class="fl">${_t('Rohmaterial (für alle Teile, optional)')}</label>
           <select class="fs" id="bqm-rawmat" onchange="_bqmCalcAll()">
-            <option value="">— kein Rohmaterial —</option>
+            <option value="">${_t('— kein Rohmaterial —')}</option>
             ${(state.rawMaterials||[]).map(m => `<option value="${m.id}" data-unit="${esc(m.unit || 'pcs')}">${esc(m.name)} — ${fmtN(m.stock_qty,0)} ${_unit(m.unit)}</option>`).join('')}
           </select>
         </div>
-        <div class="fg"><label class="fl">Stundenansatz (CHF/h)</label>
+        <div class="fg"><label class="fl">${_t('Stundenansatz (CHF/h)')}</label>
           <input class="fi" type="number" id="bqm-rate" value="${parseFloat(state.settings?.hourly_rate)||0}" min="0" step="1" oninput="_bqmCalcAll()">
         </div>
       </div>
       <div id="bqm-parts" style="display:none">
-        <div class="sep-label" style="margin-top:0">BOM-Teile</div>
+        <div class="sep-label" style="margin-top:0">${_t('BOM-Teile')}</div>
         <div id="bqm-parts-list" style="display:flex;flex-direction:column;gap:4px;max-height:340px;overflow-y:auto"></div>
         <div id="bqm-total" style="margin-top:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);font-size:13px"></div>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" id="bqm-add-btn" style="display:none" onclick="doBomImport(${orderId})">✓ Alle als Positionen übernehmen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" id="bqm-add-btn" style="display:none" onclick="doBomImport(${orderId})">${_t('✓ Alle als Positionen übernehmen')}</button>
     </div>
   </div>`);
 }
@@ -398,7 +398,7 @@ function _bqmSearch(q) {
   _bqmSearchTimer = setTimeout(async () => {
     const items = await api('/api/items-all?q=' + encodeURIComponent(q));
     const asms = items.filter(i => i.item_type === 'asm');
-    if (!asms.length) { res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Baugruppen gefunden</div>'; res.style.display = 'block'; return; }
+    if (!asms.length) { res.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">' + _t('Keine Baugruppen gefunden') + '</div>'; res.style.display = 'block'; return; }
     res.innerHTML = asms.map(i => `
       <div onclick="_bqmSelectAsm(${i.id})"
         style="padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
@@ -416,9 +416,9 @@ async function _bqmSelectAsm(itemId) {
   document.getElementById('bqm-results').style.display = 'none';
   document.getElementById('bqm-search').value = '';
   document.getElementById('bqm-parts').style.display = 'block';
-  document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--t3);font-size:13px">Lade BOM…</div>';
+  document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--t3);font-size:13px">' + _t('Lade BOM…') + '</div>';
   const item = await api('/api/items/' + itemId).catch(() => null);
-  if (!item) { document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--red);font-size:13px">Fehler beim Laden</div>'; return; }
+  if (!item) { document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--red);font-size:13px">' + _t('Fehler beim Laden') + '</div>'; return; }
   const badge = document.getElementById('bqm-asm-badge');
   document.getElementById('bqm-asm-label').textContent = item.item_number;
   document.getElementById('bqm-asm-name').textContent = item.name;
@@ -426,7 +426,7 @@ async function _bqmSelectAsm(itemId) {
 
   const bom = await api(`/api/items/${item.id}/bom-for-quote`);
   if (!bom.length) {
-    document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--amber);font-size:13px">⚠ Keine BOM-Teile gefunden</div>';
+    document.getElementById('bqm-parts-list').innerHTML = '<div style="color:var(--amber);font-size:13px">' + _t('⚠ Keine BOM-Teile gefunden') + '</div>';
     return;
   }
   _bomQItems = bom;
@@ -447,7 +447,7 @@ function _bqmRenderParts() {
         ${b.weight_g!=null ? `<span style="font-size:11px;color:var(--t4)">⚖ ${fmtN(b.weight_g,1)}g</span>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:11px;color:var(--t4);flex-shrink:0">Arbeitszeit/Stk (h):</label>
+        <label style="font-size:11px;color:var(--t4);flex-shrink:0">${_t('Arbeitszeit/Stk (h):')}</label>
         <input type="number" id="bqm-h-${i}" value="" min="0" step="0.25" placeholder="0"
           style="width:70px;font-size:13px;background:var(--bg3);border:1px solid var(--line);border-radius:var(--r-xs);padding:2px 6px"
           oninput="_bqmCalcAll()">
@@ -492,7 +492,7 @@ async function _bqmCalcAll() {
 
   const tot = document.getElementById('bqm-total');
   if (tot) tot.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
-    <span style="color:var(--t3)">Gesamtkosten (alle Teile):</span>
+    <span style="color:var(--t3)">${_t('Gesamtkosten (alle Teile):')}</span>
     <strong style="font-family:var(--mono);font-size:15px;color:var(--blue)">${fmtCHF(grandTotal)}</strong>
   </div>`;
 }
@@ -513,7 +513,7 @@ async function doBomImport(orderId) {
     });
   }
   _hideDynModal();
-  toast(`${_bomQItems.length} Position${_bomQItems.length !== 1 ? 'en' : ''} hinzugefügt`, 'ok');
+  toast(_t(_bomQItems.length === 1 ? '1 Position hinzugefügt' : '{n} Positionen hinzugefügt', { n: _bomQItems.length }), 'ok');
   await renderOrders();
   openOrderDetail(orderId);
 }
@@ -532,11 +532,11 @@ async function _doCalcLiCost() {
 
   // Effective weight: direct weight_g, or BOM sum for assemblies
   const effectiveWeight = item ? (item.effective_weight_g ?? item.weight_g ?? null) : null;
-  const weightLabel = item?.effective_weight_g != null && item?.weight_g == null ? ' (BOM-Summe)' : '';
+  const weightLabel = item?.effective_weight_g != null && item?.weight_g == null ? ' ' + _t('(BOM-Summe)') : '';
 
   // Show item weight info when linked (even without raw material)
   if (effectiveWeight != null && !rmId) {
-    rows.push({ label: 'Bauteilgewicht', val: null, info: `${fmtN(effectiveWeight, 1)} g${weightLabel} — Rohmaterial wählen für Materialkostenrechnung` });
+    rows.push({ label: _t('Bauteilgewicht'), val: null, info: `${fmtN(effectiveWeight, 1)} g${weightLabel} — ` + _t('Rohmaterial wählen für Materialkostenrechnung') });
   }
 
   // Material cost from selected lot
@@ -551,16 +551,16 @@ async function _doCalcLiCost() {
     if (price != null) {
       const rmWeight   = parseFloat(rm?.weight_g) || 0;
       const itemWeight = effectiveWeight;
-      const lotLabel   = lot?.lot_number ? ` (Lot ${lot.lot_number})` : '';
+      const lotLabel   = lot?.lot_number ? ` (${_t('Lot {lot}', { lot: lot.lot_number })})` : '';
       if (rmWeight > 0 && itemWeight != null) {
         const matCost = (price / rmWeight) * itemWeight;
         const detail  = `${fmtN(itemWeight,1)}g${weightLabel} × ${fmtCHF(price)}/${fmtN(rmWeight,0)}g${lotLabel}`;
-        if (matCost > 0) { rows.push({ label: 'Material', val: matCost, detail }); total += matCost; }
+        if (matCost > 0) { rows.push({ label: _t('Material'), val: matCost, detail }); total += matCost; }
       } else {
         const missing = [];
-        if (itemWeight == null) missing.push(`Bauteilgewicht fehlt (direkt am Item oder über BOM-Teile)`);
-        if (rmWeight <= 0)      missing.push(`Rohmaterialgewicht fehlt (Spool-Gewicht im Rohmaterial eintragen)`);
-        rows.push({ label: 'Material', val: null, warn: `⚠ ${missing.join(' · ')}` });
+        if (itemWeight == null) missing.push(_t('Bauteilgewicht fehlt (direkt am Item oder über BOM-Teile)'));
+        if (rmWeight <= 0)      missing.push(_t('Rohmaterialgewicht fehlt (Spool-Gewicht im Rohmaterial eintragen)'));
+        rows.push({ label: _t('Material'), val: null, warn: `⚠ ${missing.join(' · ')}` });
       }
     }
   }
@@ -568,7 +568,7 @@ async function _doCalcLiCost() {
   // Work time
   if (hours > 0 && hourlyRate > 0) {
     const workCost = hours * hourlyRate;
-    rows.push({ label: 'Arbeitszeit', val: workCost, detail: `${hours}h × ${fmtCHF(hourlyRate)}/h` });
+    rows.push({ label: _t('Arbeitszeit'), val: workCost, detail: `${hours}h × ${fmtCHF(hourlyRate)}/h` });
     total += workCost;
   }
 
@@ -580,7 +580,7 @@ async function _doCalcLiCost() {
     const costHr  = parseFloat(printer?.cost_per_hour) || 0;
     if (costHr > 0) {
       const printCost = printHours * costHr;
-      rows.push({ label: 'Druckzeit', val: printCost, detail: `${printHours}h × ${fmtCHF(costHr)}/h (${esc(printerName)})` });
+      rows.push({ label: _t('Druckzeit'), val: printCost, detail: `${printHours}h × ${fmtCHF(costHr)}/h (${esc(printerName)})` });
       total += printCost;
     }
   }
@@ -599,10 +599,10 @@ async function _doCalcLiCost() {
           <span style="font-family:var(--mono)">${fmtCHF(r.val)}</span>
         </div>`).join('')}
       ${total > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line2);padding-top:6px;margin-top:2px;gap:8px">
-        <span style="color:var(--t3)">Kalkuliert / Stk${qty>1?` (× ${qty} = ${fmtCHF(totalAll)} total)`:''}:</span>
+        <span style="color:var(--t3)">${_t('Kalkuliert / Stk')}${qty>1?` (× ${qty} = ${_t('{price} total', { price: fmtCHF(totalAll) })})`:''}:</span>
         <div style="display:flex;align-items:center;gap:8px">
           <strong style="font-family:var(--mono);color:var(--blue)">${fmtCHF(totalPerPiece)}</strong>
-          <button class="btn btn-primary btn-sm" onclick="set('li-price','${totalPerPiece.toFixed(2)}')">Als Preis übernehmen</button>
+          <button class="btn btn-primary btn-sm" onclick="set('li-price','${totalPerPiece.toFixed(2)}')">${_t('Als Preis übernehmen')}</button>
         </div>
       </div>` : ''}
     </div>`;
@@ -634,11 +634,11 @@ function openLineItemModal(orderId, itemId) {
   Promise.all(_liLoadPromises).then(() => {
     // li-rawmat is now a hidden input + search field — no innerHTML needed
     const prSel = document.getElementById('li-printer');
-    if (prSel) prSel.innerHTML = '<option value="">— kein Drucker —</option>' +
+    if (prSel) prSel.innerHTML = '<option value="">' + _t('— kein Drucker —') + '</option>' +
       (state.printers||[]).map(p => `<option value="${esc(p.name)}" data-cost="${p.cost_per_hour}">${esc(p.name)} (${fmtChf(p.cost_per_hour)}/h)</option>`).join('');
   });
-  document.getElementById('li-title').textContent = itemId ? 'Position bearbeiten' : 'Position hinzufügen';
-  document.getElementById('li-save').textContent = itemId ? 'Speichern' : 'Hinzufügen';
+  document.getElementById('li-title').textContent = itemId ? _t('Position bearbeiten') : _t('Position hinzufügen');
+  document.getElementById('li-save').textContent = itemId ? _t('Speichern') : _t('Hinzufügen');
   document.getElementById('li-plm-results').style.display = 'none';
   document.getElementById('li-plm-search').value = '';
   document.getElementById('li-cost-hint').style.display = 'none';
@@ -677,15 +677,15 @@ function openLineItemModal(orderId, itemId) {
         const mc = li.manufacturing_cost;
         if (mc) {
           const parts = [];
-          if (mc.material > 0) parts.push(`Mat. ${fmtCHF(mc.material)}`);
-          if (mc.machine  > 0) parts.push(`Druck ${fmtCHF(mc.machine)}`);
-          if (mc.work     > 0) parts.push(`Arbeit ${fmtCHF(mc.work)}`);
+          if (mc.material > 0) parts.push(_t('Mat. {price}', { price: fmtCHF(mc.material) }));
+          if (mc.machine  > 0) parts.push(_t('Druck {price}', { price: fmtCHF(mc.machine) }));
+          if (mc.work     > 0) parts.push(_t('Arbeit {price}', { price: fmtCHF(mc.work) }));
           const margin = li.unit_price != null ? li.unit_price - mc.total : null;
           const marginPct = (margin != null && mc.total > 0) ? (margin / mc.total * 100) : null;
           const marginColor = margin == null ? 'var(--t3)' : margin < 0 ? 'var(--red)' : marginPct != null && marginPct < 15 ? 'var(--amber)' : 'var(--green)';
-          hint.innerHTML = `<span style="color:var(--t3)">Herst./Stk.:</span> <strong>${fmtCHF(mc.total)}</strong>`
+          hint.innerHTML = `<span style="color:var(--t3)">${_t('Herst./Stk.:')}</span> <strong>${fmtCHF(mc.total)}</strong>`
             + (parts.length ? ` <span style="color:var(--t4)">(${parts.join(' + ')})</span>` : '')
-            + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor};font-weight:600">Marge ${fmtCHF(margin)}${marginPct != null ? ` (${marginPct.toFixed(0)}%)` : ''}</span>` : '');
+            + (margin != null ? ` &nbsp;·&nbsp; <span style="color:${marginColor};font-weight:600">${_t('Marge {price}', { price: fmtCHF(margin) })}${marginPct != null ? ` (${marginPct.toFixed(0)}%)` : ''}</span>` : '');
           hint.style.display = 'block';
         } else {
           hint.style.display = 'none';
@@ -713,7 +713,7 @@ function openLineItemModal(orderId, itemId) {
 async function saveLineItem() {
   const orderId = parseInt(V('li-parent-id'));
   const itemId = V('li-item-id');
-  const desc = V('li-desc'); if(!desc) return toast('Beschreibung fehlt','err');
+  const desc = V('li-desc'); if(!desc) return toast(_t('Beschreibung fehlt'),'err');
   const linkedPlmId = V('li-linked-plm-id') ? parseInt(V('li-linked-plm-id')) : null;
   const rmVal = document.getElementById('li-rawmat')?.value;
   const body = { description:desc, quantity:parseFloat(V('li-qty'))||1,
@@ -728,10 +728,10 @@ async function saveLineItem() {
     estimated_print_hours: parseFloat(V('li-print-hours'))||null };
   if (itemId) {
     const r = await api(`/api/order-items/${itemId}`,'PUT',body);
-    toast(r?.price_synced ? `Gespeichert · Preis in ${r.price_synced} Produktionsposition${r.price_synced>1?'en':''} übernommen` : 'Gespeichert','ok');
+    toast(r?.price_synced ? _t('Gespeichert') + ' · ' + _t(r.price_synced === 1 ? 'Preis in 1 Produktionsposition übernommen' : 'Preis in {n} Produktionspositionen übernommen', { n: r.price_synced }) : _t('Gespeichert'),'ok');
   } else {
     await api(`/api/orders/${orderId}/items`,'POST',body);
-    toast('Position hinzugefügt','ok');
+    toast(_t('Position hinzugefügt'),'ok');
   }
   closeModal('lineItemModal');
   await renderOrders(); openOrderDetail(orderId);
@@ -739,7 +739,7 @@ async function saveLineItem() {
 
 async function delLineItem(itemId, orderId) {
   await api(`/api/order-items/${itemId}`,'DELETE');
-  toast('Position entfernt','ok');
+  toast(_t('Position entfernt'),'ok');
   await renderOrders(); openOrderDetail(orderId);
 }
 // Nur die Positionsliste neu — der Detailbereich bleibt, wie er ist

@@ -7,14 +7,14 @@
 // Rückmeldungen auf dem Dashboard.
 
 const FEEDBACK_KIND = {
-  BUG:  { label: 'Fehler', icon: '🐞', color: 'var(--red)' },
-  IDEA: { label: 'Idee',   icon: '💡', color: 'var(--amber)' },
+  BUG:  { label: _t('Fehler'), icon: '🐞', color: 'var(--red)' },
+  IDEA: { label: _t('Idee'),   icon: '💡', color: 'var(--amber)' },
 };
 
 // Die letzten Fehler im Browser — Skriptfehler und abgelehnte Anfragen
 const _recentErrors = [];
 function _noteError(msg) {
-  _recentErrors.push(`${new Date().toLocaleTimeString('de-CH')} ${String(msg).slice(0, 500)}`);
+  _recentErrors.push(`${new Date().toLocaleTimeString(LOCALE)} ${String(msg).slice(0, 500)}`);
   if (_recentErrors.length > 5) _recentErrors.shift();
 }
 window.addEventListener('error', e => _noteError(`${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`));
@@ -42,7 +42,7 @@ function openFeedbackModal(kind = 'BUG') {
       onclick="_feedbackKind('${k}')">${FEEDBACK_KIND[k].icon} ${FEEDBACK_KIND[k].label}</button>`;
   _showDynModal(`<div class="modal" style="max-width:480px">
     <div class="modal-head">
-      <div class="modal-title">Rückmeldung an den Admin</div>
+      <div class="modal-title">${_t('Rückmeldung an den Admin')}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
@@ -53,19 +53,20 @@ function openFeedbackModal(kind = 'BUG') {
           onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();_sendFeedback()}"></textarea>
       </div>
       <div style="font-size:12px;color:var(--t3);line-height:1.5">
-        Wird mitgeschickt: dein Name, Ansicht <strong style="color:var(--t2)">${esc(ctx.view)}</strong>${ctx.item ? `, Item <strong style="color:var(--t2)">${esc(ctx.item)}</strong>` : ''}, Version und Browser${ctx.errors ? `, die letzten ${ctx.errors.length} Fehlermeldungen` : ''}.
+        ${_t(ctx.item ? 'Wird mitgeschickt: dein Name, Ansicht {view}, Item {item}, Version und Browser' : 'Wird mitgeschickt: dein Name, Ansicht {view}, Version und Browser',
+          { view: `<strong style="color:var(--t2)">${esc(ctx.view)}</strong>`, item: `<strong style="color:var(--t2)">${esc(ctx.item || '')}</strong>` })}${ctx.errors ? ', ' + _t('die letzten {n} Fehlermeldungen', { n: ctx.errors.length }) : ''}.
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" id="fb-send" onclick="_sendFeedback()">Senden</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" id="fb-send" onclick="_sendFeedback()">${_t('Senden')}</button>
     </div>
   </div>`);
   window._fbContext = ctx;
   document.getElementById('fb-text').focus();
 }
 
-const _feedbackPrompt = k => k === 'BUG' ? 'Was ist passiert? Was hättest du erwartet?' : 'Was wäre hilfreich?';
+const _feedbackPrompt = k => k === 'BUG' ? _t('Was ist passiert? Was hättest du erwartet?') : _t('Was wäre hilfreich?');
 function _feedbackKind(k) {
   document.getElementById('fb-kind').value = k;
   document.querySelectorAll('#dynModal [data-kind]').forEach(b => {
@@ -78,13 +79,13 @@ function _feedbackKind(k) {
 
 async function _sendFeedback() {
   const text = V('fb-text').trim();
-  if (!text) { toast('Bitte kurz beschreiben', 'err'); return; }
+  if (!text) { toast(_t('Bitte kurz beschreiben'), 'err'); return; }
   const btn = document.getElementById('fb-send');
   btn.disabled = true;
   try {
     await api('/api/feedback', 'POST', { kind: V('fb-kind'), text, context: window._fbContext });
     _hideDynModal();
-    toast('Danke! Die Rückmeldung ist beim Admin.', 'ok');
+    toast(_t('Danke! Die Rückmeldung ist beim Admin.'), 'ok');
   } catch { btn.disabled = false; }
 }
 
@@ -104,46 +105,46 @@ async function showFeedbackList() {
         <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(_feedbackTitle(f.text))}</div>
         <div style="font-size:12px;color:var(--t3)">${esc(f.user_name || '—')} · ${fmtDate(f.created_at)}</div>
       </div>
-      ${f.status === 'DONE' ? '<span style="font-size:12px;color:var(--green)">✓ erledigt</span>' : ''}
+      ${f.status === 'DONE' ? '<span style="font-size:12px;color:var(--green)">' + _t('✓ erledigt') + '</span>' : ''}
     </div>`;
   };
   _showDynModal(`<div class="modal" style="max-width:620px">
     <div class="modal-head">
-      <div class="modal-title">Rückmeldungen</div>
+      <div class="modal-title">${_t('Rückmeldungen')}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body">
-      ${list.length ? list.map(row).join('') : '<div class="empty" style="padding:30px"><div class="empty-text">Noch keine Rückmeldungen</div></div>'}
+      ${list.length ? list.map(row).join('') : '<div class="empty" style="padding:30px"><div class="empty-text">' + _t('Noch keine Rückmeldungen') + '</div></div>'}
     </div>
   </div>`);
 }
 
 async function openFeedbackDetail(id) {
   const f = (await api('/api/feedback')).find(x => x.id === id);
-  if (!f) { toast('Rückmeldung nicht mehr vorhanden', 'err'); return; }
+  if (!f) { toast(_t('Rückmeldung nicht mehr vorhanden'), 'err'); return; }
   const k = FEEDBACK_KIND[f.kind], c = f.context || {};
   const line = (label, val) => val ? `<div style="display:flex;gap:10px;font-size:12px;padding:2px 0">
       <span style="color:var(--t3);width:80px;flex-shrink:0">${label}</span>
       <span style="color:var(--t2);font-family:var(--mono);word-break:break-word">${esc(val)}</span></div>` : '';
   _showDynModal(`<div class="modal" style="max-width:620px">
     <div class="modal-head">
-      <div class="modal-title"><span style="color:${k.color}">${k.icon} ${k.label}</span> von ${esc(f.user_name || '—')}</div>
+      <div class="modal-title"><span style="color:${k.color}">${k.icon} ${k.label}</span> ${_t('von {name}', { name: esc(f.user_name || '—') })}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
       <div style="font-size:12px;color:var(--t3)">${fmtDate(f.created_at)}${f.status === 'DONE'
-        ? ` · <span style="color:var(--green)">erledigt${f.done_by ? ' von ' + esc(f.done_by) : ''} ${fmtDate(f.done_at)}</span>` : ''}</div>
+        ? ` · <span style="color:var(--green)">${f.done_by ? _t('erledigt von {name}', { name: esc(f.done_by) }) : _t('erledigt')} ${fmtDate(f.done_at)}</span>` : ''}</div>
       <div style="font-size:14px;white-space:pre-wrap;line-height:1.5">${esc(f.text)}</div>
       <div style="background:var(--bg1);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px">
-        ${line('Ansicht', c.view)}${line('Item', c.item)}${line('Version', c.version)}
-        ${line('Fenster', c.screen)}${line('Browser', c.browser)}
-        ${(c.errors || []).map((e, i) => line(i ? '' : 'Fehler', e) || '').join('')}
+        ${line(_t('Ansicht'), c.view)}${line('Item', c.item)}${line('Version', c.version)}
+        ${line(_t('Fenster'), c.screen)}${line('Browser', c.browser)}
+        ${(c.errors || []).map((e, i) => line(i ? '' : _t('Fehlermeldungen'), e) || '').join('')}
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" style="margin-right:auto;color:var(--red)" onclick="_deleteFeedback(${f.id})">Löschen</button>
-      <button class="btn btn-ghost" onclick="showFeedbackList()">Alle Rückmeldungen</button>
-      <button class="btn btn-primary" onclick="_setFeedbackDone(${f.id}, ${f.status !== 'DONE'})">${f.status === 'DONE' ? 'Wieder öffnen' : '✓ Erledigt'}</button>
+      <button class="btn btn-ghost" style="margin-right:auto;color:var(--red)" onclick="_deleteFeedback(${f.id})">${_t('Löschen')}</button>
+      <button class="btn btn-ghost" onclick="showFeedbackList()">${_t('Alle Rückmeldungen')}</button>
+      <button class="btn btn-primary" onclick="_setFeedbackDone(${f.id}, ${f.status !== 'DONE'})">${f.status === 'DONE' ? _t('Wieder öffnen') : _t('✓ Erledigt')}</button>
     </div>
   </div>`);
 }
@@ -151,12 +152,12 @@ async function openFeedbackDetail(id) {
 async function _setFeedbackDone(id, done) {
   await api('/api/feedback/' + id, 'PUT', { done });
   _hideDynModal();
-  toast(done ? 'Als erledigt markiert' : 'Wieder offen', 'ok');
+  toast(done ? _t('Als erledigt markiert') : _t('Wieder offen'), 'ok');
   if (state.view === 'dashboard') renderDashboard();
 }
 
 async function _deleteFeedback(id) {
-  if (!confirm('Rückmeldung endgültig löschen?')) return;
+  if (!confirm(_t('Rückmeldung endgültig löschen?'))) return;
   await api('/api/feedback/' + id, 'DELETE');
   _hideDynModal();
   if (state.view === 'dashboard') renderDashboard();
