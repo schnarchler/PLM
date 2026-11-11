@@ -295,7 +295,7 @@ async function generatePoDoc(id) {
   const itemRows = (po.items||[]).map((i, idx) => `
     <tr style="${idx % 2 === 0 ? 'background:#fafafa' : ''}">
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">${escHtml(i.description)}${i.notes?`<div style="font-size:11px;color:#9ca3af;margin-top:1px">${escHtml(i.notes)}</div>`:''}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;white-space:nowrap">${fmtN(i.quantity, 2)} ${escHtml(i.unit)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;white-space:nowrap">${fmtN(i.quantity, 2)} ${escHtml(_unit(i.unit))}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right">${i.unit_price != null ? fmtN(i.unit_price, 2) : '—'}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;font-weight:${i.unit_price != null ? '600' : '400'}">${i.unit_price != null ? fmtN(i.quantity * i.unit_price, 2) : '—'}</td>
     </tr>`).join('');
@@ -439,7 +439,7 @@ async function openPoDetail(id) {
   const itemRows = (po.items||[]).map(i => `
     <tr>
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px">${esc(i.description)}</td>
-      <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${fmtN(i.quantity,0)} ${esc(i.unit)}</td>
+      <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${fmtN(i.quantity,0)} ${esc(_unit(i.unit))}</td>
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${i.unit_price != null ? fmtCHF(i.unit_price) : '—'}</td>
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:13px;font-family:var(--mono);text-align:right">${i.unit_price != null ? fmtCHF(i.quantity * i.unit_price) : '—'}</td>
       <td style="padding:5px 8px;border:1px solid var(--line);font-size:12px;color:var(--t3)">
@@ -550,7 +550,7 @@ async function openPoItemModal(poId) {
   document.getElementById('poi-po-id').value = poId;
   document.getElementById('poi-desc').value = '';
   document.getElementById('poi-qty').value = '1';
-  document.getElementById('poi-unit').value = 'Stk';
+  document.getElementById('poi-unit').value = _unit('pcs');
   document.getElementById('poi-price').value = '';
   document.getElementById('poi-notes').value = '';
   const [invItems, rawMats, stdParts] = await Promise.all([
@@ -616,7 +616,7 @@ async function openPoItemEditModal(poId, itemId) {
   document.getElementById('poie-item-id').value = itemId;
   document.getElementById('poie-desc').value = item.description;
   document.getElementById('poie-qty').value = item.quantity;
-  document.getElementById('poie-unit').value = item.unit;
+  document.getElementById('poie-unit').value = _unit(item.unit);
   document.getElementById('poie-price').value = item.unit_price ?? '';
   document.getElementById('poie-notes').value = item.notes || '';
   openModal('poItemEditModal');
@@ -690,7 +690,7 @@ function _renderIndividualLotRows() {
           </div>`).join('');
     return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
       <div style="font-size:13px;font-weight:600;margin-bottom:2px">🧵 ${esc(i.rm_name)}</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:4px">${esc(i.description)} · ${fmtN(i.quantity,2)} ${esc(i.unit)}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:4px">${esc(i.description)} · ${fmtN(i.quantity,2)} ${esc(_unit(i.unit))}</div>
       ${unitInputs}
     </div>`;
   }).join('');
@@ -807,8 +807,8 @@ function _invRowForSupplier(i) {
       <div class="partner-row-meta">${[i.sku ? esc(i.sku) : '', i.category ? esc(i.category) : ''].filter(Boolean).join(' · ') || '—'}</div>
     </div>
     <div style="text-align:right">
-      <div style="font-family:var(--mono);font-size:13px">${fmtN(i.stock_qty || 0, 1)} ${esc(i.unit || 'Stk')}</div>
-      <div class="partner-row-meta">${i.price_per_unit != null ? fmtCHF(i.price_per_unit) + '/' + esc(i.unit || 'Stk') : ''}</div>
+      <div style="font-family:var(--mono);font-size:13px">${fmtN(i.stock_qty || 0, 1)} ${esc(_unit(i.unit))}</div>
+      <div class="partner-row-meta">${i.price_per_unit != null ? fmtCHF(i.price_per_unit) + '/' + esc(_unit(i.unit)) : ''}</div>
     </div>
   </div>`;
 }

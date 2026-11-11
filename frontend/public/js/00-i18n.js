@@ -33,9 +33,11 @@ function _t(s, vars) {
   return r;
 }
 
-// Einheit für die Anzeige. Gespeichert bleibt der deutsche Wert („Stk“), den
-// darum nie übersetzt an den Server schicken — nur zum Anzeigen hierdurch.
-function _unit(u) { return _t(u || 'Stk'); }
+// Einheit für die Anzeige. In der Datenbank steht ein Code (pcs, set, flat), der
+// Server macht auch aus „Stk“ oder „Stück“ pcs. Physikalische Einheiten (g, m, h …)
+// und eigener Freitext („Rolle“) werden angezeigt, wie sie sind.
+const UNIT_LABEL = { pcs: 'Stk', set: 'Set', flat: 'Pauschal' };
+function _unit(u) { return u && !UNIT_LABEL[u] ? u : _t(UNIT_LABEL[u || 'pcs']); }
 
 // Statisches HTML aus index.html einmal beim Laden übersetzen: Textknoten und
 // title/placeholder, die genau einem Eintrag entsprechen. Nur beim Start —

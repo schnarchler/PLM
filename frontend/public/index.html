@@ -617,7 +617,7 @@
       <div class="form-row cols3">
         <div class="fg"><label class="fl">Menge</label><input class="fi" id="li-qty" type="number" value="1" min="1" step="1" oninput="_calcLiCost()"></div>
         <div class="fg"><label class="fl">Einheit</label>
-          <select class="fs" id="li-unit"><option>Stk</option><option>h</option><option>m</option><option>mm</option><option>g</option><option>kg</option><option>Set</option><option>Pauschal</option></select>
+          <select class="fs" id="li-unit"><option value="pcs">Stk</option><option>h</option><option>m</option><option>mm</option><option>g</option><option>kg</option><option value="set">Set</option><option value="flat">Pauschal</option></select>
         </div>
         <div class="fg"><label class="fl">Einzelpreis (CHF)</label><input class="fi" id="li-price" type="number" step="0.01" value="0"></div>
       </div>
@@ -783,7 +783,7 @@
       <div class="form-row cols3">
         <div class="fg"><label class="fl">Menge</label><input class="fi" id="dim-qty" type="number" value="1" min="1" step="1"></div>
         <div class="fg"><label class="fl">Einheit</label>
-          <select class="fs" id="dim-unit"><option>Stk</option><option>Set</option><option>m</option><option>g</option><option>kg</option></select>
+          <select class="fs" id="dim-unit"><option value="pcs">Stk</option><option value="set">Set</option><option>m</option><option>g</option><option>kg</option></select>
         </div>
         <div class="fg"><label class="fl">Preis (CHF)</label><input class="fi" id="dim-price" type="number" step="0.01" min="0" placeholder="0.00"></div>
       </div>

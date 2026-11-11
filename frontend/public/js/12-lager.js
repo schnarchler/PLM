@@ -88,14 +88,14 @@ function _invRenderTable(items) {
         const planned = i.planned_qty || 0;
         const avail = (i.stock_qty || 0) - planned;
         const plannedTd = planned > 0
-          ? `<td style="font-family:var(--mono);font-size:13px;color:var(--amber);${isMulti&&!isLast?borderBottom:''}">${fmtN(planned,0)} ${i.unit}</td>`
+          ? `<td style="font-family:var(--mono);font-size:13px;color:var(--amber);${isMulti&&!isLast?borderBottom:''}">${fmtN(planned,0)} ${_unit(i.unit)}</td>`
           : `<td style="font-family:var(--mono);font-size:13px;color:var(--t4);${isMulti&&!isLast?borderBottom:''}">—</td>`;
         return `<tr onclick="openInventoryDetail(${i.id})" style="cursor:pointer">
           ${nameTd}
           ${colorTd}
-          <td style="font-family:var(--mono);font-size:13px;color:${stockColor};font-weight:${state!=='ok'?600:400};${isMulti&&!isLast?borderBottom:''}">${fmtN(i.stock_qty,2)} ${i.unit}${stockIcon}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:${stockColor};font-weight:${state!=='ok'?600:400};${isMulti&&!isLast?borderBottom:''}">${fmtN(i.stock_qty,2)} ${_unit(i.unit)}${stockIcon}</td>
           ${plannedTd}
-          <td style="font-family:var(--mono);font-size:13px;color:var(--t3);${isMulti&&!isLast?borderBottom:''}">${i.min_qty>0?fmtN(i.min_qty,2)+' '+i.unit:'—'}</td>
+          <td style="font-family:var(--mono);font-size:13px;color:var(--t3);${isMulti&&!isLast?borderBottom:''}">${i.min_qty>0?fmtN(i.min_qty,2)+' '+_unit(i.unit):'—'}</td>
           <td style="display:flex;gap:4px;${isMulti&&!isLast?borderBottom:''}">
             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'in')">＋</button>
             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openMovementModal(${i.id},'out')">－</button>
@@ -134,8 +134,8 @@ async function openInventoryDetail(id) {
         <div><div class="ps-label">Kategorie</div>${item.category}</div>
         ${item.color?`<div><div class="ps-label">Farbe</div>${esc(item.color)}</div>`:''}
         ${item.material?`<div><div class="ps-label">Material</div>${esc(item.material)}</div>`:''}
-        <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${stockColor}">${fmtN(item.stock_qty,2)} ${item.unit}${stockIcon}</span></div>
-        <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+item.unit:'—'}</div>
+        <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${stockColor}">${fmtN(item.stock_qty,2)} ${_unit(item.unit)}${stockIcon}</span></div>
+        <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+_unit(item.unit):'—'}</div>
         ${item.price_per_unit!=null?`<div><div class="ps-label">Preis / Einheit</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
         ${item.linked_item_number?`<div style="grid-column:span 2"><div class="ps-label">PLM-Teil</div>
           <span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="gotoPlmItem(${item.item_id})">${esc(item.linked_item_number)} – ${esc(item.linked_item_name||'')}</span>
@@ -154,7 +154,7 @@ async function openInventoryDetail(id) {
         <tbody>${item.movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtDT(m.created_at,'')}</td>
           <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(110,222,156,.15)':'rgba(255,142,142,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.type==='adjust'?'Korrektur':m.qty>0?'Zugang':'Abgang'}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${item.unit}</td>
+          <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${_unit(item.unit)}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.reference||'—')}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.notes||'')}</td>
         </tr>`).join('')}</tbody>
@@ -189,7 +189,7 @@ async function openInventoryModal(id) {
         <div class="fg"><label class="fl">Material</label><input id="inv-material" class="fi" placeholder="z.B. PLA" value="${esc(item?.material||'')}"></div>
       </div>
       <div class="cols2">
-        <div class="fg"><label class="fl">Einheit</label><input id="inv-unit" class="fi" value="${esc(item?.unit||'Stk')}"></div>
+        <div class="fg"><label class="fl">Einheit</label><input id="inv-unit" class="fi" value="${esc(_unit(item?.unit))}"></div>
         <div class="fg"><label class="fl">Mindestbestand</label><input id="inv-min" type="number" min="0" step="0.01" class="fi" value="${item?.min_qty||0}"></div>
       </div>
       <div class="fg"><label class="fl">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="fi" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
@@ -251,7 +251,7 @@ async function saveInventoryItem(id) {
     sku: document.getElementById('inv-sku').value.trim(),
     color: document.getElementById('inv-color').value.trim() || null,
     material: document.getElementById('inv-material').value.trim() || null,
-    unit: document.getElementById('inv-unit').value.trim() || 'Stk',
+    unit: document.getElementById('inv-unit').value.trim() || 'pcs',
     min_qty: document.getElementById('inv-min').value,
     price_per_unit: document.getElementById('inv-price').value || null,
     item_id: document.getElementById('inv-item-id').value || null,
@@ -340,7 +340,7 @@ async function openInventoryDeductModal(orderItemId, plmItemId, qty, orderId) {
   const first = invItems[0];
   const options = invItems.map(i => {
     const variantLabel = [i.color, i.material].filter(Boolean).join(' / ');
-    return `<option value="${i.id}" data-stock="${i.stock_qty}" data-planned="${i.planned_qty||0}" data-unit="${esc(i.unit)}">${esc(i.name)}${variantLabel ? ` (${esc(variantLabel)})` : ''} — ${fmtN(i.stock_qty,2)} ${esc(i.unit)}</option>`;
+    return `<option value="${i.id}" data-stock="${i.stock_qty}" data-planned="${i.planned_qty||0}" data-unit="${esc(i.unit || 'pcs')}">${esc(i.name)}${variantLabel ? ` (${esc(variantLabel)})` : ''} — ${fmtN(i.stock_qty,2)} ${esc(_unit(i.unit))}</option>`;
   }).join('');
 
   _showDynModal(`<div class="modal" style="max-width:420px">
@@ -370,7 +370,7 @@ function _dedUpdateSaveBtn(inv, qty) {
   if (!btn) return;
   const enough = (inv.stock_qty || 0) >= qty;
   btn.disabled = !enough;
-  btn.title = enough ? '' : `Nicht genug Bestand (${fmtN(inv.stock_qty,2)} ${inv.unit} vorhanden)`;
+  btn.title = enough ? '' : `Nicht genug Bestand (${fmtN(inv.stock_qty,2)} ${_unit(inv.unit)} vorhanden)`;
 }
 
 function _dedCheckQty(input) {
@@ -392,8 +392,8 @@ function _dedStockHtmlInline(inv, reqQty) {
   const bg = inv.stock_qty <= 0 || !enough ? 'var(--red-soft)' : avail < reqQty ? 'var(--amber-soft)' : 'var(--green-soft)';
   const border = inv.stock_qty <= 0 || !enough ? 'var(--red-line)' : avail < reqQty ? 'var(--amber-line)' : 'var(--green-line)';
   return `<div style="font-size:13px;padding:7px 10px;border-radius:var(--r-sm);background:${bg};border:1px solid ${border};color:${color}">
-    <b>Bestand: ${fmtN(inv.stock_qty,2)} ${inv.unit}</b>`
-    + (planned > 0 ? ` · ${fmtN(planned,0)} geplant · <b>Verfügbar: ${fmtN(avail,2)} ${inv.unit}</b>` : '')
+    <b>Bestand: ${fmtN(inv.stock_qty,2)} ${_unit(inv.unit)}</b>`
+    + (planned > 0 ? ` · ${fmtN(planned,0)} geplant · <b>Verfügbar: ${fmtN(avail,2)} ${_unit(inv.unit)}</b>` : '')
     + (!enough ? ` — <b>Zu wenig Bestand!</b>` : '')
     + `</div>`;
 }
@@ -415,7 +415,7 @@ async function deductFromInventory() {
   // Final server-side check
   const fresh = await api(`/api/inventory/${invId}`).catch(() => null);
   if (fresh && fresh.stock_qty < qty) {
-    toast(`Nicht genug Bestand — verfügbar: ${fmtN(fresh.stock_qty,2)} ${fresh.unit}`, 'err');
+    toast(`Nicht genug Bestand — verfügbar: ${fmtN(fresh.stock_qty,2)} ${_unit(fresh.unit)}`, 'err');
     return;
   }
   await api(`/api/inventory/${invId}/movement`, 'POST', { type: 'out', qty, reference, notes: 'Auftragsabgang' });
@@ -509,7 +509,7 @@ function _renderRawMaterialsTable() {
       <td style="font-size:13px;color:var(--t3)">${esc(i.brand||'—')}</td>
       <td style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${esc(i.name)}</td>
       <td style="font-family:var(--mono);font-size:13px;text-align:right;color:${stockCol};font-weight:600">${fmtN(i.stock_qty,0)}</td>
-      <td style="font-size:11px;color:var(--t4)">${esc(i.unit)}</td>
+      <td style="font-size:11px;color:var(--t4)">${esc(_unit(i.unit))}</td>
       <td style="font-size:11px;color:var(--t4)">${artNrHtml || (activeLotCount > 0 ? activeLotCount+' Lot'+(activeLotCount!==1?'s':'') : '')}</td>
     </tr>`;
   }).join('');
@@ -563,7 +563,7 @@ async function openRawMatDetail(id) {
       <div style="display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
         <div style="text-align:center">
           <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${statusColor}">${fmtN(item.stock_qty,0)}</div>
-          <div style="font-size:13px;color:var(--t3)">${item.unit}</div>
+          <div style="font-size:13px;color:var(--t3)">${_unit(item.unit)}</div>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;gap:3px">
           ${item.color      ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
@@ -571,7 +571,7 @@ async function openRawMatDetail(id) {
           ${item.weight_g != null ? `<div style="font-size:13px"><span style="color:var(--t4)">Gewicht:</span> <span style="font-family:var(--mono)">${fmtN(item.weight_g,1)} g</span></div>` : ''}
           ${item.print_temp ? `<div style="font-size:13px"><span style="color:var(--t4)">Düsentemperatur:</span> <span style="font-family:var(--mono)">${item.print_temp}°C</span></div>` : ''}
           ${item.bed_temp   ? `<div style="font-size:13px"><span style="color:var(--t4)">Betttemperatur:</span> <span style="font-family:var(--mono)">${item.bed_temp}°C</span></div>` : ''}
-          ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${item.unit}</div>` : ''}
+          ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${_unit(item.unit)}</div>` : ''}
           <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -592,7 +592,7 @@ async function openRawMatDetail(id) {
         const activeCount   = sorted.filter(l => (l.remaining_qty ?? l.qty ?? 0) > 0).length;
         const depletedCount = sorted.length - activeCount;
         return `<div class="sep-label" style="margin-top:4px">Lots
-          <span style="font-size:11px;color:var(--t4);font-weight:400;margin-left:6px">${activeCount} aktiv${depletedCount?' · '+depletedCount+' leer':''} · ${fmtN(item.stock_qty,0)} ${item.unit} gesamt</span>
+          <span style="font-size:11px;color:var(--t4);font-weight:400;margin-left:6px">${activeCount} aktiv${depletedCount?' · '+depletedCount+' leer':''} · ${fmtN(item.stock_qty,0)} ${_unit(item.unit)} gesamt</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:2px">
           ${sorted.map((l, lotIdx) => {
@@ -614,10 +614,10 @@ async function openRawMatDetail(id) {
                   ? `<span id="artnr-${lotKey}" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px">${esc(artNr)}</span>`
                   : `<button id="artnr-${lotKey}" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 5px;margin-left:6px;color:var(--t4)" onclick="assignRmArticleNr('${lotKey}')">+ Nr.</button>`}
               </span>
-              <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--t3)'};text-align:right">${fmtN(rem,0)} ${item.unit}</span>
+              <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--t3)'};text-align:right">${fmtN(rem,0)} ${_unit(item.unit)}</span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--teal)'};text-align:right">${l.unit_price!=null?fmtChf(l.unit_price)+'/'+item.unit:'—'}</span>
               <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px" onclick="openRmPrintModal('${lotKey}')" title="Etikett drucken">🖶</button>
-              ${l.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="editLotRow(${l.id},'${esc(l.lot_number||'')}',${l.qty},${l.unit_price??'null'},'${esc(item.unit)}',${item.id})" title="Bearbeiten">✎</button>` : '<span></span>'}
+              ${l.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="editLotRow(${l.id},'${esc(l.lot_number||'')}',${l.qty},${l.unit_price??'null'},'${esc(_unit(item.unit))}',${item.id})" title="Bearbeiten">✎</button>` : '<span></span>'}
             </div>`;
           }).join('')}
         </div>`;
@@ -629,8 +629,8 @@ async function openRawMatDetail(id) {
         <tbody>${movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:11px;color:var(--t4);white-space:nowrap">${fmtDT(m.created_at)}</td>
           <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px;white-space:nowrap">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
-          <td style="font-family:var(--mono);font-size:13px;text-align:right;color:${m.type==='in'?'var(--green)':'var(--amber)'};white-space:nowrap">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${item.unit}</td>
-          <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3);white-space:nowrap">${fmtN(m.balance??0,0)} ${item.unit}</td>
+          <td style="font-family:var(--mono);font-size:13px;text-align:right;color:${m.type==='in'?'var(--green)':'var(--amber)'};white-space:nowrap">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${_unit(item.unit)}</td>
+          <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3);white-space:nowrap">${fmtN(m.balance??0,0)} ${_unit(item.unit)}</td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3)">${m.unit_price!=null?fmtChf(m.unit_price):'—'}</td>
           <td style="font-family:var(--mono);font-size:11px;color:var(--t4)">${esc(m.lot_number||'—')}</td>
           <td style="font-size:13px;color:var(--t3)">${esc(m.notes||'')}</td>
@@ -683,7 +683,7 @@ async function _loadRawMatForm(id) {
       <div class="fg"><label class="fl">Lot-Nr.</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="z.B. LOT-2024-001"></div>
       <div class="fg"><label class="fl">Einheit</label>
         <select class="fs" id="rm-unit">
-          ${['Stk','g','kg','m','cm','mm','ml','l'].map(u=>`<option ${(item.unit||'Stk')===u?'selected':''}>${u}</option>`).join('')}
+          ${['pcs','g','kg','m','cm','mm','ml','l'].map(u=>`<option value="${u}" ${(item.unit||'pcs')===u?'selected':''}>${_unit(u)}</option>`).join('')}
         </select>
       </div>
     </div>

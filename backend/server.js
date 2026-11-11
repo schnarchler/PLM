@@ -794,7 +794,7 @@ function applySchema() {
     item_id INTEGER,
     description TEXT NOT NULL,
     quantity REAL DEFAULT 1,
-    unit TEXT DEFAULT 'Stk',
+    unit TEXT DEFAULT 'pcs',
     unit_price REAL,
     print_settings_json TEXT,
     notes TEXT,
@@ -826,7 +826,7 @@ function applySchema() {
     po_id INTEGER NOT NULL REFERENCES purchase_orders(id),
     description TEXT NOT NULL,
     quantity REAL DEFAULT 1,
-    unit TEXT DEFAULT 'Stk',
+    unit TEXT DEFAULT 'pcs',
     unit_price REAL,
     inventory_item_id INTEGER REFERENCES inventory_items(id),
     received_qty REAL DEFAULT 0,
@@ -913,7 +913,7 @@ function applySchema() {
     name TEXT NOT NULL,
     category TEXT DEFAULT 'Sonstiges',
     sku TEXT,
-    unit TEXT DEFAULT 'Stk',
+    unit TEXT DEFAULT 'pcs',
     stock_qty REAL DEFAULT 0,
     min_qty REAL DEFAULT 0,
     price_per_unit REAL,
@@ -1240,7 +1240,7 @@ function applySchema() {
           (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,position,
            raw_material_id,estimated_hours,printer_name,estimated_print_hours)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [oid, qi.item_id, qi.description, qi.quantity, qi.unit, qi.unit_price, qi.discount_pct,
+          [oid, qi.item_id, qi.description, qi.quantity, normUnit(qi.unit), qi.unit_price, qi.discount_pct,
            qi.notes || '', qi.position || null, qi.raw_material_id || null, qi.estimated_hours || null,
            qi.printer_name || '', qi.estimated_print_hours || null]);
       }
@@ -1367,6 +1367,16 @@ function applySchema() {
   migrateOnce('release-checks-default-v1', () => {
     db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('release_checks','file,weight')");
   });
+  // Einheiten als Code statt deutschem Wort („Stk“ → pcs, „Pauschal“ → flat)
+  migrateOnce('unit-codes-v1', () => {
+    for (const t of ['bom', 'bom_std_parts', 'order_items', 'quote_items', 'delivery_items',
+      'purchase_order_items', 'inventory_items', 'raw_materials']) {
+      for (const r of all(`SELECT DISTINCT unit FROM ${t} WHERE unit IS NOT NULL`)) {
+        const code = normUnit(r.unit);
+        if (code !== r.unit) db.run(`UPDATE ${t} SET unit=? WHERE unit=?`, [code, r.unit]);
+      }
+    }
+  });
   // Sprache der Oberfläche: Ohne Einstellung richtet sie sich nach dem Browser.
   // Wer schon mit PLM arbeitet, behält Deutsch — auch mit englischem Browser.
   migrateOnce('ui-lang-existing-v1', () => {
@@ -1422,6 +1432,24 @@ function recalcOnStart() {
 
   if (rmFixed) saveDb();
 }
+
+// Einheiten stehen sprachneutral in der Datenbank: pcs, set, flat. Die Anzeige
+// übersetzt sie (Frontend: _unit). Physikalische Einheiten (g, kg, m, h …) und
+// eigener Freitext („Rolle“) bleiben, wie sie eingegeben wurden.
+const UNIT_ALIASES = {
+  pcs: ['pcs', 'pc', 'piece', 'pieces', 'stk', 'stk.', 'stck', 'stück', 'st.'],
+  set: ['set', 'sets', 'satz'],
+  flat: ['flat', 'flat rate', 'pauschal', 'pauschale'],
+};
+function normUnit(u) {
+  const s = String(u ?? '').trim();
+  if (!s) return 'pcs';
+  const l = s.toLowerCase();
+  return Object.keys(UNIT_ALIASES).find(code => UNIT_ALIASES[code].includes(l)) || s;
+}
+// Für Texte, die der Server selbst schreibt (Historie)
+const UNIT_LABEL_DE = { pcs: 'Stk', set: 'Set', flat: 'Pauschal' };
+const unitLabel = u => UNIT_LABEL_DE[u] || u || '';
 
 function migrateOnce(key, fn) {
   const applied = get('SELECT 1 as y FROM applied_migrations WHERE key=?', [key]);
@@ -3574,7 +3602,7 @@ app.post('/api/revisions/:revId/bom', (req, res) => {
     : null;
   try {
     run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position,notes,child_rev_id) VALUES (?,?,?,?,?,?,?)',
-      [req.params.revId, child_item_id, quantity || 1, unit || 'pcs', position || 999, notes || '', pin]);
+      [req.params.revId, child_item_id, quantity || 1, normUnit(unit), position || 999, notes || '', pin]);
     const childNo = get('SELECT item_number FROM items WHERE id=?', [child_item_id])?.item_number || ('Item ' + child_item_id);
     log('revision', req.params.revId, 'BOM: Position hinzugefügt', childNo + ' x' + (quantity || 1));
     res.json({ success: true });
@@ -3584,7 +3612,7 @@ app.post('/api/revisions/:revId/bom', (req, res) => {
 app.put('/api/bom/:id/quantity', (req, res) => {
   const { quantity, unit } = req.body;
   if (rejectIfLocked(res, get('SELECT parent_rev_id FROM bom WHERE id=?', [req.params.id])?.parent_rev_id)) return;
-  run('UPDATE bom SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
+  run('UPDATE bom SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), normUnit(unit), req.params.id]);
   saveDb();
   res.json({ success: true });
 });
@@ -4900,7 +4928,7 @@ app.delete('/api/orders/:id', (req, res) => {
 app.post('/api/orders/:id/items', (req, res) => {
   const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
   const id = runGetId('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,raw_material_id,estimated_hours,printer_name,estimated_print_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-    [req.params.id, item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null]);
+    [req.params.id, item_id||null, description, quantity||1, normUnit(unit), unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null]);
   const row = get('SELECT * FROM order_items WHERE id=?', [id]);
   log('order', row.order_id, 'Position hinzugefügt', `${_histPos(row)} · ${_histNum(row.quantity)} ${row.unit} à ${HIST_FMT.money(row.unit_price || 0)}`);
   res.json(row);
@@ -4933,7 +4961,7 @@ app.put('/api/order-items/:id', (req, res) => {
   const { item_id, description, quantity, unit, unit_price, discount_pct, notes, raw_material_id, estimated_hours, printer_name, estimated_print_hours } = req.body;
   const before = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
   run('UPDATE order_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,discount_pct=?,notes=?,raw_material_id=?,estimated_hours=?,printer_name=?,estimated_print_hours=? WHERE id=?',
-    [item_id||null, description, quantity||1, unit||'pcs', unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
+    [item_id||null, description, quantity||1, normUnit(unit), unit_price||0, discount_pct||0, notes||'', raw_material_id||null, estimated_hours||null, printer_name||'', estimated_print_hours||null, req.params.id]);
   const priceSynced = syncPriceFromOrderItem(req.params.id);
   const row = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
   if (before && row) logChanges('order', row.order_id, before, row, ORDER_ITEM_HIST, 'Position geändert', _histPos(before) + ': ');
@@ -4943,7 +4971,7 @@ app.put('/api/order-items/:id', (req, res) => {
 
 app.delete('/api/order-items/:id', (req, res) => {
   const oi = get('SELECT * FROM order_items WHERE id=?', [req.params.id]);
-  if (oi) log('order', oi.order_id, 'Position entfernt', `${_histPos(oi)} · ${_histNum(oi.quantity)} ${oi.unit}`);
+  if (oi) log('order', oi.order_id, 'Position entfernt', `${_histPos(oi)} · ${_histNum(oi.quantity)} ${unitLabel(oi.unit)}`);
   run('DELETE FROM order_items WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
@@ -6585,7 +6613,7 @@ app.post('/api/revisions/:revId/bom-bulk', (req, res) => {
     for (const e of entries) {
       try {
         run('INSERT INTO bom (parent_rev_id,child_item_id,quantity,unit,position) VALUES (?,?,?,?,?)',
-          [req.params.revId, e.child_item_id, e.quantity || 1, e.unit || 'pcs', pos++]);
+          [req.params.revId, e.child_item_id, e.quantity || 1, normUnit(e.unit), pos++]);
         count++;
       } catch {} // skip duplicates
     }
@@ -6756,7 +6784,7 @@ app.get('/api/deliveries/:id/material-usage', (req, res) => {
       quantity: qty,
       raw_material_id: mat.id,
       raw_material_name: mat.name,
-      unit: mat.unit || 'Stk',
+      unit: normUnit(mat.unit),
       spool_weight_g: spoolG || null,
       grams_per_piece: per ? per.grams : null,
       total_grams: totalG,
@@ -6844,14 +6872,14 @@ app.post('/api/deliveries/:id/items', (req, res) => {
   if (!description) return res.status(400).json({ error: 'Beschreibung fehlt' });
   const id = runGetId(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,print_settings_json,notes,position,raw_material_id)
     VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    [req.params.id, item_id||null, description, quantity||1, unit||'Stk',
+    [req.params.id, item_id||null, description, quantity||1, normUnit(unit),
      unit_price!=null ? parseFloat(unit_price) : null,
      print_settings_json||null, notes||'', position||999, raw_material_id||null]);
   // Nachträglich in einen gelieferten Auftrag aufgenommen: gleich fixieren
   if (get("SELECT 1 as y FROM deliveries WHERE id=? AND status='DELIVERED'", [req.params.id])) {
     freezeDeliveryItem(get('SELECT * FROM delivery_items WHERE id=?', [id]), 'delivery');
   }
-  log('delivery', req.params.id, 'Position hinzugefügt', `„${HIST_FMT.text(description)}" · ${_histNum(quantity || 1)} ${unit || 'Stk'}`);
+  log('delivery', req.params.id, 'Position hinzugefügt', `„${HIST_FMT.text(description)}" · ${_histNum(quantity || 1)} ${unitLabel(normUnit(unit))}`);
   res.json(get('SELECT di.*, rm.name as rm_name, rm.material_type as rm_type, rm.color as rm_color FROM delivery_items di LEFT JOIN raw_materials rm ON di.raw_material_id=rm.id WHERE di.id=?', [id]));
 });
 
@@ -6861,7 +6889,7 @@ app.put('/api/delivery-items/:id', (req, res) => {
     JOIN deliveries d ON d.id=di.delivery_id WHERE di.id=?`, [req.params.id]);
   if (!before) return res.status(404).json({ error: 'Position nicht gefunden' });
   run(`UPDATE delivery_items SET item_id=?,description=?,quantity=?,unit=?,unit_price=?,print_settings_json=?,notes=?,position=?,raw_material_id=? WHERE id=?`,
-    [item_id||null, description, quantity||1, unit||'Stk',
+    [item_id||null, description, quantity||1, normUnit(unit),
      unit_price!=null ? parseFloat(unit_price) : null,
      print_settings_json??null, notes||'', position||999, raw_material_id||null, req.params.id]);
   // Anderes Item verknüpft: die Revision des alten gilt nicht mehr
@@ -6896,7 +6924,7 @@ app.put('/api/delivery-items/:id', (req, res) => {
 
 app.delete('/api/delivery-items/:id', (req, res) => {
   const di = get('SELECT * FROM delivery_items WHERE id=?', [req.params.id]);
-  if (di) log('delivery', di.delivery_id, 'Position entfernt', `${_histPos(di)} · ${_histNum(di.quantity)} ${di.unit}`);
+  if (di) log('delivery', di.delivery_id, 'Position entfernt', `${_histPos(di)} · ${_histNum(di.quantity)} ${unitLabel(di.unit)}`);
   run('DELETE FROM delivery_structure WHERE delivery_item_id=?', [req.params.id]);
   run('DELETE FROM delivery_items WHERE id=?', [req.params.id]);
   res.json({ success: true });
@@ -7028,7 +7056,7 @@ app.post('/api/print-receipt', (req, res) => {
     code:            printCode(item.short_code, rev),
     desc:            item.item_name ? '' : (item.description || ''),
     qty:             item.quantity,
-    unit:            item.unit,
+    unit:            unitLabel(item.unit),
     price:           price,
     customer:        item.customer_name || '',
     notes:           item.notes || '',
@@ -7135,7 +7163,7 @@ app.post('/api/print-receipt-delivery', (req, res) => {
       number: item.item_number || '',   // Revision steht im Kurzcode
       code:   printCode(item.short_code, rev),
       qty:    item.quantity,
-      unit:   item.unit,
+      unit:   unitLabel(item.unit),
       price:  price != null ? price * item.quantity : null,
       notes:  item.notes || ''
     };
@@ -7199,7 +7227,7 @@ app.post('/api/orders/:id/to-delivery', (req, res) => {
     oItems.forEach((oi, idx) => {
       run(`INSERT INTO delivery_items (delivery_id,item_id,description,quantity,unit,unit_price,notes,position,order_item_id)
            VALUES (?,?,?,?,?,?,?,?,?)`,
-        [id, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk',
+        [id, oi.item_id||null, oi.description, oi.quantity, normUnit(oi.unit),
          oi.unit_price||null, oi.notes||'', idx + 1, oi.id]);
     });
     // Wer einen Produktionsauftrag erzeugt, hat den Auftrag faktisch bestaetigt.
@@ -7752,7 +7780,7 @@ app.put('/api/purchase-orders/:id/status', (req, res) => {
             const newId = runGetId(`INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,notes,std_part_id)
               VALUES (?,?,?,?,0,0,?,?,?)`,
               [sp.designation || sp.name || 'Normteil', 'Normteile', sp.std_number || '',
-               item.unit || 'Stk', sp.unit_price ?? null, 'Automatisch aus Einkauf angelegt', sp.id]);
+               normUnit(item.unit), sp.unit_price ?? null, 'Automatisch aus Einkauf angelegt', sp.id]);
             inv = get('SELECT * FROM inventory_items WHERE id=?', [newId]);
             log('inventory', newId, 'Erstellt', `Lagerartikel für Normteil ${sp.designation} aus ${poNum}`);
           }
@@ -7807,9 +7835,9 @@ app.post('/api/purchase-orders/:id/items', (req, res) => {
   if (!description) return res.status(400).json({ error: 'Beschreibung fehlt' });
   const pos = (get('SELECT MAX(position) as m FROM purchase_order_items WHERE po_id=?', [req.params.id])?.m || 0) + 1;
   const iid = runGetId('INSERT INTO purchase_order_items (po_id,description,quantity,unit,unit_price,inventory_item_id,raw_material_id,std_part_id,notes,position) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    [req.params.id, description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, raw_material_id||null, std_part_id||null, notes||'', pos]);
+    [req.params.id, description, parseFloat(quantity)||1, normUnit(unit), unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, inventory_item_id||null, raw_material_id||null, std_part_id||null, notes||'', pos]);
   const row = get('SELECT * FROM purchase_order_items WHERE id=?', [iid]);
-  log('purchase_order', req.params.id, 'Position hinzugefügt', `${_histPos(row)} · ${_histNum(row.quantity)} ${row.unit}`);
+  log('purchase_order', req.params.id, 'Position hinzugefügt', `${_histPos(row)} · ${_histNum(row.quantity)} ${unitLabel(row.unit)}`);
   res.json(row);
 });
 
@@ -7818,7 +7846,7 @@ app.put('/api/purchase-orders/:id/items/:itemId', (req, res) => {
   if (!description) return res.status(400).json({ error: 'Beschreibung fehlt' });
   const before = get('SELECT * FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
   run(`UPDATE purchase_order_items SET description=?,quantity=?,unit=?,unit_price=?,notes=? WHERE id=? AND po_id=?`,
-    [description, parseFloat(quantity)||1, unit||'Stk', unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, notes||'', req.params.itemId, req.params.id]);
+    [description, parseFloat(quantity)||1, normUnit(unit), unit_price!=null&&unit_price!==''?parseFloat(unit_price):null, notes||'', req.params.itemId, req.params.id]);
   const row = get('SELECT * FROM purchase_order_items WHERE id=?', [req.params.itemId]);
   if (before && row) logChanges('purchase_order', before.po_id, before, row, PO_ITEM_HIST, 'Position geändert', _histPos(before) + ': ');
   res.json(row);
@@ -7826,7 +7854,7 @@ app.put('/api/purchase-orders/:id/items/:itemId', (req, res) => {
 
 app.delete('/api/purchase-orders/:id/items/:itemId', (req, res) => {
   const poi = get('SELECT * FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
-  if (poi) log('purchase_order', poi.po_id, 'Position entfernt', `${_histPos(poi)} · ${_histNum(poi.quantity)} ${poi.unit}`);
+  if (poi) log('purchase_order', poi.po_id, 'Position entfernt', `${_histPos(poi)} · ${_histNum(poi.quantity)} ${unitLabel(poi.unit)}`);
   run('DELETE FROM purchase_order_items WHERE id=? AND po_id=?', [req.params.itemId, req.params.id]);
   res.json({ ok: true });
 });
@@ -7876,7 +7904,7 @@ app.post('/api/inventory', (req, res) => {
   const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes, item_id, color, material } = req.body;
   if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const id = runGetId('INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,supplier_id,notes,item_id,color,material) VALUES (?,?,?,?,0,?,?,?,?,?,?,?)',
-    [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(min_qty)||0,
+    [name, category||'Sonstiges', sku||'', normUnit(unit), parseFloat(min_qty)||0,
      price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'',
      item_id||null, color||null, material||null]);
   res.json(get('SELECT * FROM inventory_items WHERE id=?', [id]));
@@ -7896,7 +7924,7 @@ app.get('/api/inventory/:id', (req, res) => {
 app.put('/api/inventory/:id', (req, res) => {
   const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes, item_id, color, material } = req.body;
   run(`UPDATE inventory_items SET name=?,category=?,sku=?,unit=?,min_qty=?,price_per_unit=?,supplier_id=?,notes=?,item_id=?,color=?,material=?,updated_at=datetime('now') WHERE id=?`,
-    [name, category||'Sonstiges', sku||'', unit||'Stk', parseFloat(min_qty)||0,
+    [name, category||'Sonstiges', sku||'', normUnit(unit), parseFloat(min_qty)||0,
      price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'',
      item_id||null, color||null, material||null, req.params.id]);
   res.json(get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]));
@@ -8032,7 +8060,7 @@ app.post('/api/revisions/:revId/bom-std', (req, res) => {
   try {
     const pos = (get('SELECT MAX(position) as m FROM bom_std_parts WHERE parent_rev_id=?', [req.params.revId])?.m || 0) + 1;
     const id = runGetId('INSERT INTO bom_std_parts (parent_rev_id,std_part_id,quantity,unit,position,notes) VALUES (?,?,?,?,?,?)',
-      [req.params.revId, std_part_id, quantity||1, unit||'pcs', pos, notes||'']);
+      [req.params.revId, std_part_id, quantity||1, normUnit(unit), pos, notes||'']);
     log('revision', req.params.revId, 'BOM: Position hinzugefügt', sp.designation + ' x' + (quantity||1));
     res.json({ success: true, id });
   } catch { res.status(400).json({ error: 'Bereits in der BOM vorhanden' }); }
@@ -8041,7 +8069,7 @@ app.post('/api/revisions/:revId/bom-std', (req, res) => {
 app.put('/api/bom-std/:id/quantity', (req, res) => {
   const { quantity, unit } = req.body;
   if (rejectIfLocked(res, get('SELECT parent_rev_id FROM bom_std_parts WHERE id=?', [req.params.id])?.parent_rev_id)) return;
-  run('UPDATE bom_std_parts SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), unit||'Stk', req.params.id]);
+  run('UPDATE bom_std_parts SET quantity=?, unit=? WHERE id=?', [Math.max(1, Math.round(parseFloat(quantity)||1)), normUnit(unit), req.params.id]);
   saveDb();
   res.json({ success: true });
 });
@@ -8121,7 +8149,7 @@ app.get('/api/raw-materials/:id/label', (req, res) => {
     brand:       rm.brand,
     lot_number:  lot,
     remaining_qty: Math.max(0, remaining?.qty || 0),
-    unit:        rm.unit,
+    unit:        unitLabel(rm.unit),
     print_temp:  rm.print_temp,
     bed_temp:    rm.bed_temp,
     dimensions:  rm.dimensions,
@@ -8154,14 +8182,14 @@ app.post('/api/raw-materials', (req, res) => {
   const { name, material_type, color, brand, stock_qty, min_qty, unit, notes, lot_number, dimensions, weight_g, print_temp, bed_temp, nozzle } = req.body;
   if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const id = runGetId('INSERT INTO raw_materials (name,material_type,color,brand,stock_qty,min_qty,unit,notes,lot_number,dimensions,weight_g,print_temp,bed_temp,nozzle) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, print_temp||null, bed_temp||null, nozzle||'']);
+    [name, material_type||'', color||'', brand||'', parseFloat(stock_qty)||0, parseFloat(min_qty)||0, normUnit(unit), notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, print_temp||null, bed_temp||null, nozzle||'']);
   res.json(get('SELECT * FROM raw_materials WHERE id=?', [id]));
 });
 
 app.put('/api/raw-materials/:id', (req, res) => {
   const { name, material_type, color, brand, min_qty, unit, notes, lot_number, dimensions, weight_g, print_temp, bed_temp, nozzle } = req.body;
   run(`UPDATE raw_materials SET name=?,material_type=?,color=?,brand=?,min_qty=?,unit=?,notes=?,lot_number=?,dimensions=?,weight_g=?,print_temp=?,bed_temp=?,nozzle=?,updated_at=datetime('now') WHERE id=?`,
-    [name, material_type||'', color||'', brand||'', parseFloat(min_qty)||0, unit||'Stk', notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, print_temp||null, bed_temp||null, nozzle||'', req.params.id]);
+    [name, material_type||'', color||'', brand||'', parseFloat(min_qty)||0, normUnit(unit), notes||'', lot_number||'', dimensions||'', weight_g!=null?parseFloat(weight_g):null, print_temp||null, bed_temp||null, nozzle||'', req.params.id]);
   res.json(get('SELECT * FROM raw_materials WHERE id=?', [req.params.id]));
 });
 
@@ -8301,7 +8329,7 @@ app.post('/api/orders/:id/clone', (req, res) => {
      new Date().toISOString().slice(0,10), o.tax_rate??0, o.discount_pct||0, o.payment_terms||'', o.include_tax||0]);
   all('SELECT * FROM order_items WHERE order_id=?', [o.id]).forEach((oi, idx) => {
     run('INSERT INTO order_items (order_id,item_id,description,quantity,unit,unit_price,discount_pct,notes,position) VALUES (?,?,?,?,?,?,?,?,?)',
-      [newId, oi.item_id||null, oi.description, oi.quantity, oi.unit||'Stk', oi.unit_price||0, oi.discount_pct||0, oi.notes||'', idx+1]);
+      [newId, oi.item_id||null, oi.description, oi.quantity, normUnit(oi.unit), oi.unit_price||0, oi.discount_pct||0, oi.notes||'', idx+1]);
   });
   log('order', newId, 'Erstellt', `${number} – ${o.title} · Kopie von ${o.number}`);
   saveDb();

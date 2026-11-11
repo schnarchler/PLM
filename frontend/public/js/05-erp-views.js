@@ -1125,7 +1125,7 @@ function _renderSearchResults(r, q) {
         <td style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(m.article_number||'—')}</td>
         <td>${esc(m.name)}</td>
         <td style="font-family:var(--mono);font-size:12px;color:var(--t3)">${esc(m.lot_number||'—')}</td>
-        <td style="font-family:var(--mono);font-size:13px;text-align:right">${fmtN(m.stock_qty,0)} ${esc(m.unit)}</td>
+        <td style="font-family:var(--mono);font-size:13px;text-align:right">${fmtN(m.stock_qty,0)} ${esc(_unit(m.unit))}</td>
       </tr>`).join('')}</tbody></table></div>` : ''}
     ${r.projects?.length ? section('Projekte', r.projects.length) + `<div class="card-grid">${r.projects.map(p=>`
       <div class="card" onclick="openProject(${p.id})"><div class="card-accent"></div>

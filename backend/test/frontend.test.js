@@ -42,7 +42,7 @@ function installGlobals() {
   global.classFieldsOf = name => global._classFields[name] || [];
   global.TextEncoder = require('node:util').TextEncoder;
   // Übersetzung: ohne Browser immer Deutsch, _t() gibt den Schlüssel zurück
-  Object.assign(global, (0, eval)(read('js/00-i18n.js') + '; ({ _t, LANG, LOCALE, LANGS })'));
+  Object.assign(global, (0, eval)(read('js/00-i18n.js') + '; ({ _t, _unit, LANG, LOCALE, LANGS })'));
 }
 installGlobals();
 global.API = '';

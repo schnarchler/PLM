@@ -262,7 +262,7 @@ function renderLineItems(items, orderId, taxRate, discountPct, includeTax) {
               ${i.notes?`<div style="font-size:13px;color:var(--t3)">${esc(i.notes)}</div>`:''}
               ${costHint}
             </td>
-            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${i.quantity} ${i.unit}</td>
+            <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${i.quantity} ${_unit(i.unit)}</td>
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px;white-space:nowrap">${fmtChf(i.unit_price)}</td>
             ${showDiscount?`<td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px;color:var(--amber)">${i.discount_pct||0}%</td>`:''}
             <td style="padding:7px 8px;text-align:right;font-family:var(--mono);font-size:13px">${fmtChf(lineTotal)}</td>
@@ -370,7 +370,7 @@ async function openBomImport(orderId) {
         <div class="fg"><label class="fl">Rohmaterial (für alle Teile, optional)</label>
           <select class="fs" id="bqm-rawmat" onchange="_bqmCalcAll()">
             <option value="">— kein Rohmaterial —</option>
-            ${(state.rawMaterials||[]).map(m => `<option value="${m.id}" data-unit="${esc(m.unit)}">${esc(m.name)} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`).join('')}
+            ${(state.rawMaterials||[]).map(m => `<option value="${m.id}" data-unit="${esc(m.unit || 'pcs')}">${esc(m.name)} — ${fmtN(m.stock_qty,0)} ${_unit(m.unit)}</option>`).join('')}
           </select>
         </div>
         <div class="fg"><label class="fl">Stundenansatz (CHF/h)</label>
@@ -443,7 +443,7 @@ function _bqmRenderParts() {
         <span>${_itemChip(b.item_type, 15)}</span>
         <span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(b.item_number)}</span>
         <span style="flex:1;font-size:13px">${esc(b.name)}</span>
-        <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${fmtN(b.quantity,0)} ${b.unit}</span>
+        <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${fmtN(b.quantity,0)} ${_unit(b.unit)}</span>
         ${b.weight_g!=null ? `<span style="font-size:11px;color:var(--t4)">⚖ ${fmtN(b.weight_g,1)}g</span>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -505,7 +505,7 @@ async function doBomImport(orderId) {
       item_id: b.id,
       description: b.item_number + ' – ' + b.name,
       quantity: b.quantity || 1,
-      unit: b.unit || 'Stk',
+      unit: b.unit || 'pcs',
       unit_price: b._calcPrice || 0,
       raw_material_id: rmVal ? parseInt(rmVal) : null,
       estimated_hours: b._calcHours || null,
@@ -655,7 +655,7 @@ function openLineItemModal(orderId, itemId) {
       set('li-disc',li.discount_pct||0); set('li-notes',li.notes||'');
       set('li-hours', li.estimated_hours||'');
       set('li-print-hours', li.estimated_print_hours||'');
-      document.getElementById('li-unit').value = li.unit||'Stk';
+      document.getElementById('li-unit').value = li.unit||'pcs';
       if (li.item_id && li.item_number) {
         set('li-linked-plm-id', li.item_id);
         const icon = _itemChip(li.item_type, 18);
@@ -703,7 +703,7 @@ function openLineItemModal(orderId, itemId) {
   } else {
     ['li-desc','li-notes'].forEach(f=>set(f,''));
     set('li-qty',1); set('li-price',0); set('li-disc',0);
-    document.getElementById('li-unit').value = 'Stk';
+    document.getElementById('li-unit').value = 'pcs';
     document.getElementById('li-plm-selected').style.display = 'none';
     _rmSetValue('li-rawmat', '', '');
   }

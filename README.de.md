@@ -582,7 +582,9 @@ Der deutsche Text ist der Schlüssel: Im Code steht `_t('Speichern')`,
 Platzhalter in geschweiften Klammern: `_t('… und {n} weitere', { n: 3 })`. Fehlt ein Eintrag,
 erscheint der deutsche Text — so lässt sich Datei für Datei übersetzen. Statischer Text in
 `index.html` (Text, `title`, `placeholder`) wird beim Laden einmal übersetzt, ohne
-zusätzliche Attribute; `data-no-i18n` nimmt ein Element aus. `npm test` prüft, dass jedes
+zusätzliche Attribute; `data-no-i18n` nimmt ein Element aus. Einheiten stehen als sprachneutraler Code in der
+Datenbank (`pcs`, `set`, `flat`; physikalische wie `g`, `m`, `h` unverändert). Der Server macht
+aus Eingaben wie „Stk“ oder „Stück“ `pcs`, `_unit()` zeigt den Code in der Sprache der Oberfläche. `npm test` prüft, dass jedes
 `_t('…')` einen Eintrag hat. Englische Begriffe: Glossar im englischen README (Terminology).
 
 Stand der englischen Oberfläche: Navigation, Dashboard und der ganze PLM-Bereich (Projekte,
@@ -763,3 +765,11 @@ Die wichtigsten Testdateien:
 Die Server-Tests starten jeweils einen eigenen Server (eigener Port) mit einer leeren
 Wegwerf-Datenbank; `frontend.test.js` prüft reine Funktionen des Frontends ohne Server
 und ohne Browser.
+
+---
+
+## Unterstützen
+
+Das Projekt entsteht in der Freizeit und ist kostenlos nutzbar. Wenn es dir Arbeit abnimmt, freue ich mich über einen Kaffee:
+
+[![ko-fi](https://img.shields.io/badge/Ko--fi-Kaffee%20spendieren-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/schnarchler)

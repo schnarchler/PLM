@@ -130,3 +130,43 @@ test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deuts
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
   }
 });
+
+test('Einheiten: Datenbank speichert Codes, Migration stellt alte Werte um', async () => {
+  const SQL = await require('sql.js')();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-test-'));
+  const post = (url, body) => fetch(`http://127.0.0.1:${PORT}${url}`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: `http://127.0.0.1:${PORT}` }, body: JSON.stringify(body) }).then(r => r.json());
+  const get = url => fetch(`http://127.0.0.1:${PORT}${url}`).then(r => r.json());
+  let proc = await startServer(dir);
+  try {
+    // Beim Speichern: Stk, Stück, Pauschal, Set → Code; Freitext und g bleiben
+    const units = {};
+    for (const u of ['Stk', 'Stück', 'pcs', '', 'Pauschal', 'Set', 'Rolle', 'g']) {
+      const inv = await post('/api/inventory', { name: 'Test ' + u, unit: u });
+      units[u] = (await get('/api/inventory')).find(i => i.id === inv.id).unit;
+    }
+    assert.deepStrictEqual(units, { Stk: 'pcs', 'Stück': 'pcs', pcs: 'pcs', '': 'pcs', Pauschal: 'flat', Set: 'set', Rolle: 'Rolle', g: 'g' });
+    await stopServer(proc);
+
+    // Alte Datenbank mit deutschen Einheiten: beim Start umgestellt
+    const db = new SQL.Database(fs.readFileSync(path.join(dir, 'plm.db')));
+    db.run("UPDATE inventory_items SET unit='Stk' WHERE unit='pcs'");
+    db.run("UPDATE inventory_items SET unit='Pauschal' WHERE unit='flat'");
+    db.run("DELETE FROM applied_migrations WHERE key='unit-codes-v1'");
+    fs.writeFileSync(path.join(dir, 'plm.db'), Buffer.from(db.export()));
+    proc = await startServer(dir);
+    const after = [...new Set((await get('/api/inventory')).map(i => i.unit))].sort();
+    assert.deepStrictEqual(after, ['Rolle', 'flat', 'g', 'pcs', 'set']);
+  } finally {
+    await stopServer(proc).catch(() => {});
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+});
+
+test('Einheiten: _unit() zeigt Codes übersetzt, Freitext unverändert', () => {
+  const I = (0, eval)(read('js/00-i18n.js') + '; ({ _unit, I18N, setLangForTest: l => { LANG = l; } })');
+  assert.deepStrictEqual(['pcs', '', undefined, 'set', 'flat', 'g', 'Rolle'].map(I._unit), ['Stk', 'Stk', 'Stk', 'Set', 'Pauschal', 'g', 'Rolle']);
+  I.I18N.en = EN;
+  I.setLangForTest('en');
+  assert.deepStrictEqual(['pcs', 'flat', 'kg'].map(I._unit), ['pcs', 'Flat rate', 'kg']);
+});

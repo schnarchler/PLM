@@ -1496,7 +1496,7 @@ function renderBomList(rev, item, locked) {
             <input type="number" value="${Math.round(b.quantity)}" min="1" step="1"
               style="width:52px;font-size:13px;font-family:var(--mono);text-align:right;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 4px;color:var(--t1)"
               onkeydown="if(event.key==='.'||event.key===','||event.key==='-')event.preventDefault()"
-              onchange="saveBomQty(${b.id},'${rev.id}',this.value,'${b.unit||'Stk'}',${item.id})" onclick="event.stopPropagation()">
+              onchange="saveBomQty(${b.id},'${rev.id}',this.value,'${b.unit||'pcs'}',${item.id})" onclick="event.stopPropagation()">
             <span style="font-size:13px;color:var(--t3)">${_unit(b.unit)}</span>
            </span>`}
       ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delBom(${b.id},${item.id},${rev.id})">✕</button>`}
@@ -1521,7 +1521,7 @@ function renderBomList(rev, item, locked) {
             <input type="number" value="${Math.round(b.quantity)}" min="1" step="1"
               style="width:52px;font-size:13px;font-family:var(--mono);text-align:right;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 4px;color:var(--t1)"
               onkeydown="if(event.key==='.'||event.key===','||event.key==='-')event.preventDefault()"
-              onchange="saveBomStdQty(${b.id},this.value,'${b.unit||'Stk'}')" onclick="event.stopPropagation()">
+              onchange="saveBomStdQty(${b.id},this.value,'${b.unit||'pcs'}')" onclick="event.stopPropagation()">
             <span style="font-size:13px;color:var(--t3)">${_unit(b.unit)}</span>
            </span>`}
       ${locked ? '' : `<button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();delBomStd(${b.id},${item.id},${rev.id})">✕</button>`}

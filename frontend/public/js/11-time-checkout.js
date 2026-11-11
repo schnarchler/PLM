@@ -257,7 +257,7 @@ async function loadErpUsage(itemId) {
     <div style="display:flex;gap:12px;align-items:center;padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:4px;flex-wrap:wrap">
       <span style="font-size:11px;text-transform:uppercase;color:var(--t4);letter-spacing:.06em">${_t('Total Aufträge')}</span>
       <span style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">${fmtCHF(totalRev)}</span>
-      <span style="font-size:12px;color:var(--t3)">${fmtN(totalQty,0)} ${_unit('Stk')} · ${_t(activeOrders.length === 1 ? '1 Auftrag' : '{n} Aufträge', { n: activeOrders.length })}</span>
+      <span style="font-size:12px;color:var(--t3)">${fmtN(totalQty,0)} ${_unit('pcs')} · ${_t(activeOrders.length === 1 ? '1 Auftrag' : '{n} Aufträge', { n: activeOrders.length })}</span>
       ${orders.length !== activeOrders.length ? `<span style="font-size:11px;color:var(--t4)">${_t('(nur bestätigte, gelieferte und fakturierte)')}</span>` : ''}
     </div>` : '';
 

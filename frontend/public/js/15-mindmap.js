@@ -140,7 +140,7 @@ function _mmEdgeSvg(e, L) {
   // Kein Emoji: in SVG haengt dessen Darstellung von der Systemschrift ab,
   // die Farbe traegt die Bedeutung zuverlaessiger.
   const qty = e.quantity != null
-    ? `${fmtN(e.quantity, e.quantity % 1 ? 1 : 0)}${e.unit ? ' ' + e.unit : '×'}`
+    ? `${fmtN(e.quantity, e.quantity % 1 ? 1 : 0)}${e.unit ? ' ' + _unit(e.unit) : '×'}`
     : '';
   const pin = e.pinned_rev ? `rev${e.pinned_rev}` : '';
   const label = [qty, pin].filter(Boolean).join(' · ');

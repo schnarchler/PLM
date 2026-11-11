@@ -686,7 +686,7 @@ test('ERP-Historie hält fest, was sich geändert hat', async () => {
     'Status → Bestätigt | von Entwurf',
     'Position hinzugefügt | „Deckel" · 2 pcs à 10.00',
     'Position geändert | „Deckel": Menge: 2 → 3',
-    'Position entfernt | „Deckel" · 3 pcs',
+    'Position entfernt | „Deckel" · 3 Stk',
   ]);
   await api(`/api/customers/${k.id}`, 'PUT', { ...k, city: 'Bern' });
   assert.strictEqual((await api(`/api/customers/${k.id}`)).changelog[0].details, 'Ort: — → Bern');

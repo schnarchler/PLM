@@ -8,7 +8,7 @@ const INSPECTION_LABEL = { OK: ['✓ in Ordnung', 'var(--green)'], NOK: ['✗ ni
 
 function _lotLine(l) {
   return `${esc(l.material)} · Charge <strong style="font-family:var(--mono)">${esc(l.lot_number || 'ohne Nr.')}</strong>
-    <span style="color:var(--t3)">· ${fmtN(l.qty, 2)} ${esc(l.unit || '')}</span>`;
+    <span style="color:var(--t3)">· ${fmtN(l.qty, 2)} ${esc(_unit(l.unit))}</span>`;
 }
 
 // Prüfung einer Position: Ergebnis mit wer und wann, sonst die Knöpfe zum Erfassen
@@ -36,7 +36,7 @@ function _deliveryTraceHtml(t) {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         ${p.item_type ? _itemChip(p.item_type, 16) : ''}
         <span style="flex:1;min-width:0;font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.description)}</span>
-        <span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtN(p.quantity, 0)} ${esc(p.unit || '')}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtN(p.quantity, 0)} ${esc(_unit(p.unit))}</span>
       </div>
       <div style="display:grid;grid-template-columns:90px 1fr;gap:6px 10px;font-size:13px;align-items:baseline">
         ${row('Teil', p.item_number

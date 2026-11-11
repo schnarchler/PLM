@@ -231,7 +231,7 @@ function renderDeliveryItems(items, deliveryId, delivered = false) {
         ${item.short_code?`<span class="chip" style="flex-shrink:0" title="Kurzcode auf dem Teil">${esc(item.short_code + (item.effective_rev ? '-' + item.effective_rev.rev : ''))}</span>`:''}
         <span style="font-size:13px;font-weight:500;flex:1">${esc(item.description)}</span>
         ${item.rm_name?`<span style="font-size:11px;background:rgba(157,180,255,.12);color:var(--blue);border-radius:3px;padding:1px 6px;font-family:var(--mono);flex-shrink:0">${esc(item.rm_name)}</span>`:''}
-        <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${item.unit}</span>
+        <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${_unit(item.unit)}</span>
         ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">${fmtCHF(parseFloat(item.unit_price))}</span>`:''}
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="Kurzbeleg">🖶</button>
         <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'full')" title="Vollbeleg mit Parametern">🖶≡</button>
@@ -417,9 +417,9 @@ async function _showDimStockInfo(itemId) {
     el.style.background = s.stock_qty <= 0 ? 'var(--red-soft)' : avail <= 0 ? 'var(--amber-soft)' : 'var(--green-soft)';
     el.style.borderColor = s.stock_qty <= 0 ? 'var(--red-line)' : avail <= 0 ? 'var(--amber-line)' : 'var(--green-line)';
     el.style.color = color;
-    el.innerHTML = `<b>Lager: ${fmtN(s.stock_qty, 0)} ${s.unit}</b>`
+    el.innerHTML = `<b>Lager: ${fmtN(s.stock_qty, 0)} ${_unit(s.unit)}</b>`
       + (s.planned_qty > 0 ? ` · ${fmtN(s.planned_qty, 0)} geplant (offene Aufträge)` : '')
-      + ` · <b style="color:${color}">Verfügbar: ${fmtN(avail, 0)} ${s.unit}</b>`
+      + ` · <b style="color:${color}">Verfügbar: ${fmtN(avail, 0)} ${_unit(s.unit)}</b>`
       + (s.stock_qty <= 0 ? ' — <b>Kein Bestand!</b>' : '');
   } catch { el.style.display = 'none'; }
 }
@@ -538,7 +538,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
     if (it) {
       set('dim-desc', it.description); set('dim-qty', it.quantity); set('dim-notes', it.notes||'');
       set('dim-price', it.unit_price!=null ? it.unit_price : '');
-      document.getElementById('dim-unit').value = it.unit||'Stk';
+      document.getElementById('dim-unit').value = it.unit||'pcs';
       if (it.raw_material_id) {
         document.getElementById('dim-rawmat').value = it.raw_material_id;
         set('dim-rawmat-id', it.raw_material_id);
@@ -565,7 +565,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   } else {
     ['dim-desc','dim-notes'].forEach(f=>set(f,''));
     set('dim-qty', 1); set('dim-price', '');
-    document.getElementById('dim-unit').value = 'Stk';
+    document.getElementById('dim-unit').value = 'pcs';
   }
   openModal('deliveryItemModal');
 }
@@ -656,7 +656,7 @@ async function offerMaterialConsumption(deliveryId) {
 
   const row = (r, i) => {
     const lotOpts = (r.lots || []).map(l =>
-      `<option value="${esc(l.lot_number || '')}">${l.lot_number ? esc(l.lot_number) : '— ohne Lot —'} · Rest ${fmtN(l.remaining_qty, 2)} ${esc(r.unit)}</option>`).join('');
+      `<option value="${esc(l.lot_number || '')}">${l.lot_number ? esc(l.lot_number) : '— ohne Lot —'} · Rest ${fmtN(l.remaining_qty, 2)} ${esc(_unit(r.unit))}</option>`).join('');
     const short = r.qty_to_deduct > (parseFloat(r.stock_qty) || 0);
     return `<div style="display:flex;flex-direction:column;gap:5px;padding:9px 11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -672,10 +672,10 @@ async function offerMaterialConsumption(deliveryId) {
         <span style="font-family:var(--mono);font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.6px">Abbuchen</span>
         <input type="number" step="0.0001" min="0" value="${r.qty_to_deduct}" data-idx="${i}"
           class="fi mat-qty" style="width:96px;font-family:var(--mono);font-size:13px;padding:3px 7px">
-        <span style="font-size:13px;color:var(--t3)">${esc(r.unit)}</span>
+        <span style="font-size:13px;color:var(--t3)">${esc(_unit(r.unit))}</span>
         ${lotOpts ? `<select class="fs mat-lot" data-idx="${i}" style="max-width:230px;font-size:13px;padding:3px 7px">${lotOpts}</select>` : ''}
         <span style="font-size:12px;color:${short ? 'var(--amber)' : 'var(--t4)'};margin-left:auto">
-          Bestand ${fmtN(r.stock_qty, 2)} ${esc(r.unit)}${short ? ' ⚠ reicht nicht' : ''}</span>
+          Bestand ${fmtN(r.stock_qty, 2)} ${esc(_unit(r.unit))}${short ? ' ⚠ reicht nicht' : ''}</span>
       </div>
     </div>`;
   };

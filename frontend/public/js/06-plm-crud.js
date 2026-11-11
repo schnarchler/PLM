@@ -1333,7 +1333,7 @@ function _renderBomBasket() {
           onkeydown="if(event.key==='.'||event.key===',')event.preventDefault()"
           onchange="_bomSetQty(${i},this.value)" oninput="_bomSetQty(${i},this.value)">
         <select style="font-size:13px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px 4px;color:var(--t1);flex-shrink:0" onchange="_bomSetUnit(${i},this.value)">
-          ${units.map(u => `<option${u === b.unit ? ' selected' : ''}>${u}</option>`).join('')}
+          ${units.map(u => `<option value="${u}"${u === b.unit ? ' selected' : ''}>${_unit(u)}</option>`).join('')}
         </select>
       </div>`).join('') +
   '</div>';
@@ -1502,7 +1502,7 @@ async function applyDimRawMat(val) {
   const prices = await api(`/api/raw-materials/${val}/prices`).catch(() => []);
   if (!prices.length) return;
 
-  const unit = opt.dataset.unit || 'Stk';
+  const unit = _unit(opt.dataset.unit);
   if (prices.length === 1) {
     set('dim-price', prices[0].unit_price);
     return;
@@ -1532,7 +1532,7 @@ function _buildRmOptions(mats) {
   let opts = '<option value="">' + _t('— kein Rohmaterial —') + '</option>';
   for (const m of mats) {
     const label = [m.color, m.material_type, m.brand].filter(Boolean).join(' · ') || m.name;
-    opts += `<option value="${m.id}">${esc(label)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${m.unit}</option>`;
+    opts += `<option value="${m.id}">${esc(label)}${m.weight_g?' ('+fmtN(m.weight_g,0)+'g)':''} — ${fmtN(m.stock_qty,0)} ${_unit(m.unit)}</option>`;
   }
   return opts;
 }
@@ -1558,7 +1558,7 @@ function _rmSearch(q, resultsId, hiddenId) {
     '<div onclick="_rmSelectItem(\'\',\'\',\''+resultsId+'\',\''+hiddenId+'\')" style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--t4)" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">' + _t('— kein Rohmaterial —') + '</div>',
     ...filtered.map(m => {
       const label = [m.color, m.material_type, m.brand].filter(Boolean).join(' · ') || m.name;
-      const stock = `${fmtN(m.stock_qty,0)} ${m.unit}`;
+      const stock = `${fmtN(m.stock_qty,0)} ${_unit(m.unit)}`;
       return `<div onclick="_rmSelectItem('${m.id}','${esc(label).replace(/'/g,"\\'")}','${resultsId}','${hiddenId}')"
         style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -1623,7 +1623,7 @@ function _showLotPicker(mat, lots) {
           return `<button class="btn btn-ghost" style="text-align:left;justify-content:space-between;display:flex;gap:12px"
             onclick="_selectLot(${JSON.stringify(l).replace(/"/g,'&quot;')})">
             <span style="font-family:var(--mono)">${esc(l.lot_number)}</span>
-            <span style="color:var(--t3);font-size:13px">${rem} ${mat.unit}</span>
+            <span style="color:var(--t3);font-size:13px">${rem} ${_unit(mat.unit)}</span>
             <span style="color:var(--teal);font-family:var(--mono)">${price}</span>
           </button>`;
         }).join('')}
@@ -1645,7 +1645,7 @@ function _populateDimSelects() {
   if (rmSel) rmSel.innerHTML = '<option value="">' + _t('— kein Rohmaterial —') + '</option>' +
     (state.rawMaterials||[]).map(m => {
       const label = [m.material_type, m.color, m.dimensions].filter(Boolean).join(' · ');
-      return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}" data-unit="${esc(m.unit)}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${m.unit}</option>`;
+      return `<option value="${m.id}" data-mat="${esc(m.material_type)}" data-col="${esc(m.color)}" data-unit="${esc(m.unit || 'pcs')}">${esc(m.name)}${label?' ('+esc(label)+')':''} — ${m.stock_qty} ${_unit(m.unit)}</option>`;
     }).join('');
   const nozSel = document.getElementById('dim-man-nozzle');
   if (nozSel) nozSel.innerHTML = '<option value="">—</option>' +

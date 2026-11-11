@@ -84,8 +84,8 @@ function _renderCompare(a, b) {
       return `<tr style="background:${bg}">
         <td style="font-family:monospace;font-size:12px;padding:4px 8px;border:1px solid #e5e7eb;color:#1d4ed8">${escHtml(item.item_number)}</td>
         <td style="font-size:13px;padding:4px 8px;border:1px solid #e5e7eb">${escHtml(item.name)}</td>
-        <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${ra ? fmtN(ra.quantity,0)+' '+ra.unit : '<span style="color:#d1d5db">—</span>'}</td>
-        <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${rb ? fmtN(rb.quantity,0)+' '+rb.unit : '<span style="color:#d1d5db">—</span>'}</td>
+        <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${ra ? fmtN(ra.quantity,0)+' '+_unit(ra.unit) : '<span style="color:#d1d5db">—</span>'}</td>
+        <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${rb ? fmtN(rb.quantity,0)+' '+_unit(rb.unit) : '<span style="color:#d1d5db">—</span>'}</td>
         <td style="padding:4px 8px;border:1px solid #e5e7eb;font-size:12px;color:${onlyA?'#dc2626':onlyB?'#16a34a':qtyDiff?'#d97706':'#9ca3af'}">${onlyA?'nur A':onlyB?'nur B':qtyDiff?'Mengenabw.':'='}</td>
       </tr>`;
     }).join('');
@@ -258,7 +258,7 @@ function _renderRevisionCompare(c, only) {
   const psRows = c.print_settings.filter(p => !only || p.changed).map(p =>
     tr(p.changed ? 'changed' : 'same', [esc(printParamLabel(p.field)), val(fmtPrintParam(p.field, p.a)), val(fmtPrintParam(p.field, p.b)), chip(p.changed ? 'changed' : 'same')]));
 
-  const qty = s => !s ? none : `${fmtN(s.quantity, 0)} ${esc(s.unit || 'Stk')}`
+  const qty = s => !s ? none : `${fmtN(s.quantity, 0)} ${esc(_unit(s.unit))}`
     + (s.pinned_rev ? ` <span style="font-size:11px;color:var(--t3)" title="fest auf diese Revision">🔒rev${esc(s.pinned_rev)}</span>` : '');
   const note = r => r.change !== 'changed' ? '' : ' <span style="font-size:11px;color:var(--t3)">'
     + [r.qty_changed ? 'Menge' : '', r.rev_changed ? 'Revision' : ''].filter(Boolean).join(', ') + '</span>';
@@ -485,9 +485,9 @@ function generateItemTemplate(type, opts = {}) {
         <tbody>${inv.map(l => `<tr>
           <td>${escHtml(l.name)}</td>
           <td style="font-family:monospace;font-size:12px">${escHtml(l.sku||'')}</td>
-          <td style="text-align:right;font-family:monospace">${fmtN(l.stock_qty||0, 1)} ${escHtml(l.unit||'Stk')}</td>
+          <td style="text-align:right;font-family:monospace">${fmtN(l.stock_qty||0, 1)} ${escHtml(_unit(l.unit))}</td>
           <td style="text-align:right;font-family:monospace">${l.min_qty != null ? fmtN(l.min_qty, 1) : '—'}</td>
-          <td style="text-align:right;font-family:monospace">${l.price_per_unit != null ? fmtChf(l.price_per_unit) + '/' + escHtml(l.unit||'Stk') : '—'}</td>
+          <td style="text-align:right;font-family:monospace">${l.price_per_unit != null ? fmtChf(l.price_per_unit) + '/' + escHtml(_unit(l.unit)) : '—'}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
@@ -547,7 +547,7 @@ function generateItemTemplate(type, opts = {}) {
           <td>${escHtml(b.name)}</td>
           <td style="font-family:monospace;font-size:12px">${b.child_active_rev ? 'rev'+b.child_active_rev.rev : '—'}</td>
           <td style="text-align:right;font-family:monospace">${fmtN(b.quantity,0)}</td>
-          <td>${escHtml(b.unit||'pcs')}</td>
+          <td>${escHtml(_unit(b.unit))}</td>
           <td style="text-align:right;font-family:monospace">${b.default_price != null ? fmtN(b.default_price * b.quantity, 2) : '—'}</td>
           <td style="text-align:right;font-family:monospace;color:#d97706">${(b.dev_hours||0) > 0 ? fmtN(b.dev_hours,2) : '—'}</td>
         </tr>`).join('')}
@@ -566,7 +566,7 @@ function generateItemTemplate(type, opts = {}) {
           <td style="font-family:monospace;font-size:12px">${escHtml(b.standard||'')} ${escHtml(b.std_number||'')}</td>
           <td>${escHtml(b.material||'')}</td>
           <td style="text-align:right;font-family:monospace">${fmtN(b.quantity,0)}</td>
-          <td>${escHtml(b.unit||'pcs')}</td>
+          <td>${escHtml(_unit(b.unit))}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
@@ -773,7 +773,7 @@ async function generateDoc(id, type) {
     let html = '<tr style="border-bottom:1px solid #e5e7eb">'
       +'<td style="padding:8px 6px">'+escHtml(p.description)+(p.item_number?' <span style="font-size:13px;color:#6b7280">['+p.item_number+']</span>':'')
       +(p.notes?'<br><span style="font-size:13px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
-      +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+p.unit+'</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+_unit(p.unit)+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtP(p.unit_price)+'</td>'
       +(hasDiscount?(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>'):'')
       +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtP(lineTotal)+'</td>'
@@ -782,7 +782,7 @@ async function generateDoc(id, type) {
       html += p.sub_items.map(s =>
         '<tr style="background:#f9fafb">'
         +'<td style="padding:4px 6px 4px 22px;color:#6b7280;font-size:13px">↳ '+(s.item_type==='asm'?'📦':s.item_type==='doc'?'📄':'🔩')+' '+escHtml(s.item_number)+' – '+escHtml(s.name)+'</td>'
-        +'<td style="padding:4px 6px;text-align:right;font-size:13px;color:#6b7280">'+s.quantity+' '+s.unit+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;font-size:13px;color:#6b7280">'+s.quantity+' '+_unit(s.unit)+'</td>'
         +'<td style="padding:4px 6px"></td>'
         +(hasDiscount?'<td style="padding:4px 6px"></td>':'')
         +'<td style="padding:4px 6px"></td>'
@@ -1098,7 +1098,7 @@ async function generateDeliveryDoc(id) {
         <span style="background:rgba(255,255,255,.2);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${idx+1}</span>
         ${item.item_number?`<span style="font-family:monospace;font-size:13px;opacity:.8">${escHtml(item.item_number)}${item.effective_rev ? ' · rev' + escHtml(item.effective_rev.rev) : ''}</span>`:''}
         <span style="font-weight:600;font-size:13px;flex:1">${escHtml(item.description)}</span>
-        <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${item.unit}</span>
+        <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${_unit(item.unit)}</span>
       </div>
       ${item.rm_name?`<div style="padding:6px 14px;background:#f0f9ff;font-size:13px;color:#0369a1;border-bottom:1px solid #bae6fd">🧵 Rohmaterial: <strong>${escHtml(item.rm_name)}</strong>${item.rm_type?' · '+escHtml(item.rm_type):''}${item.rm_color?' · '+escHtml(item.rm_color):''}</div>`:''}
       ${item.hint_customer?`<div style="padding:8px 14px;background:#fef2f2;font-size:13px;color:#7f1d1d;border-bottom:2px solid #dc2626;white-space:pre-wrap"><b>⚠ Hinweis:</b> ${escHtml(item.hint_customer)}</div>`:''}
@@ -1201,7 +1201,7 @@ function partLabelHtml(d, it) {
       ${code ? `<div class="code">${escHtml(code)}</div>` : ''}
       <div class="name">${escHtml(it.item_name || it.description || '')}</div>
       ${it.item_number ? `<div class="num">${escHtml(it.item_number)}${rev ? ' · rev' + escHtml(rev) : ''}</div>` : ''}
-      <div class="meta">${escHtml(String(it.quantity ?? ''))} ${escHtml(it.unit || 'Stk')}${material ? ' · ' + escHtml(material) : ''}</div>
+      <div class="meta">${escHtml(String(it.quantity ?? ''))} ${escHtml(_unit(it.unit))}${material ? ' · ' + escHtml(material) : ''}</div>
       <div class="meta">${escHtml(d.number)}${date ? ' · ' + fmtD(date) : ''}</div>
     </div>
     ${qr ? `<div class="qr">${qr}</div>` : ''}
@@ -1300,7 +1300,7 @@ async function printBom(itemId, revId) {
       <td style="text-align:center">${b._std
         ? '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;font-size:11px">N</span>'
         : escH(b.item_type?.toUpperCase())}</td>
-      <td style="text-align:right;font-family:monospace"><strong>${b.quantity}</strong> ${escH(b.unit||'Stk')}</td>
+      <td style="text-align:right;font-family:monospace"><strong>${b.quantity}</strong> ${escH(_unit(b.unit))}</td>
       ${b._std ? '<td style="color:#9ca3af;font-size:12px">—</td>' : `<td style="font-family:monospace;font-size:12px;color:#6b7280">${b.child_active_rev?'rev'+b.child_active_rev.rev:'—'}</td>`}
     </tr>`).join('');
 

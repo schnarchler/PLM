@@ -620,6 +620,9 @@ Placeholders use braces: `_t('… und {n} weitere', { n: 3 })`. A missing entry 
 the German text, so the interface can be translated file by file. Static text in
 `index.html` (text, `title`, `placeholder`) is translated once on load without any markup;
 `data-no-i18n` excludes an element. `npm test` checks that every `_t('…')` has an entry.
+Units are stored as language-neutral codes (`pcs`, `set`, `flat`; physical units such as
+`g`, `m`, `h` as they are). The server turns input like "Stk" or "Stück" into `pcs`, and
+`_unit()` shows the code in the interface language.
 
 Status of the English interface: navigation, dashboard and the whole PLM area (projects,
 items, data sheet, BOM, revisions, change requests, mind map, check-out/check-in, time
@@ -801,3 +804,11 @@ The most important test files:
 
 The server tests each start their own server (own port) with an empty throwaway database;
 `frontend.test.js` tests pure frontend functions without a server and without a browser.
+
+---
+
+## Support
+
+This project is developed in my spare time and is free to use. If it saves you work, I'd be happy about a coffee:
+
+[![ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/schnarchler)

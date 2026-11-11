@@ -105,7 +105,7 @@ async function renderDashboard() {
       return row(`gotoView('inventory');openInventoryDetail(${i.id})`,
         `<span style="display:block;width:7px;height:7px;border-radius:50%;background:${col}"></span>`,
         esc(i.name), [i.color, i.material].filter(Boolean).map(esc).join(' · '),
-        `<span style="font-family:var(--mono);font-size:13px;color:${col}">${fmtN(i.stock_qty, 1)} / min ${fmtN(i.min_qty, 1)} ${esc(i.unit || '')}</span>`);
+        `<span style="font-family:var(--mono);font-size:13px;color:${col}">${fmtN(i.stock_qty, 1)} / min ${fmtN(i.min_qty, 1)} ${esc(_unit(i.unit))}</span>`);
     }),
   ].join('');
 
