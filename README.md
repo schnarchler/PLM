@@ -14,9 +14,9 @@ Runs locally on Linux and Windows: no internet connection, no cloud, no account.
 - **3D printing:** print parameters read straight from `.3mf` files (PrusaSlicer, OrcaSlicer,
   Bambu Studio, SuperSlicer), cost calculation from part weight, print time and labour
 
-> **Language:** the user interface and the [manual](HANDBUCH.md) are currently in German.
-> An English user interface is in progress. This README describes the program in English;
-> button and menu names refer to the planned English labels.
+> **Language:** the user interface is available in **English and German** (Settings →
+> Appearance), printed documents have their own language (Settings → Company). The
+> [manual](HANDBUCH.md) and the [quick start](SCHNELLSTART.md) are currently in German.
 
 ---
 
@@ -604,7 +604,7 @@ the reference for the English translation of the interface.
 | Beleg | **Document** | printed or PDF document: invoice, quote, delivery note … |
 
 Number prefixes: existing databases keep their prefixes (AUF, LS, EK, KD, LF). New
-installations with the English interface start with English defaults (ORD, PO, CUS, SUP …).
+installations with the English interface start with English defaults (ORD, PRD, PO, CUS, SUP).
 Prefixes remain configurable under Settings → Admin.
 
 ---
@@ -625,11 +625,17 @@ Units are stored as language-neutral codes (`pcs`, `set`, `flat`; physical units
 `g`, `m`, `h` as they are). The server turns input like "Stk" or "Stück" into `pcs`, and
 `_unit()` shows the code in the interface language.
 
-Status of the English interface: navigation, dashboard, the whole PLM area (projects,
-items, data sheet, BOM, revisions, change requests, mind map, check-out/check-in, time
-tracking) and the ERP views (customers, orders, production, inventory, raw material,
-standard parts, purchasing, traceability) and all printed documents are done. Settings,
-server messages and history entries follow step by step.
+The whole interface, the start screen, all printed documents, the server's error messages
+and the history actions are translated. The server sends its messages in German and
+translates them into the language the browser sends (`X-PLM-Lang`), using the same
+`lang/en.js`; `npm test` requires an English entry for every fixed server message. History
+entries are stored in German as before; their action is translated when shown, details stay
+as recorded.
+
+**New installations:** the first time an empty installation is opened, PLM stores the
+browser language. With English it also starts with English defaults: payment terms, invoice
+and quote footers, classifications (In-house part, Purchased part, …) and number prefixes
+(ORD, PRD, CUS, PO, SUP). Existing installations keep German and their own texts.
 
 **Document language:** printed documents (invoice, quote, delivery note, purchase order, data
 sheet, BOM, inspection report, labels, thermal printer receipts) have their own language under

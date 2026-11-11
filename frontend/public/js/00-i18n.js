@@ -96,7 +96,13 @@ async function setLang(l) {
 // sich auch merken kann — sonst würde die Seite endlos neu laden.
 function _syncLang() {
   const l = state.settings?.ui_lang;
-  if (!LANGS[l] || l === LANG) return;
+  // Noch nichts gewählt (neue Installation): die erkannte Sprache festhalten —
+  // der Server legt dann Vorgaben wie Fusszeilen in dieser Sprache an
+  if (!LANGS[l]) {
+    api('/api/settings', 'PUT', { ui_lang: LANG }).then(s => { if (s) state.settings = s; }).catch(() => {});
+    return;
+  }
+  if (l === LANG) return;
   try { localStorage.setItem('plm.lang', l); if (localStorage.getItem('plm.lang') === l) location.reload(); } catch {}
 }
 

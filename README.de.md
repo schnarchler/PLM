@@ -587,11 +587,19 @@ Datenbank (`pcs`, `set`, `flat`; physikalische wie `g`, `m`, `h` unverändert). 
 aus Eingaben wie „Stk“ oder „Stück“ `pcs`, `_unit()` zeigt den Code in der Sprache der Oberfläche. `npm test` prüft, dass jedes
 `_t('…')` einen Eintrag hat. Englische Begriffe: Glossar im englischen README (Terminology).
 
-Stand der englischen Oberfläche: Navigation, Dashboard, der ganze PLM-Bereich (Projekte,
-Items, Datenblatt, Stückliste, Revisionen, Änderungsanträge, Mindmap, Check-out/Check-in,
-Zeiterfassung) und die ERP-Ansichten (Kunden, Aufträge, Produktion, Lager, Rohmaterial,
-Normteile, Einkauf, Rückverfolgung) und alle Belege sind übersetzt. Einstellungen, Meldungen
-des Servers und Einträge der Historie folgen Schritt für Schritt.
+Übersetzt sind die ganze Oberfläche, der Startbildschirm, alle Belege, die Fehlermeldungen
+des Servers und die Aktionen der Historie. Der Server schreibt seine Meldungen deutsch und
+übersetzt sie in die Sprache, die der Browser mitschickt (`X-PLM-Lang`) — mit derselben
+`lang/en.js`; `npm test` verlangt für jede feste Servermeldung einen englischen Eintrag.
+Die Historie steht weiterhin deutsch in der Datenbank; die Aktion wird bei der Anzeige
+übersetzt, die Details bleiben, wie sie aufgezeichnet wurden.
+
+**Neue Installationen:** Beim ersten Öffnen einer leeren Installation merkt sich PLM die
+Sprache des Browsers. Mit Englisch beginnt sie auch mit englischen Vorgaben:
+Zahlungsbedingungen, Fusszeilen von Rechnung und Angebot, Klassifizierungen (In-house part,
+Purchased part, …) und Nummernpräfixe (ORD, PRD, CUS, PO, SUP). Bestehende Installationen
+behalten Deutsch und ihre eigenen Texte. Das Präfix der Lieferanten steht neu in der
+Einstellung `prefix_supplier` (Vorgabe LF).
 
 **Sprache der Belege:** Gedruckte Belege (Rechnung, Angebot, Lieferschein, Bestellung,
 Datenblatt, Stückliste, Prüfprotokoll, Etiketten, Belege des Thermodruckers) haben eine eigene

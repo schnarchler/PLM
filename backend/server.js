@@ -682,7 +682,7 @@ function applySchema() {
     number TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     email TEXT, phone TEXT, address TEXT, notes TEXT,
-    street TEXT, postal_code TEXT, city TEXT, country TEXT DEFAULT 'Deutschland',
+    street TEXT, postal_code TEXT, city TEXT, country TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )`);
 
@@ -1588,7 +1588,7 @@ function nextDeliveryNumber() {
   const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
   return pre + '-' + yr + padN(nextCounter('delivery'), 'pad_delivery', 3);
 }
-function nextSupplierNumber() { return 'LF-' + String(nextCounter('supplier')).padStart(4, '0'); }
+function nextSupplierNumber() { return getSetting('prefix_supplier', 'LF') + '-' + String(nextCounter('supplier')).padStart(4, '0'); }
 function nextPoNumber() {
   const pre = getSetting('prefix_po','EK');
   const yr = getSetting('num_yearly','1') !== '0' ? new Date().getFullYear()+'-' : '';
@@ -4881,7 +4881,7 @@ app.post('/api/customers', (req, res) => {
   if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const number = nextCustomerNumber();
   const id = runGetId('INSERT INTO customers (number,name,email,phone,street,postal_code,city,country,notes) VALUES (?,?,?,?,?,?,?,?,?)',
-    [number, name, email||'', phone||'', street||'', postal_code||'', city||'', country||'Deutschland', notes||'']);
+    [number, name, email||'', phone||'', street||'', postal_code||'', city||'', country||'', notes||'']);
   log('customer', id, 'Erstellt', `${number} – ${name}`);
   res.json(get('SELECT * FROM customers WHERE id=?', [id]));
 });
@@ -4916,7 +4916,7 @@ app.put('/api/customers/:id', (req, res) => {
   const { name, email, phone, street, postal_code, city, country, notes } = req.body;
   const before = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
   run('UPDATE customers SET name=?,email=?,phone=?,street=?,postal_code=?,city=?,country=?,notes=? WHERE id=?',
-    [name, email, phone, street, postal_code, city, country||'Deutschland', notes, req.params.id]);
+    [name, email, phone, street, postal_code, city, country||'', notes, req.params.id]);
   const after = get('SELECT * FROM customers WHERE id=?', [req.params.id]);
   if (before) logChanges('customer', before.id, before, after, CUSTOMER_HIST);
   res.json(after);
@@ -6067,7 +6067,38 @@ app.delete('/api/settings/logo', (req, res) => {
 // (/api/checkout-dir — es steht in plm.config, pro PC) und der Datenstand
 const SETTINGS_ELSEWHERE = [...LOGO_KEYS, 'checkout_dir', 'data_stand'];
 
+// Neue, noch leere Installation: Beim ersten Festlegen der Sprache bekommen die
+// Vorgaben (Fusszeilen, Zahlungsbedingungen, Klassifizierungen, Nummernpräfixe)
+// diese Sprache. Nur einmal und nur, solange sie noch den deutschen Vorgaben
+// entsprechen — bestehende Installationen und eigene Texte bleiben unberührt.
+const FRESH_DEFAULTS = {
+  en: {
+    settings: {
+      default_payment_terms: ['30 Tage netto', '30 days net'],
+      invoice_footer: ['Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen. Vielen Dank!', 'Please pay the amount in accordance with the payment terms. Thank you!'],
+      quote_footer: ['Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.', 'This quote is non-binding. Prices excl. VAT unless stated otherwise.'],
+    },
+    prefixes: { prefix_order: 'ORD', prefix_delivery: 'PRD', prefix_customer: 'CUS', prefix_po: 'PO', prefix_supplier: 'SUP' },
+    classifications: [['In-house part', '#9db4ff'], ['Purchased part', '#79dde3'], ['Standard part', '#f5c061'],
+      ['Semi-finished product', '#c4a2ff'], ['Raw material', '#9aa3b2']],
+  },
+};
+function isFreshInstall() {
+  return !['projects', 'items', 'customers', 'orders', 'deliveries', 'suppliers', 'purchase_orders', 'inventory_items',
+    'raw_materials', 'standard_parts'].some(t => get(`SELECT 1 AS y FROM ${t} LIMIT 1`));
+}
+function applyFreshDefaults(lang) {
+  const d = FRESH_DEFAULTS[lang];
+  if (!d || getSetting('fresh_defaults_lang', '') || !isFreshInstall()) return;
+  const set = (k, v) => db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, v]);
+  for (const [k, [de, other]] of Object.entries(d.settings)) if (getSetting(k, de) === de) set(k, other);
+  for (const [k, v] of Object.entries(d.prefixes)) if (!getSetting(k, '')) set(k, v);
+  if (!getSetting('item_classifications', '')) set('item_classifications', JSON.stringify(d.classifications.map(([name, color]) => ({ name, color }))));
+  set('fresh_defaults_lang', lang);
+}
+
 app.put('/api/settings', (req, res) => {
+  if (req.body?.ui_lang) applyFreshDefaults(req.body.ui_lang);
   Object.entries(req.body).filter(([k]) => !SETTINGS_ELSEWHERE.includes(k)).forEach(([k, v]) => {
     db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, String(v??'')]);
   });

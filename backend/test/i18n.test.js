@@ -177,6 +177,15 @@ test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deuts
       headers: { 'Content-Type': 'application/json', Origin: `http://127.0.0.1:${PORT}` }, body: JSON.stringify({ ui_lang: 'en' }) });
     assert.strictEqual(r.status, 200);
     assert.strictEqual((await settings()).ui_lang, 'en');
+    // Leere Installation, erste Wahl Englisch: Vorgaben auf Englisch
+    const st = await settings();
+    assert.strictEqual(st.default_payment_terms, '30 days net');
+    assert.match(st.invoice_footer, /^Please pay/);
+    assert.deepStrictEqual([st.prefix_order, st.prefix_delivery, st.prefix_customer, st.prefix_po, st.prefix_supplier], ['ORD', 'PRD', 'CUS', 'PO', 'SUP']);
+    assert.deepStrictEqual(JSON.parse(st.item_classifications).map(c => c.name)[0], 'In-house part');
+    const sup = await fetch(`http://127.0.0.1:${PORT}/api/suppliers`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Supplier Ltd' }) }).then(r => r.json());
+    assert.match(sup.number, /^SUP-/);
     await stopServer(proc);
 
     // Datenbank aus der Zeit vor der Übersetzung: Daten da, keine Sprache, Migration nie gelaufen
@@ -185,10 +194,16 @@ test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deuts
     db.run("DELETE FROM applied_migrations WHERE key='ui-lang-existing-v1'");
     db.run("DELETE FROM applied_migrations WHERE key='doc-lang-existing-v1'");
     db.run("INSERT INTO customers (number, name) VALUES ('KD-0001', 'Muster AG')");
+    db.run("UPDATE settings SET value='30 Tage netto' WHERE key='default_payment_terms'");
+    db.run("DELETE FROM settings WHERE key='fresh_defaults_lang'");
     fs.writeFileSync(path.join(dir, 'plm.db'), Buffer.from(db.export()));
     proc = await startServer(dir);
     assert.strictEqual((await settings()).ui_lang, 'de');
     assert.strictEqual((await settings()).doc_lang, 'de', 'bestehende Belege bleiben deutsch');
+    // Bestehende Daten: eine spätere Sprachwahl ändert keine Vorgaben
+    const fresh = await fetch(`http://127.0.0.1:${PORT}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ui_lang: 'en' }) }).then(r => r.json());
+    assert.strictEqual(fresh.default_payment_terms, '30 Tage netto', 'mit Daten bleibt alles, wie es war');
   } finally {
     await stopServer(proc).catch(() => {});
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
