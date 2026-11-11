@@ -1073,12 +1073,13 @@ diese Seite speichert. Listen wie Drucker, Personen oder Sicherungen ändern sic
 nächsten Öffnen erscheint die zuletzt gewählte Seite.
 
 > Arbeiten mehrere Personen mit PLM, sehen **User** und **Superuser** hier nur ihre persönlichen
-> Einstellungen: Darstellung, Person wechseln und eigene PIN. Alle übrigen Seiten verwaltet ein Admin.
+> Einstellungen: Darstellung, Person wechseln, eigene PIN und Version. Alle übrigen Seiten verwaltet ein Admin.
 
 | Gruppe | Seite | Inhalt |
 |---|---|---|
 | Allgemein | **Darstellung** | Sprache, Schriftgrösse, Farbdesign |
 | | **Benutzer** | wer mit PLM arbeitet, Rollen, PIN |
+| | **Version** | laufende Version, nach Updates suchen, Änderungen |
 | Daten | **Sicherung & Export** | Sicherungen, Export, Datei-Index (siehe 21) |
 | | **Speicherort** | Speicherbelegung, Datenpfad, Daten verschieben |
 | Firma & Belege | **Firma** | Briefkopf, Logo, Bankangaben |
@@ -1116,6 +1117,12 @@ Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Pas
 
 > Die Benutzerverwaltung schützt nicht vor Absicht: Wer im Netz Zugriff auf PLM hat, kann ohne
 > PIN jede Kachel wählen. Sie dient der Nachvollziehbarkeit.
+
+### Version
+- **Installiert** — laufende Version mit Commit, Datum und Art der Installation (Git oder ZIP-Download). Darunter der Update-Stand: **↻ Nach Updates suchen** fragt sofort nach; gibt es Neues, öffnet sich das Update-Fenster (**Details und installieren**).
+- **Änderungen** — was sich bis zur laufenden Version geändert hat, nach Tagen gruppiert, das Neuste zuoberst, mit der Versionsnummer jeder Änderung. **Ältere anzeigen** lädt weitere (bis 200). Eine ZIP-Kopie holt die Liste von GitHub und kennt nur die Nummer des laufenden Stands.
+
+Auch User und Superuser sehen diese Angaben in ihren persönlichen Einstellungen.
 
 ### Speicherort
 - Oben die Speicherbelegung (Datenbank, Dateien, Papierkorb) und die Pfade von Datenbank, Dateien und Konfigdatei.

@@ -331,7 +331,7 @@ When adding a line, the following costs can be calculated automatically:
 Sections by topic on the left, the page on the right; every page with inputs has its own Save
 button. Settings reopen on the page used last.
 - **General**: **Appearance** (language, font size, design), **Users** (user, superuser, admin;
-  names in history and release)
+  names in history and release), **Version** (running version, updates, what has changed)
 - **Data**: **Backup & export** (create, download and restore backups; export, file index),
   **Storage location** (data path, moving the data)
 - **Company & documents**: **Company** (letterhead, logo, bank), **Documents & prices** (VAT, hourly

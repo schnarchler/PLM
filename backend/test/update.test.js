@@ -86,6 +86,26 @@ test('Update: aktueller Stand meldet nichts', async () => {
   assert.strictEqual(u.behind, 0);
 });
 
+test('Versionsverlauf: Commits bis zum laufenden Stand, mit Versionsnummer, neuste zuerst', async () => {
+  const repo = path.join(tmp, 'verlauf');
+  fs.mkdirSync(repo);
+  git(repo, 'init', '-q', '-b', 'main');
+  for (const m of ['Anfang', 'Sicherungen jährlich', 'Einstellungen neu']) commit(repo, m);
+  const base = await startServer(repo);
+  const v = await (await fetch(base + '/api/version')).json();
+  const h = await (await fetch(base + '/api/version/history')).json();
+  assert.strictEqual(h.source, 'git');
+  assert.deepStrictEqual(h.commits.map(c => c.subject), ['Einstellungen neu', 'Sicherungen jährlich', 'Anfang']);
+  assert.strictEqual(h.commits[0].commit, v.commit, 'zuoberst der laufende Stand');
+  assert.strictEqual(h.commits[0].version, v.version);
+  assert.deepStrictEqual(h.commits.map(c => c.version.split('.').pop()), ['3', '2', '1']);
+  assert.ok(h.commits.every(c => c.date));
+  // Neuer Commit ohne Neustart: es läuft weiter der alte Stand
+  commit(repo, 'Noch nicht gestartet');
+  const lim = await (await fetch(base + '/api/version/history?limit=2')).json();
+  assert.deepStrictEqual(lim.commits.map(c => c.subject), ['Einstellungen neu', 'Sicherungen jährlich']);
+});
+
 test('Update: neue Commits auf dem Remote werden mit Version und Liste gemeldet', async () => {
   commit(dev, 'Neue Funktion');
   commit(dev, 'Fehler behoben');
@@ -156,7 +176,7 @@ function zipCopy(name, stand) {
 
 // Schein-GitHub: Vergleich mit HEAD, Anzahl Commits über den Link-Header
 // (ein Commit pro Seite), package.json des neusten Stands
-async function fakeGithub({ status, ahead = 0, total, commits = [], pkgVersion = '2.0.0', zip = null }) {
+async function fakeGithub({ status, ahead = 0, total, commits = [], pkgVersion = '2.0.0', zip = null, history = [] }) {
   const seen = [];
   const srv = http.createServer((req, res) => {
     seen.push(req.url);
@@ -164,6 +184,10 @@ async function fakeGithub({ status, ahead = 0, total, commits = [], pkgVersion =
     res.setHeader('Content-Type', 'application/json');
     if (/^\/repos\/[^/]+\/[^/]+\/compare\/[0-9a-f]{40}\.\.\.HEAD$/.test(p)) {
       return res.end(JSON.stringify({ status, ahead_by: ahead, behind_by: 0, commits }));
+    }
+    // Verlauf ab einem bestimmten Stand (Einstellungen → Version)
+    if (/^\/repos\/[^/]+\/[^/]+\/commits$/.test(p) && new URL(req.url, 'http://x').searchParams.get('sha') !== 'HEAD') {
+      return res.end(JSON.stringify(history));
     }
     if (/^\/repos\/[^/]+\/[^/]+\/commits$/.test(p)) {
       res.setHeader('Link', `<http://x${p}?sha=HEAD&per_page=1&page=2>; rel="next", <http://x${p}?sha=HEAD&per_page=1&page=${total}>; rel="last"`);
@@ -199,6 +223,21 @@ test('Update: ZIP-Download aktuell — Stand aus version.json, Nummer von GitHub
   assert.strictEqual(v.commit, SHA.slice(0, 7));
   assert.strictEqual(v.date, '2026-10-25T14:05:31+01:00');
   assert.match(v.version, /^\d+\.\d+\.312$/);
+});
+
+test('Versionsverlauf: ZIP-Download fragt GitHub ab dem eigenen Stand', async () => {
+  const gh = await fakeGithub({ status: 'identical', total: 312, history: [
+    { sha: SHA, commit: { message: 'Einstellungen neu\n\nDetails', committer: { date: '2026-11-11T10:00:00Z' } } },
+    { sha: 'b'.repeat(40), commit: { message: 'Sicherungen jährlich', committer: { date: '2026-11-10T10:00:00Z' } } },
+  ] });
+  const base = await startServer(zipCopy('zip-verlauf', { commit: SHA, date: '2026-11-11T10:00:00Z' }), { PLM_GITHUB_API: gh.url });
+  await update(base);   // GitHub nennt die Nummer des laufenden Stands
+  const h = await (await fetch(base + '/api/version/history')).json();
+  assert.strictEqual(h.source, 'zip');
+  assert.deepStrictEqual(h.commits.map(c => [c.commit, c.subject]), [[SHA.slice(0, 7), 'Einstellungen neu'], ['bbbbbbb', 'Sicherungen jährlich']]);
+  assert.match(h.commits[0].version, /^\d+\.\d+\.312$/, 'der laufende Stand mit Nummer');
+  assert.strictEqual(h.commits[1].version, null);
+  assert.ok(gh.seen.some(s => s.includes(`/commits?sha=${SHA}&per_page=40`)), 'fragt ab dem Commit aus version.json');
 });
 
 test('Update: ZIP-Download hinter GitHub — neue Commits, Version und ZIP-Link', async () => {

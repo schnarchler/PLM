@@ -6527,10 +6527,15 @@ async function _github(url, timeout = 10000) {
     : r.status === 403 || r.status === 429 ? 'GitHub-Abfragelimit erreicht, später erneut' : 'GitHub antwortet mit ' + r.status);
 }
 
-async function checkGithubUpdate(res) {
+// „besitzer/name“ aus package.json, sonst null
+function _githubRepo() {
   const m = String(require('./package.json').repository?.url || '').match(/github\.com[/:]([^/]+)\/(.+?)(?:\.git)?\/?$/);
-  if (!m) return { ...res, error: 'Kein GitHub-Repository in package.json' };
-  const repo = m[1] + '/' + m[2];
+  return m ? m[1] + '/' + m[2] : null;
+}
+
+async function checkGithubUpdate(res) {
+  const repo = _githubRepo();
+  if (!repo) return { ...res, error: 'Kein GitHub-Repository in package.json' };
   Object.assign(res, { upstream: 'github.com/' + repo, download: `https://github.com/${repo}/archive/HEAD.zip`, repo });
   try {
     const cmp = await (await _github(`/repos/${repo}/compare/${APP_VERSION.sha}...HEAD`)).json();
@@ -6557,6 +6562,52 @@ async function checkGithubUpdate(res) {
   } catch (e) { res.error = e.message; }
   return res;
 }
+
+// ── VERSIONSVERLAUF ───────────────────────────────────────────
+// Einstellungen → Version: Was hat sich bis zum laufenden Stand geändert?
+// Die Commits ab dem laufenden Commit rückwärts, im Git-Checkout mit der
+// Versionsnummer jedes Commits (Major.Minor aus package.json + Anzahl
+// Commits bis dorthin). Eine ZIP-Kopie fragt GitHub; dort kennt nur der
+// laufende Stand seine Nummer. Der Stand ändert sich erst mit einem
+// Neustart, darum wird das Ergebnis je Anzahl gemerkt.
+const _historyCache = new Map();
+async function versionHistory(limit) {
+  if (!APP_VERSION.commit) return { commits: [], source: null, error: 'Kein Git-Stand' };
+  const pkg = require('./package.json').version || '0.0.0';
+  if (APP_VERSION.source === 'git') {
+    const log = await _gitBg(['log', '-n', String(limit), '--format=%h%x1f%cI%x1f%s', APP_VERSION.commit]);
+    const commits = await Promise.all(log.split('\n').filter(Boolean).map(async line => {
+      const [commit, date, subject] = line.split('\x1f');
+      const count = await _gitBg(['rev-list', '--count', commit]).catch(() => null);
+      return { commit, date, subject, version: count ? _versionOf(pkg, count) : null };
+    }));
+    return { commits, source: 'git' };
+  }
+  const repo = _githubRepo();
+  if (!repo) return { commits: [], source: 'zip', error: 'Kein GitHub-Repository in package.json' };
+  const list = await (await _github(`/repos/${repo}/commits?sha=${APP_VERSION.sha}&per_page=${limit}`)).json();
+  return { source: 'zip', commits: (Array.isArray(list) ? list : []).map(c => ({
+    commit: String(c.sha || '').slice(0, 7), date: c.commit?.committer?.date || null,
+    subject: String(c.commit?.message || '').split('\n')[0], version: null,
+  })) };
+}
+
+app.get('/api/version/history', async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 40, 1), 200);
+  let h = _historyCache.get(limit);
+  if (!h) {
+    h = versionHistory(limit);
+    _historyCache.set(limit, h);
+    // Fehler (z. B. GitHub nicht erreichbar) nicht merken — nächstes Mal neu versuchen
+    h.catch(() => _historyCache.delete(limit));
+  }
+  try {
+    const out = await h;
+    // ZIP: Die Nummer des laufenden Stands kennt PLM erst nach der Update-Prüfung
+    const known = out.source === 'zip' && APP_VERSION.version.split('.').length === 3 ? APP_VERSION.version : null;
+    res.json(known && out.commits[0] ? { ...out, commits: [{ ...out.commits[0], version: known }, ...out.commits.slice(1)] } : out);
+  } catch (e) { res.json({ commits: [], source: APP_VERSION.source, error: e.message }); }
+});
 
 // fresh: Klick auf die Version — sofort neu prüfen statt des gemerkten
 // Ergebnisses. Läuft gerade eine Prüfung, wird auf diese gewartet.

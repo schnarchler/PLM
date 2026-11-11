@@ -401,6 +401,8 @@ body {
 .st-nav-group { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
   color: var(--t3); margin: 18px 0 6px 10px; }
 .st-nav-group:first-child { margin-top: 2px; }
+/* Linie zwischen den Gruppen wie im linken Menü (.nav-sep) */
+.st-nav-group:not(:first-child)::before { content: ''; display: block; height: 1px; background: var(--line); margin: 0 0 14px -10px; }
 .st-nav-btn { text-align: left; padding: 6px 10px; border: none; border-radius: var(--r-sm); background: none;
   color: var(--t2); font-size: 13px; cursor: pointer; font-family: inherit; }
 .st-nav-btn:hover { background: var(--bg2); color: var(--t1); }
@@ -445,6 +447,19 @@ body {
 .st-subtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
 .st-subtabs button { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 6px 14px;
   cursor: pointer; font-size: 13px; color: var(--t3); font-family: inherit; }
+.st-ver { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.st-ver-num { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--t1); }
+.st-ver-facts { font-size: 13px; color: var(--t3); }
+.st-ver-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--line); font-size: 13px; }
+.st-ver-status #st-ver-check { margin-left: auto; }
+.st-hist-day { font-size: 12px; font-weight: 600; color: var(--t3); margin: 14px 0 4px; }
+.st-hist-day:first-child { margin-top: 0; }
+.st-hist-row { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--t2); }
+.st-hist-ver { font-family: var(--mono); font-size: 12px; color: var(--blue); }
+.st-hist-subj { overflow-wrap: anywhere; }
+.st-hist-hash { font-family: var(--mono); font-size: 11.5px; color: var(--t4); }
 .st-subtabs button.active { color: var(--red); border-bottom-color: var(--red); font-weight: 600; }
 @media (max-width: 900px) {
   .st-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }

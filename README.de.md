@@ -301,7 +301,7 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 Links die Bereiche nach Thema, rechts die Seite; jede Seite mit Eingaben hat ihren eigenen
 Speichern-Knopf. Beim Öffnen erscheint die zuletzt gewählte Seite.
 - **Allgemein** – **Darstellung** (Sprache, Schriftgrösse, Design), **Benutzer** (User, Superuser,
-  Admin; Namen in Historie und Freigabe)
+  Admin; Namen in Historie und Freigabe), **Version** (laufende Version, Updates, was sich geändert hat)
 - **Daten** – **Sicherung & Export** (Sicherungen anlegen, herunterladen, wiederherstellen; Export,
   Datei-Index), **Speicherort** (Datenpfad, Daten verschieben)
 - **Firma & Belege** – **Firma** (Briefkopf, Logo, Bank), **Belege & Preise** (MwSt., Stundensatz,

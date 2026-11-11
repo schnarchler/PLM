@@ -7,7 +7,7 @@
 // Funktionen lesen ihre Felder per ID, auch die von anderen Seiten.
 const ST_PAGE_KEY = 'plm.settingsPage';
 const ST_NAV = () => [
-  [_t('Allgemein'), [['darstellung', _t('Darstellung')], ['benutzer', _t('Benutzer')]]],
+  [_t('Allgemein'), [['darstellung', _t('Darstellung')], ['benutzer', _t('Benutzer')], ['version', _t('Version')]]],
   [_t('Daten'), [['sicherung', _t('Sicherung & Export')], ['speicherort', _t('Speicherort')]]],
   [_t('Firma & Belege'), [['firma', _t('Firma')], ['belege', _t('Belege & Preise')], ['bon', _t('Bon & Etiketten')], ['nummern', _t('Nummerierung')]]],
   ['PLM', [['klass', _t('Klassifizierungen')], ['freigabe', _t('Freigabe')], ['pruef', _t('Prüfprotokoll')]]],
@@ -17,6 +17,7 @@ const ST_NAV = () => [
 // Beim Anzeigen neu laden: Listen, die sich anderswo ändern
 const ST_ON_SHOW = {
   benutzer: () => _renderUsersSettings(),
+  version: () => _renderVersionPage(),
   sicherung: () => loadBackupList(),
   loeschen: () => _loadDelTab(),
 };
@@ -79,7 +80,9 @@ function _renderPersonalSettings() {
           <button class="btn btn-ghost btn-sm" onclick="openOwnPinModal()">${u?.has_pin ? _t('PIN ändern') : _t('PIN setzen')}</button>
           ${u?.has_pin ? '<button class="btn btn-ghost btn-sm" onclick="openOwnPinModal(true)">' + _t('PIN entfernen') + '</button>' : ''}
         </div>`)}
+      ${_versionCards()}
     </div>`);
+  _renderVersionPage();
 }
 
 async function renderSettings(page) {
@@ -114,6 +117,8 @@ async function renderSettings(page) {
 
     _stPage('benutzer', _t('Benutzer'), _t('Wer mit PLM arbeitet und was die Person darf.'),
       _stCard('', '', `<div id="st-users-box" class="st-muted">${_t('Lädt…')}</div>`)),
+
+    _stPage('version', _t('Version'), _t('Welche Version läuft und was sich geändert hat.'), _versionCards()),
 
     // ── Daten
     _stPage('sicherung', _t('Sicherung & Export'), '',
@@ -363,6 +368,91 @@ async function renderSettings(page) {
   let last = page;
   if (!last) try { last = localStorage.getItem(ST_PAGE_KEY); } catch {}
   _stTab(last || 'darstellung');
+}
+
+// ── VERSION ───────────────────────────────────────────────────
+// Laufende Version mit Update-Status (wie der Punkt an der Version unten
+// links) und die Änderungen bis zum laufenden Stand, nach Tagen gruppiert.
+const HISTORY_STEP = 40, HISTORY_MAX = 200;
+let _historyLimit = HISTORY_STEP;
+
+function _versionCards() {
+  return _stCard(_t('Installiert'), '', `<div id="st-ver-box" class="st-muted">${_t('Lädt…')}</div>`)
+    + _stCard(_t('Änderungen'), _t('Was in den bisherigen Versionen geändert wurde — das Neuste zuoberst.'),
+      `<div id="st-hist-box" class="st-muted">${_t('Lädt…')}</div>`);
+}
+
+async function _renderVersionPage() {
+  if (!state.version) await loadVersion();
+  _renderVersionBox();
+  _renderHistory();
+}
+
+function _renderVersionBox() {
+  const box = document.getElementById('st-ver-box');
+  if (!box) return;
+  const v = state.version, u = state.update;
+  if (!v) { box.textContent = _t('Version unbekannt'); return; }
+  const facts = [
+    v.commit ? `<code class="st-code">${esc(v.commit)}</code>` : '',
+    v.date ? _t('Stand {date}', { date: new Date(v.date).toLocaleDateString(LOCALE) }) : '',
+    v.source === 'zip' ? _t('ZIP-Download ohne Git') : v.source === 'git' ? 'Git' : '',
+  ].filter(Boolean).join(' · ');
+  const status = !u ? `<span class="st-muted">${_t('Noch nicht nach Updates gesucht')}</span>`
+    : u.available ? `<span style="color:var(--blue);font-weight:600">${_t(u.behind === 1 ? 'Version {v} verfügbar (1 neuer Commit)' : 'Version {v} verfügbar ({n} neue Commits)', { v: esc(u.version), n: u.behind })}</span>
+        <button class="btn btn-primary btn-sm" onclick="showUpdateDialog()">${_t('Details und installieren')}</button>`
+    : u.fetched ? `<span style="color:var(--green)">✓ ${_t('Aktuell — das ist die neuste Version')}</span>`
+    : `<span style="color:var(--amber)">${_t('Update-Prüfung nicht möglich')}${u.error ? ': ' + esc(u.error) : ''}</span>`;
+  box.innerHTML = `<div class="st-ver">
+      <div class="st-ver-num">v${esc(v.version)}</div>
+      <div class="st-ver-facts">${facts}</div>
+    </div>
+    ${v.dirty ? `<div class="st-note">${_t('mit Änderungen, die noch nicht committet sind')}</div>` : ''}
+    <div class="st-ver-status">${status}
+      <button class="btn btn-ghost btn-sm" id="st-ver-check" onclick="_checkUpdateFromSettings()">${_t('↻ Nach Updates suchen')}</button>
+    </div>`;
+}
+
+async function _checkUpdateFromSettings() {
+  const btn = document.getElementById('st-ver-check');
+  if (btn) { btn.disabled = true; btn.textContent = _t('Sucht…'); }
+  const ok = await checkUpdate(true);
+  _renderVersionBox();
+  if (!ok) toast(_t('Update-Prüfung fehlgeschlagen — PLM nicht erreichbar'), 'err');
+  else if (state.update?.available) showUpdateDialog();
+}
+
+async function _renderHistory() {
+  const box = document.getElementById('st-hist-box');
+  if (!box) return;
+  let h;
+  try { h = await api('/api/version/history?limit=' + _historyLimit); }
+  catch { box.textContent = _t('Änderungen konnten nicht geladen werden.'); return; }
+  if (!h.commits?.length) {
+    box.textContent = h.error ? _t('Änderungen konnten nicht geladen werden.') + ' ' + h.error : _t('Keine Änderungen gefunden.');
+    return;
+  }
+  const days = [];
+  for (const c of h.commits) {
+    const day = c.date ? new Date(c.date).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+    if (days[days.length - 1]?.day !== day) days.push({ day, rows: [] });
+    days[days.length - 1].rows.push(c);
+  }
+  const first = h.commits[0];
+  const more = h.commits.length >= _historyLimit && _historyLimit < HISTORY_MAX;
+  box.innerHTML = days.map(d => `<div class="st-hist-day">${esc(d.day)}</div>
+      ${d.rows.map(c => `<div class="st-hist-row">
+        <span class="st-hist-ver">${c.version ? 'v' + esc(c.version) : ''}</span>
+        <span class="st-hist-subj">${esc(c.subject)}${c === first ? ` <span class="chip" style="color:var(--green)">${_t('installiert')}</span>` : ''}</span>
+        <code class="st-hist-hash">${esc(c.commit)}</code>
+      </div>`).join('')}`).join('')
+    + (more ? `<button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="_moreHistory()">${_t('Ältere anzeigen')}</button>` : '')
+    + (h.error ? `<div class="st-note">${esc(h.error)}</div>` : '');
+}
+
+function _moreHistory() {
+  _historyLimit = Math.min(_historyLimit + HISTORY_STEP, HISTORY_MAX);
+  _renderHistory();
 }
 
 // Checkout-Verzeichnis: steht in plm.config, gilt also nur für diesen PC.
