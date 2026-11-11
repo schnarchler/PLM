@@ -151,6 +151,12 @@ async function renderSettings() {
         <div class="form-row cols3">
           ${fi('hourly_rate','Stundensatz (CHF/h)',s.hourly_rate,'z.B. 120','number')}
         </div>
+        <div class="sep-label">${_t('Sprache der Belege')}</div>
+        <div class="form-row cols3">
+          <div class="fg"><select class="fs" id="st-doc_lang">${Object.entries(LANGS).map(([code, name]) =>
+            `<option value="${code}"${_docLang() === code ? ' selected' : ''}>${name}</option>`).join('')}</select></div>
+        </div>
+        <div style="font-size:12px;color:var(--t3);margin:-4px 0 12px;line-height:1.5">${_t('Gilt für Rechnung, Angebot, Lieferschein, Bestellung, Datenblatt, Stückliste, Prüfprotokoll, Etiketten und die Belege des Thermodruckers — unabhängig von der Sprache der Oberfläche. Fusszeilen und Zahlungsbedingungen stehen so auf den Belegen, wie sie hier eingetragen sind.')}</div>
         <div class="sep-label">Dokument-Fussnoten</div>
         <div class="form-row">
           ${ft('invoice_footer','Fusszeile Rechnung',s.invoice_footer,'Zahlungshinweis, Bankverbindung …')}
@@ -806,7 +812,7 @@ async function saveSettings() {
     'bank_name','bank_iban','bank_bic',
     'default_tax_rate','quote_validity_days','default_payment_terms',
     'hourly_rate',
-    'invoice_footer','quote_footer','receipt_footer','receipt_line_width'];   // Checkout-Pfad: eigener Knopf
+    'invoice_footer','quote_footer','receipt_footer','receipt_line_width','doc_lang'];   // Checkout-Pfad: eigener Knopf
   const checkboxKeys = ['receipt_show_datetime','receipt_show_customer','receipt_show_item_number','receipt_show_notes','label_show_qr'];
   const body = {};
   keys.forEach(k => {

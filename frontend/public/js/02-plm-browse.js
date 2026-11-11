@@ -910,7 +910,7 @@ function renderItemSheet(item, activeRevId) {
   const ps = rev?.print_settings;
   if (ps) {
     // In Blöcken nach Thema; Bezeichnungen und Einheiten aus PRINT_PARAMS (01-core.js)
-    const label = key => PRINT_PARAMS.find(p => p[0] === key)?.[1] || key;
+    const label = key => printParamLabel(key);
     const cells = keys => keys.map(k => [label(k), fmtPrintParam(k, ps[k])])
       .filter(([, v]) => v !== null && v !== undefined && v !== '');
     const groups = _sheetGroups([

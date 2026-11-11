@@ -19,7 +19,7 @@ function _compareSearch(q) {
     const items = await api('/api/items-for-bom?q=' + encodeURIComponent(q)).catch(() => []);
     const base = window._compareBaseId;
     const filtered = items.filter(i => i.id !== base);
-    if (!filtered.length) { el.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; return; }
+    if (!filtered.length) { el.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--t3)">' + _t('Keine Treffer') + '</div>'; return; }
     el.innerHTML = filtered.map(i => `
       <div onclick="runItemCompare(${base},${i.id})"
         style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)"
@@ -53,18 +53,18 @@ function _renderCompare(a, b) {
 
   const metaHtml = `<table style="width:100%;border-collapse:collapse;margin-bottom:16px">
     <thead><tr>
-      <th style="padding:6px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;width:110px">Eigenschaft</th>
+      <th style="padding:6px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;width:110px">${_t('Eigenschaft')}</th>
       <th style="padding:6px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:13px;color:#1d4ed8;font-weight:700">${escHtml(a.item_number)}</th>
       <th style="padding:6px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:13px;color:#16a34a;font-weight:700">${escHtml(b.item_number)}</th>
     </tr></thead>
     <tbody>
       ${metaRow('Name', escHtml(a.name), escHtml(b.name))}
-      ${metaRow('Typ', a.item_type.toUpperCase(), b.item_type.toUpperCase())}
-      ${metaRow('Projekt', a.project?.number, b.project?.number)}
-      ${metaRow('Klassifizierung', a.classification, b.classification)}
-      ${metaRow('Gewicht (g)', a.effective_weight_g != null ? fmtN(a.effective_weight_g,1) : null, b.effective_weight_g != null ? fmtN(b.effective_weight_g,1) : null)}
-      ${metaRow('Preis (CHF)', a.default_price != null ? fmtN(a.default_price,2) : null, b.default_price != null ? fmtN(b.default_price,2) : null)}
-      ${metaRow('Akt. Revision', revA ? 'rev'+revA.rev+' ('+revA.status+')' : null, revB ? 'rev'+revB.rev+' ('+revB.status+')' : null)}
+      ${metaRow(_t('Typ'), a.item_type.toUpperCase(), b.item_type.toUpperCase())}
+      ${metaRow(_t('Projekt'), a.project?.number, b.project?.number)}
+      ${metaRow(_t('Klassifizierung'), a.classification, b.classification)}
+      ${metaRow(_t('Gewicht (g)'), a.effective_weight_g != null ? fmtN(a.effective_weight_g,1) : null, b.effective_weight_g != null ? fmtN(b.effective_weight_g,1) : null)}
+      ${metaRow(_t('Preis (CHF)'), a.default_price != null ? fmtN(a.default_price,2) : null, b.default_price != null ? fmtN(b.default_price,2) : null)}
+      ${metaRow(_t('Akt. Revision'), revA ? 'rev'+revA.rev+' ('+revA.status+')' : null, revB ? 'rev'+revB.rev+' ('+revB.status+')' : null)}
     </tbody></table>`;
 
   // BOM diff (only if both are ASM)
@@ -86,25 +86,25 @@ function _renderCompare(a, b) {
         <td style="font-size:13px;padding:4px 8px;border:1px solid #e5e7eb">${escHtml(item.name)}</td>
         <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${ra ? fmtN(ra.quantity,0)+' '+_unit(ra.unit) : '<span style="color:#d1d5db">—</span>'}</td>
         <td style="text-align:center;padding:4px 8px;border:1px solid #e5e7eb;font-family:monospace">${rb ? fmtN(rb.quantity,0)+' '+_unit(rb.unit) : '<span style="color:#d1d5db">—</span>'}</td>
-        <td style="padding:4px 8px;border:1px solid #e5e7eb;font-size:12px;color:${onlyA?'#dc2626':onlyB?'#16a34a':qtyDiff?'#d97706':'#9ca3af'}">${onlyA?'nur A':onlyB?'nur B':qtyDiff?'Mengenabw.':'='}</td>
+        <td style="padding:4px 8px;border:1px solid #e5e7eb;font-size:12px;color:${onlyA?'#dc2626':onlyB?'#16a34a':qtyDiff?'#d97706':'#9ca3af'}">${onlyA?_t('nur A'):onlyB?_t('nur B'):qtyDiff?_t('Mengenabw.'):'='}</td>
       </tr>`;
     }).join('');
 
-    bomHtml = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:16px 0 6px">Stückliste</div>
+    bomHtml = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:16px 0 6px">${_t('Stückliste')}</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
       <thead><tr>
-        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Item-Nummer</th>
-        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Name</th>
-        <th style="padding:5px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:11px;color:#1d4ed8">Menge A</th>
-        <th style="padding:5px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:11px;color:#16a34a">Menge B</th>
-        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;color:#6b7280">Diff</th>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">${_t('Item-Nummer')}</th>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">${_t('Name')}</th>
+        <th style="padding:5px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:11px;color:#1d4ed8">${_t('Menge A')}</th>
+        <th style="padding:5px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:11px;color:#16a34a">${_t('Menge B')}</th>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;color:#6b7280">${_t('Diff')}</th>
       </tr></thead>
-      <tbody>${rows || '<tr><td colspan="5" style="padding:8px;color:#9ca3af;text-align:center;border:1px solid #e5e7eb">Beide BOMs leer</td></tr>'}</tbody>
+      <tbody>${rows || '<tr><td colspan="5" style="padding:8px;color:#9ca3af;text-align:center;border:1px solid #e5e7eb">' + _t('Beide BOMs leer') + '</td></tr>'}</tbody>
     </table>
     <div style="display:flex;gap:16px;font-size:12px;color:#6b7280">
-      <span style="background:#fef2f2;padding:2px 8px;border-radius:4px">Rot = nur in A</span>
-      <span style="background:#f0fdf4;padding:2px 8px;border-radius:4px">Grün = nur in B</span>
-      <span style="background:#fef3c7;padding:2px 8px;border-radius:4px">Gelb = Mengenabweichung</span>
+      <span style="background:#fef2f2;padding:2px 8px;border-radius:4px">${_t('Rot = nur in A')}</span>
+      <span style="background:#f0fdf4;padding:2px 8px;border-radius:4px">${_t('Grün = nur in B')}</span>
+      <span style="background:#fef3c7;padding:2px 8px;border-radius:4px">${_t('Gelb = Mengenabweichung')}</span>
     </div>`;
   }
 
@@ -113,10 +113,10 @@ function _renderCompare(a, b) {
   const dsB = (revB?.datasets || []).map(d => d.ds_type + ':' + (d.original_filename || d.filename));
   const allDs = [...new Set([...dsA, ...dsB])].sort();
   const dsHtml = allDs.length ? `
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:16px 0 6px">Dateien (aktive Revision)</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin:16px 0 6px">${_t('Dateien (aktive Revision)')}</div>
     <table style="width:100%;border-collapse:collapse">
       <thead><tr>
-        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">Datei</th>
+        <th style="padding:5px 8px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:11px;text-align:left;color:#6b7280">${_t('Datei')}</th>
         <th style="padding:5px 8px;background:#eff6ff;border:1px solid #e5e7eb;font-size:11px;color:#1d4ed8;width:60px">A</th>
         <th style="padding:5px 8px;background:#f0fdf4;border:1px solid #e5e7eb;font-size:11px;color:#16a34a;width:60px">B</th>
       </tr></thead>
@@ -132,15 +132,15 @@ function _renderCompare(a, b) {
       }).join('')}</tbody>
     </table>` : '';
 
-  const html = `<!DOCTYPE html><html lang="de-CH"><head><meta charset="UTF-8">
-    <title>Vergleich ${escHtml(a.item_number)} ↔ ${escHtml(b.item_number)}</title>
+  const html = `<!DOCTYPE html><html lang="${LANG}"><head><meta charset="UTF-8">
+    <title>${_t('Vergleich')} ${escHtml(a.item_number)} ↔ ${escHtml(b.item_number)}</title>
     <style>body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:24px}
     h1{font-size:16px;font-weight:700;margin:0 0 16px;color:#111827}
     @media print{body{padding:12px}}</style>
     </head><body>
-    <h1>Vergleich ↔</h1>
+    <h1>${_t('Vergleich ↔')}</h1>
     ${metaHtml}${bomHtml}${dsHtml}
-    <div style="margin-top:20px;font-size:12px;color:#d1d5db;text-align:right">${new Date().toLocaleDateString('de-CH')}</div>
+    <div style="margin-top:20px;font-size:12px;color:#d1d5db;text-align:right">${new Date().toLocaleDateString(LOCALE)}</div>
     </body></html>`;
   const w = window.open('', '_blank', 'width=1000,height=750');
   w.document.write(html);
@@ -153,14 +153,14 @@ function _renderCompare(a, b) {
 // der Server aus (/api/items/:id/compare), hier stehen sie mit denselben
 // Bezeichnungen wie im Datenblatt (PRINT_PARAMS, PLM_ST_LABEL).
 const COMPARE_META_LABEL = {
-  status: 'Status', description: 'Beschreibung', item_description: 'Teilebeschreibung', eco_reason: 'ECO-Grund',
-  released_at: 'Freigegeben am', released_by: 'Freigegeben von',
-  weight_g: 'Gewicht', default_price: 'Verkaufspreis',
+  status: 'Status', description: _t('Beschreibung'), item_description: _t('Teilebeschreibung'), eco_reason: _t('ECO-Grund'),
+  released_at: _t('Freigegeben am'), released_by: _t('Freigegeben von'),
+  weight_g: _t('Gewicht'), default_price: _t('Verkaufspreis'),
 };
 const COMPARE_CHANGE = {
-  added:   { label: 'neu',      color: 'var(--green)', bg: 'var(--green-soft)' },
+  added:   { label: _t('neu'),      color: 'var(--green)', bg: 'var(--green-soft)' },
   removed: { label: 'entfernt', color: 'var(--red)',   bg: 'var(--red-soft)' },
-  changed: { label: 'geändert', color: 'var(--amber)', bg: 'var(--amber-soft)' },
+  changed: { label: _t('geändert'), color: 'var(--amber)', bg: 'var(--amber-soft)' },
   same:    { label: 'gleich',   color: 'var(--t4)',    bg: 'transparent' },
 };
 let _cmpState = { itemId: null, onlyChanges: true, cache: {} };
@@ -169,35 +169,35 @@ async function openRevisionCompare(itemId, revA, revB) {
   const item = state.item?.id === itemId ? state.item : await api(`/api/items/${itemId}`).catch(() => null);
   if (!item) return;
   const revs = item.revisions || [];   // neueste zuerst
-  if (revs.length < 2) return toast('Dieses Item hat nur eine Revision', 'err');
+  if (revs.length < 2) return toast(_t('Dieses Item hat nur eine Revision'), 'err');
   // Standard: gewählte Revision gegen die nächstältere
   const bId = revB || (revs.some(r => r.id === state.activeRevId) ? state.activeRevId : revs[0].id);
   const bIdx = revs.findIndex(r => r.id === bId);
   const aId = revA || (revs[bIdx + 1] || revs[bIdx - 1]).id;
   _cmpState = { itemId, onlyChanges: _cmpState.onlyChanges, cache: {} };
-  const opts = sel => revs.map(r => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>rev${esc(r.rev)} · ${r.status}${r.delivered?.length ? ' · geliefert' : ''}</option>`).join('');
+  const opts = sel => revs.map(r => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>rev${esc(r.rev)} · ${r.status}${r.delivered?.length ? ' · ' + _t('geliefert') : ''}</option>`).join('');
 
   _showDynModal(`<div class="modal" style="max-width:920px;width:96vw">
     <div class="modal-head">
       <div class="modal-title" style="display:flex;align-items:center;gap:8px;min-width:0">
-        <span>Revisionen vergleichen</span>
+        <span>${_t('Revisionen vergleichen')}</span>
         <span style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.item_number)} · ${esc(item.name)}</span>
       </div>
     </div>
     <div class="modal-body" style="max-height:72vh;overflow-y:auto">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        <select class="fs" id="cmp-rev-a" style="max-width:230px" onchange="_loadRevisionCompare()" aria-label="Revision A">${opts(aId)}</select>
-        <button class="btn btn-ghost btn-sm" onclick="_swapRevisionCompare()" title="Seiten tauschen">⇄</button>
-        <select class="fs" id="cmp-rev-b" style="max-width:230px" onchange="_loadRevisionCompare()" aria-label="Revision B">${opts(bId)}</select>
+        <select class="fs" id="cmp-rev-a" style="max-width:230px" onchange="_loadRevisionCompare()" aria-label="${_t('Revision A')}">${opts(aId)}</select>
+        <button class="btn btn-ghost btn-sm" onclick="_swapRevisionCompare()" title="${_t('Seiten tauschen')}">⇄</button>
+        <select class="fs" id="cmp-rev-b" style="max-width:230px" onchange="_loadRevisionCompare()" aria-label="${_t('Revision B')}">${opts(bId)}</select>
         <label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t2);cursor:pointer">
           <input type="checkbox" ${_cmpState.onlyChanges ? 'checked' : ''} style="accent-color:var(--blue)"
-            onchange="_cmpState.onlyChanges=this.checked;_loadRevisionCompare()"> Nur Änderungen
+            onchange="_cmpState.onlyChanges=this.checked;_loadRevisionCompare()"> ${_t('Nur Änderungen')}
         </label>
       </div>
-      <div id="cmp-body"><div style="color:var(--t3);font-size:13px">Wird verglichen…</div></div>
+      <div id="cmp-body"><div style="color:var(--t3);font-size:13px">${_t('Wird verglichen…')}</div></div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Schliessen')}</button>
     </div>
   </div>`);
   _loadRevisionCompare();
@@ -214,11 +214,11 @@ async function _loadRevisionCompare() {
   const a = document.getElementById('cmp-rev-a')?.value, b = document.getElementById('cmp-rev-b')?.value;
   const host = document.getElementById('cmp-body');
   if (!a || !b || !host) return;
-  if (a === b) { host.innerHTML = '<div style="color:var(--t3);font-size:13px">Zweimal dieselbe Revision gewählt — bitte zwei verschiedene wählen.</div>'; return; }
+  if (a === b) { host.innerHTML = '<div style="color:var(--t3);font-size:13px">' + _t('Zweimal dieselbe Revision gewählt — bitte zwei verschiedene wählen.') + '</div>'; return; }
   const key = a + ':' + b;
   try {
     _cmpState.cache[key] = _cmpState.cache[key] || await api(`/api/items/${_cmpState.itemId}/compare?a=${a}&b=${b}`);
-  } catch { host.innerHTML = '<div style="color:var(--red);font-size:13px">Vergleich fehlgeschlagen.</div>'; return; }
+  } catch { host.innerHTML = '<div style="color:var(--red);font-size:13px">' + _t('Vergleich fehlgeschlagen.') + '</div>'; return; }
   host.innerHTML = _renderRevisionCompare(_cmpState.cache[key], _cmpState.onlyChanges);
 }
 
@@ -235,9 +235,9 @@ function _renderRevisionCompare(c, only) {
     ? `<div class="tbl-wrap"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : '';
   const section = (title, changes, total, body) => `
     <div class="sep-label" style="margin-top:16px">${title}
-      <span style="margin-left:8px;font-family:var(--mono);font-size:11px;text-transform:none;letter-spacing:0;color:${changes ? 'var(--amber)' : 'var(--t4)'}">${changes ? changes + ' Änderung' + (changes === 1 ? '' : 'en') : 'keine Änderung'}</span>
+      <span style="margin-left:8px;font-family:var(--mono);font-size:11px;text-transform:none;letter-spacing:0;color:${changes ? 'var(--amber)' : 'var(--t4)'}">${changes ? _t(changes === 1 ? '1 Änderung' : '{n} Änderungen', { n: changes }) : _t('keine Änderung')}</span>
     </div>
-    ${body || `<div style="font-size:13px;color:var(--t4);padding:2px 0 6px">${total ? 'Keine Unterschiede.' : 'In beiden Revisionen leer.'}</div>`}`;
+    ${body || `<div style="font-size:13px;color:var(--t4);padding:2px 0 6px">${total ? _t('Keine Unterschiede.') : _t('In beiden Revisionen leer.')}</div>`}`;
 
   const head = r => `<div style="flex:1;min-width:210px;padding:9px 11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
       <div style="display:flex;align-items:center;gap:6px">
@@ -245,7 +245,7 @@ function _renderRevisionCompare(c, only) {
         <span style="font-size:13px;color:var(--t3)">${esc(PLM_ST_LABEL[r.status] || r.status)}</span>
         ${r.delivered?.length ? `<span title="Geliefert: ${esc(r.delivered.join(', '))}">🚚</span>` : ''}
       </div>
-      <div style="font-size:12px;color:var(--t3);margin-top:4px">angelegt ${fmtDate(r.created_at)}${r.released_at ? ' · freigegeben ' + fmtDate(r.released_at) : ''}</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:4px">${_t('angelegt {date}', { date: fmtDate(r.created_at) })}${r.released_at ? ' · ' + _t('freigegeben {date}', { date: fmtDate(r.released_at) }) : ''}</div>
       ${r.description ? `<div style="font-size:12.5px;color:var(--t2);margin-top:3px">${esc(r.description)}</div>` : ''}
     </div>`;
 
@@ -259,9 +259,9 @@ function _renderRevisionCompare(c, only) {
     tr(p.changed ? 'changed' : 'same', [esc(printParamLabel(p.field)), val(fmtPrintParam(p.field, p.a)), val(fmtPrintParam(p.field, p.b)), chip(p.changed ? 'changed' : 'same')]));
 
   const qty = s => !s ? none : `${fmtN(s.quantity, 0)} ${esc(_unit(s.unit))}`
-    + (s.pinned_rev ? ` <span style="font-size:11px;color:var(--t3)" title="fest auf diese Revision">🔒rev${esc(s.pinned_rev)}</span>` : '');
+    + (s.pinned_rev ? ` <span style="font-size:11px;color:var(--t3)" title="${_t('fest auf diese Revision')}">🔒rev${esc(s.pinned_rev)}</span>` : '');
   const note = r => r.change !== 'changed' ? '' : ' <span style="font-size:11px;color:var(--t3)">'
-    + [r.qty_changed ? 'Menge' : '', r.rev_changed ? 'Revision' : ''].filter(Boolean).join(', ') + '</span>';
+    + [r.qty_changed ? _t('Menge') : '', r.rev_changed ? 'Revision' : ''].filter(Boolean).join(', ') + '</span>';
   const bomRows = c.bom.filter(r => !only || r.change !== 'same').map(r => tr(r.change, [
     `${_itemChip(r.item_type, 14)} <span style="font-family:var(--mono);color:var(--blue);cursor:pointer" onclick="_hideDynModal();gotoPlmItem(${r.child_item_id})">${esc(r.item_number)}</span>`,
     esc(r.name), qty(r.a), qty(r.b), chip(r.change) + note(r)]));
@@ -269,9 +269,9 @@ function _renderRevisionCompare(c, only) {
     `<span style="font-family:var(--mono)">${esc(r.designation)}</span>`, esc(r.name || ''), qty(r.a), qty(r.b), chip(r.change)]));
 
   const file = s => !s ? none : `${esc(_cleanDsName(s.original_name))} <span style="color:var(--t4);font-size:11px;white-space:nowrap">${fmtSize(s.file_size)} · v${esc(s.version || '1')}</span>`;
-  const content = r => r.content === 'identical' ? ' <span style="font-size:11px;color:var(--t4)">Inhalt gleich</span>'
-    : r.content === 'different' ? ' <span style="font-size:11px;color:var(--t3)">Inhalt geändert</span>'
-    : r.content === 'unknown' ? ' <span style="font-size:11px;color:var(--t4)">Inhalt nicht geprüft</span>' : '';
+  const content = r => r.content === 'identical' ? ' <span style="font-size:11px;color:var(--t4)">' + _t('Inhalt gleich') + '</span>'
+    : r.content === 'different' ? ' <span style="font-size:11px;color:var(--t3)">' + _t('Inhalt geändert') + '</span>'
+    : r.content === 'unknown' ? ' <span style="font-size:11px;color:var(--t4)">' + _t('Inhalt nicht geprüft') + '</span>' : '';
   const dsRows = c.datasets.filter(r => !only || r.change !== 'same').map(r => tr(r.change, [
     `<span class="ds-type ${dtClass(r.name, r.ds_type)}">${fileLabel(r.name, r.ds_type)}</span>`, file(r.a), file(r.b), chip(r.change) + content(r)]));
 
@@ -280,15 +280,15 @@ function _renderRevisionCompare(c, only) {
   return `
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch">${head(c.a)}<div style="align-self:center;color:var(--t4)">→</div>${head(c.b)}</div>
     <div style="font-size:13px;margin-top:10px;color:${total ? 'var(--t2)' : 'var(--green)'}">
-      ${total ? `${total} Unterschied${total === 1 ? '' : 'e'} von ${A} nach ${B}` : `${A} und ${B} unterscheiden sich nicht.`}
+      ${total ? _t(total === 1 ? '1 Unterschied von {a} nach {b}' : '{n} Unterschiede von {a} nach {b}', { n: total, a: A, b: B }) : _t('{a} und {b} unterscheiden sich nicht.', { a: A, b: B })}
     </div>
-    ${section('Kopfdaten', c.summary.meta, c.meta.length, table(['Feld', A, B, ''], metaRows))}
-    ${section('Druckparameter', c.summary.print_settings, c.print_settings.length, table(['Parameter', A, B, ''], psRows))}
-    ${isAsm || c.bom.length ? section('Stückliste', c.summary.bom, c.bom.length, table(['Item', 'Name', A, B, ''], bomRows)) : ''}
-    ${isAsm || c.bom_std.length ? section('Normteile', c.summary.bom_std, c.bom_std.length, table(['Normteil', 'Name', A, B, ''], stdRows)) : ''}
-    ${section('Dateien', c.summary.datasets, c.datasets.length, table(['Typ', A, B, ''], dsRows))}
+    ${section(_t('Kopfdaten'), c.summary.meta, c.meta.length, table([_t('Feld'), A, B, ''], metaRows))}
+    ${section(_t('Druckparameter'), c.summary.print_settings, c.print_settings.length, table([_t('Parameter'), A, B, ''], psRows))}
+    ${isAsm || c.bom.length ? section(_t('Stückliste'), c.summary.bom, c.bom.length, table(['Item', 'Name', A, B, ''], bomRows)) : ''}
+    ${isAsm || c.bom_std.length ? section(_t('Normteile'), c.summary.bom_std, c.bom_std.length, table([_t('Normteil'), 'Name', A, B, ''], stdRows)) : ''}
+    ${section(_t('Dateien'), c.summary.datasets, c.datasets.length, table([_t('Typ'), A, B, ''], dsRows))}
     <div style="font-size:12px;color:var(--t4);margin-top:12px">
-      Dateien werden über den Namen ohne „_revN" zugeordnet; bei gleicher Grösse vergleicht PLM den Inhalt.
+      ${_t('Dateien werden über den Namen ohne „_revN" zugeordnet; bei gleicher Grösse vergleicht PLM den Inhalt.')}
     </div>`;
 }
 
@@ -302,15 +302,17 @@ function _docLogo(s, nameHtml) {
 }
 
 // Prüfprotokoll: Vorlage aus den Einstellungen (PLM-Tab), ohne Eintrag
-// gilt der Standard. Gespeichert als JSON unter pruef_template.
-const PRUEF_DEFAULT = {
-  points: ['Masshaltigkeit / Abmessungen', 'Oberflächenqualität', 'Materialprüfung',
-    'Funktionsprüfung', 'Kennzeichnung / Beschriftung', 'Verpackung / Versand'].map(label => ({ label, soll: '' })),
+// gilt der Standard. Gespeichert als JSON unter pruef_template. Der Standard
+// steht in der Sprache der Belege — darum eine Funktion: die Einstellung ist
+// beim Laden der Scripts noch nicht bekannt.
+const _pruefDefault = () => ({
+  points: [_d('Masshaltigkeit / Abmessungen'), _d('Oberflächenqualität'), _d('Materialprüfung'),
+    _d('Funktionsprüfung'), _d('Kennzeichnung / Beschriftung'), _d('Verpackung / Versand')].map(label => ({ label, soll: '' })),
   empty_rows: 3,
-  decisions: ['Freigegeben', 'Nacharbeit', 'Ausschuss'],
-  signatures: ['Geprüft durch', 'Freigegeben durch', 'Datum'],
+  decisions: [_d('Freigegeben'), _d('Nacharbeit'), _d('Ausschuss')],
+  signatures: [_d('Geprüft durch'), _d('Freigegeben durch'), _d('Datum')],
   note: '',
-};
+});
 
 // Fehlende oder kaputte Felder fallen einzeln auf den Standard zurück.
 // Eine leere Liste bleibt leer — so lässt sich z.B. der Prüfentscheid weglassen.
@@ -319,6 +321,7 @@ function getPruefTemplate(raw = state.settings?.pruef_template) {
   try { t = JSON.parse(raw || '{}') || {}; } catch {}
   const words = (v, def) => Array.isArray(v) ? v.map(x => String(x ?? '').trim()).filter(Boolean) : [...def];
   const n = parseInt(t.empty_rows, 10);
+  const PRUEF_DEFAULT = _pruefDefault();
   return {
     points: Array.isArray(t.points)
       ? t.points.map(p => ({ label: String(p?.label ?? '').trim(), soll: String(p?.soll ?? '').trim() })).filter(p => p.label)
@@ -334,9 +337,9 @@ function openDocTemplateModal(itemId) {
   window._docTemplateItem = state.item;
   const isASM = state.item?.item_type === 'asm';
   document.getElementById('dtpl-cards').innerHTML = [
-    { type:'datenblatt', label:'Datenblatt', desc:'Allgemeine Informationen, Druckparameter, Revisionen, Lager, Dateien und Varianten' },
-    isASM ? { type:'stueckliste', label:'Stückliste', desc:'Vollständige BOM-Tabelle mit Mengen, Preisen und Entwicklungszeit' } : null,
-    { type:'pruefprotokoll', label:'Prüfprotokoll', desc:'Prüfpunkte und Unterschriften nach der Vorlage in Einstellungen → PLM' },
+    { type:'datenblatt', label:_t('Datenblatt'), desc:_t('Allgemeine Informationen, Druckparameter, Revisionen, Lager, Dateien und Varianten') },
+    isASM ? { type:'stueckliste', label:_t('Stückliste'), desc:_t('Vollständige BOM-Tabelle mit Mengen, Preisen und Entwicklungszeit') } : null,
+    { type:'pruefprotokoll', label:_t('Prüfprotokoll'), desc:_t('Prüfpunkte und Unterschriften nach der Vorlage in Einstellungen → PLM') },
   ].filter(Boolean).map(t => `
     <div onclick="generateItemTemplate('${t.type}')" style="padding:14px 16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
       <div style="font-weight:600;font-size:14px;color:var(--t1);margin-bottom:3px">${t.label}</div>
@@ -352,7 +355,7 @@ function generateItemTemplate(type, opts = {}) {
   const item = opts.item || window._docTemplateItem;
   if (!item) return;
   const s = state.settings || {};
-  const today = new Date().toLocaleDateString('de-CH');
+  const today = new Date().toLocaleDateString(_docLocale());
   // Dieselbe Revision wie am Bildschirm (Auswahl im Revisionen-Tab)
   const rev = (item.revisions || []).find(r => r.id === state.activeRevId) || item.revisions?.[0];
   const pcode = item.short_code && item.item_type !== 'doc' ? item.short_code + (rev ? '-' + rev.rev : '') : '';
@@ -370,7 +373,7 @@ function generateItemTemplate(type, opts = {}) {
         <div style="text-align:right">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:2px">${escHtml(item.item_type.toUpperCase())}</div>
           <div style="font-family:monospace;font-size:15px;font-weight:700;color:#1d4ed8">${escHtml(item.item_number)}</div>
-          ${pcode ? `<div style="font-size:12px;color:#6b7280">Kurzcode <b style="font-family:monospace;color:#111827">${escHtml(pcode)}</b></div>` : ''}
+          ${pcode ? `<div style="font-size:12px;color:#6b7280">${_d('Kurzcode')} <b style="font-family:monospace;color:#111827">${escHtml(pcode)}</b></div>` : ''}
           <div style="font-size:12px;color:#6b7280">${today}</div>
         </div>
         ${qr ? `<div style="line-height:0">${qr}</div>` : ''}
@@ -420,32 +423,32 @@ function generateItemTemplate(type, opts = {}) {
     // Aussenmasse der Revision; bei mehreren STL mit verschiedenen Massen alle mit Dateinamen
     const dims = revDims(rev);
     const dimsOne = new Set(dims.map(d => d.txt)).size === 1;
-    body += `<div class="sec">Allgemein</div>` + kvTable([
-      ['Typ', item.item_type.toUpperCase()],
-      ['Projekt', item.project ? item.project.number + ' · ' + item.project.name : null],
-      ['Klassifizierung', item.classification],
-      ['Gewicht', revWeightTxt(item, rev)],
-      ['Aussenmasse', !dims.length ? null : dimsOne ? dims[0].txt : dims.map(d => d.name + ': ' + d.txt).join(' · '), !dimsOne],
-      ['Verkaufspreis', revPrice(item, rev) != null ? fmtChf(revPrice(item, rev)) : null],
-      ['Entwicklungszeit', _fmtHours(item.dev_hours)],
-      ['Erstellt', fmtD(item.created_at, null)],
-      ['Quelle', item.source_url, true],
+    body += `<div class="sec">${_d('Allgemein')}</div>` + kvTable([
+      [_d('Typ'), item.item_type.toUpperCase()],
+      [_d('Projekt'), item.project ? item.project.number + ' · ' + item.project.name : null],
+      [_d('Klassifizierung'), item.classification],
+      [_d('Gewicht'), revWeightTxt(item, rev)],
+      [_d('Aussenmasse'), !dims.length ? null : dimsOne ? dims[0].txt : dims.map(d => d.name + ': ' + d.txt).join(' · '), !dimsOne],
+      [_d('Verkaufspreis'), revPrice(item, rev) != null ? fmtChf(revPrice(item, rev)) : null],
+      [_d('Entwicklungszeit'), _fmtHours(item.dev_hours)],
+      [_d('Erstellt'), fmtD(item.created_at, null)],
+      [_d('Quelle'), item.source_url, true],
     ]);
 
     // Eigenschaften der Klassifizierung (Werkstoff, Hersteller …)
     const attrs = item.attributes || {};
     const attrTable = kvTable(classFieldsOf(item.classification).map(f => [f.label, attrs[f.id] || null]));
-    if (attrTable) body += `<div class="sec">Eigenschaften</div>` + attrTable;
+    if (attrTable) body += `<div class="sec">${_d('Eigenschaften')}</div>` + attrTable;
 
-    if (item.notes) body += `<div class="sec">Notizen</div><div class="txt">${escHtml(item.notes)}</div>`;
+    if (item.notes) body += `<div class="sec">${_d('Notizen')}</div><div class="txt">${escHtml(item.notes)}</div>`;
 
     if (rev) {
-      body += `<div class="sec">Revision rev${escHtml(rev.rev)}</div>` + kvTable([
-        ['Status', rev.status + (PLM_ST_LABEL[rev.status] ? ' · ' + PLM_ST_LABEL[rev.status] : '')],
-        ['Angelegt', fmtD(rev.created_at, null)],
-        ['Freigegeben', rev.released_at ? fmtD(rev.released_at) + (rev.released_by ? ' · ' + rev.released_by : '') : null],
-        ['Beschreibung', rev.description, true],
-        ['ECO-Grund', rev.eco_reason, true],
+      body += `<div class="sec">${_d('Revision rev{rev}', { rev: escHtml(rev.rev) })}</div>` + kvTable([
+        ['Status', rev.status + (_dSt('plm', rev.status) !== rev.status ? ' · ' + _dSt('plm', rev.status) : '')],
+        [_d('Angelegt'), fmtD(rev.created_at, null)],
+        [_d('Freigegeben'), rev.released_at ? fmtD(rev.released_at) + (rev.released_by ? ' · ' + rev.released_by : '') : null],
+        [_d('Beschreibung'), rev.description, true],
+        [_d('ECO-Grund'), rev.eco_reason, true],
       ]);
     }
 
@@ -453,10 +456,10 @@ function generateItemTemplate(type, opts = {}) {
     const ps = rev?.print_settings;
     if (ps) {
       const psRows = PRINT_PARAMS.filter(([k]) => k !== 'notes').map(([k, label]) =>
-        [label, k === 'raw_material_id' ? ps.raw_material_name || null : fmtPrintParam(k, ps[k])]);
-      psRows.push(['Notizen', ps.notes, true]);
+        [_d(label), k === 'raw_material_id' ? ps.raw_material_name || null : fmtPrintParam(k, ps[k], _d)]);
+      psRows.push([_d('Notizen'), ps.notes, true]);
       const t = kvTable(psRows);
-      if (t) body += `<div class="sec">Druckparameter rev${escHtml(rev.rev)}</div>` + t;
+      if (t) body += `<div class="sec">${_d('Druckparameter rev{rev}', { rev: escHtml(rev.rev) })}</div>` + t;
     }
 
     if (item.item_type === 'asm' && rev) {
@@ -466,34 +469,34 @@ function generateItemTemplate(type, opts = {}) {
         const bomTotal = bom.reduce((s, b) => s + (b.default_price != null ? b.default_price * b.quantity : 0), 0);
         const stdTotal = std.reduce((s, b) => s + (b.unit_price || 0) * b.quantity, 0);
         const unpriced = bom.filter(b => b.default_price == null).length;
-        body += `<div class="sec">Stückliste rev${escHtml(rev.rev)}</div>` + kvTable([
-          ['Positionen', String(bom.length + std.length)],
-          ['Eigene Teile', String(bom.length)],
-          ['Normteile', String(std.length)],
-          ['Teilesumme', bomTotal ? fmtChf(bomTotal) : null],
-          ['Normteilsumme', stdTotal ? fmtChf(stdTotal) : null],
-          ['Gesamt', (bomTotal + stdTotal) ? fmtChf(bomTotal + stdTotal) : null],
-          ['Hinweis', unpriced ? `${unpriced} von ${bom.length} eigenen Teilen ohne Preis — Summe unvollständig` : null, true],
+        body += `<div class="sec">${_d('Stückliste rev{rev}', { rev: escHtml(rev.rev) })}</div>` + kvTable([
+          [_d('Positionen'), String(bom.length + std.length)],
+          [_d('Eigene Teile'), String(bom.length)],
+          [_d('Normteile'), String(std.length)],
+          [_d('Teilesumme'), bomTotal ? fmtChf(bomTotal) : null],
+          [_d('Normteilsumme'), stdTotal ? fmtChf(stdTotal) : null],
+          [_d('Gesamt'), (bomTotal + stdTotal) ? fmtChf(bomTotal + stdTotal) : null],
+          [_d('Hinweis'), unpriced ? _d('{n} von {total} eigenen Teilen ohne Preis — Summe unvollständig', { n: unpriced, total: bom.length }) : null, true],
         ]);
       }
     }
 
     const inv = item.inventory || [];
     if (inv.length) {
-      body += `<div class="sec">Lagerbestand</div><table>
-        <thead><tr><th>Lagerartikel</th><th>SKU</th><th style="text-align:right">Bestand</th><th style="text-align:right">Minimum</th><th style="text-align:right">Preis</th></tr></thead>
+      body += `<div class="sec">${_d('Lagerbestand')}</div><table>
+        <thead><tr><th>${_d('Lagerartikel')}</th><th>${_d('SKU')}</th><th style="text-align:right">${_d('Bestand')}</th><th style="text-align:right">${_d('Minimum')}</th><th style="text-align:right">${_d('Preis')}</th></tr></thead>
         <tbody>${inv.map(l => `<tr>
           <td>${escHtml(l.name)}</td>
           <td style="font-family:monospace;font-size:12px">${escHtml(l.sku||'')}</td>
-          <td style="text-align:right;font-family:monospace">${fmtN(l.stock_qty||0, 1)} ${escHtml(_unit(l.unit))}</td>
+          <td style="text-align:right;font-family:monospace">${fmtN(l.stock_qty||0, 1)} ${escHtml(_dunit(l.unit))}</td>
           <td style="text-align:right;font-family:monospace">${l.min_qty != null ? fmtN(l.min_qty, 1) : '—'}</td>
-          <td style="text-align:right;font-family:monospace">${l.price_per_unit != null ? fmtChf(l.price_per_unit) + '/' + escHtml(_unit(l.unit)) : '—'}</td>
+          <td style="text-align:right;font-family:monospace">${l.price_per_unit != null ? fmtChf(l.price_per_unit) + '/' + escHtml(_dunit(l.unit)) : '—'}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
     if ((item.revisions||[]).length) {
-      body += `<div class="sec">Revisionen</div><table>
-        <thead><tr><th>Revision</th><th>Status</th><th>Beschreibung</th><th>Angelegt</th><th>Freigegeben</th></tr></thead>
+      body += `<div class="sec">${_d('Revisionen')}</div><table>
+        <thead><tr><th>Revision</th><th>Status</th><th>${_d('Beschreibung')}</th><th>${_d('Angelegt')}</th><th>${_d('Freigegeben')}</th></tr></thead>
         <tbody>${item.revisions.map(r=>`<tr>
           <td style="font-family:monospace;font-weight:700">rev${escHtml(r.rev)}</td>
           <td><span class="badge" style="background:#dbeafe;color:#1d4ed8">${escHtml(r.status)}</span></td>
@@ -506,8 +509,8 @@ function generateItemTemplate(type, opts = {}) {
     // original_name ist der Name, den der Benutzer sieht; filename nur der Speichername
     const allDatasets = (item.revisions||[]).flatMap(r=>(r.datasets||[]).map(d=>({...d, rev:r.rev, revStatus:r.status})));
     if (allDatasets.length) {
-      body += `<div class="sec">Dateien</div><table>
-        <thead><tr><th>Revision</th><th>Typ</th><th>Dateiname</th><th>Grösse</th><th>Datum</th></tr></thead>
+      body += `<div class="sec">${_d('Dateien')}</div><table>
+        <thead><tr><th>Revision</th><th>${_d('Typ')}</th><th>${_d('Dateiname')}</th><th>${_d('Grösse')}</th><th>${_d('Datum')}</th></tr></thead>
         <tbody>${allDatasets.map(d=>`<tr>
           <td style="font-family:monospace">rev${escHtml(d.rev)}</td>
           <td style="color:#6b7280">${escHtml(fileLabel(d.original_name, d.ds_type))}</td>
@@ -518,8 +521,8 @@ function generateItemTemplate(type, opts = {}) {
     }
 
     if ((item.variants||[]).length) {
-      body += `<div class="sec">Varianten</div><table>
-        <thead><tr><th>Item-Nummer</th><th>Name</th><th>Typ</th></tr></thead>
+      body += `<div class="sec">${_d('Varianten')}</div><table>
+        <thead><tr><th>${_d('Item-Nummer')}</th><th>Name</th><th>${_d('Typ')}</th></tr></thead>
         <tbody>${item.variants.map(v=>`<tr>
           <td style="font-family:monospace;color:#1d4ed8">${escHtml(v.item_number)}</td>
           <td>${escHtml(v.name)}</td>
@@ -534,58 +537,58 @@ function generateItemTemplate(type, opts = {}) {
     const totalDev = bom.reduce((s,b) => s + (b.dev_hours||0), 0);
 
     body += `<div style="display:flex;gap:20px;margin-bottom:16px;font-size:13px;color:#6b7280">
-      <span>Revision: <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
+      <span>${_d('Revision:')} <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
       <span class="badge" style="background:#dbeafe;color:#1d4ed8">${rev?.status||''}</span>
     </div>`;
 
     if (bom.length) {
-      body += `<div class="sec">Stückliste – Parts</div><table>
-        <thead><tr><th style="width:30px">Pos</th><th>Item-Nummer</th><th>Name</th><th>Revision</th><th style="text-align:right">Menge</th><th>Einh.</th><th style="text-align:right">VP (CHF)</th><th style="text-align:right">⏱ Entw.h</th></tr></thead>
+      body += `<div class="sec">${_d('Stückliste – Parts')}</div><table>
+        <thead><tr><th style="width:30px">${_d('Pos')}</th><th>${_d('Item-Nummer')}</th><th>Name</th><th>Revision</th><th style="text-align:right">${_d('Menge')}</th><th>${_d('Einh.')}</th><th style="text-align:right">${_d('VP (CHF)')}</th><th style="text-align:right">${_d('⏱ Entw.h')}</th></tr></thead>
         <tbody>${bom.map((b,i)=>`<tr>
           <td style="color:#9ca3af">${b.position||i+1}</td>
           <td style="font-family:monospace;color:#1d4ed8">${escHtml(b.item_number)}</td>
           <td>${escHtml(b.name)}</td>
           <td style="font-family:monospace;font-size:12px">${b.child_active_rev ? 'rev'+b.child_active_rev.rev : '—'}</td>
           <td style="text-align:right;font-family:monospace">${fmtN(b.quantity,0)}</td>
-          <td>${escHtml(_unit(b.unit))}</td>
+          <td>${escHtml(_dunit(b.unit))}</td>
           <td style="text-align:right;font-family:monospace">${b.default_price != null ? fmtN(b.default_price * b.quantity, 2) : '—'}</td>
           <td style="text-align:right;font-family:monospace;color:#d97706">${(b.dev_hours||0) > 0 ? fmtN(b.dev_hours,2) : '—'}</td>
         </tr>`).join('')}
         <tr style="background:#f9fafb;font-weight:700">
-          <td colspan="6" style="text-align:right;color:#6b7280">Total</td>
+          <td colspan="6" style="text-align:right;color:#6b7280">${_d('Total')}</td>
           <td style="text-align:right;font-family:monospace">${totalPrice > 0 ? fmtN(totalPrice,2) : '—'}</td>
           <td style="text-align:right;font-family:monospace;color:#d97706">${totalDev > 0 ? fmtN(totalDev,2) : '—'}</td>
         </tr></tbody></table>`;
     }
 
     if (bomStd.length) {
-      body += `<div class="sec">Normteile</div><table>
-        <thead><tr><th>Bezeichnung</th><th>Norm</th><th>Material</th><th style="text-align:right">Menge</th><th>Einh.</th></tr></thead>
+      body += `<div class="sec">${_d('Normteile')}</div><table>
+        <thead><tr><th>${_d('Bezeichnung')}</th><th>${_d('Norm')}</th><th>Material</th><th style="text-align:right">${_d('Menge')}</th><th>${_d('Einh.')}</th></tr></thead>
         <tbody>${bomStd.map(b=>`<tr>
           <td>${escHtml(b.designation)}</td>
           <td style="font-family:monospace;font-size:12px">${escHtml(b.standard === 'other' ? '' : b.standard||'')} ${escHtml(b.std_number||'')}</td>
           <td>${escHtml(b.material||'')}</td>
           <td style="text-align:right;font-family:monospace">${fmtN(b.quantity,0)}</td>
-          <td>${escHtml(_unit(b.unit))}</td>
+          <td>${escHtml(_dunit(b.unit))}</td>
         </tr>`).join('')}</tbody></table>`;
     }
 
-    if (!bom.length && !bomStd.length) body += '<div style="color:#9ca3af;font-size:13px">Keine Positionen.</div>';
+    if (!bom.length && !bomStd.length) body += '<div style="color:#9ca3af;font-size:13px">' + _d('Keine Positionen.') + '</div>';
 
   } else if (type === 'pruefprotokoll') {
     const tpl = opts.pruef || getPruefTemplate();
     // Leerzeilen ohne Nummer — zum Ergänzen von Hand
     const checkRows = [...tpl.points, ...Array.from({ length: tpl.empty_rows }, () => ({ label: '', soll: '' }))];
     body += `<div style="display:flex;gap:20px;margin-bottom:16px;font-size:13px;color:#6b7280">
-      <span>Revision: <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
+      <span>${_d('Revision:')} <strong style="font-family:monospace;color:#1d4ed8">rev${rev?.rev||'—'}</strong></span>
       <span class="badge" style="background:#dbeafe;color:#1d4ed8">${rev?.status||''}</span>
-      ${revEffWeight(item, rev) != null ? `<span>Gewicht: <strong>${fmtN(revEffWeight(item, rev),1)} g</strong></span>` : ''}
-      ${item.classification ? `<span>Klassifizierung: <strong>${escHtml(item.classification)}</strong></span>` : ''}
+      ${revEffWeight(item, rev) != null ? `<span>${_d('Gewicht:')} <strong>${fmtN(revEffWeight(item, rev),1)} g</strong></span>` : ''}
+      ${item.classification ? `<span>${_d('Klassifizierung:')} <strong>${escHtml(item.classification)}</strong></span>` : ''}
     </div>
     ${tpl.note ? `<div class="txt">${escHtml(tpl.note)}</div>` : ''}
-    <div class="sec">Prüfpunkte</div>
+    <div class="sec">${_d('Prüfpunkte')}</div>
     <table>
-      <thead><tr><th style="width:28px">Nr</th><th>Prüfpunkt</th><th style="width:120px">Soll</th><th style="width:120px">Ist</th><th style="width:36px">OK</th><th style="width:120px">Bemerkung</th></tr></thead>
+      <thead><tr><th style="width:28px">${_d('Nr')}</th><th>${_d('Prüfpunkt')}</th><th style="width:120px">${_d('Soll')}</th><th style="width:120px">${_d('Ist')}</th><th style="width:36px">OK</th><th style="width:120px">${_d('Bemerkung')}</th></tr></thead>
       <tbody>${checkRows.map((c,i)=>`<tr style="height:28px">
         <td style="color:#9ca3af;font-size:12px">${c.label ? i+1 : ''}</td>
         <td>${escHtml(c.label)}</td><td>${escHtml(c.soll)}</td><td></td>
@@ -593,7 +596,7 @@ function generateItemTemplate(type, opts = {}) {
         <td></td>
       </tr>`).join('')}</tbody>
     </table>
-    ${tpl.decisions.length ? `<div class="sec" style="margin-top:24px">Prüfentscheid</div>
+    ${tpl.decisions.length ? `<div class="sec" style="margin-top:24px">${_d('Prüfentscheid')}</div>
     <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:28px">
       ${tpl.decisions.map(d => `<label style="display:flex;align-items:center;gap:6px;font-size:13px"><span style="width:16px;height:16px;border:1px solid #9ca3af;display:inline-block;border-radius:3px"></span> ${escHtml(d)}</label>`).join('')}
     </div>` : ''}
@@ -602,8 +605,8 @@ function generateItemTemplate(type, opts = {}) {
     </div>` : ''}`;
   }
 
-  const templateLabels = { datenblatt:'Datenblatt', stueckliste:'Stückliste', pruefprotokoll:'Prüfprotokoll' };
-  const html = `<!DOCTYPE html><html lang="de-CH"><head><meta charset="UTF-8">
+  const templateLabels = { datenblatt:_d('Datenblatt'), stueckliste:_d('Stückliste'), pruefprotokoll:_d('Prüfprotokoll') };
+  const html = `<!DOCTYPE html><html lang="${_docLang()}"><head><meta charset="UTF-8">
     <title>${templateLabels[type]||type} – ${escHtml(item.item_number)}</title>
     <style>${css}</style></head><body>
     ${hdr}${body}
@@ -624,35 +627,35 @@ function _renderPruefSettings(tpl = getPruefTemplate()) {
     <div id="st-pruef-points" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
       ${tpl.points.map((p, i) => `<div class="pruef-row" style="display:flex;align-items:center;gap:6px">
         <span style="font-family:var(--mono);font-size:12px;color:var(--t4);width:18px;text-align:right;flex-shrink:0">${i + 1}</span>
-        <input class="fi pruef-label" value="${esc(p.label)}" placeholder="Prüfpunkt" style="flex:1;font-size:13px;padding:3px 7px;height:28px">
-        <input class="fi pruef-soll" value="${esc(p.soll)}" placeholder="Soll (optional)" style="width:160px;font-size:13px;padding:3px 7px;height:28px">
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="_movePruefPoint(${i},-1)" title="Nach oben"${i === 0 ? ' disabled' : ''}>↑</button>
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="_movePruefPoint(${i},1)" title="Nach unten"${i === n - 1 ? ' disabled' : ''}>↓</button>
-        <button class="btn btn-red btn-icon btn-sm" onclick="_removePruefPoint(${i})" title="Entfernen">✕</button>
-      </div>`).join('') || '<div style="font-size:13px;color:var(--t3)">Keine Prüfpunkte — das Protokoll hat dann nur Leerzeilen.</div>'}
+        <input class="fi pruef-label" value="${esc(p.label)}" placeholder="${_t('Prüfpunkt')}" style="flex:1;font-size:13px;padding:3px 7px;height:28px">
+        <input class="fi pruef-soll" value="${esc(p.soll)}" placeholder="${_t('Soll (optional)')}" style="width:160px;font-size:13px;padding:3px 7px;height:28px">
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="_movePruefPoint(${i},-1)" title="${_t('Nach oben')}"${i === 0 ? ' disabled' : ''}>↑</button>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="_movePruefPoint(${i},1)" title="${_t('Nach unten')}"${i === n - 1 ? ' disabled' : ''}>↓</button>
+        <button class="btn btn-red btn-icon btn-sm" onclick="_removePruefPoint(${i})" title="${_t('Entfernen')}">✕</button>
+      </div>`).join('') || '<div style="font-size:13px;color:var(--t3)">' + _t('Keine Prüfpunkte — das Protokoll hat dann nur Leerzeilen.') + '</div>'}
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
-      <input class="fi" id="st-pruef-new" placeholder="Neuer Prüfpunkt…" style="max-width:280px" onkeydown="if(event.key==='Enter')_addPruefPoint()">
-      <button class="btn btn-ghost btn-sm" onclick="_addPruefPoint()">+ Hinzufügen</button>
+      <input class="fi" id="st-pruef-new" placeholder="${_t('Neuer Prüfpunkt…')}" style="max-width:280px" onkeydown="if(event.key==='Enter')_addPruefPoint()">
+      <button class="btn btn-ghost btn-sm" onclick="_addPruefPoint()">${_t('+ Hinzufügen')}</button>
     </div>
     <div class="form-row cols3">
-      <div class="fg"><label class="fl">Leerzeilen zum Ausfüllen</label>
+      <div class="fg"><label class="fl">${_t('Leerzeilen zum Ausfüllen')}</label>
         <input class="fi" id="st-pruef-empty" type="number" min="0" max="20" value="${tpl.empty_rows}"></div>
     </div>
     <div class="form-row cols2">
-      <div class="fg"><label class="fl">Prüfentscheid (mit Komma getrennt)</label>
-        <input class="fi" id="st-pruef-dec" value="${esc(tpl.decisions.join(', '))}" placeholder="leer = kein Prüfentscheid"></div>
-      <div class="fg"><label class="fl">Unterschriften (mit Komma getrennt)</label>
-        <input class="fi" id="st-pruef-sig" value="${esc(tpl.signatures.join(', '))}" placeholder="leer = keine Unterschriftszeilen"></div>
+      <div class="fg"><label class="fl">${_t('Prüfentscheid (mit Komma getrennt)')}</label>
+        <input class="fi" id="st-pruef-dec" value="${esc(tpl.decisions.join(', '))}" placeholder="${_t('leer = kein Prüfentscheid')}"></div>
+      <div class="fg"><label class="fl">${_t('Unterschriften (mit Komma getrennt)')}</label>
+        <input class="fi" id="st-pruef-sig" value="${esc(tpl.signatures.join(', '))}" placeholder="${_t('leer = keine Unterschriftszeilen')}"></div>
     </div>
     <div class="form-row">
-      <div class="fg"><label class="fl">Hinweis über den Prüfpunkten (optional)</label>
-        <textarea class="ft" id="st-pruef-note" rows="2" placeholder="z.B. Prüfmittel: Messschieber · Sichtprüfung bei Tageslicht">${esc(tpl.note)}</textarea></div>
+      <div class="fg"><label class="fl">${_t('Hinweis über den Prüfpunkten (optional)')}</label>
+        <textarea class="ft" id="st-pruef-note" rows="2" placeholder="${_t('z.B. Prüfmittel: Messschieber · Sichtprüfung bei Tageslicht')}">${esc(tpl.note)}</textarea></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
-      <button class="btn btn-primary btn-sm" onclick="_savePruefSettings()">Speichern</button>
-      <button class="btn btn-ghost btn-sm" onclick="_previewPruef()">Vorschau</button>
-      <button class="btn btn-ghost btn-sm" onclick="_resetPruefSettings()">Standard einsetzen</button>
+      <button class="btn btn-primary btn-sm" onclick="_savePruefSettings()">${_t('Speichern')}</button>
+      <button class="btn btn-ghost btn-sm" onclick="_previewPruef()">${_t('Vorschau')}</button>
+      <button class="btn btn-ghost btn-sm" onclick="_resetPruefSettings()">${_t('Standard einsetzen')}</button>
       <span id="st-pruef-msg" style="font-size:13px;color:var(--t3)"></span>
     </div>`;
 }
@@ -699,13 +702,13 @@ function _addPruefPoint() {
 function _resetPruefSettings() {
   _renderPruefSettings(getPruefTemplate(''));
   const msg = document.getElementById('st-pruef-msg');
-  if (msg) { msg.textContent = 'Standard eingesetzt — mit Speichern übernehmen'; msg.style.color = 'var(--amber)'; }
+  if (msg) { msg.textContent = _t('Standard eingesetzt — mit Speichern übernehmen'); msg.style.color = 'var(--amber)'; }
 }
 
 // Vorschau mit einem Beispielteil und der Vorlage, wie sie gerade im Formular steht
 function _previewPruef() {
   generateItemTemplate('pruefprotokoll', {
-    item: { id: 0, item_type: 'prt', item_number: 'P000-prt-001', name: 'Beispielteil', description: 'Vorschau der Prüfprotokoll-Vorlage',
+    item: { id: 0, item_type: 'prt', item_number: 'P000-prt-001', name: _t('Beispielteil'), description: _t('Vorschau der Prüfprotokoll-Vorlage'),
       classification: getClassifications()[0]?.name || null, effective_weight_g: 12.5, revisions: [{ id: 0, rev: '1', status: 'DFT' }] },
     pruef: _readPruefForm(),
     preview: true,
@@ -717,8 +720,8 @@ async function _savePruefSettings() {
   state.settings = await api('/api/settings');
   _renderPruefSettings();
   const msg = document.getElementById('st-pruef-msg');
-  if (msg) { msg.textContent = 'Gespeichert'; msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
-  toast('Prüfprotokoll-Vorlage gespeichert', 'ok');
+  if (msg) { msg.textContent = _t('Gespeichert'); msg.style.color = 'var(--green)'; setTimeout(() => { msg.textContent = ''; }, 2000); }
+  toast(_t('Prüfprotokoll-Vorlage gespeichert'), 'ok');
 }
 
 // -- PDF GENERATION (Rechnung + Angebot) -----------------------
@@ -733,9 +736,9 @@ async function generateDoc(id, type) {
     : `/api/orders/${id}/invoice-data`;
   const d = await api(endpoint);
   const s = state.settings;
-  const today = new Date().toLocaleDateString('de-CH');
+  const today = new Date().toLocaleDateString(_docLocale());
   const isQuote = type === 'order-quote';
-  const docLabel = isQuote ? 'Angebot' : 'Rechnung';
+  const docLabel = isQuote ? _d('Angebot') : _d('Rechnung');
   const color = '#1d4ed8';
 
   // Company address block from settings
@@ -752,8 +755,8 @@ async function generateDoc(id, type) {
   ].filter(Boolean).join(' · ');
 
   const footer = isQuote
-    ? (s.quote_footer   || 'Dieses Angebot ist freibleibend.')
-    : (s.invoice_footer || 'Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen.');
+    ? (s.quote_footer   || _d('Dieses Angebot ist freibleibend.'))
+    : (s.invoice_footer || _d('Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen.'));
 
   // Customer address
   const custAddrLines = [
@@ -773,7 +776,7 @@ async function generateDoc(id, type) {
     let html = '<tr style="border-bottom:1px solid #e5e7eb">'
       +'<td style="padding:8px 6px">'+escHtml(p.description)+(p.item_number?' <span style="font-size:13px;color:#6b7280">['+p.item_number+']</span>':'')
       +(p.notes?'<br><span style="font-size:13px;color:#9ca3af">'+escHtml(p.notes)+'</span>':'')+'</td>'
-      +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+_unit(p.unit)+'</td>'
+      +'<td style="padding:8px 6px;text-align:right">'+p.quantity+' '+_dunit(p.unit)+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtP(p.unit_price)+'</td>'
       +(hasDiscount?(p.discount_pct?'<td style="padding:8px 6px;text-align:right;color:#d97706">'+p.discount_pct+'%</td>':'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>'):'')
       +'<td style="padding:8px 6px;text-align:right;font-weight:600">'+fmtP(lineTotal)+'</td>'
@@ -782,7 +785,7 @@ async function generateDoc(id, type) {
       html += p.sub_items.map(s =>
         '<tr style="background:#f9fafb">'
         +'<td style="padding:4px 6px 4px 22px;color:#6b7280;font-size:13px">↳ '+(s.item_type==='asm'?'📦':s.item_type==='doc'?'📄':'🔩')+' '+escHtml(s.item_number)+' – '+escHtml(s.name)+'</td>'
-        +'<td style="padding:4px 6px;text-align:right;font-size:13px;color:#6b7280">'+s.quantity+' '+_unit(s.unit)+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;font-size:13px;color:#6b7280">'+s.quantity+' '+_dunit(s.unit)+'</td>'
         +'<td style="padding:4px 6px"></td>'
         +(hasDiscount?'<td style="padding:4px 6px"></td>':'')
         +'<td style="padding:4px 6px"></td>'
@@ -797,7 +800,7 @@ async function generateDoc(id, type) {
   const quoteWorkCost  = quoteWorkHours > 0 && hourlyRate > 0 ? quoteWorkHours * hourlyRate : 0;
   const quoteWorkRow   = quoteWorkCost > 0
     ? '<tr style="border-bottom:1px solid #e5e7eb">'
-      +'<td style="padding:8px 6px">Arbeitszeit</td>'
+      +'<td style="padding:8px 6px">' + _d('Arbeitszeit') + '</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtN(quoteWorkHours,2)+' h</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtP(hourlyRate)+'/h</td>'
       +(hasDiscount?'<td style="padding:8px 6px;text-align:right;color:#9ca3af">—</td>':'')
@@ -811,7 +814,7 @@ async function generateDoc(id, type) {
     const hrs = parseFloat(t.hours) || 0;
     const cost = hrs * hourlyRate;
     return '<tr style="border-bottom:1px solid #e5e7eb">'
-      +'<td style="padding:8px 6px">'+(t.description||'Arbeitszeit')+(t.date?' <span style="font-size:13px;color:#9ca3af">['+t.date+']</span>':'')+'</td>'
+      +'<td style="padding:8px 6px">'+(t.description||_d('Arbeitszeit'))+(t.date?' <span style="font-size:13px;color:#9ca3af">['+t.date+']</span>':'')+'</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtN(hrs,2)+' h</td>'
       +'<td style="padding:8px 6px;text-align:right">'+fmtP(hourlyRate)+'/h</td>'
       +(hasDiscount?'<td style="padding:8px 6px"></td>':'')
@@ -825,7 +828,7 @@ async function generateDoc(id, type) {
   const grandTotal = (d.total || 0) + allWorkTotal + workTaxExtra;
 
   const html = `<!DOCTYPE html>
-<html lang="de-CH">
+<html lang="${_docLang()}">
 <head><meta charset="UTF-8"><title>${docLabel} ${d.number}</title>
 <style>
   body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:40px}
@@ -862,50 +865,50 @@ async function generateDoc(id, type) {
     <div class="doc-label">${docLabel}</div>
     <div style="font-family:monospace;font-size:13px;color:${color}">${d.number}</div>
     <div class="meta">
-      Datum: ${today}<br>
-      ${isQuote && d.valid_until ? 'Gültig bis: '+fmtD(d.valid_until)+'<br>' : ''}
-      ${!isQuote && d.order_date ? 'Auftragsdatum: '+fmtD(d.order_date)+'<br>' : ''}
-      ${!isQuote && d.delivery_date ? 'Lieferdatum: '+fmtD(d.delivery_date)+'<br>' : ''}
-      ${d.payment_terms ? 'Zahlung: '+escHtml(d.payment_terms) : ''}
+      ${_d('Datum:')} ${today}<br>
+      ${isQuote && d.valid_until ? _d('Gültig bis:') + ' ' +fmtD(d.valid_until)+'<br>' : ''}
+      ${!isQuote && d.order_date ? _d('Auftragsdatum:') + ' ' +fmtD(d.order_date)+'<br>' : ''}
+      ${!isQuote && d.delivery_date ? _d('Lieferdatum:') + ' ' +fmtD(d.delivery_date)+'<br>' : ''}
+      ${d.payment_terms ? _d('Zahlung:') + ' ' +escHtml(d.payment_terms) : ''}
     </div>
   </div>
 </div>
 
 <div class="addr-block">
   ${d.customer_name ? `<div>
-    <div class="addr-label">${isQuote ? 'Angebotsempfänger' : 'Rechnungsempfänger'}</div>
+    <div class="addr-label">${isQuote ? _d('Angebotsempfänger') : _d('Rechnungsempfänger')}</div>
     <div style="font-weight:600;font-size:13px">${escHtml(d.customer_name)}</div>
     ${d.customer_number ? '<div style="font-size:13px;color:#6b7280">'+d.customer_number+'</div>' : ''}
     <div style="margin-top:4px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
     ${d.customer_email ? '<div style="margin-top:4px;color:#6b7280">'+escHtml(d.customer_email)+'</div>' : ''}
-  </div>` : `<div><div class="addr-label">${isQuote ? 'Angebotsempfänger' : 'Rechnungsempfänger'}</div><div style="color:#9ca3af">Kein Kunde zugewiesen</div></div>`}
+  </div>` : `<div><div class="addr-label">${isQuote ? _d('Angebotsempfänger') : _d('Rechnungsempfänger')}</div><div style="color:#9ca3af">${_d('Kein Kunde zugewiesen')}</div></div>`}
   <div>
-    <div class="addr-label">${isQuote ? 'Betreff' : 'Auftrag'}</div>
+    <div class="addr-label">${isQuote ? _d('Betreff') : _d('Auftrag')}</div>
     <div style="font-weight:600">${escHtml(d.title)}</div>
-    <div style="margin-top:4px"><span class="badge">${d.status}</span></div>
+    <div style="margin-top:4px"><span class="badge">${esc(_dSt('order', d.status))}</span></div>
     ${d.notes ? '<div style="margin-top:6px;font-size:13px;color:#6b7280">'+escHtml(d.notes)+'</div>' : ''}
   </div>
 </div>
 
 <table>
   <thead><tr>
-    <th>Beschreibung</th>
-    <th style="text-align:right">Menge</th>
-    <th style="text-align:right">Einzelpreis</th>
-    ${hasDiscount ? '<th style="text-align:right">Rabatt</th>' : ''}
-    <th style="text-align:right">Total</th>
+    <th>${_d('Beschreibung')}</th>
+    <th style="text-align:right">${_d('Menge')}</th>
+    <th style="text-align:right">${_d('Einzelpreis')}</th>
+    ${hasDiscount ? '<th style="text-align:right">' + _d('Rabatt') + '</th>' : ''}
+    <th style="text-align:right">${_d('Total')}</th>
   </tr></thead>
-  <tbody>${rows || `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9ca3af">Keine Positionen</td></tr>`}${quoteWorkRow}${timeRows}</tbody>
+  <tbody>${rows || `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9ca3af">${_d('Keine Positionen')}</td></tr>`}${quoteWorkRow}${timeRows}</tbody>
 </table>
 
 <div class="totals">
-  ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>Zwischentotal</span><span>'+fmtP(d.subtotal)+'</span></div>'
+  ${(d.discount_pct||0)>0 ? '<div class="total-row"><span>' + _d('Zwischentotal') + '</span><span>'+fmtP(d.subtotal)+'</span></div>'
     +'<div class="total-row" style="color:#d97706"><span>Rabatt '+d.discount_pct+'%</span><span>-'+fmtP(d.discount_amount)+'</span></div>' : ''}
-  <div class="total-row"><span>Positionen Netto</span><span>${fmtP(d.net)}</span></div>
-  ${quoteWorkCost > 0 ? '<div class="total-row"><span>Arbeitszeit</span><span>'+fmtP(quoteWorkCost)+'</span></div>' : ''}
-  ${billableTime.length && hourlyRate > 0 ? '<div class="total-row"><span>Arbeitszeit (verrechenbar)</span><span>'+fmtP(timeTotal)+'</span></div>' : ''}
+  <div class="total-row"><span>${_d('Positionen Netto')}</span><span>${fmtP(d.net)}</span></div>
+  ${quoteWorkCost > 0 ? '<div class="total-row"><span>' + _d('Arbeitszeit') + '</span><span>'+fmtP(quoteWorkCost)+'</span></div>' : ''}
+  ${billableTime.length && hourlyRate > 0 ? '<div class="total-row"><span>' + _d('Arbeitszeit (verrechenbar)') + '</span><span>'+fmtP(timeTotal)+'</span></div>' : ''}
   ${d.include_tax ? '<div class="total-row"><span>MwSt. '+(d.tax_rate ?? 0)+'%</span><span>'+fmtP(d.tax_amount + workTaxExtra)+'</span></div>' : ''}
-  <div class="total-gross"><span>Gesamtbetrag</span><span>${fmtCHF(grandTotal)}</span></div>
+  <div class="total-gross"><span>${_d('Gesamtbetrag')}</span><span>${fmtCHF(grandTotal)}</span></div>
 </div>
 
 <div class="footer">
@@ -932,15 +935,14 @@ async function offerInvoicedStatus(orderId) {
   if (!o || o.status === 'INVOICED' || o.status === 'CANCELLED') return;
 
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">Rechnung erstellt</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Rechnung erstellt')}</div></div>
     <div class="modal-body" style="font-size:13px;color:var(--t2)">
-      Auftrag <strong style="font-family:var(--mono);color:var(--t1)">${esc(o.number || '')}</strong>
-      steht auf „${esc(ORDER_ST_LABEL[o.status] || o.status)}“.<br><br>
-      Soll er als <strong>fakturiert</strong> markiert werden?
+      ${_t('Auftrag {number} steht auf „{status}“.', { number: `<strong style="font-family:var(--mono);color:var(--t1)">${esc(o.number || '')}</strong>`, status: esc(ORDER_ST_LABEL[o.status] || o.status) })}<br><br>
+      ${_t('Soll er als <strong>fakturiert</strong> markiert werden?')}
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Später</button>
-      <button class="btn btn-primary" onclick="_markInvoiced(${orderId})">Als fakturiert markieren</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Später')}</button>
+      <button class="btn btn-primary" onclick="_markInvoiced(${orderId})">${_t('Als fakturiert markieren')}</button>
     </div>
   </div>`);
 }
@@ -951,12 +953,12 @@ async function _markInvoiced(orderId) {
     await api(`/api/orders/${orderId}/status`, 'PUT', { status: 'INVOICED' });
     const rec = (state.orders || []).find(x => x.id === orderId);
     if (rec) rec.status = 'INVOICED';
-    toast('Auftrag als fakturiert markiert', 'ok');
+    toast(_t('Auftrag als fakturiert markiert'), 'ok');
     if (state.view === 'orders') await renderOrders();
     else if (typeof openOrderDetail === 'function') openOrderDetail(orderId);
     loadStats();
   } catch (e) {
-    toast('Status konnte nicht gesetzt werden', 'err');
+    toast(_t('Status konnte nicht gesetzt werden'), 'err');
   }
 }
 
@@ -971,7 +973,7 @@ function showPrinterError(msg) {
   banner.innerHTML = `<div style="display:flex;align-items:flex-start;gap:10px">
     <span style="color:var(--red);font-size:16px;flex-shrink:0">🖶</span>
     <div style="flex:1;min-width:0">
-      <div style="font-weight:600;color:var(--red);margin-bottom:4px;font-size:13px">Drucker nicht erreichbar</div>
+      <div style="font-weight:600;color:var(--red);margin-bottom:4px;font-size:13px">${_t('Drucker nicht erreichbar')}</div>
       <div style="font-size:13px;color:var(--t2);font-family:var(--mono);white-space:pre-wrap;word-break:break-word">${esc(String(msg))}</div>
     </div>
     <button onclick="document.getElementById('printer-err-banner').remove()" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0;flex-shrink:0;line-height:1">✕</button>
@@ -987,7 +989,7 @@ async function printReceiptAll(deliveryId, mode) {
   btn.disabled = true;
   try {
     await api('/api/print-receipt-delivery', 'POST', { delivery_id: deliveryId, mode });
-    toast('Gesamtbeleg gedruckt ✓', 'ok');
+    toast(_t('Gesamtbeleg gedruckt ✓'), 'ok');
   } catch(e) {
     showPrinterError(e);
   } finally {
@@ -1003,7 +1005,7 @@ async function printReceipt(deliveryItemId, mode) {
   btn.disabled = true;
   try {
     await api('/api/print-receipt', 'POST', { delivery_item_id: deliveryItemId, mode });
-    toast('Beleg gedruckt ✓', 'ok');
+    toast(_t('Beleg gedruckt ✓'), 'ok');
   } catch(e) {
     showPrinterError(e);
   } finally {
@@ -1014,56 +1016,56 @@ async function printReceipt(deliveryItemId, mode) {
 
 // ── DELIVERY DOC (Lieferschein eines Produktionsauftrags) ──────
 const SETTINGS_GROUPS_PDF = [
-  { label: 'Profil', keys: [
-    ['print_settings_id','Druckprofil'], ['printer_settings_id','Drucker'], ['filament_settings_id','Filamentprofil']
+  { label: _d('Profil'), keys: [
+    ['print_settings_id',_d('Druckprofil')], ['printer_settings_id',_d('Drucker')], ['filament_settings_id',_d('Filamentprofil')]
   ]},
-  { label: 'Schichten & Wände', keys: [
-    ['layer_height','Schichthöhe (mm)'], ['first_layer_height','1. Schicht (mm)'],
-    ['perimeters','Perimeter'], ['top_solid_layers','Oben'], ['bottom_solid_layers','Unten'],
-    ['spiral_vase','Vase-Modus']
+  { label: _d('Schichten & Wände'), keys: [
+    ['layer_height',_d('Schichthöhe (mm)')], ['first_layer_height',_d('1. Schicht (mm)')],
+    ['perimeters','Perimeter'], ['top_solid_layers',_d('Oben')], ['bottom_solid_layers',_d('Unten')],
+    ['spiral_vase',_d('Vase-Modus')]
   ]},
-  { label: 'Füllung', keys: [
-    ['fill_density','Füllung (%)'], ['fill_pattern','Muster'],
-    ['top_fill_pattern','Oben'], ['bottom_fill_pattern','Unten']
+  { label: _d('Füllung'), keys: [
+    ['fill_density',_d('Füllung (%)')], ['fill_pattern',_d('Muster')],
+    ['top_fill_pattern',_d('Oben')], ['bottom_fill_pattern',_d('Unten')]
   ]},
-  { label: 'Stützen', keys: [
-    ['support_material','Aktiv'], ['support_material_auto','Auto'],
-    ['support_material_threshold','Überhang (°)'], ['support_material_pattern','Muster'],
-    ['support_material_style','Stil'], ['raft_layers','Raft']
+  { label: _d('Stützen'), keys: [
+    ['support_material',_d('Aktiv')], ['support_material_auto',_d('Auto')],
+    ['support_material_threshold',_d('Überhang (°)')], ['support_material_pattern',_d('Muster')],
+    ['support_material_style',_d('Stil')], ['raft_layers','Raft']
   ]},
-  { label: 'Temperatur', keys: [
-    ['temperature','Düsentemperatur (°C)'], ['first_layer_temperature','Düse 1. Schicht'],
-    ['bed_temperature','Betttemperatur (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht']
+  { label: _d('Temperatur'), keys: [
+    ['temperature',_d('Düsentemperatur (°C)')], ['first_layer_temperature',_d('Düse 1. Schicht')],
+    ['bed_temperature',_d('Betttemperatur (°C)')], ['first_layer_bed_temperature',_d('Bett 1. Schicht')]
   ]},
-  { label: 'Geschwindigkeit (mm/s)', keys: [
-    ['perimeter_speed','Perimeter'], ['infill_speed','Füllung'],
-    ['travel_speed','Travel'], ['first_layer_speed','1. Schicht'], ['bridge_speed','Brücken']
+  { label: _d('Geschwindigkeit (mm/s)'), keys: [
+    ['perimeter_speed','Perimeter'], ['infill_speed',_d('Füllung')],
+    ['travel_speed',_d('Travel')], ['first_layer_speed',_d('1. Schicht')], ['bridge_speed',_d('Brücken')]
   ]},
-  { label: 'Kühlung', keys: [
-    ['fan_always_on','Immer an'], ['min_fan_speed','Min (%)'], ['max_fan_speed','Max (%)'],
-    ['bridge_fan_speed','Brücken (%)'], ['disable_fan_first_layers','Aus (erste Lagen)']
+  { label: _d('Kühlung'), keys: [
+    ['fan_always_on',_d('Immer an')], ['min_fan_speed',_d('Min (%)')], ['max_fan_speed',_d('Max (%)')],
+    ['bridge_fan_speed',_d('Brücken (%)')], ['disable_fan_first_layers',_d('Aus (erste Lagen)')]
   ]},
   { label: 'Filament', keys: [
-    ['filament_type','Typ'], ['filament_diameter','Ø (mm)'],
-    ['filament_density','Dichte (g/cm³)'], ['nozzle_diameter','Düse (mm)']
+    ['filament_type',_d('Typ')], ['filament_diameter',_d('Ø (mm)')],
+    ['filament_density',_d('Dichte (g/cm³)')], ['nozzle_diameter',_d('Düse (mm)')]
   ]},
-  { label: 'Diverses', keys: [
-    ['seam_position','Naht'], ['brim_width','Brim (mm)'],
-    ['skirts','Skirt-Linien'], ['wipe_tower','Wipe-Tower'],
-    ['ironing','Bügeln'], ['avoid_crossing_perimeters','Kreuzungen vermeiden'],
-    ['estimated_printing_time_normal_mode','Druckzeit (geschätzt)']
+  { label: _d('Diverses'), keys: [
+    ['seam_position',_d('Naht')], ['brim_width','Brim (mm)'],
+    ['skirts',_d('Skirt-Linien')], ['wipe_tower',_d('Wipe-Tower')],
+    ['ironing',_d('Bügeln')], ['avoid_crossing_perimeters',_d('Kreuzungen vermeiden')],
+    ['estimated_printing_time_normal_mode',_d('Druckzeit (geschätzt)')]
   ]}
 ];
 
 function renderSettingsTablePdf(s) {
-  if (!s) return '<p style="color:#9ca3af;font-size:13px">Keine Druckeinstellungen hinterlegt.</p>';
+  if (!s) return '<p style="color:#9ca3af;font-size:13px">' + _d('Keine Druckeinstellungen hinterlegt.') + '</p>';
   return SETTINGS_GROUPS_PDF.map(g => {
     const rows = g.keys.map(([k, label]) => {
       const raw = s[k];
       if (!raw) return '';
       const v = raw.split(';')[0].trim();
       if (!v) return '';
-      const disp = v === '0' ? 'Nein' : v === '1' ? 'Ja' : v;
+      const disp = v === '0' ? _d('Nein') : v === '1' ? _d('Ja') : v;
       return `<tr><td style="padding:4px 8px;color:#6b7280;width:48%;border-bottom:1px solid #f3f4f6">${label}</td>
               <td style="padding:4px 8px;font-weight:600;border-bottom:1px solid #f3f4f6">${escHtml(disp)}</td></tr>`;
     }).filter(Boolean).join('');
@@ -1078,7 +1080,7 @@ function renderSettingsTablePdf(s) {
 async function generateDeliveryDoc(id) {
   const d = await api(`/api/deliveries/${id}/delivery-data`);
   const s = state.settings;
-  const today = new Date().toLocaleDateString('de-CH');
+  const today = new Date().toLocaleDateString(_docLocale());
   const color = '#1d4ed8';
 
   const companyLines = [
@@ -1098,20 +1100,20 @@ async function generateDeliveryDoc(id) {
         <span style="background:rgba(255,255,255,.2);width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${idx+1}</span>
         ${item.item_number?`<span style="font-family:monospace;font-size:13px;opacity:.8">${escHtml(item.item_number)}${item.effective_rev ? ' · rev' + escHtml(item.effective_rev.rev) : ''}</span>`:''}
         <span style="font-weight:600;font-size:13px;flex:1">${escHtml(item.description)}</span>
-        <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${_unit(item.unit)}</span>
+        <span style="background:rgba(255,255,255,.15);padding:3px 10px;border-radius:20px;font-size:13px">${item.quantity} ${_dunit(item.unit)}</span>
       </div>
-      ${item.rm_name?`<div style="padding:6px 14px;background:#f0f9ff;font-size:13px;color:#0369a1;border-bottom:1px solid #bae6fd">🧵 Rohmaterial: <strong>${escHtml(item.rm_name)}</strong>${item.rm_type?' · '+escHtml(item.rm_type):''}${item.rm_color?' · '+escHtml(item.rm_color):''}</div>`:''}
-      ${item.hint_customer?`<div style="padding:8px 14px;background:#fef2f2;font-size:13px;color:#7f1d1d;border-bottom:2px solid #dc2626;white-space:pre-wrap"><b>⚠ Hinweis:</b> ${escHtml(item.hint_customer)}</div>`:''}
-      ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:13px;color:#374151;border-bottom:1px solid #dbeafe">Notiz: ${escHtml(item.notes)}</div>`:''}
+      ${item.rm_name?`<div style="padding:6px 14px;background:#f0f9ff;font-size:13px;color:#0369a1;border-bottom:1px solid #bae6fd">${_d('🧵 Rohmaterial:')} <strong>${escHtml(item.rm_name)}</strong>${item.rm_type?' · '+escHtml(item.rm_type):''}${item.rm_color?' · '+escHtml(item.rm_color):''}</div>`:''}
+      ${item.hint_customer?`<div style="padding:8px 14px;background:#fef2f2;font-size:13px;color:#7f1d1d;border-bottom:2px solid #dc2626;white-space:pre-wrap"><b>${_d('⚠ Hinweis:')}</b> ${escHtml(item.hint_customer)}</div>`:''}
+      ${item.notes?`<div style="padding:8px 14px;background:#eff6ff;font-size:13px;color:#374151;border-bottom:1px solid #dbeafe">${_d('Notiz:')} ${escHtml(item.notes)}</div>`:''}
       <div style="padding:12px 14px">
-        ${hasSettings ? renderSettingsTablePdf(item.print_settings) : '<p style="color:#9ca3af;font-size:13px;margin:0">Keine 3MF-Druckeinstellungen hinterlegt.</p>'}
+        ${hasSettings ? renderSettingsTablePdf(item.print_settings) : '<p style="color:#9ca3af;font-size:13px;margin:0">' + _d('Keine 3MF-Druckeinstellungen hinterlegt.') + '</p>'}
       </div>
     </div>`;
   }).join('');
 
   const html = `<!DOCTYPE html>
-<html lang="de-CH">
-<head><meta charset="UTF-8"><title>Lieferschein ${escHtml(d.number)}</title>
+<html lang="${_docLang()}">
+<head><meta charset="UTF-8"><title>${_d('Lieferschein')} ${escHtml(d.number)}</title>
 <style>
   body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:32px}
   .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #1d4ed8}
@@ -1137,41 +1139,41 @@ async function generateDeliveryDoc(id) {
     </div>
   </div>
   <div style="text-align:right">
-    <div class="doc-label">Lieferschein</div>
+    <div class="doc-label">${_d('Lieferschein')}</div>
     <div style="font-family:monospace;font-size:13px;color:#1d4ed8;margin-bottom:4px">${escHtml(d.number)}</div>
     <div class="meta">
-      Erstellt: ${today}<br>
-      ${d.delivery_date?'Lieferdatum: '+fmtD(d.delivery_date)+'<br>':''}
-      ${d.manufacture_date?'Herstellungsdatum: '+fmtD(d.manufacture_date)+'<br>':''}
-      ${d.order_number?'Auftrag: '+escHtml(d.order_number):''}
+      ${_d('Erstellt:')} ${today}<br>
+      ${d.delivery_date?_d('Lieferdatum:') + ' ' +fmtD(d.delivery_date)+'<br>':''}
+      ${d.manufacture_date?_d('Herstellungsdatum:') + ' ' +fmtD(d.manufacture_date)+'<br>':''}
+      ${d.order_number?_d('Auftrag:') + ' ' +escHtml(d.order_number):''}
     </div>
-    <span class="badge" style="background:#dbeafe;color:#1d4ed8;margin-top:4px">${DELIVERY_ST_LABEL[d.status]||d.status}</span>
+    <span class="badge" style="background:#dbeafe;color:#1d4ed8;margin-top:4px">${_dSt('delivery', d.status)}</span>
   </div>
 </div>
 
 <div class="addr-block">
   ${d.customer_name?`<div>
-    <div class="addr-label">Empfänger</div>
+    <div class="addr-label">${_d('Empfänger')}</div>
     <div style="font-weight:600;font-size:13px">${escHtml(d.customer_name)}</div>
     ${d.customer_number?'<div style="font-size:13px;color:#6b7280">'+escHtml(d.customer_number)+'</div>':''}
     <div style="margin-top:3px;line-height:1.7;color:#374151">${custAddrLines.map(l=>escHtml(l)).join('<br>')}</div>
     ${d.customer_email?'<div style="margin-top:3px;color:#6b7280">'+escHtml(d.customer_email)+'</div>':''}
-  </div>`:`<div><div class="addr-label">Empfänger</div><div style="color:#9ca3af">—</div></div>`}
+  </div>`:`<div><div class="addr-label">${_d('Empfänger')}</div><div style="color:#9ca3af">—</div></div>`}
   <div>
-    <div class="addr-label">Auftrag / Betreff</div>
+    <div class="addr-label">${_d('Auftrag / Betreff')}</div>
     <div style="font-weight:600">${escHtml(d.title)}</div>
     ${d.notes?`<div style="margin-top:4px;font-size:13px;color:#6b7280">${escHtml(d.notes)}</div>`:''}
   </div>
 </div>
 
-<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:12px">${(d.items||[]).length} Position(en)</div>
+<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:12px">${_d('{n} Position(en)', { n: (d.items||[]).length })}</div>
 
-${itemsHtml || '<p style="color:#9ca3af">Keine Positionen</p>'}
+${itemsHtml || '<p style="color:#9ca3af">' + _d('Keine Positionen') + '</p>'}
 
 <div class="sign-row">
-  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">Übergabe durch</div><div class="sign-box"></div></div>
-  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">Empfang bestätigt</div><div class="sign-box"></div></div>
-  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">Datum</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">${_d('Übergabe durch')}</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">${_d('Empfang bestätigt')}</div><div class="sign-box"></div></div>
+  <div style="flex:1"><div style="font-size:13px;color:#6b7280;margin-bottom:6px">${_d('Datum')}</div><div class="sign-box"></div></div>
 </div>
 
 <div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:13px;color:#d1d5db;text-align:right">${today}</div>
@@ -1201,7 +1203,7 @@ function partLabelHtml(d, it) {
       ${code ? `<div class="code">${escHtml(code)}</div>` : ''}
       <div class="name">${escHtml(it.item_name || it.description || '')}</div>
       ${it.item_number ? `<div class="num">${escHtml(it.item_number)}${rev ? ' · rev' + escHtml(rev) : ''}</div>` : ''}
-      <div class="meta">${escHtml(String(it.quantity ?? ''))} ${escHtml(_unit(it.unit))}${material ? ' · ' + escHtml(material) : ''}</div>
+      <div class="meta">${escHtml(String(it.quantity ?? ''))} ${escHtml(_dunit(it.unit))}${material ? ' · ' + escHtml(material) : ''}</div>
       <div class="meta">${escHtml(d.number)}${date ? ' · ' + fmtD(date) : ''}</div>
     </div>
     ${qr ? `<div class="qr">${qr}</div>` : ''}
@@ -1211,12 +1213,12 @@ function partLabelHtml(d, it) {
 async function printPartLabels(deliveryId) {
   const d = await api(`/api/deliveries/${deliveryId}/delivery-data`);
   const labels = (d.items || []).map(it => partLabelHtml(d, it));
-  if (!labels.length) return toast('Keine Positionen', 'err');
+  if (!labels.length) return toast(_d('Keine Positionen'), 'err');
   // "</" im Skriptblock entschärfen, damit der Browser ihn nicht vorzeitig schliesst
   const data = JSON.stringify(labels).replace(/<\//g, '<\\/');
   const html = `<!DOCTYPE html>
-<html lang="de-CH">
-<head><meta charset="UTF-8"><title>Etiketten ${escHtml(d.number)}</title>
+<html lang="${_docLang()}">
+<head><meta charset="UTF-8"><title>${_d('Etiketten')} ${escHtml(d.number)}</title>
 <style>
   @page { size: A4; margin: 0 }
   body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; color: #111 }
@@ -1247,11 +1249,11 @@ async function printPartLabels(deliveryId) {
 </head>
 <body>
 <div class="bar">
-  <strong>${labels.length} Etikett${labels.length === 1 ? '' : 'en'} · ${escHtml(d.number)}</strong>
-  <label>Erstes freies Etikett auf dem Bogen:
+  <strong>${_d(labels.length === 1 ? '1 Etikett' : '{n} Etiketten', { n: labels.length })} · ${escHtml(d.number)}</strong>
+  <label>${_d('Erstes freies Etikett auf dem Bogen:')}
     <input type="number" min="1" max="${LABELS_PER_SHEET}" value="1" oninput="render(this.value)"></label>
-  <span style="color:#555">A4-Bogen 70 × 37 mm (3 × 8) — im Druckdialog Ränder «Keine», Skalierung 100 %</span>
-  <button onclick="window.print()">Drucken</button>
+  <span style="color:#555">${_d('A4-Bogen 70 × 37 mm (3 × 8) — im Druckdialog Ränder «Keine», Skalierung 100 %')}</span>
+  <button onclick="window.print()">${_d('Drucken')}</button>
 </div>
 <div id="pages"></div>
 <script>
@@ -1267,7 +1269,7 @@ async function printPartLabels(deliveryId) {
 <\/script>
 </body></html>`;
   const w = window.open('', '_blank', 'width=950,height=900');
-  if (!w) return toast('Popup blockiert — bitte Popups für PLM erlauben', 'err');
+  if (!w) return toast(_t('Popup blockiert — bitte Popups für PLM erlauben'), 'err');
   w.document.write(html);
   w.document.close();
 }
@@ -1276,7 +1278,7 @@ async function printPartLabels(deliveryId) {
 async function printBom(itemId, revId) {
   const item = await api('/api/items/' + itemId);
   const rev  = item.revisions?.find(r => r.id === revId) || item.revisions?.[0];
-  if (!rev) return toast('Revision nicht gefunden', 'err');
+  if (!rev) return toast(_t('Revision nicht gefunden'), 'err');
   const s = state.settings || {};
 
   const plmRows = (rev.bom||[]).slice().sort((a,b) => (a.position||999)-(b.position||999));
@@ -1300,11 +1302,11 @@ async function printBom(itemId, revId) {
       <td style="text-align:center">${b._std
         ? '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;font-size:11px">N</span>'
         : escH(b.item_type?.toUpperCase())}</td>
-      <td style="text-align:right;font-family:monospace"><strong>${b.quantity}</strong> ${escH(_unit(b.unit))}</td>
+      <td style="text-align:right;font-family:monospace"><strong>${b.quantity}</strong> ${escH(_dunit(b.unit))}</td>
       ${b._std ? '<td style="color:#9ca3af;font-size:12px">—</td>' : `<td style="font-family:monospace;font-size:12px;color:#6b7280">${b.child_active_rev?'rev'+b.child_active_rev.rev:'—'}</td>`}
     </tr>`).join('');
 
-  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+  const html = `<!DOCTYPE html><html lang="${_docLang()}"><head><meta charset="utf-8">
   <title>BOM ${escH(item.item_number)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1325,28 +1327,28 @@ async function printBom(itemId, revId) {
   <div class="meta">
     <div>
       <h1>${escH(item.item_number)} — ${escH(item.name)}</h1>
-      <div class="sub">Stückliste rev${rev.rev} · Status: ${rev.status}${item.classification?' · '+escH(item.classification):''}</div>
+      <div class="sub">${_d('Stückliste rev{rev}', { rev: rev.rev })} · Status: ${rev.status}${item.classification?' · '+escH(item.classification):''}</div>
       ${_docLogo(s, s.company_name ? `<div class="company">${escH(s.company_name)}</div>` : '')}
     </div>
     <div style="text-align:right;font-size:12px;color:#6b7280">
-      ${new Date().toLocaleDateString('de-CH')}<br>
-      ${allRows.length} Position(en)${totalWeight>0?' · Gewicht: ~'+totalWeight.toFixed(1)+' g':''}
+      ${new Date().toLocaleDateString(_docLocale())}<br>
+      ${_d('{n} Position(en)', { n: allRows.length })}${totalWeight>0?' · ' + _d('Gewicht:') + ' ~'+totalWeight.toFixed(1)+' g':''}
     </div>
   </div>
   <table>
     <thead><tr>
-      <th style="width:36px;text-align:center">Pos.</th>
-      <th style="width:130px">Nummer</th>
-      <th>Bezeichnung</th>
-      <th style="width:50px;text-align:center">Typ</th>
-      <th style="width:80px;text-align:right">Menge</th>
-      <th style="width:60px">Rev.</th>
+      <th style="width:36px;text-align:center">${_d('@pos:Pos.')}</th>
+      <th style="width:130px">${_d('Nummer')}</th>
+      <th>${_d('Bezeichnung')}</th>
+      <th style="width:50px;text-align:center">${_d('Typ')}</th>
+      <th style="width:80px;text-align:right">${_d('Menge')}</th>
+      <th style="width:60px">${_d('Rev.')}</th>
     </tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px">Keine Positionen</td></tr>'}</tbody>
+    <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px">' + _d('Keine Positionen') + '</td></tr>'}</tbody>
   </table>
   <div class="footer">
     <span>${escH(item.item_number)} · BOM rev${rev.rev}</span>
-    <span>Gedruckt: ${new Date().toLocaleDateString('de-CH')}</span>
+    <span>${_d('Gedruckt:')} ${new Date().toLocaleDateString(_docLocale())}</span>
   </div>
   <script>window.onload=()=>{window.print();}<\/script>
   </body></html>`;

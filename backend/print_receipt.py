@@ -69,7 +69,7 @@ def build_receipt(data):
         o+=row(qty_line, w=w)
     o+=sep(w)
     if params:
-        o+=row('DRUCKPARAMETER',bold=True,w=w)
+        o+=row(data.get('params_title') or 'DRUCKPARAMETER',bold=True,w=w)
         for k,v in params.items():
             vs=str(v).strip()
             if vs and vs not in ('','-','None'): o+=lr(str(k)[:14],vs[:16],w=w)

@@ -30,18 +30,34 @@ const LOCALE = LOCALES[LANG];
 
 // Gleicher deutscher Text, verschiedene Bedeutung: ein Kontext davor trennt die
 // Übersetzungen — _t('@lock:Übernehmen') zeigt auf Deutsch „Übernehmen“.
-function _t(s, vars) {
-  let r = (LANG !== 'de' && I18N[LANG]?.[s]) || s;
+function _tIn(lang, s, vars) {
+  let r = (lang !== 'de' && I18N[lang]?.[s]) || s;
   if (r === s && s[0] === '@') r = s.slice(s.indexOf(':') + 1);
   if (vars) r = r.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   return r;
 }
+function _t(s, vars) { return _tIn(LANG, s, vars); }
+// Nur als Schlüssel markieren, übersetzt wird erst beim Verwenden — für Tabellen,
+// die Oberfläche (_t) und Belege (_d) teilen (wie N_() bei gettext).
+const _k = s => s;
+
+// Belege (Rechnung, Angebot, Lieferschein, Bestellung, Datenblatt …) haben ihre
+// eigene Sprache: Einstellungen → Firma (doc_lang). Ohne Einstellung gilt die der
+// Oberfläche. _d() statt _t() für alles, was gedruckt oder als PDF erzeugt wird.
+function _docLang() {
+  let l;
+  try { l = state.settings?.doc_lang; } catch {}
+  return LANGS[l] ? l : LANG;
+}
+function _d(s, vars) { return _tIn(_docLang(), s, vars); }
+const _docLocale = () => LOCALES[_docLang()];
 
 // Einheit für die Anzeige. In der Datenbank steht ein Code (pcs, set, flat), der
 // Server macht auch aus „Stk“ oder „Stück“ pcs. Physikalische Einheiten (g, m, h …)
 // und eigener Freitext („Rolle“) werden angezeigt, wie sie sind.
 const UNIT_LABEL = { pcs: 'Stk', set: 'Set', flat: 'Pauschal' };
 function _unit(u) { return u && !UNIT_LABEL[u] ? u : _t(UNIT_LABEL[u || 'pcs']); }
+function _dunit(u) { return u && !UNIT_LABEL[u] ? u : _d(UNIT_LABEL[u || 'pcs']); }
 
 // Statisches HTML aus index.html einmal beim Laden übersetzen: Textknoten und
 // title/placeholder, die genau einem Eintrag entsprechen. Nur beim Start —

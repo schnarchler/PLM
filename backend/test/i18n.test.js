@@ -24,7 +24,7 @@ function tKeys(src) {
   src = src.replace(/^\s*\/\/.*$/gm, '');   // Kommentare
   const keys = [];
   const LIT = String.raw`'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"`;
-  const re = new RegExp(String.raw`(?<![\w$.])_t\(\s*(?:(?:[^'"()?,]|${LIT})*?\?\s*)?(${LIT})(?:\s*:\s*(${LIT}))?`, 'g');
+  const re = new RegExp(String.raw`(?<![\w$.])_[tdk]\(\s*(?:(?:[^'"()?,]|${LIT})*?\?\s*)?(${LIT})(?:\s*:\s*(${LIT}))?`, 'g');
   for (const m of src.matchAll(re)) for (const lit of [m[1], m[2]]) if (lit) keys.push(unquote(lit));
   return keys;
 }
@@ -73,9 +73,10 @@ test('i18n: _t() setzt Platzhalter ein und fällt auf Deutsch zurück', () => {
   assert.strictEqual(I._t('@lock:Übernehmen'), 'Übernehmen', 'auf Deutsch ohne Kontext');
 });
 
-test('i18n: keine Variable heisst _t — sie würde die Übersetzung verdecken', () => {
-  const decl = /(?:\b(?:const|let|var|function)\s+_t\b(?!\(s, vars\))|[(,]\s*_t\s*[,)=]|\b_t\s*=>)/;
-  const bad = JS.filter(f => decl.test(read(f).replace(/^function _t\(s, vars\)/m, '')));
+test('i18n: keine Variable heisst _t oder _d — sie würde die Übersetzung verdecken', () => {
+  // Deklarationen: const/let/var/function _t, Parameter (… _t …) => oder function f(… _t …)
+  const decl = /(?:\b(?:const|let|var|function)\s+_[td]\b(?!\(s, vars\))|\b_[td]\s*=>|\(([^()]*[(,]\s*)?_[td]\s*(=[^,()]*)?(,[^()]*)?\)\s*(=>|\{))/;
+  const bad = JS.filter(f => decl.test(read(f).replace(/^function _[td]\(s, vars\)/gm, '')));
   assert.deepStrictEqual(bad, []);
 });
 
@@ -114,6 +115,7 @@ test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deuts
   try {
     // Leere Datenbank: keine Sprache eingetragen, jede Person darf sie wählen
     assert.strictEqual((await settings()).ui_lang, undefined);
+    assert.strictEqual((await settings()).doc_lang, undefined, 'Belege ohne Vorgabe');
     const r = await fetch(`http://127.0.0.1:${PORT}/api/settings`, { method: 'PUT',
       headers: { 'Content-Type': 'application/json', Origin: `http://127.0.0.1:${PORT}` }, body: JSON.stringify({ ui_lang: 'en' }) });
     assert.strictEqual(r.status, 200);
@@ -124,10 +126,12 @@ test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deuts
     const db = new SQL.Database(fs.readFileSync(path.join(dir, 'plm.db')));
     db.run("DELETE FROM settings WHERE key='ui_lang'");
     db.run("DELETE FROM applied_migrations WHERE key='ui-lang-existing-v1'");
+    db.run("DELETE FROM applied_migrations WHERE key='doc-lang-existing-v1'");
     db.run("INSERT INTO customers (number, name) VALUES ('KD-0001', 'Muster AG')");
     fs.writeFileSync(path.join(dir, 'plm.db'), Buffer.from(db.export()));
     proc = await startServer(dir);
     assert.strictEqual((await settings()).ui_lang, 'de');
+    assert.strictEqual((await settings()).doc_lang, 'de', 'bestehende Belege bleiben deutsch');
   } finally {
     await stopServer(proc).catch(() => {});
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
@@ -205,4 +209,22 @@ test('Kategorien und Normen: Codes in der Datenbank, Migration stellt alte Werte
     await stopServer(proc).catch(() => {});
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
   }
+});
+
+test('Belege: _d() folgt der Sprache der Belege, nicht der Oberfläche', () => {
+  const I = (0, eval)(read('js/00-i18n.js') + `; ({ _t, _d, _dunit, _docLocale, I18N, setLangForTest: l => { LANG = l; },
+    setDocLang: l => { globalThis.state = { settings: { doc_lang: l } }; } })`);
+  I.I18N.en = EN;
+  I.setDocLang('en');                       // Oberfläche Deutsch, Belege Englisch
+  assert.strictEqual(I._t('Speichern'), 'Speichern');
+  assert.strictEqual(I._d('Lieferschein'), 'Delivery note');
+  assert.strictEqual(I._dunit('pcs'), 'pcs');
+  assert.strictEqual(I._docLocale(), 'en-GB');
+  I.setLangForTest('en'); I.setDocLang('de'); // Oberfläche Englisch, Belege Deutsch
+  assert.strictEqual(I._t('Speichern'), 'Save');
+  assert.strictEqual(I._d('Lieferschein'), 'Lieferschein');
+  assert.strictEqual(I._dunit('pcs'), 'Stk');
+  I.setDocLang(undefined);                  // ohne Einstellung: wie die Oberfläche
+  assert.strictEqual(I._d('Lieferschein'), 'Delivery note');
+  delete globalThis.state;
 });

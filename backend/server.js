@@ -1387,6 +1387,11 @@ function applySchema() {
       if (code !== r.standard) db.run('UPDATE standard_parts SET standard=? WHERE standard=?', [code, r.standard]);
     }
   });
+  // Sprache der Belege: Wer schon Belege erstellt hat, behält Deutsch
+  migrateOnce('doc-lang-existing-v1', () => {
+    if (['projects', 'items', 'customers', 'orders'].some(t => get(`SELECT 1 AS y FROM ${t} LIMIT 1`)))
+      db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('doc_lang','de')");
+  });
   // Sprache der Oberfläche: Ohne Einstellung richtet sie sich nach dem Browser.
   // Wer schon mit PLM arbeitet, behält Deutsch — auch mit englischem Browser.
   migrateOnce('ui-lang-existing-v1', () => {
@@ -1477,6 +1482,19 @@ const normStandard = s => _byAlias({ other: ['sonstiges', 'sonstige', 'other'] }
 // Für Texte, die der Server selbst schreibt (Historie)
 const UNIT_LABEL_DE = { pcs: 'Stk', set: 'Set', flat: 'Pauschal' };
 const unitLabel = u => UNIT_LABEL_DE[u] || u || '';
+
+// Belege (Thermodrucker) in der Sprache der Belege: Einstellungen → Firma
+// (doc_lang). Ohne Einstellung Deutsch. Ohne Umlaute — der Drucker kann sie nicht.
+const DOC_TEXT_EN = {
+  Profil: 'Profile', Drucker: 'Printer', Filament: 'Filament', Material: 'Material', 'Schicht mm': 'Layer mm',
+  Perimeter: 'Perimeters', Infill: 'Infill', Muster: 'Pattern', Support: 'Support', 'Duese °C': 'Nozzle °C',
+  'Bett °C': 'Bed °C', 'Luefter %': 'Fan %', Druckzeit: 'Print time', 'Duese mm': 'Nozzle mm', Ja: 'Yes', Nein: 'No',
+  DRUCKPARAMETER: 'PRINT PARAMETERS',
+};
+const UNIT_LABEL_EN = { pcs: 'pcs', set: 'Set', flat: 'Flat rate' };
+const docLang = () => get("SELECT value FROM settings WHERE key='doc_lang'")?.value === 'en' ? 'en' : 'de';
+const docText = s => (docLang() === 'en' && DOC_TEXT_EN[s]) || s;
+const docUnit = u => docLang() === 'en' ? (UNIT_LABEL_EN[u] || u || '') : unitLabel(u);
 
 function migrateOnce(key, fn) {
   const applied = get('SELECT 1 as y FROM applied_migrations WHERE key=?', [key]);
@@ -7050,10 +7068,10 @@ app.post('/api/print-receipt', (req, res) => {
     try {
       const s = JSON.parse(item.print_settings_json);
       const g1 = k => s[k] ? s[k].split(';')[0].trim() : null;
-      const bool1 = k => { const v = g1(k); return v === '1' ? 'Ja' : v === '0' ? 'Nein' : v; };
+      const bool1 = k => { const v = g1(k); return v === '1' ? docText('Ja') : v === '0' ? docText('Nein') : v; };
       const add = (label, k, transform) => {
         const v = g1(k);
-        if (v !== null && v !== '') params[label] = transform ? transform(v) : v;
+        if (v !== null && v !== '') params[docText(label)] = transform ? transform(v) : v;
       };
       add('Profil',      'print_settings_id');
       add('Drucker',     'printer_settings_id');
@@ -7064,7 +7082,7 @@ app.post('/api/print-receipt', (req, res) => {
       add('Infill',      'fill_density');
       add('Muster',      'fill_pattern');
       const sup = g1('support_material');
-      if (sup !== null) params['Support'] = sup === '1' ? 'Ja' : 'Nein';
+      if (sup !== null) params[docText('Support')] = sup === '1' ? docText('Ja') : docText('Nein');
       add('Duese °C',    'temperature');
       add('Bett °C',     'bed_temperature');
       add('Luefter %',   'max_fan_speed');
@@ -7083,7 +7101,8 @@ app.post('/api/print-receipt', (req, res) => {
     code:            printCode(item.short_code, rev),
     desc:            item.item_name ? '' : (item.description || ''),
     qty:             item.quantity,
-    unit:            unitLabel(item.unit),
+    unit:            docUnit(item.unit),
+    params_title:    docText('DRUCKPARAMETER'),
     price:           price,
     customer:        item.customer_name || '',
     notes:           item.notes || '',
@@ -7190,7 +7209,7 @@ app.post('/api/print-receipt-delivery', (req, res) => {
       number: item.item_number || '',   // Revision steht im Kurzcode
       code:   printCode(item.short_code, rev),
       qty:    item.quantity,
-      unit:   unitLabel(item.unit),
+      unit:   docUnit(item.unit),
       price:  price != null ? price * item.quantity : null,
       notes:  item.notes || ''
     };

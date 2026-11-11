@@ -286,7 +286,7 @@ async function delRawMat(id) {
 async function generatePoDoc(id) {
   const po = await api('/api/purchase-orders/' + id);
   const s = state.settings || {};
-  const today = new Date().toLocaleDateString('de-CH');
+  const today = new Date().toLocaleDateString(_docLocale());
   const total = (po.items||[]).reduce((sum, i) => sum + (i.unit_price != null ? i.quantity * i.unit_price : 0), 0);
 
   const companyLines = [s.company_street, [s.company_postal_code, s.company_city].filter(Boolean).join(' ')].filter(Boolean);
@@ -296,13 +296,13 @@ async function generatePoDoc(id) {
   const itemRows = (po.items||[]).map((i, idx) => `
     <tr style="${idx % 2 === 0 ? 'background:#fafafa' : ''}">
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">${escHtml(i.description)}${i.notes?`<div style="font-size:11px;color:#9ca3af;margin-top:1px">${escHtml(i.notes)}</div>`:''}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;white-space:nowrap">${fmtN(i.quantity, 2)} ${escHtml(_unit(i.unit))}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;white-space:nowrap">${fmtN(i.quantity, 2)} ${escHtml(_dunit(i.unit))}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right">${i.unit_price != null ? fmtN(i.unit_price, 2) : '—'}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-family:monospace;text-align:right;font-weight:${i.unit_price != null ? '600' : '400'}">${i.unit_price != null ? fmtN(i.quantity * i.unit_price, 2) : '—'}</td>
     </tr>`).join('');
 
-  const html = `<!DOCTYPE html><html lang="de-CH"><head><meta charset="UTF-8">
-  <title>Bestellung ${escHtml(po.number)}</title>
+  const html = `<!DOCTYPE html><html lang="${_docLang()}"><head><meta charset="UTF-8">
+  <title>${_d('Bestellung')} ${escHtml(po.number)}</title>
   <style>
     body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#1f2937;margin:0;padding:32px}
     .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:16px;border-bottom:2px solid #1d4ed8}
@@ -326,25 +326,25 @@ async function generatePoDoc(id) {
       </div>
     </div>
     <div style="text-align:right">
-      <div class="doc-label">Bestellung</div>
+      <div class="doc-label">${_d('Bestellung')}</div>
       <div style="font-family:monospace;font-size:14px;color:#1d4ed8;margin-bottom:4px">${escHtml(po.number)}</div>
       <div class="meta">
-        Datum: ${today}<br>
-        ${po.expected_date?'Lieferdatum bis: <strong>'+po.expected_date+'</strong><br>':''}
+        ${_d('Datum:')} ${today}<br>
+        ${po.expected_date ? _d('Lieferdatum bis:') + ' <strong>' + fmtD(po.expected_date) + '</strong><br>' : ''}
       </div>
     </div>
   </div>
 
   <div style="display:flex;gap:48px;margin-bottom:28px">
     <div>
-      <div class="addr-label">Lieferant</div>
+      <div class="addr-label">${_d('Lieferant')}</div>
       <div style="font-weight:600;font-size:13px">${escHtml(po.supplier_name||'—')}</div>
       ${po.supplier_address ? `<div style="margin-top:3px;line-height:1.7;color:#374151">${supAddrLines.map(l=>escHtml(l)).join('<br>')}</div>` : ''}
       ${po.supplier_email ? `<div style="margin-top:3px;color:#6b7280">${escHtml(po.supplier_email)}</div>` : ''}
       ${po.supplier_phone ? `<div style="color:#6b7280">${escHtml(po.supplier_phone)}</div>` : ''}
     </div>
     <div>
-      <div class="addr-label">Von</div>
+      <div class="addr-label">${_d('Von')}</div>
       <div style="font-weight:600;font-size:13px">${escHtml(s.company_name||'')}</div>
       ${companyLines.length ? `<div style="margin-top:3px;line-height:1.7;color:#374151">${companyLines.map(l=>escHtml(l)).join('<br>')}</div>` : ''}
     </div>
@@ -354,21 +354,21 @@ async function generatePoDoc(id) {
 
   <table>
     <thead><tr>
-      <th>Bezeichnung</th>
-      <th class="r" style="width:100px">Menge</th>
-      <th class="r" style="width:90px">EP (CHF)</th>
-      <th class="r" style="width:90px">Total (CHF)</th>
+      <th>${_d('Bezeichnung')}</th>
+      <th class="r" style="width:100px">${_d('Menge')}</th>
+      <th class="r" style="width:90px">${_d('EP (CHF)')}</th>
+      <th class="r" style="width:90px">${_d('Total (CHF)')}</th>
     </tr></thead>
     <tbody>${itemRows}</tbody>
     ${total > 0 ? `<tfoot><tr>
-      <td colspan="3" style="padding:8px 10px;text-align:right;font-size:13px;font-weight:700;color:#6b7280;border-top:2px solid #e5e7eb">Total CHF</td>
+      <td colspan="3" style="padding:8px 10px;text-align:right;font-size:13px;font-weight:700;color:#6b7280;border-top:2px solid #e5e7eb">${_d('Total CHF')}</td>
       <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:15px;font-weight:700;border-top:2px solid #e5e7eb">${fmtN(total,2)}</td>
     </tr></tfoot>` : ''}
   </table>
 
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280">
-    Bitte bestätigen Sie diese Bestellung und teilen Sie uns die voraussichtliche Lieferzeit mit.
-    ${s.company_email?'<br>Rückfragen an: '+escHtml(s.company_email):''}
+    ${_d('Bitte bestätigen Sie diese Bestellung und teilen Sie uns die voraussichtliche Lieferzeit mit.')}
+    ${s.company_email ? '<br>' + _d('Rückfragen an:') + ' ' + escHtml(s.company_email) : ''}
   </div>
 
   <div style="margin-top:16px;font-size:12px;color:#d1d5db;text-align:right">${escHtml(po.number)} · ${today}</div>

@@ -42,7 +42,7 @@ function installGlobals() {
   global.classFieldsOf = name => global._classFields[name] || [];
   global.TextEncoder = require('node:util').TextEncoder;
   // Übersetzung: ohne Browser immer Deutsch, _t() gibt den Schlüssel zurück
-  Object.assign(global, (0, eval)(read('js/00-i18n.js') + '; ({ _t, _unit, LANG, LOCALE, LANGS })'));
+  Object.assign(global, (0, eval)(read('js/00-i18n.js') + '; ({ _t, _d, _k, _unit, _dunit, _docLocale, _docLang, LANG, LOCALE, LANGS })'));
 }
 installGlobals();
 global.API = '';
@@ -586,7 +586,7 @@ test('Workflow: einfacher Modus bietet "Neue Revision", Prüfung nur mit Vier-Au
 
 // ── Gelieferter Stand und Revisionsvergleich ──────────────────
 evalPart('js/01-core.js', 'const PLM_ST_LABEL', '// Statusbadge',
-  'globalThis.PLM_ST_LABEL = PLM_ST_LABEL; globalThis.HINT_KINDS = HINT_KINDS; globalThis.itemHints = itemHints; globalThis._hintHtml = _hintHtml');
+  'globalThis.PLM_ST_LABEL = PLM_ST_LABEL; globalThis.HINT_KINDS = HINT_KINDS; globalThis.itemHints = itemHints; globalThis._hintHtml = _hintHtml; globalThis._dSt = _dSt');
 evalPart('js/01-core.js', '// Druckparameter einer Revision', '// ── ITEM TYPE ICONS', 'globalThis.PRINT_PARAMS = PRINT_PARAMS');
 evalPart('js/01-core.js', '// ── ITEM TYPE ICONS', 'function _classColor', '0');
 evalPart('js/02-plm-browse.js', 'function _cleanDsName', 'function renderDatasets', '0');

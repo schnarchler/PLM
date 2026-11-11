@@ -55,6 +55,15 @@ function revWeightLock(item, rev) {
   if ((rev.delivered || []).length) return _t('Revision geliefert — Gewicht gesperrt, Änderung in einer neuen Revision');
   return null;
 }
+// Status in der Sprache der Belege (die Tabellen oben sind beim Laden schon in
+// die Sprache der Oberfläche übersetzt)
+const _ST_KEYS = {
+  plm: { DFT: _k('Entwurf'), REV: _k('In Review'), REL: _k('Freigegeben'), ECO: _k('Änderung (ECO)'), OBS: _k('Veraltet') },
+  delivery: { DRAFT: _k('Entwurf'), READY: _k('Bereit'), DELIVERED: _k('Geliefert') },
+  order: { QUOTE: _k('Angebot'), DRAFT: _k('Entwurf'), CONFIRMED: _k('Bestätigt'), DELIVERED: _k('Geliefert'),
+    INVOICED: _k('Fakturiert'), DECLINED: _k('Abgelehnt'), CANCELLED: _k('Storniert') },
+};
+const _dSt = (type, s) => _ST_KEYS[type]?.[s] ? _d(_ST_KEYS[type][s]) : s;
 // Statusbadge aus den zentralen Tabellen oben — damit überall dieselben Wörter stehen
 function stBadge(type, status, style = '') {
   const m = type === 'order' ? ORDER_ST_MAP : DELIVERY_ST_MAP;
@@ -316,24 +325,25 @@ function fmtCHF(v) { return 'CHF ' + fmtN(rnd5(v)); }
 // Revisionsvergleich, damit beide dieselben Wörter und Einheiten zeigen.
 // Die ersten zwölf erscheinen im Datenblatt.
 const PRINT_PARAMS = [
-  ['nozzle',                _t('Düse'),            v => v + ' mm'],
-  ['layer_height',          _t('Schichthöhe'),     v => fmtN(v, 2) + ' mm'],
-  ['material',              _t('Material')],
-  ['infill',                _t('Füllung'),         v => v + ' %'],
-  ['infill_pattern',        _t('Füllmuster'),      v => fmtInfillPattern(v)],
-  ['supports',              _t('Stützen'),         v => Number(v) ? _t('ja') : _t('nein')],
-  ['print_temp',            _t('Düsentemperatur'), v => v + ' °C'],
-  ['bed_temp',              _t('Betttemperatur'),  v => v + ' °C'],
-  ['printer',               _t('Drucker')],
-  ['part_weight',           _t('Teilgewicht'),     v => fmtN(v, 1) + ' g'],
-  ['filament_weight_total', _t('Filamentgewicht'), v => fmtN(v, 1) + ' g'],
-  ['print_duration',        _t('Druckdauer'),      v => _fmtHours(v)],
-  ['filament_price_kg',     _t('Filamentpreis'),   v => fmtN(v, 2) + ' CHF/kg'],
-  ['printer_cost_hr',       _t('Druckerkosten'),   v => fmtN(v, 2) + ' CHF/h'],
-  ['raw_material_id',       _t('Rohmaterial')],
-  ['notes',                 _t('Notizen')],
+  ['nozzle',                _k('Düse'),            v => v + ' mm'],
+  ['layer_height',          _k('Schichthöhe'),     v => fmtN(v, 2) + ' mm'],
+  ['material',              _k('Material')],
+  ['infill',                _k('Füllung'),         v => v + ' %'],
+  ['infill_pattern',        _k('Füllmuster'),      (v, tr) => fmtInfillPattern(v, tr)],
+  ['supports',              _k('Stützen'),         (v, tr) => Number(v) ? tr(_k('ja')) : tr(_k('nein'))],
+  ['print_temp',            _k('Düsentemperatur'), v => v + ' °C'],
+  ['bed_temp',              _k('Betttemperatur'),  v => v + ' °C'],
+  ['printer',               _k('Drucker')],
+  ['part_weight',           _k('Teilgewicht'),     v => fmtN(v, 1) + ' g'],
+  ['filament_weight_total', _k('Filamentgewicht'), v => fmtN(v, 1) + ' g'],
+  ['print_duration',        _k('Druckdauer'),      v => _fmtHours(v)],
+  ['filament_price_kg',     _k('Filamentpreis'),   v => fmtN(v, 2) + ' CHF/kg'],
+  ['printer_cost_hr',       _k('Druckerkosten'),   v => fmtN(v, 2) + ' CHF/h'],
+  ['raw_material_id',       _k('Rohmaterial')],
+  ['notes',                 _k('Notizen')],
 ];
-function printParamLabel(key) { return PRINT_PARAMS.find(p => p[0] === key)?.[1] || key; }
+// tr: _t für die Oberfläche, _d für Belege
+function printParamLabel(key, tr = _t) { const l = PRINT_PARAMS.find(p => p[0] === key)?.[1]; return l ? tr(l) : key; }
 // Aussenmasse einer STL, vom Server als [x, y, z] in mm → "42.0 × 42.0 × 6.5 mm"
 function fmtDims(d) { return Array.isArray(d) ? d.map(v => fmtN(v, 1)).join(' × ') + ' mm' : null; }
 // STL-Dateien einer Revision mit Aussenmassen, Reihenfolge wie die 3D-Vorschau
@@ -341,25 +351,26 @@ function revDims(rev) {
   return (rev?.datasets || []).filter(d => Array.isArray(d.dims))
     .map(d => ({ name: d.original_name, txt: fmtDims(d.dims) }));
 }
-function fmtPrintParam(key, v) {
+function fmtPrintParam(key, v, tr = _t) {
   if (v === null || v === undefined || v === '') return null;
   const f = PRINT_PARAMS.find(p => p[0] === key)?.[2];
-  return f ? f(v) : String(v);
+  return f ? f(v, tr) : String(v);
 }
 
 // Füllmuster: Schlüssel aus PrusaSlicer, Orca und Bambu → Name wie im Slicer.
 // Bambu und Orca nennen „Geradlinig“ intern zig-zag. Unbekannte bleiben, wie sie sind.
 const INFILL_PATTERNS = {
-  rectilinear: _t('Geradlinig'), 'zig-zag': _t('Geradlinig'), alignedrectilinear: _t('Geradlinig ausgerichtet'),
-  grid: _t('Gitter'), triangles: _t('Dreiecke'), stars: _t('Sterne'), 'tri-hexagon': 'Tri-Hexagon',
-  cubic: _t('Kubisch'), adaptivecubic: _t('Adaptiv kubisch'), supportcubic: _t('Stützkubisch'), quartercubic: _t('Viertelkubisch'),
-  line: _t('Linie'), concentric: _t('Konzentrisch'), honeycomb: _t('Bienenwabe'), '3dhoneycomb': _t('3D-Bienenwabe'),
-  gyroid: 'Gyroid', hilbertcurve: _t('Hilbertkurve'), archimedeanchords: _t('Archimedische Akkorde'),
-  octagramspiral: _t('Oktagramm-Spirale'), lightning: _t('Blitz'), crosshatch: _t('Kreuzschraffur'),
+  rectilinear: _k('Geradlinig'), 'zig-zag': _k('Geradlinig'), alignedrectilinear: _k('Geradlinig ausgerichtet'),
+  grid: _k('Gitter'), triangles: _k('Dreiecke'), stars: _k('Sterne'), 'tri-hexagon': 'Tri-Hexagon',
+  cubic: _k('Kubisch'), adaptivecubic: _k('Adaptiv kubisch'), supportcubic: _k('Stützkubisch'), quartercubic: _k('Viertelkubisch'),
+  line: _k('Linie'), concentric: _k('Konzentrisch'), honeycomb: _k('Bienenwabe'), '3dhoneycomb': _k('3D-Bienenwabe'),
+  gyroid: 'Gyroid', hilbertcurve: _k('Hilbertkurve'), archimedeanchords: _k('Archimedische Akkorde'),
+  octagramspiral: _k('Oktagramm-Spirale'), lightning: _k('Blitz'), crosshatch: _k('Kreuzschraffur'),
 };
-function fmtInfillPattern(v) {
+function fmtInfillPattern(v, tr = _t) {
   const s = String(v).trim();
-  return INFILL_PATTERNS[s.toLowerCase()] || s.charAt(0).toUpperCase() + s.slice(1);
+  const known = INFILL_PATTERNS[s.toLowerCase()];
+  return known ? tr(known) : s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // ── ITEM TYPE ICONS ───────────────────────────────────────────

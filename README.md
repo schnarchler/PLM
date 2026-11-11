@@ -601,6 +601,7 @@ the reference for the English translation of the interface.
 | Sicherung | **Backup** | copy of the database in `data/backups/` |
 | Papierkorb | **Trash** | deleted files, kept for 30 days |
 | Einstellungen | **Settings** | |
+| Beleg | **Document** | printed or PDF document: invoice, quote, delivery note … |
 
 Number prefixes: existing databases keep their prefixes (AUF, LS, EK, KD, LF). New
 installations with the English interface start with English defaults (ORD, PO, CUS, SUP …).
@@ -627,9 +628,15 @@ Units are stored as language-neutral codes (`pcs`, `set`, `flat`; physical units
 Status of the English interface: navigation, dashboard, the whole PLM area (projects,
 items, data sheet, BOM, revisions, change requests, mind map, check-out/check-in, time
 tracking) and the ERP views (customers, orders, production, inventory, raw material,
-standard parts, purchasing, traceability) are done. Settings, printed documents (invoice,
-quote, delivery note, purchase order), server messages and history entries follow step by
-step.
+standard parts, purchasing, traceability) and all printed documents are done. Settings,
+server messages and history entries follow step by step.
+
+**Document language:** printed documents (invoice, quote, delivery note, purchase order, data
+sheet, BOM, inspection report, labels, thermal printer receipts) have their own language under
+**Settings → Company**, independent of the interface. Installations that already had data keep
+German. In code, `_d('…')` translates into the document language, `_k('…')` only marks a key
+for tables shared by interface and documents (like gettext's `N_()`). Footers and payment terms
+are printed exactly as entered in the settings.
 
 Where the same German word has two meanings, a context prefix separates the translations:
 `_t('@lock:Übernehmen')` shows "Übernehmen" in German and the `@lock:` entry in English. Contributions

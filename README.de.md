@@ -590,9 +590,16 @@ aus Eingaben wie „Stk“ oder „Stück“ `pcs`, `_unit()` zeigt den Code in 
 Stand der englischen Oberfläche: Navigation, Dashboard, der ganze PLM-Bereich (Projekte,
 Items, Datenblatt, Stückliste, Revisionen, Änderungsanträge, Mindmap, Check-out/Check-in,
 Zeiterfassung) und die ERP-Ansichten (Kunden, Aufträge, Produktion, Lager, Rohmaterial,
-Normteile, Einkauf, Rückverfolgung) sind übersetzt. Einstellungen, Belege (Rechnung, Angebot,
-Lieferschein, Bestellung), Meldungen des Servers und Einträge der Historie folgen Schritt
-für Schritt.
+Normteile, Einkauf, Rückverfolgung) und alle Belege sind übersetzt. Einstellungen, Meldungen
+des Servers und Einträge der Historie folgen Schritt für Schritt.
+
+**Sprache der Belege:** Gedruckte Belege (Rechnung, Angebot, Lieferschein, Bestellung,
+Datenblatt, Stückliste, Prüfprotokoll, Etiketten, Belege des Thermodruckers) haben eine eigene
+Sprache unter **Einstellungen → Firma**, unabhängig von der Oberfläche. Installationen, die schon
+Daten hatten, bleiben auf Deutsch. Im Code übersetzt `_d('…')` in die Sprache der Belege,
+`_k('…')` markiert nur einen Schlüssel für Tabellen, die Oberfläche und Belege teilen (wie
+`N_()` bei gettext). Fusszeilen und Zahlungsbedingungen stehen so auf den Belegen, wie sie in
+den Einstellungen eingetragen sind.
 
 Hat dasselbe deutsche Wort zwei Bedeutungen, trennt ein Kontext die Übersetzungen:
 `_t('@lock:Übernehmen')` zeigt auf Deutsch „Übernehmen“, auf Englisch den Eintrag mit `@lock:`.
