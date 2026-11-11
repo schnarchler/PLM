@@ -729,7 +729,7 @@ async function openMoveItemModal(itemId) {
   let item, projects;
   try {
     [item, projects] = await Promise.all([api('/api/items/' + itemId), api('/api/projects')]);
-  } catch(e) { return toast('Fehler: ' + e, 'err'); }
+  } catch(e) { return toast(_t('Fehler:') + ' ' + e, 'err'); }
   const others = projects.filter(p => p.id !== item.project_id);
   if (!others.length) return toast(_t('Keine anderen Projekte vorhanden'), 'err');
 
@@ -775,7 +775,7 @@ async function confirmMoveItem(itemId) {
     else if (state.view === 'parts') renderPartsList();
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = _t('Verschieben'); }
-    toast('Fehler: ' + e, 'err');
+    toast(_t('Fehler:') + ' ' + e, 'err');
   }
 }
 
@@ -842,7 +842,7 @@ async function saveWeightModal(itemId) {
     renderItemDetail(state.item, state.activeRevId);
     if (state.project) refreshProjectTree();   // Baum zeigt Gewicht je Revision
     else if (state.view === 'parts') renderPartsList();
-  } catch (e) { toast('Fehler: ' + e, 'err'); }
+  } catch (e) { toast(_t('Fehler:') + ' ' + e, 'err'); }
 }
 
 // Einzige Stelle, an der der Verkaufspreis eines bestehenden Items geändert
@@ -906,7 +906,7 @@ async function saveItemHints(itemId) {
     const item = await api('/api/items/' + itemId);
     state.item = item;
     renderItemDetail(item, state.activeRevId);
-  } catch (e) { toast('Fehler: ' + e, 'err'); }
+  } catch (e) { toast(_t('Fehler:') + ' ' + e, 'err'); }
 }
 
 // Beschreibung der gewählten Revision — in jeder Revision änderbar, auch
@@ -942,7 +942,7 @@ async function saveDescModal(itemId) {
     const item = await api('/api/items/' + itemId);
     state.item = item;
     renderItemDetail(item, state.activeRevId);
-  } catch (e) { toast('Fehler: ' + e, 'err'); }
+  } catch (e) { toast(_t('Fehler:') + ' ' + e, 'err'); }
 }
 
 async function savePriceModal(itemId) {
@@ -959,7 +959,7 @@ async function savePriceModal(itemId) {
     renderItemDetail(item, state.activeRevId);
     if (state.project) refreshProjectTree();
     else if (state.view === 'parts') renderPartsList();
-  } catch (e) { toast('Fehler: ' + e, 'err'); }
+  } catch (e) { toast(_t('Fehler:') + ' ' + e, 'err'); }
 }
 
 // ── ITEM CRUD ─────────────────────────────────────────────────

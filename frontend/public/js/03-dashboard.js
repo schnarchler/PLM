@@ -123,6 +123,31 @@ async function renderDashboard() {
 }
 
 // ── HISTORIE ──────────────────────────────────────────────────
+// Aktionen der Historie: Der Server schreibt sie deutsch in die Datenbank (auch
+// alle alten Einträge). Angezeigt wird die Übersetzung, Unbekanntes bleibt wie
+// es ist. Die Details sind aufgezeichnete Werte und bleiben unverändert.
+const _HISTORY_ACTIONS = [
+  _k('Abgelehnt'), _k('Angebot erstellt'), _k('Angelegt'), _k('Artikel-Nr. vergeben'), _k('Ausgecheckt'),
+  _k('BOM importiert'), _k('BOM: Position entfernt'), _k('BOM: Position hinzugefügt'), _k('BOM: Revision'),
+  _k('Beschreibung geändert'), _k('Bestätigt'), _k('Datei gelöscht'), _k('Datei hinzugefügt'),
+  _k('Dokument gelöscht'), _k('Dokument hochgeladen'), _k('Druckparameter'), _k('Druckparameter geändert'),
+  _k('ECO'), _k('Eigenschaften geändert'), _k('Eingecheckt'), _k('Erledigt'), _k('Erstellt'),
+  _k('Fertigungshinweis entfernt'), _k('Fertigungshinweis gesetzt'), _k('Gelöscht'), _k('Genehmigt'),
+  _k('Gewicht geändert'), _k('Geändert'), _k('Importiert'), _k('In Umsetzung'), _k('Item erhalten'),
+  _k('Item gelöscht'), _k('Klassifizierung entfernt'), _k('Klassifizierung umbenannt'),
+  _k('Konstruktionshinweis entfernt'), _k('Konstruktionshinweis gesetzt'), _k('Kundenhinweis entfernt'),
+  _k('Kundenhinweis gesetzt'), _k('Material abgebucht'), _k('Neue Revision'), _k('Person angelegt'),
+  _k('Person geändert'), _k('Position entfernt'), _k('Position geändert'), _k('Position hinzugefügt'),
+  _k('Preis geändert'), _k('Produktionsauftrag erzeugt'), _k('Prüfung'), _k('Revision'),
+  _k('Sicherung erstellt'), _k('Sicherung wiederhergestellt'), _k('Stand fixiert'), _k('Stand gelöst'),
+  _k('Stand korrigiert'), _k('Variante entfernt'), _k('Variante verknüpft'), _k('Verschoben'),
+  _k('Änderungsantrag'), _k('Änderungsantrag umsetzen')
+];
+function _histAction(a) {
+  const s = String(a || '');
+  if (s.startsWith('Status → ')) return _t('Status') + ' → ' + s.slice('Status → '.length);
+  return _t(s);
+}
 let _changelogRows = [], _changelogKind = 'plm';
 const HISTORY_TYPE_LABEL = { item: 'Item', revision: 'Revision', project: _t('Projekt'), order: _t('Auftrag'),
   delivery: _t('Produktionsauftrag'), customer: _t('Kunde'), inventory: _t('Lagerartikel'), raw_material: _t('Rohmaterial'), settings: _t('Einstellungen'),
@@ -134,7 +159,7 @@ function exportChangelog() {
     const local = r.created_at ? parseDbDate(r.created_at) : null;
     const date = local ? local.toLocaleDateString(LOCALE, { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
     const time = local ? local.toLocaleTimeString(LOCALE, { hour:'2-digit', minute:'2-digit' }) : '';
-    return [date, time, r.user_name || '', HISTORY_TYPE_LABEL[r.entity_type] || r.entity_type || '', r.ref||'', r.label||'', r.action||'', r.details||''];
+    return [date, time, r.user_name || '', HISTORY_TYPE_LABEL[r.entity_type] || r.entity_type || '', r.ref||'', r.label||'', _histAction(r.action), r.details||''];
   });
   const csv = [header, ...csvRows].map(row => row.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const a = document.createElement('a');
@@ -201,7 +226,7 @@ async function renderChangelog(kind = 'plm') {
           <div style="width:18px;text-align:center;flex-shrink:0;font-size:13px;margin-top:1px">${actionIcon(r.action)}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:500">${esc(r.action)}</span>${_clUser(r)}
+              <span style="font-size:13px;font-weight:500">${esc(_histAction(r.action))}</span>${_clUser(r)}
               ${r.ref ? `<span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="${_historyOpen(r)}">${r.item_type ? itemTypeIcon(r.item_type) : ({ project: '📁', order: '📋', delivery: '🚚', customer: '👤', ecr: '🛠', supplier: '🏭', purchase_order: '🛒' }[r.entity_type] || '')} ${esc(r.ref)}</span>` : ''}
             </div>
             ${r.details ? `<div style="font-size:13px;color:var(--t3);margin-top:2px;${erp ? 'line-height:1.5' : 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px'}">${esc(r.details)}</div>` : ''}

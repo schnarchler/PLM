@@ -46,6 +46,8 @@ function installGlobals() {
 }
 installGlobals();
 global.API = '';
+// Aktionen der Historie werden bei der Anzeige übersetzt (03-dashboard.js)
+global._histAction = evalPart('js/03-dashboard.js', 'const _HISTORY_ACTIONS', 'let _changelogRows', '_histAction');
 evalPart('js/08-ui-api.js', 'function helpTip(', 'function setLeftHeader(', 'globalThis.helpTip = helpTip');
 // Rechte und Kacheln — die Freigabe-Knöpfe fragen canRelease()
 const WHO = evalPart('js/16-benutzer.js', 'const ROLE_LABEL', 'async function _saveUser(',

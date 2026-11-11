@@ -131,7 +131,7 @@ async function renderSettings() {
         </div>
         <div class="sep-label">${_t('Bankangaben')}</div>
         <div class="form-row cols3">
-          ${fi('bank_name',_t('Bank'),s.bank_name,'Zürcher Kantonalbank')}
+          ${fi('bank_name',_t('Bank'),s.bank_name,_t('Zürcher Kantonalbank'))}
           ${fi('bank_iban','IBAN',s.bank_iban,'CH00 0000 0000 0000 0000 0')}
           ${fi('bank_bic',_t('BIC / SWIFT'),s.bank_bic,'ZKBKCHZZ80A')}
         </div>

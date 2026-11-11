@@ -473,7 +473,7 @@ function openProjectDetail(p) {
     <div id="pt-log" style="display:none">
       ${(p.changelog||[]).map(cl => `
         <div class="cl-row"><div class="cl-dot"></div>
-        <div><div class="cl-action">${esc(cl.action)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
+        <div><div class="cl-action">${esc(_histAction(cl.action))}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
         ${_clTime(cl)}</div>`).join('') || '<div style="color:var(--t3);font-size:13px">' + _t('Leer') + '</div>'}
     </div>`;
   showDetail();
@@ -1018,7 +1018,7 @@ function renderItemSheet(item, activeRevId) {
     ? `<div class="cl-row" style="padding:0;border:none">
         <div class="cl-dot"></div>
         <div class="cl-body">
-          <div class="cl-action">${lastLog.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(lastLog.rev)}</span>` : ''}${esc(lastLog.action)}</div>
+          <div class="cl-action">${lastLog.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(lastLog.rev)}</span>` : ''}${esc(_histAction(lastLog.action))}</div>
           ${lastLog.details ? `<div class="cl-detail">${esc(lastLog.details)}</div>` : ''}
         </div>
         ${_clTime(lastLog)}

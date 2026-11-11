@@ -565,7 +565,7 @@ async function doCheckin(folder, btn) {
     await _refreshOpenViews(null, r.revisions?.length ? null : state.activeRevId);
   } catch(e) {
     if (btn) { btn.innerHTML = orig; btn.disabled = false; }
-    toast('Fehler beim Einchecken: ' + (e.message||''), 'err');
+    toast(_t('Fehler beim Einchecken:') + ' ' + (e.message||''), 'err');
   }
 }
 

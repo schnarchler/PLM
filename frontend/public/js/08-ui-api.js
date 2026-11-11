@@ -123,7 +123,7 @@ function _clTime(entry) {
 function renderChangelogList(entries) {
   return (entries || []).map(cl => `
     <div class="cl-row"><div class="cl-dot"></div>
-    <div><div class="cl-action">${cl.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(cl.rev)}</span>` : ''}${esc(cl.action)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
+    <div><div class="cl-action">${cl.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(cl.rev)}</span>` : ''}${esc(_histAction(cl.action))}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
     ${_clTime(cl)}</div>`).join('') || '<div style="color:var(--t3);font-size:13px">' + _t('Leer') + '</div>';
 }
 function setLeftHeader(title, actionsHtml) {
