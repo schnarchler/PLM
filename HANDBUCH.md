@@ -818,7 +818,7 @@ sonst aus den Druckparametern des Items, sonst aus dem Teilgewicht.
 ### 12.5 Thermodrucker (Pipsta)
 
 Pro Position: **🖶** Kurzbeleg oder **🖶≡** Vollbeleg mit Druckparametern. Einstellungen unter
-Einstellungen → **Kassabon**. Einrichtung unter Windows: siehe `README.md`, Abschnitt
+Einstellungen → **Kassabon**. Einrichtung unter Windows: siehe `README.de.md`, Abschnitt
 „Pipsta Classic – Einrichtung“. Probleme: siehe [24. Häufige Fragen](#24-häufige-fragen).
 
 ### 12.6 Rückverfolgung
@@ -1182,7 +1182,7 @@ Schlägt etwas fehl, läuft die bisherige Version weiter. Daten und `plm.config`
 vor jeder Änderung an der Datenbank legt PLM eine Sicherung an.
 
 Steht bei der Version „geändert“, wurde PLM mit eigenen Änderungen am Programm gestartet — dann
-geht „Jetzt installieren“ nicht. Weitere Wege (von Hand, ZIP ohne Git): siehe `README.md`,
+geht „Jetzt installieren“ nicht. Weitere Wege (von Hand, ZIP ohne Git): siehe `README.de.md`,
 Abschnitt „Update einspielen“.
 
 Nach einem Update, das die Farbpalette betrifft: einmal **Einstellungen → Daten → Design zurücksetzen**.
@@ -1334,4 +1334,4 @@ Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** kon
 
 ---
 
-*Technische Details (Installation, Update von Hand, Tests): siehe `README.md`*
+*Technische Details (Installation, Update von Hand, Tests): siehe `README.de.md`*

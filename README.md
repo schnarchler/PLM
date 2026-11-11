@@ -1,14 +1,28 @@
-# PLM & ERP – Produktionsverwaltung
+# PLM & ERP – Production Management
 
-Teamcenter-inspiriertes PLM- und ERP-System.  
-Läuft lokal auf Linux/Windows – kein Internet, kein Cloud-Zwang.
+[Deutsch](README.de.md) · **English**
 
-> **🚀 [Schnellstart](SCHNELLSTART.md)** — das Wichtigste auf einer Seite  
-> **📖 [Handbuch](HANDBUCH.md)** — Bedienung Schritt für Schritt
+A self-hosted PLM and ERP system for small workshops, makers and 3D-printing shops,
+inspired by Teamcenter.  
+Runs locally on Linux and Windows: no internet connection, no cloud, no account.
+
+- **PLM:** projects, assemblies, parts and documents with revisions, BOMs, release
+  workflow (Draft → Released → ECO), change requests, CAD check-out/check-in, 3D preview
+  for STL and STEP
+- **ERP:** customers, quotes and orders, production orders with delivery notes, invoices,
+  inventory, raw material with lot tracking, purchasing, traceability
+- **3D printing:** print parameters read straight from `.3mf` files (PrusaSlicer, OrcaSlicer,
+  Bambu Studio, SuperSlicer), cost calculation from part weight, print time and labour
+
+> **Language:** the user interface and the [manual](HANDBUCH.md) are currently in German.
+> An English user interface is in progress. This README describes the program in English;
+> button and menu names refer to the planned English labels.
 
 ---
 
-## Installation und Start
+## Installation and start
+
+Requires [Node.js](https://nodejs.org) (LTS).
 
 **Linux:**
 ```bash
@@ -16,702 +30,729 @@ cd backend && npm install && node server.js
 ```
 
 **Windows:**  
-Doppelklick auf **`START-PLM.bat`**  
-Desktop-Verknüpfung mit Logo: einmal **`VERKNUEPFUNG-ERSTELLEN.bat`** ausführen
+Double-click **`START-PLM.bat`**  
+Desktop shortcut with logo: run **`VERKNUEPFUNG-ERSTELLEN.bat`** once
 
-→ Browser öffnet sich von selbst, auf `http://localhost:3000` oder, wenn der Port belegt
-ist, auf dem nächsten freien (wird in `plm.config` als `port=` gemerkt)  
-Beim ersten Start werden alle Node-Pakete automatisch installiert.  
-`plm.config` wird automatisch erstellt wenn sie fehlt.
+→ The browser opens by itself at `http://localhost:3000`, or at the next free port if 3000
+is taken (remembered in `plm.config` as `port=`).  
+All Node packages are installed automatically on first start.  
+`plm.config` is created automatically if it is missing.
 
-### Windows-Sicherheitswarnung vermeiden
+### Avoiding the Windows security warning
 
-Windows markiert alles, was aus dem Internet heruntergeladen wurde, und fragt beim Starten
-einer `.bat`-Datei nach („Der Herausgeber konnte nicht verifiziert werden“). Die Dateiendung
-spielt keine Rolle — `.cmd` oder `.exe` warnen genauso. Abhilfe: die ZIP-Datei **vor dem
-Entpacken** freigeben, dann trägt keine der entpackten Dateien die Markierung.
+Windows marks everything downloaded from the internet and asks for confirmation before
+running a `.bat` file ("The publisher could not be verified"). The file extension does not
+matter: `.cmd` or `.exe` show the same warning. The fix is to unblock the ZIP file **before
+extracting** it, so that none of the extracted files carry the mark.
 
-1. Heruntergeladene ZIP-Datei mit der rechten Maustaste anklicken → **Eigenschaften**
-2. Im Reiter **Allgemein** ganz unten bei *Sicherheit: Die Datei stammt von einem anderen
-   Computer …* das Häkchen **Zulassen** setzen
-3. **OK** klicken, erst dann die ZIP-Datei entpacken
+1. Right-click the downloaded ZIP file → **Properties**
+2. On the **General** tab, at the bottom next to *Security: This file came from another
+   computer …*, tick **Unblock**
+3. Click **OK**, then extract the ZIP file
 
-Wurde schon entpackt, ohne freizugeben: Die Warnung einmal mit **Ausführen** bestätigen.
-`START-PLM.bat` entfernt die Markierung danach bei sich selbst, sie warnt nicht mehr.
-Ohne Warnung von Anfang an geht es auch mit `git clone` statt ZIP-Download — Git markiert
-keine Dateien.
+Already extracted without unblocking? Confirm the warning once with **Run anyway**.
+`START-PLM.bat` then removes the mark from itself and no longer warns.
+Using `git clone` instead of the ZIP download avoids the warning entirely: Git does not
+mark files.
 
-### Daten auf einem Netzlaufwerk (mehrere PCs)
+### Data on a network drive (several PCs)
 
-Die Daten können auf einem Netzlaufwerk liegen und PLM auf jedem PC selbst laufen — dann
-checkt jeder PC in einen eigenen, lokalen Ordner aus, und das CAD arbeitet mit lokalen Dateien.
-In `plm.config` jedes PCs:
+The data can live on a network drive while PLM runs on each PC. Each PC then checks out
+into its own local folder, and the CAD program works with local files.
+In `plm.config` on each PC:
 
 ```
-data_dir=Z:\PLM-Daten              ← der gemeinsame Datenordner, wie er auf diesem PC heisst
-checkout_dir=C:\CAD\Checkout       ← nur dieser PC (auch über Einstellungen → Daten)
+data_dir=Z:\PLM-Data               ← the shared data folder, as it is named on this PC
+checkout_dir=C:\CAD\Checkout       ← this PC only (also under Settings → Data)
 ```
 
-Es arbeitet immer nur ein PLM zur Zeit mit den Daten: Jedes hält die Datenbank im Speicher
-und schreibt sie als Ganzes zurück. `plm.lock` im Datenordner sagt, welches PLM sie hat
-(PC, Prozess, Lebenszeichen alle zwei Minuten). Läuft beim Start schon eines, lädt PLM nichts
-und fragt im Browser, ob es übernehmen soll; das andere speichert danach nichts mehr und
-bietet „Hier weiterarbeiten“ an. Eine Sperre ohne Lebenszeichen seit 10 Minuten (PC aus, im
-Ruhezustand) gilt als verwaist. Zusätzlich vergleicht PLM vor jedem Speichern `plm.db` mit dem
-Stand, den es zuletzt gelesen oder geschrieben hat: Hat jemand anderes sie geändert, wird sie
-nicht überschrieben, und Ungespeichertes landet als `…-nicht-gespeichert.db` in `backups/`.
-Fehlt der eingetragene Datenordner oder liegt darin keine `plm.db` (Netzlaufwerk nicht
-verbunden, Sync noch nicht fertig), legt PLM nicht still eine leere Datenbank an, sondern fragt
-im Browser (erneut versuchen / neu anlegen); ein leerer Ordner und `backend/data` gelten als neu.
-Den Ordner legt deshalb nicht mehr `START-PLM.bat` an, sondern der Server. Jeder Checkout steht
-zusätzlich mit dem PC-Namen in der Tabelle `checkouts`, damit die anderen PCs ihn sehen. Und die
-Datenbank merkt sich in `settings.data_stand`, welcher PLM-Stand sie zuletzt geöffnet hat
-(verglichen wird das Commit-Datum): Ein älterer Stand öffnet sie erst nach Rückfrage.
-Ein echtes Netzlaufwerk (SMB/NAS) ist dafür sicherer als ein Sync-Ordner (Proton Drive,
-OneDrive), der verzögert abgleicht. Bedienung siehe [HANDBUCH.md](HANDBUCH.md), Kapitel 2.
+Only one PLM works with the data at a time: each one keeps the database in memory and
+writes it back as a whole. `plm.lock` in the data folder records which PLM has it (PC,
+process, heartbeat every two minutes). If one is already running at start-up, PLM loads
+nothing and asks in the browser whether to take over; the other one then stops saving and
+offers "Continue working here". A lock without a heartbeat for 10 minutes (PC switched off
+or asleep) counts as orphaned. In addition, before every save PLM compares `plm.db` with the
+state it last read or wrote: if someone else has changed it, it is not overwritten, and
+unsaved changes end up in `backups/` as `…-nicht-gespeichert.db`.
+If the configured data folder is missing or contains no `plm.db` (network drive not
+connected, sync not finished yet), PLM does not silently create an empty database but asks
+in the browser (retry / create new); an empty folder and `backend/data` count as new.
+That is why the server, not `START-PLM.bat`, creates the folder. Every checkout is also
+recorded with the PC name in the `checkouts` table so the other PCs can see it. And the
+database remembers in `settings.data_stand` which PLM version last opened it (compared by
+commit date): an older version only opens it after confirmation.
+A real network drive (SMB/NAS) is safer for this than a sync folder (Proton Drive,
+OneDrive), which syncs with a delay. Usage: see [HANDBUCH.md](HANDBUCH.md), chapter 2.
 
 ---
 
-## Nummernschema
+## Numbering scheme
 
 ```
-Projekt:              0028
-Baugruppe:            0028-asm-001
-Unter-Baugruppe:      0028-asm-002
-Part in Baugruppe:    0028-asm-001-prt-001
-Part im Projekt:      0028-prt-001
-Dokument:             0028-doc-001
+Project:               0028
+Assembly:              0028-asm-001
+Sub-assembly:          0028-asm-002
+Part in assembly:      0028-asm-001-prt-001
+Part in project:       0028-prt-001
+Document:              0028-doc-001
 
-Aufträge / Angebote:  AUF-2026-0001
-Produktionsauftrag:   LS-2026-0001
-Einkauf:              EK-2026-0001
-Kunden:               KD-0001
-Lieferanten:          LF-0001
+Orders / quotes:       AUF-2026-0001
+Production order:      LS-2026-0001
+Purchase order:        EK-2026-0001
+Customers:             KD-0001
+Suppliers:             LF-0001
 ```
 
-Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** konfigurierbar.
+Prefixes, digit counts and the revision format can be configured under
+**Settings → Admin**.
 
 ---
 
-## Freigabe-Workflow
+## Release workflow
 
 ```
-DFT ──────────► REL ──► ECO ──► (neue Revision in DFT)
- │               ▲        └──► OBS (veraltet)
- └──► REV ───────┘   (nur mit Vier-Augen-Prinzip)
-       └──► DFT (zurück)
+DFT ──────────► REL ──► ECO ──► (new revision in DFT)
+ │               ▲        └──► OBS (obsolete)
+ └──► REV ───────┘   (only with two-person approval)
+       └──► DFT (back)
 ```
 
-Allein oder ohne Vier-Augen-Prinzip gibt man direkt aus dem Entwurf frei. Mit
-Vier-Augen-Prinzip (Einstellungen → PLM, ab zwei Personen) geht eine Revision erst
-in Review (REV) und ist dort gesperrt; freigeben darf dann nur eine andere Person als die,
-die eingereicht hat — Admins dürfen auch selbst freigeben.
+Working alone or without two-person approval, you release directly from draft. With
+two-person approval (Settings → PLM, from two people on), a revision first goes into review
+(REV) and is locked there; only a person other than the one who submitted it may then
+release it. Admins may also release their own submissions.
 
-| Status | Bedeutung |
-|--------|-----------|
-| DFT | Entwurf – in Bearbeitung |
-| REV | In Prüfung |
-| REL | Freigegeben – produktiv |
-| ECO | Änderung (Engineering Change Order) – Revision bleibt gültig und gesperrt, geändert wird in einer neuen DFT |
-| OBS | Veraltet (Obsolete) – abgelöst, archiviert |
+| Status | Meaning |
+|--------|---------|
+| DFT | Draft: work in progress |
+| REV | In review |
+| REL | Released: in production use |
+| ECO | Engineering Change Order: the revision stays valid and locked, changes are made in a new DFT |
+| OBS | Obsolete: superseded, archived |
 
-Bei ECO: Dateien, Stückliste und Druckparameter der freigegebenen Revision werden in
-die neue DFT-Revision übernommen — genau wie bei „＋ Neue Revision“.  
-Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.  
-Wird die neue Revision freigegeben, geht die bisherige (REL oder ECO) auf OBS.
+On ECO, the files, BOM and print parameters of the released revision are carried over into
+the new DFT revision, just like with "＋ New revision".  
+If the DFT revision is deleted, the ECO automatically returns to REL.  
+When the new revision is released, the previous one (REL or ECO) becomes OBS.
 
-**Prüfung vor der Freigabe** (Einstellungen → PLM): wählbare Pflichtpunkte — mindestens
-eine Datei, CAD-Datei, Zeichnung (PDF), Beschreibung, Klassifizierung, Gewicht (Standard:
-Datei und Gewicht) — plus die als Pflicht markierten
-Eigenschaften der Klassifizierung. Fehlt etwas, nennt PLM es und sperrt „Freigeben“.
+**Checks before release** (Settings → PLM): selectable mandatory items: at least one file,
+CAD file, drawing (PDF), description, classification, weight (default: file and weight),
+plus the properties marked as mandatory for the classification. If something is missing,
+PLM names it and disables "Release".
 
-**Ohne Freigabe arbeiten:** Unter **Einstellungen → PLM → Freigabe-Workflow** lässt sich
-auf den einfachen Modus umstellen. Dann bleiben alle Revisionen im Status DFT und
-bearbeitbar; statt „Freigeben“ steht dort **„＋ Neue Revision“**, die Dateien,
-Druckparameter und Stückliste der bisherigen Revision übernimmt. Für die Arbeit allein,
-ohne Prüfschritt. Bestehende freigegebene Revisionen bleiben unangetastet, und der
-ECO-Weg steht dort weiterhin zur Verfügung.
+**Working without release:** under **Settings → PLM → Release workflow** you can switch to
+simple mode. All revisions then stay in DFT and editable; instead of "Release" there is
+**"＋ New revision"**, which carries over the files, print parameters and BOM of the
+previous revision. Meant for working alone, without a review step. Existing released
+revisions remain untouched, and the ECO path is still available for them.
+
+**Change requests (ECR):** a change request records *why* something should change before
+anyone starts designing: reason, affected parts and their impact on assemblies (all
+levels), open orders and quotes, open production and stock. Open → Approved or Rejected →
+Implement (creates the revision to work in for each part) → Done.
 
 ---
 
 ## Features
 
 ### PLM
-- Projekte mit konfigurierbarer Nummer (Standard 4-stellig)
-- Baugruppen (ASM), Parts (PRT) und Dokumente (DOC) mit sprechenden Nummern
-- Beliebige Hierarchietiefe (ASM in ASM)
-- **Projektfarben** – jedem Projekt eine Farbe geben; sie erscheint als Streifen in der
-  Liste, färbt die Nummernkachel und markiert das offene Projekt im Brotkrumenpfad
-- Revisionsverwaltung rev1, rev2, … (alle alten Revisionen bleiben erhalten)
-- Freigabe-Workflow: DFT → REL → ECO → neue Revision, optional mit Vier-Augen-Prüfung (REV)
-- Stückliste (BOM) pro Revision – mehrere Positionen gleichzeitig hinzufügen (Warenkorb)
-- Normteile in BOM einsetzbar
-- Dateien pro Revision: CAD, GCODE, PDF, Bilder, Dokumente …
-- Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
-- Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar; Baugruppen ohne
-  eigenes Gewicht summieren Teile und Normteile der Stückliste
-- **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
-- **Eigenschaften je Klassifizierung** – z. B. Werkstoff, Oberfläche, Hersteller; im Datenblatt,
-  auf der PDF und in der Suche, optional Pflicht für die Freigabe
-- **Vorschaubilder** – in Projektbaum, Stückliste und Suche beim Überfahren einer Zeile mit der
-  Maus: die STL oder STEP der neusten Revision isometrisch gezeichnet (bei Baugruppen die STEP
-  zuerst, sonst das Bild aus der 3MF oder ein hochgeladenes Bild), einmal berechnet und unter
-  `thumbs/` im Datenordner zwischengespeichert
-- **3D-Vorschau für STL und STEP** – STEP wird mit OpenCascade (`occt-import-js`, offline)
-  einmal vernetzt und ebenfalls unter `thumbs/` abgelegt
-- **Datenblatt-Tab** – Beschreibung, Quelle, Kennzahlen, Druckparameter, Stücklisten-Kurzfassung,
-  Lagerbestand, freie Notizen, QR-Code der Item-Nummer und letzte Änderung auf einen Blick
-- **Mindmap** – Abhängigkeiten als Graph: links die Baugruppen, die das Item verwenden,
-  rechts die Teile, aus denen es besteht (siehe unten)
-- **Revisionsstand in der Stückliste** – folgt standardmässig automatisch der aktuellen
-  Revision, pro Position optional fest fixierbar (siehe unten)
-- **Gelieferter Stand** – beim Liefern wird die Revision jeder Position fixiert, bei
-  Baugruppen die ganze Struktur; gelieferte Revisionen sind gesperrt (siehe unten)
-- **Revisionen vergleichen** – zwei Revisionen eines Items gegenüberstellen: Kopfdaten,
-  Druckparameter, Stückliste, Normteile und Dateien (siehe unten)
-- **Freigabe-Workflow abschaltbar** – unter Einstellungen → PLM wählbar zwischen
-  Freigabelauf (DFT → REL → ECO, optional mit Prüfung REV) und einfachem Betrieb ohne Freigabe
-- **Druckparameter aus 3MF** – beim Hochladen einer `.3mf` an eine Revision werden
-  Schichthöhe, Füllung, Füllmuster, Temperaturen, Material und Drucker automatisch übernommen
-- **Klassifizierung automatisch** – neue Items werden anhand der Quelle als Eigen-
-  oder Kaufteil eingestuft (Vorgaben unter Einstellungen → PLM)
-- **Freie Notizen** pro Item – für alles was nicht in die Beschreibung gehört
-- **Verwendung** – zeigt alle Revisionen der Baugruppen, in denen ein Item verbaut ist,
-  inklusive des Standes, auf den die jeweilige Verwendung fixiert ist
-- **Variantenverwaltung** – Items als Varianten verknüpfen; Navigation zwischen Varianten direkt im Detail
-- **Dokumentvorlagen** – PDF-Vorlagen aus dem Item-Detail: Datenblatt, Stückliste, Prüfprotokoll
-- **Itemvergleich** – zwei Items nebeneinander vergleichen (Kopfdaten, BOM-Diff, Dateien)
-- **BOM-Import aus STEP** – Stückliste automatisch aus Solid Edge STEP-Export einlesen
-- **Normteilverwaltung** – eigene Datenbank für Normteile (DIN/ISO/EN) mit Dateien
-- Checkout/Check-in Funktion für CAD-Dateien
-- Vollständige **Historie** aller Änderungen (Navigation → Historie, als CSV exportierbar)
+- Projects with a configurable number (4 digits by default)
+- Assemblies (ASM), parts (PRT) and documents (DOC) with meaningful numbers
+- Any hierarchy depth (ASM within ASM)
+- **Project colours**: give each project a colour; it shows as a stripe in the list,
+  colours the number tile and marks the open project in the breadcrumb
+- Revision management rev1, rev2, … (all old revisions are kept)
+- Release workflow: DFT → REL → ECO → new revision, optionally with two-person approval (REV)
+- **Change requests (ECR)** with impact analysis
+- BOM per revision: add several lines at once (cart)
+- Standard parts usable in BOMs
+- Files per revision: CAD, G-code, PDF, images, documents …
+- Automatic file type detection (STL/3MF/STEP → CAD, .gcode → G-code …)
+- Weight per part (editable inline), development time tracking; assemblies without their
+  own weight sum up the parts and standard parts in their BOM
+- **Classification**: coloured chips, configurable under Settings → PLM
+- **Properties per classification**, e.g. material, surface finish, manufacturer; shown on
+  the data sheet, on the PDF and in search, optionally mandatory for release
+- **Thumbnails**: hovering a row in the project tree, BOM or search shows the STL or STEP
+  of the latest revision drawn isometrically (for assemblies the STEP first, otherwise the
+  image from the 3MF or an uploaded image), computed once and cached under `thumbs/` in
+  the data folder
+- **3D preview for STL and STEP**: STEP is meshed once with OpenCascade
+  (`occt-import-js`, offline) and also stored under `thumbs/`
+- **Data sheet tab**: description, source, key figures, print parameters, BOM summary,
+  stock, free notes, QR code of the item number and last change at a glance
+- **Mind map**: dependencies as a graph: on the left the assemblies that use the item,
+  on the right the parts it is made of (see below)
+- **Revision in the BOM**: follows the current revision automatically by default, can be
+  pinned per line (see below)
+- **As-delivered configuration**: on delivery, the revision of each line is pinned, for
+  assemblies the whole structure; delivered revisions are locked (see below)
+- **Compare revisions**: put two revisions of an item side by side: header data, print
+  parameters, BOM, standard parts and files (see below)
+- **Release workflow can be switched off**: under Settings → PLM, choose between the
+  release process (DFT → REL → ECO, optionally with review REV) and simple mode without
+  release
+- **Print parameters from 3MF**: uploading a `.3mf` to a revision automatically takes
+  over layer height, infill, infill pattern, temperatures, material and printer
+- **Automatic classification**: new items are classified as in-house or purchased parts
+  based on their source (defaults under Settings → PLM)
+- **Free notes** per item, for everything that does not belong in the description
+- **Where-used**: shows all revisions of the assemblies an item is built into, including
+  the revision each usage is pinned to
+- **Variants**: link items as variants; navigate between variants directly in the detail view
+- **Document templates**: PDF templates from the item detail: data sheet, BOM, inspection report
+- **Item comparison**: compare two items side by side (header data, BOM diff, files)
+- **BOM import from STEP**: read a BOM automatically from a Solid Edge STEP export
+- **Standard parts**: separate database for standard parts (DIN/ISO/EN) with files
+- Check-out/check-in for CAD files
+- Complete **history** of all changes (Navigation → History, exportable as CSV)
 
 ### ERP
-- Kundenverwaltung (KD-0001)
-- Kunde als Freitext eingeben möglich
-- **Angebot als Auftragsphase** – ein Vorgang statt zwei Datensätze (siehe unten)
-- Aufträge mit Rechnungs-PDF inkl. Arbeitszeit als Position
-- Angebot annehmen heisst Phasenwechsel — gleiche Nummer, gleiche Positionen
-- **Kunde löschen behält die Belege**: der Name wandert ins Freitextfeld, Rechnungen
-  bleiben vollständig nachdruckbar
-- PLM-Items in Positionen verknüpfen
-- Lagerbestandsprüfung beim Abbuchen
-- **Produktion im Auftrag**: Tab „Produktion" im Auftragsdetail — Positionen, Rohmaterial,
-  Druckparameter, Lieferschein und Status ohne Wechsel in die Produktionsliste
-- **Status läuft mit**: Produktionsauftrag erzeugen bestätigt den Auftrag, der letzte
-  gelieferte Produktionsauftrag setzt ihn auf „Geliefert", nach dem Rechnungsdruck
-  wird „Fakturiert" angeboten
-- **Materialabzug beim Abschliessen** – verbrauchtes Rohmaterial wird beim Setzen auf
-  „Geliefert" vorgerechnet und nach Bestätigung vom Lot abgebucht (siehe unten)
+- Customer management (KD-0001)
+- Customer can also be entered as free text
+- **Quote as an order phase**: one record instead of two (see below)
+- Orders with invoice PDF, including labour time as a line item
+- Accepting a quote is a phase change: same number, same lines
+- **Deleting a customer keeps the documents**: the name moves into the free-text field,
+  invoices can still be reprinted in full
+- Link PLM items to order lines
+- Stock check when booking out
+- **Production within the order**: "Production" tab in the order detail: lines, raw
+  material, print parameters, delivery note and status without switching to the
+  production list
+- **Status follows along**: creating a production order confirms the order, the last
+  delivered production order sets it to "Delivered", and after printing the invoice
+  "Invoiced" is offered
+- **Material consumption on completion**: consumed raw material is calculated when setting
+  "Delivered" and booked out of the lot after confirmation (see below)
+- **Traceability**: per production order line the revision, the material lot used and the
+  inspection result; in reverse, for each raw material lot, which production orders,
+  customers and parts it went into (for a recall)
 
-### Einkauf / Bestellwesen
-- **Lieferantenverwaltung** (LF-0001) mit Kontakt, Adresse, verknüpften Lagerartikeln
-- **Einkaufsbestellungen** (EK-2026-001): ENTWURF → BESTELLT → ERHALTEN / STORNIERT
-- Positionen mit Menge, Einheit, Einzelpreis — verknüpfbar mit Lagerartikel, Rohmaterial oder **Normteil**
-- Normteile: beim ersten Wareneingang wird automatisch ein Lagerartikel angelegt und
-  fest verknüpft — keine doppelte Pflege
-- **Bestellungs-PDF** direkt druckbar / an Lieferant sendbar
-- **Wareneingang**: automatische Einbuchung von Lagerartikel und Rohmaterial
-- Bei Rohmaterial: Lot-Nr.-Abfrage pro Material, wählbar ob gleiche oder individuelle Lot-Nr.
-- Bei Menge > 1: Lot-Nr. pro Einheit einzeln erfassbar
+### Purchasing
+- **Supplier management** (LF-0001) with contact, address and linked stock items
+- **Purchase orders** (EK-2026-001): DRAFT → ORDERED → RECEIVED / CANCELLED
+- Lines with quantity, unit, unit price, linkable to a stock item, raw material or
+  **standard part**
+- Standard parts: on the first goods receipt a stock item is created automatically and
+  linked permanently, so nothing is maintained twice
+- **Purchase order PDF**, ready to print or send to the supplier
+- **Goods receipt**: stock items and raw material are booked in automatically
+- For raw material: lot number prompt per material, choose the same or individual lot numbers
+- For quantity > 1: lot number can be entered per unit
 
-### Angebots-Kalkulation
-Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet werden:
-- **Material** – Bauteilgewicht × Rohmaterialpreis/Gewicht (Lot-spezifisch)
-- **Arbeitszeit** – geschätzte Stunden × Stundenansatz
-- **Druckzeit** – Druckstunden × Drucker CHF/h
-- **Aus BOM** – Button „📦 Aus BOM kalkulieren" im Auftrag (auch in der Angebotsphase) expandiert eine Baugruppe in Einzelpositionen
+### Quote calculation
+When adding a line, the following costs can be calculated automatically:
+- **Material**: part weight × raw material price/weight (lot-specific)
+- **Labour**: estimated hours × hourly rate
+- **Print time**: print hours × printer CHF/h
+- **From BOM**: the "📦 Calculate from BOM" button in the order (also in the quote phase)
+  expands an assembly into individual lines
 
-### Rohmaterial
-- Eigene Verwaltung mit Materialtyp, Farbe, Abmessungen, Gewicht, Druckparametern
-- Lot-Tracking: jede Einbuchung mit Lot-Nr. und Einkaufspreis
-- Remaining-Qty pro Lot, aufgebrauchte Lots durchgestrichen/ausgeblendet
-- Bei Auswahl in Produktion: Drucktemperatur und Betttemperatur automatisch übernommen
+### Raw material
+- Separate management with material type, colour, dimensions, weight, print parameters
+- Lot tracking: every booking-in with lot number and purchase price
+- Remaining quantity per lot; used-up lots are struck through or hidden
+- When selected in production: nozzle and bed temperature are taken over automatically
 
-### Normteile
-- Katalog für genormte Bauteile (DIN, ISO, EN, …)
-- Auto-Bezeichnung aus Norm + Nummer + Grösse + Material
-- Gewicht pro Stück — zählt ins Gewicht der Baugruppe
-- Dateien (STEP, PDF, …) pro Normteil hinterlegbar
-- Als BOM-Positionen in Baugruppen einsetzbar
-- **⬇ Auschecken** – alle Normteil-Dateien in festen `normteile/`-Ordner kopieren
+### Standard parts
+- Catalogue of standardised components (DIN, ISO, EN, …)
+- Automatic designation from standard + number + size + material
+- Weight per piece, counted in the assembly weight
+- Files (STEP, PDF, …) can be attached per standard part
+- Usable as BOM lines in assemblies
+- **⬇ Check out**: copy all standard part files into a fixed `normteile/` folder
 
-### Produktion
-- Eigenständig oder mit Auftrag verknüpft
-- Rohmaterial pro Position zuweisbar (übernimmt Druckparameter)
-- Druckparameter direkt aus 3MF-Datei auslesen (PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio)
-- **Lieferschein-PDF** mit Positionen, Revision, Druckparametern, Unterschriftsfeldern
-- **Gelieferter Stand** – jede Position zeigt ihre Revision; beim Liefern wird sie fixiert
-- Belegdruck auf **Pipsta Classic Thermodrucker**
+### Production
+- Standalone or linked to an order
+- Raw material assignable per line (takes over print parameters)
+- Read print parameters directly from a 3MF file (PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio)
+- **Delivery note PDF** with lines, revision, print parameters and signature fields
+- **As-delivered configuration**: every line shows its revision; it is pinned on delivery
+- Receipt printing on a **Pipsta Classic thermal printer**
 
-### Dashboard & Suche
-- Dashboard mit offenen Aufträgen, Angeboten, fälligen Produktionsaufträgen, ablaufenden Angeboten
-- Globale Suche (`Ctrl+K`) über Projekte, PLM-Items, Aufträge und Angebote, Produktionsaufträge,
-  Kunden, Rohmaterial und Dateien — mehrere Wörter müssen alle vorkommen
-- **Filter nach Klassifizierung**: Chips mit Trefferzahl, auch ohne Suchwort (siehe unten)
-- PLM-Items (PRT/ASM) erscheinen in der Suche zuerst, sortiert nach Relevanz
+### Dashboard and search
+- Dashboard with open orders, quotes, due production orders, expiring quotes and open
+  change requests
+- Global search (`Ctrl+K`) across projects, PLM items, orders and quotes, production orders,
+  customers, raw material and files; with several words, all of them must match
+- **Filter by classification**: chips with hit counts, even without a search term (see below)
+- PLM items (PRT/ASM) appear first in search, sorted by relevance
 
 ### Navigation
-- **Ctrl+K** – Suche öffnen
-- **Escape** – Modal / Detail schliessen
-- **Browser-Zurück-Button** – navigiert innerhalb der App
-- **Zuletzt geöffnet** – zuletzt geöffnete Items und Belege in der Seitenleiste
+- **Ctrl+K**: open search
+- **Escape**: close modal / detail
+- **Browser back button**: navigates within the app
+- **Recently opened**: recently opened items and documents in the sidebar
 
-### Einstellungen / Admin
-- **Firma** – Name, Adresse, Bankverbindung, Logo
-- **Kalkulation** – Stundenansatz, Maschinenkosten, Standardwerte
-- **3D-Druck** – Slicer (PrusaSlicer / Bambu Studio), Drucker, Düsen, Materialprofile
-- **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items)
-- **Daten** – Schriftgrösse, **Design zurücksetzen**, Checkout-Ordner, CAD-Programm,
-  **Sicherungen anlegen und wiederherstellen**, Export
-- **Benutzer** – wer mit PLM arbeitet (User, Superuser, Admin); Namen in Historie und Freigabe
-- **Admin** – Nummerierungsstruktur, Datensätze löschen
+### Settings / Admin
+- **Company**: name, address, bank details, logo
+- **Calculation**: hourly rate, machine costs, defaults
+- **3D printing**: slicer (PrusaSlicer / Bambu Studio), printers, nozzles, material profiles
+- **PLM**: classification list (name + colour, drag & drop; renaming carries over to the items)
+- **Data**: font size, **reset design**, checkout folder, CAD program,
+  **create and restore backups**, export
+- **Users**: who works with PLM (user, superuser, admin); names in history and release
+- **Admin**: numbering structure, deleting records
 
 ---
 
-## Revisionsstand in der Stückliste
+## Revision in the BOM
 
-Eine Stücklistenposition verweist auf das **Teil**, nicht auf eine feste Revision.
-Standardmässig zeigt sie deshalb immer den aktuellen Stand: wird das Teil auf rev2
-gehoben, ziehen alle Baugruppen automatisch mit. Das ist für die meisten
-Baugruppen richtig und bleibt unverändert.
+A BOM line refers to the **part**, not to a fixed revision. By default it therefore
+always shows the current state: when the part is raised to rev2, all assemblies follow
+automatically. That is right for most assemblies and stays unchanged.
 
-Für Fälle, in denen ein realer, abweichender Zustand dokumentiert werden muss,
-lässt sich eine Position **fest auf eine Revision setzen**. Klick auf das
-Revisions-Kennzeichen in der Stücklistenzeile öffnet die Auswahl:
+For cases where a real, deviating state has to be documented, a line can be **pinned to
+a revision**. Clicking the revision badge in the BOM line opens the choice:
 
-| Auswahl | Verhalten |
+| Choice | Behaviour |
 |---|---|
-| **Automatisch** (Standard) | folgt immer der aktiven Revision |
-| **Fest auf revN** | bleibt auf diesem Stand, auch wenn neuere Revisionen entstehen |
+| **Automatic** (default) | always follows the active revision |
+| **Pinned to revN** | stays on this revision even when newer revisions appear |
 
-Fixierte Positionen sind mit einem Schloss markiert. Existiert inzwischen eine
-neuere Revision, erscheint zusätzlich ein Hinweis (`↑rev2`) in Amber — der Stand
-ist dann bewusst alt, nicht vergessen.
+Pinned lines are marked with a lock. If a newer revision exists by now, an additional
+hint (`↑rev2`) appears in amber, so the old state is clearly deliberate, not forgotten.
 
-**Typischer Anwendungsfall:** Fahrzeuge oder ausgelieferte Geräte, die als
-Baugruppe (ASM) angelegt sind. Wird ein Bauteil überarbeitet, bleiben die
-Einheiten, die noch nicht umgerüstet sind, auf ihrem Stand. Der Tab „Verwendung“
-des Bauteils zeigt dann direkt, welche Einheit auf welchem Stand ist.
+**Typical use case:** vehicles or delivered devices set up as an assembly (ASM). When a
+component is revised, the units that have not been upgraded yet stay on their revision.
+The component's "Where-used" tab then shows directly which unit is on which revision.
 
-Für Lieferungen an Kunden muss man das nicht mehr von Hand machen — siehe
-**Gelieferter Stand**.
+For deliveries to customers this no longer has to be done by hand; see
+**As-delivered configuration**.
 
-Wird eine fixierte Revision gelöscht, fällt die Position automatisch auf
-„Automatisch" zurück — es entstehen keine toten Verweise.
+If a pinned revision is deleted, the line automatically falls back to "Automatic", so
+there are no dead references.
 
 ---
 
-## Gelieferter Stand
+## As-delivered configuration
 
-Eine Produktionsposition, die mit einem Item verknüpft ist, folgt bis zur Lieferung
-der aktiven Revision (blasses Kennzeichen `rev2`). Sobald der Produktionsauftrag auf
-**„Geliefert“** gesetzt wird, hält PLM fest, was tatsächlich beim Kunden ist:
+A production line linked to an item follows the active revision until delivery (faint
+badge `rev2`). As soon as the production order is set to **"Delivered"**, PLM records
+what is actually at the customer:
 
-| Was | Wie |
+| What | How |
 |---|---|
-| Part | die Revision der Position wird fixiert (`🔒 rev2`) |
-| Baugruppe | zusätzlich die **komplette Struktur** — jedes Unterteil mit seiner damaligen Revision |
-| Gelieferte Revision | gesperrt: keine Datei-, Stücklisten- oder Druckparameter-Änderung, kein Löschen |
-| Item mit gelieferter Revision | nur noch unter **Einstellungen → Admin** löschbar |
+| Part | the revision of the line is pinned (`🔒 rev2`) |
+| Assembly | additionally the **complete structure**: every sub-part with its revision at the time |
+| Delivered revision | locked: no changes to files, BOM or print parameters, no deletion |
+| Item with a delivered revision | can only be deleted under **Settings → Admin** |
 
-Weiterarbeiten geht in einer **neuen Revision** — im Revisionen-Tab erscheint dafür
-„＋ Neue Revision“, auch im Workflow mit Freigabe. Werden bei einem Check-in Dateien
-einer gelieferten Revision geändert, fragt PLM nach und legt dafür eine neue Revision an.
+Further work happens in a **new revision**: the Revisions tab shows "＋ New revision" for
+this, also in the workflow with release. If a check-in changes files of a delivered
+revision, PLM asks and creates a new revision for them.
 
-- **Vor der Lieferung** lässt sich eine Position über das Kennzeichen von Hand auf eine
-  Revision setzen (z. B. wenn bewusst noch rev1 gedruckt wird).
-- **Nach der Lieferung** zeigt ein Klick auf das Kennzeichen den gelieferten Stand mit
-  der Struktur. Wurde die falsche Revision erfasst, lässt sie sich dort korrigieren.
-- **Status zurück** (z. B. auf „Bereit“): automatisch fixierte Revisionen folgen wieder
-  der aktiven, von Hand gewählte bleiben.
-- Gibt es inzwischen eine neuere Revision, steht `↑rev3` daneben.
-- Item → Tab **Aufträge** zeigt pro Produktionsauftrag den gelieferten Stand, auch für
-  Teile, die als Teil einer Baugruppe geliefert wurden (Abschnitt „Geliefert als Teil
-  einer Baugruppe“). So beantwortet PLM die Frage, welcher Kunde welchen Stand hat.
-- Der Lieferschein druckt die Revision zu jeder Position.
+- **Before delivery**, a line can be set to a revision by hand via the badge (e.g. when
+  rev1 is deliberately still being printed).
+- **After delivery**, clicking the badge shows the delivered configuration with its
+  structure. If the wrong revision was recorded, it can be corrected there.
+- **Status back** (e.g. to "Ready"): automatically pinned revisions follow the active one
+  again, manually chosen ones stay.
+- If a newer revision exists by now, `↑rev3` appears next to it.
+- Item → **Orders** tab shows the delivered configuration per production order, also for
+  parts delivered as part of an assembly (section "Delivered as part of an assembly"). This
+  is how PLM answers the question of which customer has which revision.
+- The delivery note prints the revision for each line.
 
-**Bestehende Lieferungen:** Beim ersten Start wird für bereits gelieferte
-Produktionsaufträge die Revision ermittelt, die am Lieferdatum aktiv war. Diese
-Positionen tragen den Hinweis „ermittelt“.
+**Existing deliveries:** on first start, PLM determines for already delivered production
+orders the revision that was active on the delivery date. These lines carry the note
+"determined".
 
 ---
 
-## Revisionen vergleichen
+## Compare revisions
 
-Im Revisionen-Tab eines Items mit mehreren Revisionen öffnet
-**„⇄ Revisionen vergleichen“** die Gegenüberstellung. Standard ist die gewählte Revision
-gegen die nächstältere; beide Seiten sind wählbar und tauschbar.
+In the Revisions tab of an item with several revisions, **"⇄ Compare revisions"** opens
+the comparison. By default the selected revision is compared with the next older one;
+both sides can be chosen and swapped.
 
-| Bereich | Verglichen wird |
+| Area | Compared |
 |---|---|
-| Kopfdaten | Status, Beschreibung, ECO-Grund, Freigabe |
-| Druckparameter | jeder Wert, mit denselben Bezeichnungen wie im Datenblatt |
-| Stückliste | neu, entfernt, Menge geändert, Revisionsfixierung geändert |
-| Normteile | neu, entfernt, Menge geändert |
-| Dateien | über den Namen ohne `_revN` zugeordnet; bei gleicher Grösse entscheidet eine Prüfsumme |
+| Header data | status, description, ECO reason, release |
+| Print parameters | every value, with the same labels as on the data sheet |
+| BOM | added, removed, quantity changed, revision pinning changed |
+| Standard parts | added, removed, quantity changed |
+| Files | matched by name without `_revN`; for equal size a checksum decides |
 
-Eine bei ECO oder „Neue Revision“ kopierte Datei gilt so als unverändert.
-„Nur Änderungen“ blendet Gleiches aus. Der Knopf ⇄ in der Titelzeile vergleicht
-weiterhin zwei **verschiedene** Items.
+A file copied on ECO or "New revision" therefore counts as unchanged.
+"Changes only" hides what is identical. The ⇄ button in the title bar still compares two
+**different** items.
 
 ---
 
-## Mindmap – Abhängigkeiten
+## Mind map: dependencies
 
-Der ⌗-Knopf in der Titelzeile eines Items (oder im Datenblatt-Tab) öffnet den
-Abhängigkeitsgraphen:
+The ⌗ button in the title bar of an item (or in the data sheet tab) opens the dependency
+graph:
 
 ```
-Baugruppen, die es verwenden  ──►  [ Item ]  ──►  Teile, aus denen es besteht
-          (Verwendung)                                (Stückliste)
+Assemblies that use it  ──►  [ Item ]  ──►  Parts it is made of
+     (Where-used)                               (BOM)
 ```
 
-- **Ziehen** verschiebt, **Mausrad** zoomt
-- **Klick** stellt die Mindmap auf das angeklickte Teil um — so navigiert man durch die
-  Struktur; **Doppelklick** öffnet das Item
-- Tiefe für beide Richtungen getrennt einstellbar (0–6 Ebenen)
-- Normteile erscheinen als Blätter, Mengen stehen an den Kanten
-- Fest fixierte Positionen zeigen die Revision in Amber; der Graph klappt dann
-  die Unterstückliste **dieser** Revision auf, nicht die der aktuellsten
-- Verwendungen, die nur in älteren Revisionen stehen, werden gezählt und
-  in der Fusszeile gemeldet
+- **Drag** to pan, **mouse wheel** to zoom
+- **Click** re-centres the mind map on the clicked part, which lets you navigate the
+  structure; **double-click** opens the item
+- Depth adjustable separately for both directions (0–6 levels)
+- Standard parts appear as leaves, quantities are shown on the edges
+- Pinned lines show the revision in amber; the graph then expands the sub-BOM of
+  **that** revision, not of the latest one
+- Usages that only exist in older revisions are counted and reported in the footer
 
 ---
 
-## Suche und Klassifizierung
+## Search and classification
 
-Die Suche (`Ctrl+K` oder Klick ins Suchfeld oben) findet Items, deren Nummer, Name,
-Beschreibung, Notizen oder Klassifizierung **alle** eingegebenen Wörter enthalten:
-„Halter PETG“ findet einen Halter, der in der Beschreibung „PETG“ stehen hat.
-Gross-/Kleinschreibung spielt keine Rolle, auch nicht bei Umlauten.
-Eine exakt eingegebene Item-Nummer steht immer oben.
+Search (`Ctrl+K` or click into the search field at the top) finds items whose number,
+name, description, notes or classification contain **all** the words entered:
+"holder PETG" finds a holder that has "PETG" in its description.
+Upper and lower case do not matter, umlauts included.
+An exactly entered item number is always at the top.
 
-Die **Chips** über den Ergebnissen sind ein echter Filter:
+The **chips** above the results are a real filter:
 
-- Klick auf eine Klassifizierung zeigt nur Items dieser Klassifizierung — auch ganz
-  ohne Suchwort als Liste der Klasse. Zweiter Klick hebt den Filter auf.
-- Die Zahl am Chip gilt für das aktuelle Suchwort; Chips ohne Treffer sind blass.
-- **ohne** zeigt Items, denen noch keine Klassifizierung zugeordnet ist.
-- Gestrichelte Chips sind Werte, die an Items stehen, aber nicht (mehr) in der Liste.
+- Clicking a classification shows only items of that classification, even without a
+  search term, as a list of the class. A second click removes the filter.
+- The number on the chip applies to the current search term; chips without hits are faded.
+- **none** shows items that have no classification yet.
+- Dashed chips are values that are set on items but are not (or no longer) in the list.
 
-Unter **Einstellungen → PLM** steht bei jeder Klassifizierung, wie viele Items sie
-tragen. Umbenennen überträgt den neuen Namen beim Speichern auf alle Items und auf
-die Standard-Klassifizierung. Beim Entfernen eines benutzten Eintrags fragt PLM, ob
-die Items ihn behalten oder verlieren. Werte, die an Items stehen, aber in der Liste
-fehlen, lassen sich mit „＋ übernehmen“ zurückholen. Schreibweisen wie „ kaufteil “
-werden beim Speichern auf den Listeneintrag „Kaufteil“ gezogen.
-
----
-
-## Angebot als Auftragsphase
-
-Angebot, Auftrag und Produktionsauftrag waren drei Datensätze in drei Listen für
-denselben Vorgang. Das Angebot ist jetzt die erste **Phase** eines Auftrags:
-
-```
-Angebot ──► Bestätigt ──► Geliefert ──► Fakturiert
-   │
-   └──► Abgelehnt          Entwurf ──► Bestätigt   (Auftrag ohne vorheriges Angebot)
-```
-
-- Ein neuer Vorgang startet wahlweise als **Angebot** oder als **Entwurf**
-- In der Phase Angebot druckt der Beleg-Knopf das **Angebots-PDF**, sonst die Rechnung
-- „Angebot angenommen“ wechselt die Phase — **keine neue Nummer, kein neuer Datensatz,
-  Positionen bleiben stehen**
-- „Gültig bis“ erscheint nur in der Angebotsphase
-
-**Migration:** Beim ersten Start wandern bestehende Angebote automatisch in die neue
-Form. Sie behalten ihre ANG-Nummer, damit gedruckte Belege zuordenbar bleiben; die
-ursprüngliche Nummer steht zusätzlich im Feld `origin_quote_number`. Angebote, die
-bereits in einen Auftrag umgewandelt waren, werden übersprungen — ihr Auftrag existiert
-ja schon. Die alte Angebotstabelle bleibt nur für diese Migration bestehen — eine
-eigene Ansicht oder API dafür gibt es nicht mehr.
+Under **Settings → PLM**, each classification shows how many items carry it. Renaming
+carries the new name over to all items and to the default classification on save. When
+removing a classification that is in use, PLM asks whether the items keep or lose it.
+Values that are set on items but missing from the list can be brought back with
+"＋ add". Spellings like " purchased " are mapped to the list entry "Purchased" on save.
 
 ---
 
-## Produktion im Auftrag
+## Quote as an order phase
 
-Ein Produktionsauftrag bleibt ein eigener Datensatz mit eigener Nummer — Lieferscheine
-und Historie laufen unverändert weiter. Bearbeitet wird er aber im Auftrag:
+Quote, order and production order used to be three records in three lists for the same
+transaction. The quote is now the first **phase** of an order:
 
-| Wo | Was |
+```
+Quote ──► Confirmed ──► Delivered ──► Invoiced
+  │
+  └──► Rejected            Draft ──► Confirmed   (order without a prior quote)
+```
+
+- A new transaction starts either as a **quote** or as a **draft**
+- In the quote phase, the document button prints the **quote PDF**, otherwise the invoice
+- "Quote accepted" changes the phase: **no new number, no new record, the lines stay**
+- "Valid until" only appears in the quote phase
+
+**Migration:** on first start, existing quotes are moved to the new form automatically.
+They keep their ANG number so that printed documents can still be matched; the original
+number is also stored in the `origin_quote_number` field. Quotes that had already been
+converted into an order are skipped, since their order already exists. The old quotes
+table only remains for this migration; there is no separate view or API for it anymore.
+
+---
+
+## Production within the order
+
+A production order remains a record of its own with its own number, so delivery notes
+and history carry on unchanged. It is edited within the order, though:
+
+| Where | What |
 |---|---|
-| Auftrag → Tab **Produktion** | Positionen, Rohmaterial, Druckparameter, Lieferschein, Status |
-| Mehrere Produktionsaufträge | als Unterreiter im selben Tab (Teillieferungen bleiben möglich) |
-| Navigation **Produktion** | zeigt standardmässig nur **eigenständige** Produktionsaufträge ohne Auftrag |
+| Order → **Production** tab | lines, raw material, print parameters, delivery note, status |
+| Several production orders | as sub-tabs in the same tab (partial deliveries remain possible) |
+| Navigation → **Production** | shows only **standalone** production orders without an order by default |
 
-Der Auftrag gilt erst als geliefert, wenn alle seine Produktionsaufträge geliefert sind.
-Produktionsaufträge mit Auftragsbezug tragen in der Produktionsliste die Auftragsnummer
-und springen per Klick direkt in den Tab „Produktion“ des Auftrags.
-
----
-
-## Materialabzug beim Abschliessen
-
-Rohmaterial wird in **Spulen** geführt (`stock_qty`), der Verbrauch fällt in **Gramm**
-an. Über `weight_g` (Gewicht einer vollen Spule) rechnet das System um:
-1840 g bei einer 1000-g-Spule sind 1.84 Stk.
-
-Wird ein Produktionsauftrag auf „Geliefert" gesetzt, erscheint eine Aufstellung der
-Positionen mit zugewiesenem Rohmaterial. Das Gewicht pro Stück kommt in dieser
-Reihenfolge:
-
-1. Filamentgewicht, das an der Produktionsposition erfasst wurde
-2. `filament_weight_total` aus den Druckparametern des verknüpften Items
-3. hinterlegtes Teilgewicht
-
-Mengen und Lot sind im Dialog korrigierbar; Lots werden nach FIFO vorgeschlagen.
-Erst nach Bestätigung wird gebucht — „Nicht abbuchen" lässt alles unverändert.
-Positionen ohne Gewicht oder ohne Spulengewicht werden getrennt aufgeführt und
-bleiben unberührt. Pro Produktionsauftrag wird nur einmal abgebucht.
+The order only counts as delivered once all its production orders have been delivered.
+Production orders linked to an order show the order number in the production list and
+jump straight to the order's "Production" tab when clicked.
 
 ---
 
-## Checkout / Check-in (CAD-Workflow mit Solid Edge)
+## Material consumption on completion
 
-### Solid Edge: Standardpfad setzen
+Raw material is managed in **spools** (`stock_qty`), consumption is in **grams**. The
+system converts via `weight_g` (weight of a full spool): 1840 g on a 1000 g spool is
+1.84 pcs.
+
+When a production order is set to "Delivered", a breakdown of the lines with assigned raw
+material appears. The weight per piece is taken in this order:
+
+1. Filament weight entered on the production line
+2. `filament_weight_total` from the print parameters of the linked item
+3. Stored part weight
+
+Quantities and lots can be corrected in the dialog; lots are suggested by FIFO.
+Nothing is booked until confirmed; "Don't book out" leaves everything unchanged.
+Lines without weight or without spool weight are listed separately and left untouched.
+Each production order is booked out only once.
+
+---
+
+## Check-out / check-in (CAD workflow with Solid Edge)
+
+### Solid Edge: set the default path
 
 **Tools → Options → File Locations**
 
-| Dateityp | Pfad |
+| File type | Path |
 |----------|------|
-| Parts (.par / .psm) | Checkout-Ordner |
-| Assemblies (.asm) | gleicher Pfad |
-| Drafts (.dft) | gleicher Pfad |
+| Parts (.par / .psm) | checkout folder |
+| Assemblies (.asm) | same path |
+| Drafts (.dft) | same path |
 
-Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis** — pro PC, steht in
-`plm.config` als `checkout_dir=` (leer: `[Datenverzeichnis]/checkout`). Früher stand er in
-der Datenbank; gibt es den Ordner auf dem PC, übernimmt PLM ihn beim Start einmalig.
+Checkout path: **Settings → Data → Checkout directory**, per PC, stored in `plm.config` as
+`checkout_dir=` (empty: `[data directory]/checkout`). It used to be stored in the database;
+if that folder exists on the PC, PLM takes it over once at start-up.
 
 ### Workflow
 
 ```
-1. Item → "⬇ Auschecken"
-   → Dateien in <checkout-pfad>/<item-nummer>/ (kein Zeitstempel → Pfad bleibt konstant)
+1. Item → "⬇ Check out"
+   → files in <checkout-path>/<item-number>/ (no timestamp → the path stays the same)
 
-2. In Solid Edge bearbeiten
+2. Edit in Solid Edge
 
-3. → "⬆ Einchecken" → nur geänderte Dateien werden übernommen, Ordner wird gelöscht.
-   Ist das Teil inzwischen nicht mehr im Entwurf (freigegeben, in Review, veraltet,
-   geliefert), fragt PLM vorher nach: als neue Revision hochladen oder verwerfen
+3. → "⬆ Check in" → only changed files are taken over, the folder is deleted.
+   If the part is no longer in draft by then (released, in review, obsolete,
+   delivered), PLM asks first: upload as a new revision or discard
 
-4. Neue Dateien → PLM erkennt sie automatisch beim Öffnen der Checkout-Übersicht
+4. New files → PLM detects them automatically when the checkout overview is opened
 ```
 
-### Normteile auschecken
+### Checking out standard parts
 
-Navigation → Normteile → **⬇ Auschecken** — kopiert alle Normteil-STEP-Dateien in `<checkout-pfad>/normteile/`. Ordnername ist immer gleich → einmalig in Solid Edge als Suchpfad konfigurieren.
+Navigation → Standard parts → **⬇ Check out** copies all standard part STEP files into
+`<checkout-path>/normteile/`. The folder name is always the same, so it only needs to be
+configured once as a search path in Solid Edge.
 
 ---
 
-## Pipsta Classic – Einrichtung (Windows, einmalig)
+## Pipsta Classic: setup (Windows, once)
 
 ```
 pip install pyusb
 ```
 
-Zadig-Treiber installieren: [zadig.akeo.ie](https://zadig.akeo.ie) → Pipsta → WinUSB
+Install the Zadig driver: [zadig.akeo.ie](https://zadig.akeo.ie) → Pipsta → WinUSB
 
-| Fehlermeldung | Lösung |
+| Error | Solution |
 |---|---|
-| LED blinkt rot/grün | Netzteil verwenden |
-| `Kein WinUSB-Gerät gefunden` | Zadig-Treiber neu installieren |
-| `pyusb nicht installiert` | `pip install pyusb` |
-| Zeichen `@B` am Anfang | Drucker aus- und einschalten |
+| LED blinks red/green | use the power supply |
+| `Kein WinUSB-Gerät gefunden` (no WinUSB device found) | reinstall the Zadig driver |
+| `pyusb nicht installiert` (pyusb not installed) | `pip install pyusb` |
+| Characters `@B` at the start | switch the printer off and on |
 
 ---
 
-## 3MF-Druckparameter
+## 3MF print parameters
 
-Beim Hinzufügen einer Produktionsposition kann eine `.3mf`-Datei hochgeladen werden.
+When adding a production line, a `.3mf` file can be uploaded.
 
-| Slicer | Unterstützt |
-|--------|-------------|
-| PrusaSlicer 2.x (inkl. 2.9+) | ✓ |
+| Slicer | Supported |
+|--------|-----------|
+| PrusaSlicer 2.x (incl. 2.9+) | ✓ |
 | SuperSlicer | ✓ |
 | OrcaSlicer | ✓ |
 | BambuStudio | ✓ |
 
 ---
 
-## Begriffe
+## Terminology
 
-Damit Oberfläche, Belege und das Handbuch dieselbe Sprache sprechen. Schreibweise
-Schweizer Hochdeutsch (ss statt ß).
+So that the interface, documents and manual speak the same language. This list is also
+the reference for the English translation of the interface.
 
-| Begriff | Bedeutung | Nicht verwenden |
+| German (UI) | English | Meaning |
 |---|---|---|
-| **Item** | Oberbegriff für Baugruppe, Bauteil und Dokument im PLM | Artikel, Teil (als Oberbegriff) |
-| **Baugruppe** (ASM) | Item mit BOM | Assembly |
-| **Part** (PRT) | einzelnes Teil; im Fliesstext auch „Bauteil“ | — |
-| **Dokument** (DOC) | Item, das nicht gefertigt wird, z. B. Zeichnung | Dok |
-| **Item-Nummer** | `0028-asm-001-prt-001` | Teilenummer, Artikelnummer |
-| **Revision** | Stand eines Items, geschrieben `rev1`, `rev2` | Rev 1, Version |
-| **BOM** / Stückliste | Positionen einer Baugruppenrevision — „BOM“ in Knöpfen und kurzen Beschriftungen, „Stückliste“ als Abschnitts- und Dokumentname | — |
-| **Datei** | Datei an einer Revision (CAD, PDF, …) | Dataset |
-| **Klassifizierung** | Einordnung eines Items, z. B. Eigenteil, Kaufteil | Klasse, Klassifikation |
-| **Verwendung** | in welchen Baugruppen ein Item steckt | Where-Used |
-| **Historie** | Protokoll aller Änderungen | Changelog |
-| **Status** DFT / REV / REL / ECO / OBS | Entwurf / In Review / Freigegeben / Änderung / Veraltet | Obsolete |
-| **fixiert** | fest auf eine Revision gesetzt (Stückliste, gelieferter Stand) | gepinnt |
-| **Gelieferter Stand** | die beim Liefern fixierten Revisionen eines Produktionsauftrags | — |
-| **Auftrag** | Vorgang mit Phasen Angebot → Bestätigt → Geliefert → Fakturiert | — |
-| **Angebot** | erste Phase eines Auftrags (Status „Angebot“) | eigener Angebotsdatensatz |
-| **Produktionsauftrag** | Fertigung mit Nummer `LS-…`, eigenständig oder im Auftrag (Tab „Produktion“) | Los, Fertigungslos, Lieferung |
-| **Lieferschein** | Ausdruck eines Produktionsauftrags | Druckansicht, Produktionsblatt |
-| **Lagerartikel** | Artikel im Lager | Artikel (allein), Item |
-| **Lot-Nr.** | Charge eines Rohmaterials | LOT, Lotnummer |
-| **Verkaufspreis** (VP) | Preis eines Items | Listenpreis |
-| **Sicherung** | Kopie der Datenbank in `data/backups/` | Backup (in der Oberfläche) |
-| **anlegen** | einen Datensatz neu erfassen | erstellen (für Datensätze) |
-| **erstellen** | ein Dokument oder eine Sicherung erzeugen | generieren |
+| Item | **Item** | umbrella term for assembly, part and document in PLM |
+| Baugruppe (ASM) | **Assembly** | item with a BOM |
+| Part / Bauteil (PRT) | **Part** | single part |
+| Dokument (DOC) | **Document** | item that is not manufactured, e.g. a drawing |
+| Item-Nummer | **Item number** | `0028-asm-001-prt-001` |
+| Revision | **Revision** | state of an item, written `rev1`, `rev2` |
+| Stückliste / BOM | **BOM** (bill of materials) | lines of an assembly revision |
+| Datei | **File** | file attached to a revision (CAD, PDF, …) |
+| Klassifizierung | **Classification** | category of an item, e.g. in-house part, purchased part |
+| Eigenteil / Kaufteil | **In-house part / Purchased part** | default classifications |
+| Verwendung | **Where-used** | which assemblies an item is used in |
+| Historie | **History** | log of all changes |
+| Status DFT / REV / REL / ECO / OBS | **Draft / In review / Released / Change (ECO) / Obsolete** | revision status |
+| Freigabe / freigeben | **Release / release** | |
+| Vier-Augen-Prinzip | **Two-person approval** | release by a second person |
+| Änderungsantrag (ECR) | **Change request (ECR)** | reason and impact of a planned change |
+| fixiert | **pinned** | set to a fixed revision (BOM, as-delivered configuration) |
+| Gelieferter Stand | **As-delivered configuration** | revisions pinned on delivery of a production order |
+| Auschecken / Einchecken | **Check out / Check in** | |
+| Datenblatt | **Data sheet** | |
+| Normteil | **Standard part** | DIN/ISO/EN component |
+| Auftrag | **Order** | transaction with phases Quote → Confirmed → Delivered → Invoiced |
+| Angebot | **Quote** | first phase of an order |
+| Rechnung | **Invoice** | |
+| Produktionsauftrag | **Production order** | manufacturing job, number `LS-…` |
+| Lieferschein | **Delivery note** | printout of a production order |
+| Rückverfolgung | **Traceability** | |
+| Lager / Lagerartikel | **Inventory / Stock item** | |
+| Rohmaterial | **Raw material** | |
+| Lot-Nr. | **Lot no.** | batch of a raw material |
+| Einkauf / Bestellung | **Purchasing / Purchase order** | |
+| Wareneingang | **Goods receipt** | |
+| Lieferant / Kunde | **Supplier / Customer** | |
+| Verkaufspreis (VP) | **Selling price** | price of an item |
+| Stundenansatz | **Hourly rate** | |
+| Sicherung | **Backup** | copy of the database in `data/backups/` |
+| Papierkorb | **Trash** | deleted files, kept for 30 days |
+| Einstellungen | **Settings** | |
+
+Number prefixes: existing databases keep their prefixes (AUF, LS, EK, KD, LF). New
+installations with the English interface start with English defaults (ORD, PO, CUS, SUP …).
+Prefixes remain configurable under Settings → Admin.
 
 ---
 
-## Dateistruktur
+## File structure
 
 ```
 PLM/
 ├── backend/
-│   ├── server.js          ← REST-API (Express + sql.js/SQLite)
+│   ├── server.js          ← REST API (Express + sql.js/SQLite)
 │   ├── package.json
-│   ├── print_receipt.py   ← Pipsta-Druckskript (Python, ESC/POS)
-│   └── data/              ← automatisch angelegt (nicht ins Git)
-│       ├── plm.db         ← SQLite-Datenbank
-│       ├── files/         ← hochgeladene Dateien (UUID-Namen)
-│       ├── backups/       ← Sicherungen der Datenbank (siehe Datensicherung)
-│       ├── papierkorb/    ← gelöschte Dateien, 30 Tage aufbewahrt
-│       └── plm.lock       ← welches PLM die Daten gerade hat (solange es läuft)
+│   ├── print_receipt.py   ← Pipsta print script (Python, ESC/POS)
+│   └── data/              ← created automatically (not in Git)
+│       ├── plm.db         ← SQLite database
+│       ├── files/         ← uploaded files (UUID names)
+│       ├── backups/       ← database backups (see Backups)
+│       ├── papierkorb/    ← deleted files, kept for 30 days
+│       └── plm.lock       ← which PLM currently holds the data (while it runs)
 ├── frontend/
 │   └── public/
-│       ├── index.html     ← HTML-Grundstruktur
-│       ├── js/            ← Single-Page-App, aufgeteilt nach Domänen
+│       ├── index.html     ← HTML skeleton
+│       ├── js/            ← single-page app, split by domain
 │       │   ├── 01-core.js …  13-normteile-einkauf.js
-│       │   ├── 14-qr.js      ← QR-Encoder (eigenständig, keine externe Bibliothek)
-│       │   ├── 15-mindmap.js ← Abhängigkeitsgraph (SVG, Pan/Zoom)
-│       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
-│       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
-├── plm.config             ← Konfiguration dieses PCs: data_dir, checkout_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (wird auto-erstellt)
-├── HANDBUCH.md            ← Handbuch für die Bedienung (Deutsch)
-├── START-PLM.bat          ← Starter für Windows
-├── VERKNUEPFUNG-ERSTELLEN.bat ← legt die Desktop-Verknüpfung mit Logo an (Windows)
-├── PLM-ERP.ico            ← Logo als Windows-Symbol für die Verknüpfung
-└── README.md
+│       │   ├── 14-qr.js      ← QR encoder (standalone, no external library)
+│       │   ├── 15-mindmap.js ← dependency graph (SVG, pan/zoom)
+│       │   └── (load order in index.html, shared global scope)
+│       └── styles.css     ← design system (dark theme, high-contrast palette)
+├── plm.config             ← configuration of this PC: data_dir, checkout_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (created automatically)
+├── HANDBUCH.md            ← user manual (German)
+├── SCHNELLSTART.md        ← quick start (German)
+├── START-PLM.bat          ← launcher for Windows
+├── VERKNUEPFUNG-ERSTELLEN.bat ← creates the desktop shortcut with logo (Windows)
+├── PLM-ERP.ico            ← logo as Windows icon for the shortcut
+├── README.md              ← this file
+└── README.de.md           ← German version
 ```
 
 ---
 
-## Sicherheit
+## Security
 
-PLM hat keine Anmeldung: Wer die Oberfläche erreicht, darf alles. Der Server lauscht auf
-Port 3000 (oder dem gemerkten Ausweich-Port) aller Netzwerkschnittstellen. Ob andere
-Geräte herankommen, entscheidet die Firewall des PCs.
+PLM has no login: whoever can reach the interface may do everything. The server listens
+on port 3000 (or the remembered fallback port) on all network interfaces. Whether other
+devices can reach it is decided by the PC's firewall.
 
-- Anfragen fremder Webseiten (fremder Origin oder Host) werden abgewiesen, es gibt keine CORS-Freigabe.
-- CAD, Slicer und „Ordner öffnen“ starten ohne Shell und nur für Anfragen vom PC selbst.
-  Programmpfade stehen in `plm.config`, nicht in der Oberfläche.
-- Check-in und Import arbeiten nur im Checkout-Verzeichnis, und dieses lässt sich nur am PC ändern
-  (es steht in `plm.config`). Übernehmen der Datensperre geht ebenfalls nur am PC selbst.
-- Paketlücken prüfen: `cd backend && npm audit --omit=dev`
+- Requests from other websites (foreign origin or host) are rejected; there is no CORS allowance.
+- CAD, slicer and "Open folder" start without a shell and only for requests from the PC itself.
+  Program paths are stored in `plm.config`, not in the interface.
+- Check-in and import only work inside the checkout directory, and it can only be changed
+  on the PC itself (it is stored in `plm.config`). Taking over the data lock also only
+  works on the PC itself.
+- Check for package vulnerabilities: `cd backend && npm audit --omit=dev`
 
-Die Benutzer (Einstellungen → Benutzer) dienen der Nachvollziehbarkeit, nicht als Schutz:
-gewählt wird ohne Passwort; jede Person kann ihre Kachel mit einer PIN schützen. Bedienung siehe
-[HANDBUCH.md](HANDBUCH.md), Kapitel Einstellungen → Benutzer.
+Users (Settings → Users) are for traceability, not for protection: they are selected
+without a password; each person can protect their tile with a PIN. Usage: see
+[HANDBUCH.md](HANDBUCH.md), chapter Settings → Users.
 
 ---
 
-## Update einspielen
+## Installing updates
 
-Am einfachsten in PLM selbst: Klick auf die Version unten in der Navigation (blauer Punkt)
-→ **Jetzt installieren**. PLM holt den neuen Stand (`git merge --ff-only` bzw. die ZIP von
-GitHub), führt bei geänderten Paketen `npm install` aus und startet neu; die Seite lädt
-sich danach selbst neu. Das geht nur am PC, auf dem PLM läuft, und im Git-Checkout nur ohne
-eigene, nicht committete Änderungen. Schlägt etwas fehl, läuft die bisherige Version weiter.
-Gestartet über `START-PLM.bat` oder `start-plm.sh`, startet das Skript PLM neu (Exit-Code 75);
-sonst startet PLM sich selbst und löst den alten Prozess ab.
+The easiest way is from within PLM: click the version at the bottom of the navigation
+(blue dot) → **Install now**. PLM fetches the new version (`git merge --ff-only` or the
+ZIP from GitHub), runs `npm install` if packages changed and restarts; the page reloads
+itself afterwards. This only works on the PC where PLM runs and, in a Git checkout, only
+without uncommitted changes of your own. If something fails, the previous version keeps
+running. When started via `START-PLM.bat` or `start-plm.sh`, the script restarts PLM
+(exit code 75); otherwise PLM restarts itself and replaces the old process.
 
-Von Hand:
+By hand:
 
 ```bash
 git pull
-cd backend && npm install     # nur nötig wenn Pakete dazugekommen sind
+cd backend && npm install     # only needed if packages were added
 node server.js
 ```
 
-Datenbank und `plm.config` liegen ausserhalb des Repositories und stehen in der
-`.gitignore` — ein Pull fasst sie nicht an.
+The database and `plm.config` live outside the repository and are listed in
+`.gitignore`, so a pull does not touch them.
 
-Welche Version läuft, steht unten in der Navigation unter den Einstellungen und auf dem Startbildschirm:
-`2.0.282` = Major.Minor aus `backend/package.json`, dahinter die Anzahl Commits.
-Der Punkt an der Version: blau = Update verfügbar, grün = aktuell, grau = Stand unbekannt
-(offline oder GitHub nicht erreichbar — der Grund steht im Tooltip). „geändert“ (Startbildschirm, Dashboard, Tooltip der Version) heisst,
-PLM wurde mit Änderungen gestartet, die noch nicht committet sind — dann geht „Jetzt installieren“ nicht.
+The running version is shown at the bottom of the navigation below Settings and on the
+start screen: `2.0.282` = major.minor from `backend/package.json`, followed by the number
+of commits. The dot next to the version: blue = update available, green = up to date,
+grey = unknown (offline or GitHub unreachable; the reason is in the tooltip). "geändert"
+(modified; start screen, dashboard, version tooltip) means PLM was started with
+uncommitted changes, in which case "Install now" is not available.
 
-**Kopie aus dem ZIP-Download (ohne Git):** GitHub trägt beim Download Commit und Datum in
-`backend/version.json` ein (`export-subst` in `.gitattributes`). Damit fragt PLM bei GitHub nach,
-ob es Neueres gibt, und holt von dort auch die Versionsnummer — ohne Internet steht statt der
-Nummer der Commit da. Aktualisieren: „Jetzt installieren“ wie oben — oder von Hand PLM beenden, neue ZIP
-herunterladen, ihren Inhalt über den PLM-Ordner kopieren und neu starten. Daten und `plm.config` bleiben dabei erhalten.
+**Copy from the ZIP download (without Git):** when downloading, GitHub writes the commit
+and date into `backend/version.json` (`export-subst` in `.gitattributes`). With that, PLM
+asks GitHub whether there is something newer and also gets the version number from there;
+without internet the commit is shown instead of the number. To update: "Install now" as
+above, or by hand: stop PLM, download the new ZIP, copy its contents over the PLM folder
+and restart. Data and `plm.config` are preserved.
 
-Beim Start prüft PLM, ob auf dem Git-Remote neuere Commits liegen (`git fetch` im
-Hintergrund, ab dem laufenden Commit). Gibt es welche, zeigt der Startbildschirm eine
-Zeile „Update“ mit der neuen Versionsnummer, und an der Version in der Navigation steht ein
-blauer Punkt (Klick zeigt die neuen Commits und „Jetzt installieren“). Installiert wird
-nur auf Klick — PLM läuft mit
-dem bisherigen Stand ganz normal weiter; im Betrieb prüft die Oberfläche alle 30 Minuten
-nach. Die Prüfung fragt nie nach Passwort oder Passphrase: bei SSH-Remotes braucht es
-einen Schlüssel ohne Passphrase oder einen laufenden SSH-Agent. Ist das Remote nicht
-erreichbar, zählt der Stand vom letzten Abruf; ohne Git oder ohne Upstream-Branch bleibt es still.
+At start-up, PLM checks whether there are newer commits on the Git remote (`git fetch` in
+the background, from the running commit on). If there are, the start screen shows an
+"Update" line with the new version number, and a blue dot appears next to the version in
+the navigation (a click shows the new commits and "Install now"). Installation only
+happens on click; PLM keeps running normally on the current version, and while running
+the interface checks again every 30 minutes. The check never asks for a password or
+passphrase: SSH remotes need a key without passphrase or a running SSH agent. If the
+remote cannot be reached, the state of the last fetch counts; without Git or without an
+upstream branch it stays silent.
 
-Schemaänderungen laufen beim Serverstart automatisch: `initDb()` legt **zuerst**
-eine Tageskopie unter `data/backups/` an, `applySchema()` ergänzt dann fehlende Tabellen
-und Spalten und schreibt die Datei zurück. Der Vorgang ist idempotent, ein zweiter
-Start ändert nichts mehr. Dasselbe läuft nach dem Wiederherstellen einer Sicherung,
-damit auch ein älterer Stand das aktuelle Schema bekommt.
+Schema changes run automatically at server start: `initDb()` **first** creates a daily
+copy under `data/backups/`, then `applySchema()` adds missing tables and columns and
+writes the file back. The process is idempotent; a second start changes nothing. The same
+runs after restoring a backup, so that an older backup also gets the current schema.
 
-Neue Einstellungen (Freigabe-Workflow, Standard-Klassifizierung) starten auf den
-bisherigen Werten — es ändert sich nichts, bis du sie umstellst.
+New settings (release workflow, default classification) start with the previous values:
+nothing changes until you switch them.
 
-Nach einem Update, das die Farbpalette betrifft, einmal
-**Einstellungen → Daten → Design zurücksetzen** drücken: die Farben der
-Klassifizierungen liegen in der Datenbank und ziehen sonst nicht mit. Namen und
-Reihenfolge bleiben dabei erhalten.
+After an update that affects the colour palette, press
+**Settings → Data → Reset design** once: the classification colours are stored in the
+database and would not follow otherwise. Names and order are kept.
 
 ---
 
-## Datensicherung
+## Backups
 
-Alles unter **Einstellungen → Daten → Datensicherung**, im laufenden Betrieb — ein
-Neustart ist nicht nötig.
+Everything is under **Settings → Data → Backup**, while running; no restart needed.
 
-| Art | Name in `data/backups/` | Aufbewahrung |
+| Kind | Name in `data/backups/` | Kept |
 |---|---|---|
-| täglich, beim Serverstart | `plm-JJJJ-MM-TT.db` | die letzten 14 |
-| „💾 Jetzt sichern“ | `plm-JJJJ-MM-TT_HHMMSS-manuell.db` | bis du sie löschst |
-| vor jedem Wiederherstellen | `plm-JJJJ-MM-TT_HHMMSS-vor-wiederherstellung.db` | bis du sie löschst |
-| anderes PLM hat übernommen oder `plm.db` von aussen geändert, bevor alles gespeichert war | `plm-JJJJ-MM-TT_HHMMSS-nicht-gespeichert.db` | bis du sie löschst |
+| daily, at server start | `plm-YYYY-MM-DD.db` | the last 14 |
+| "💾 Back up now" | `plm-YYYY-MM-DD_HHMMSS-manuell.db` | until you delete it |
+| before every restore | `plm-YYYY-MM-DD_HHMMSS-vor-wiederherstellung.db` | until you delete it |
+| another PLM took over, or `plm.db` was changed from outside, before everything was saved | `plm-YYYY-MM-DD_HHMMSS-nicht-gespeichert.db` | until you delete it |
 
-**Wiederherstellen:**
+**Restoring:**
 
-1. In der Liste bei der gewünschten Sicherung „Wiederherstellen“ klicken. Der Dialog
-   zeigt die Kennzahlen jetzt gegen die Sicherung (Projekte, Items, Aufträge, …).
-2. PLM sichert zuerst den jetzigen Stand („vor Wiederherstellung“) — du kannst also zurück.
-3. Die Datenbank wird getauscht und auf das aktuelle Schema gebracht.
-4. Gelöschte Dateien, auf die die Sicherung noch verweist, holt PLM aus dem
-   **Papierkorb** zurück. Fehlt eine Datei trotzdem, nennt der Abschlussdialog sie.
+1. Click "Restore" next to the desired backup in the list. The dialog shows the key
+   figures of the current state against the backup (projects, items, orders, …).
+2. PLM first backs up the current state ("before restore"), so you can go back.
+3. The database is swapped and brought up to the current schema.
+4. PLM retrieves deleted files that the backup still refers to from the **trash**. If a
+   file is still missing, the final dialog names it.
 
-Über **„⬆ Aus Datei wiederherstellen…“** geht dasselbe mit einer `.db`-Sicherung oder
-einem **Gesamtexport** (`.zip` mit `plm.db` und `files/`). Beim ZIP werden fehlende
-Dateien gleich mit eingespielt; vorhandene Dateien bleiben unberührt.
+**"⬆ Restore from file…"** does the same with a `.db` backup or a **full export** (`.zip`
+with `plm.db` and `files/`). With a ZIP, missing files are restored as well; existing
+files are left untouched.
 
-**Papierkorb:** Gelöschte Dateien (Datei an einer Revision, Projektdokument,
-Normteil-Datei, gelöschtes Item) landen in `data/papierkorb/` und werden nach 30 Tagen
-beim Serverstart endgültig entfernt.
+**Trash:** deleted files (file on a revision, project document, standard part file,
+deleted item) end up in `data/papierkorb/` and are permanently removed at server start
+after 30 days.
 
-**Export:** **Einstellungen → Daten → Gesamtexport** lädt `plm.db` + `files/` als ZIP;
-„Export mit Klarnamen“ legt die Dateien nach Projekt/Item/Revision ab (zum Lesen,
-nicht zum Wiederherstellen der Dateien).
+**Export:** **Settings → Data → Full export** downloads `plm.db` + `files/` as a ZIP;
+"Export with readable names" arranges the files by project/item/revision (for reading,
+not for restoring the files).
 
 ---
 
@@ -722,17 +763,17 @@ cd backend
 npm test
 ```
 
-Die wichtigsten Testdateien:
+The most important test files:
 
-| Datei | Inhalt |
+| File | Content |
 |---|---|
-| `test/sperre.test.js` | geteiltes Datenverzeichnis: Warten und Übernehmen, Änderung von aussen, verwaiste Sperren, Checkout-Verzeichnis pro PC, Sperre beim Verschieben, fehlender Datenordner, Checkout-Vermerke, Datenstand |
-| `test/smoke.test.js` | Aufträge, Preis-Sync Auftrag ↔ Produktion, Lagerbuchungen, Backups |
-| `test/workflow.test.js` | Projektfarben, Klassifizierungs-Ableitung, 3MF-Druckparameter, Revisionsfixierung, einfacher Workflow, Normteil-Einkauf, Materialabzug, Angebotsphase, Kundenlöschung |
-| `test/revisionen.test.js` | gelieferter Stand (Fixieren, Sperre, Lösen, Korrektur, Check-in), Revisionsvergleich, ECO-Übernahme, Suche mit Klassifizierung, Umbenennen von Klassifizierungen |
-| `test/backup.test.js` | Sicherung anlegen, wiederherstellen (Liste, `.db`, ZIP), Papierkorb, Schema-Update älterer Sicherungen |
-| `test/frontend.test.js` | QR-Encoder (gegen die ISO-Referenzwerte), URL-Absicherung, Datenblatt, Stücklisten-Revisionsanzeige, Mindmap-Layout, Workflow-Umschaltung, Revisionskennzeichen in der Produktion, Revisionsvergleich |
+| `test/sperre.test.js` | shared data directory: waiting and taking over, external changes, orphaned locks, checkout directory per PC, lock when moving, missing data folder, checkout records, data version |
+| `test/smoke.test.js` | orders, price sync order ↔ production, stock bookings, backups |
+| `test/workflow.test.js` | project colours, classification derivation, 3MF print parameters, revision pinning, simple workflow, standard part purchasing, material consumption, quote phase, customer deletion |
+| `test/revisionen.test.js` | as-delivered configuration (pinning, locking, releasing, correction, check-in), revision comparison, ECO carry-over, search with classification, renaming classifications |
+| `test/backup.test.js` | creating and restoring backups (list, `.db`, ZIP), trash, schema update of older backups |
+| `test/frontend.test.js` | QR encoder (against the ISO reference values), URL sanitising, data sheet, BOM revision display, mind map layout, workflow switching, revision badges in production, revision comparison |
+| `test/anonym.test.js` | everything in Git is anonymous: no real e-mail addresses, user paths, IBANs or phone numbers |
 
-Die Server-Tests starten jeweils einen eigenen Server (eigener Port) mit einer leeren
-Wegwerf-Datenbank; `frontend.test.js` prüft reine Funktionen des Frontends ohne Server
-und ohne Browser.
+The server tests each start their own server (own port) with an empty throwaway database;
+`frontend.test.js` tests pure frontend functions without a server and without a browser.
