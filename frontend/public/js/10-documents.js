@@ -339,7 +339,7 @@ function openDocTemplateModal(itemId) {
   document.getElementById('dtpl-cards').innerHTML = [
     { type:'datenblatt', label:_t('Datenblatt'), desc:_t('Allgemeine Informationen, Druckparameter, Revisionen, Lager, Dateien und Varianten') },
     isASM ? { type:'stueckliste', label:_t('Stückliste'), desc:_t('Vollständige BOM-Tabelle mit Mengen, Preisen und Entwicklungszeit') } : null,
-    { type:'pruefprotokoll', label:_t('Prüfprotokoll'), desc:_t('Prüfpunkte und Unterschriften nach der Vorlage in Einstellungen → PLM') },
+    { type:'pruefprotokoll', label:_t('Prüfprotokoll'), desc:_t('Prüfpunkte und Unterschriften nach der Vorlage in Einstellungen → Prüfprotokoll') },
   ].filter(Boolean).map(t => `
     <div onclick="generateItemTemplate('${t.type}')" style="padding:14px 16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
       <div style="font-weight:600;font-size:14px;color:var(--t1);margin-bottom:3px">${t.label}</div>
@@ -618,7 +618,7 @@ function generateItemTemplate(type, opts = {}) {
   w.document.close();
 }
 
-// -- PRUEFPROTOKOLL-VORLAGE (Einstellungen → PLM) --------------
+// -- PRUEFPROTOKOLL-VORLAGE (Einstellungen → Klassifizierungen) --------------
 function _renderPruefSettings(tpl = getPruefTemplate()) {
   const el = document.getElementById('st-pruef-box');
   if (!el) return;

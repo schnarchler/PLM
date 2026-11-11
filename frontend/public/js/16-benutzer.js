@@ -44,7 +44,7 @@ function _renderUserChip() {
 async function onUserChip() {
   if (state.session?.mode === 'team') return askWhoIsThere('switch');
   await gotoView('settings');
-  document.querySelector('.st-tab-btn[data-tab="benutzer"]')?.click();
+  _stTab('benutzer');
 }
 
 // Nach einem Wechsel ändern sich die Rechte — was davon abhängt, neu zeichnen

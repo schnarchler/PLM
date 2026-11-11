@@ -19,8 +19,8 @@ The essentials on one page. Everything in detail is in the **[README](README.md)
 The browser opens by itself. On first start, PLM installs the required packages, which takes
 a little longer once. Requires [Node.js](https://nodejs.org) (LTS).
 
-**Language:** PLM follows the browser language; switch under **Settings → Data → Appearance**.
-Printed documents have their own language under **Settings → Company**.
+**Language:** PLM follows the browser language; switch under **Settings → Appearance**.
+Printed documents have their own language under **Settings → Documents & prices**.
 
 **Data folder:** set in `plm.config` (line `data_dir=`), without an entry `backend/data/`.
 It holds the database, files and backups. `plm.config` and the data folder never go into Git.
@@ -58,7 +58,7 @@ new revision and carries over files, BOM and print parameters.
 
 ## 4. The most important data
 
-**Numbers** (prefixes can be changed under Settings → Admin)
+**Numbers** (prefixes can be changed under Settings → Numbers)
 
 | What | Example | | What | Example |
 |---|---|---|---|---|
@@ -102,7 +102,7 @@ revision takes them over from the previous one.
 - **Check out / Check in** on the item: files for editing in CAD. On check-in, only changed
   files are taken over.
 - **History** on the item: who changed what and when, with old and new value.
-- **Back up:** Settings → **Data → 💾 Back up now**, or **Full export** as a ZIP.
+- **Back up:** Settings → **Backup & export → 💾 Back up now**, or **Full export** as a ZIP.
 
 ---
 

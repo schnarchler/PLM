@@ -1041,7 +1041,7 @@ function _renderSearchChips(counts) {
     + list.map(c => chip(c.name, c.name, c.color || '#9aa3b2', countOf.get(c.name.toLowerCase()),
         _searchClass.toLowerCase() === c.name.toLowerCase() ? _t('Filter aufheben') : _t('Nur Items mit „{name}"', { name: c.name }))).join('')
     + orphans.map(c => chip(c.name, c.name, '#9aa3b2', c.count,
-        _t('„{name}" steht nicht in der Liste (Einstellungen → PLM)', { name: c.name }), true)).join('')
+        _t('„{name}" steht nicht in der Liste (Einstellungen → Klassifizierungen)', { name: c.name }), true)).join('')
     + chip('__none__', _t('ohne'), '#939cab', countOf.get(''), _t('Items ohne Klassifizierung'), true)
     + (_searchClass ? `<button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="setSearchClass(_searchClass)">${_t('✕ Filter aufheben')}</button>` : '');
 }

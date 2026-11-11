@@ -89,7 +89,7 @@ In `plm.config` jedes PCs:
 
 ```
 data_dir=Z:\PLM-Daten              ← der gemeinsame Datenordner, wie er auf diesem PC heisst
-checkout_dir=C:\CAD\Checkout       ← nur dieser PC (auch über Einstellungen → Daten)
+checkout_dir=C:\CAD\Checkout       ← nur dieser PC (auch über Einstellungen → CAD & Checkout)
 ```
 
 Es arbeitet immer nur ein PLM zur Zeit mit den Daten: Jedes hält die Datenbank im Speicher
@@ -129,7 +129,7 @@ Kunden:               KD-0001
 Lieferanten:          LF-0001
 ```
 
-Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** konfigurierbar.
+Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Nummern** konfigurierbar.
 
 ---
 
@@ -143,7 +143,7 @@ DFT ──────────► REL ──► ECO ──► (neue Revision
 ```
 
 Allein oder ohne Vier-Augen-Prinzip gibt man direkt aus dem Entwurf frei. Mit
-Vier-Augen-Prinzip (Einstellungen → PLM, ab zwei Personen) geht eine Revision erst
+Vier-Augen-Prinzip (Einstellungen → Freigabe, ab zwei Personen) geht eine Revision erst
 in Review (REV) und ist dort gesperrt; freigeben darf dann nur eine andere Person als die,
 die eingereicht hat — Admins dürfen auch selbst freigeben.
 
@@ -160,12 +160,12 @@ die neue DFT-Revision übernommen — genau wie bei „＋ Neue Revision“.
 Wird die DFT-Revision gelöscht, kehrt das ECO automatisch auf REL zurück.  
 Wird die neue Revision freigegeben, geht die bisherige (REL oder ECO) auf OBS.
 
-**Prüfung vor der Freigabe** (Einstellungen → PLM): wählbare Pflichtpunkte — mindestens
+**Prüfung vor der Freigabe** (Einstellungen → Freigabe): wählbare Pflichtpunkte — mindestens
 eine Datei, CAD-Datei, Zeichnung (PDF), Beschreibung, Klassifizierung, Gewicht (Standard:
 Datei und Gewicht) — plus die als Pflicht markierten
 Eigenschaften der Klassifizierung. Fehlt etwas, nennt PLM es und sperrt „Freigeben“.
 
-**Ohne Freigabe arbeiten:** Unter **Einstellungen → PLM → Freigabe-Workflow** lässt sich
+**Ohne Freigabe arbeiten:** Unter **Einstellungen → Freigabe** lässt sich
 auf den einfachen Modus umstellen. Dann bleiben alle Revisionen im Status DFT und
 bearbeitbar; statt „Freigeben“ steht dort **„＋ Neue Revision“**, die Dateien,
 Druckparameter und Stückliste der bisherigen Revision übernimmt. Für die Arbeit allein,
@@ -190,7 +190,7 @@ ECO-Weg steht dort weiterhin zur Verfügung.
 - Automatische Dateityp-Erkennung (STL/3MF/STEP → CAD, .gcode → GCODE …)
 - Gewicht pro Part (direkt inline editierbar), Entwicklungszeiten erfassbar; Baugruppen ohne
   eigenes Gewicht summieren Teile und Normteile der Stückliste
-- **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → PLM
+- **Klassifizierung** – farbige Chips, konfigurierbar unter Einstellungen → Klassifizierungen
 - **Eigenschaften je Klassifizierung** – z. B. Werkstoff, Oberfläche, Hersteller; im Datenblatt,
   auf der PDF und in der Suche, optional Pflicht für die Freigabe
 - **Vorschaubilder** – in Projektbaum, Stückliste und Suche beim Überfahren einer Zeile mit der
@@ -209,12 +209,12 @@ ECO-Weg steht dort weiterhin zur Verfügung.
   Baugruppen die ganze Struktur; gelieferte Revisionen sind gesperrt (siehe unten)
 - **Revisionen vergleichen** – zwei Revisionen eines Items gegenüberstellen: Kopfdaten,
   Druckparameter, Stückliste, Normteile und Dateien (siehe unten)
-- **Freigabe-Workflow abschaltbar** – unter Einstellungen → PLM wählbar zwischen
+- **Freigabe-Workflow abschaltbar** – unter Einstellungen → Freigabe wählbar zwischen
   Freigabelauf (DFT → REL → ECO, optional mit Prüfung REV) und einfachem Betrieb ohne Freigabe
 - **Druckparameter aus 3MF** – beim Hochladen einer `.3mf` an eine Revision werden
   Schichthöhe, Füllung, Füllmuster, Temperaturen, Material und Drucker automatisch übernommen
 - **Klassifizierung automatisch** – neue Items werden anhand der Quelle als Eigen-
-  oder Kaufteil eingestuft (Vorgaben unter Einstellungen → PLM)
+  oder Kaufteil eingestuft (Vorgaben unter Einstellungen → Klassifizierungen)
 - **Freie Notizen** pro Item – für alles was nicht in die Beschreibung gehört
 - **Verwendung** – zeigt alle Revisionen der Baugruppen, in denen ein Item verbaut ist,
   inklusive des Standes, auf den die jeweilige Verwendung fixiert ist
@@ -297,15 +297,19 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - **Browser-Zurück-Button** – navigiert innerhalb der App
 - **Zuletzt geöffnet** – zuletzt geöffnete Items und Belege in der Seitenleiste
 
-### Einstellungen / Admin
-- **Daten** (öffnet zuerst) – Sprache der Oberfläche, Schriftgrösse, **Design zurücksetzen**,
-  Datenpfad, Checkout-Ordner, CAD-Programm, **Sicherungen anlegen und wiederherstellen**, Export
-- **Firma** – Name, Adresse, Bankverbindung, Logo, Sprache der Belege
-- **Kalkulation** – Stundenansatz, Maschinenkosten, Standardwerte
-- **3D-Druck** – Slicer (PrusaSlicer / Bambu Studio), Drucker, Düsen, Materialprofile
-- **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items)
-- **Benutzer** – wer mit PLM arbeitet (User, Superuser, Admin); Namen in Historie und Freigabe
-- **Admin** – Nummerierungsstruktur, Datensätze löschen
+### Einstellungen
+Links die Bereiche nach Thema, rechts die Seite; jede Seite mit Eingaben hat ihren eigenen
+Speichern-Knopf. Beim Öffnen erscheint die zuletzt gewählte Seite.
+- **Allgemein** – **Darstellung** (Sprache, Schriftgrösse, Design), **Personen** (User, Superuser,
+  Admin; Namen in Historie und Freigabe)
+- **Daten** – **Sicherung & Export** (Sicherungen anlegen, herunterladen, wiederherstellen; Export,
+  Datei-Index), **Speicherort** (Datenpfad, Daten verschieben)
+- **Firma & Belege** – **Firma** (Briefkopf, Logo, Bank), **Belege & Preise** (MwSt., Stundensatz,
+  Sprache der Belege, Fusszeilen), **Bon & Etiketten**, **Nummern** (Präfixe, Stellen, Revisionsformat)
+- **PLM** – **Klassifizierungen** (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items),
+  **Freigabe** (Workflow, Vier-Augen-Prinzip, Prüfung vor der Freigabe), **Prüfprotokoll**
+- **Werkstatt** – **3D-Druck** (Slicer, Drucker, Düsen, Materialprofile), **CAD & Checkout** (pro PC)
+- **Admin** – **Datensätze löschen**
 
 ---
 
@@ -353,7 +357,7 @@ der aktiven Revision (blasses Kennzeichen `rev2`). Sobald der Produktionsauftrag
 | Part | die Revision der Position wird fixiert (`🔒 rev2`) |
 | Baugruppe | zusätzlich die **komplette Struktur** — jedes Unterteil mit seiner damaligen Revision |
 | Gelieferte Revision | gesperrt: keine Datei-, Stücklisten- oder Druckparameter-Änderung, kein Löschen |
-| Item mit gelieferter Revision | nur noch unter **Einstellungen → Admin** löschbar |
+| Item mit gelieferter Revision | nur noch unter **Einstellungen → Datensätze löschen** löschbar |
 
 Weiterarbeiten geht in einer **neuen Revision** — im Revisionen-Tab erscheint dafür
 „＋ Neue Revision“, auch im Workflow mit Freigabe. Werden bei einem Check-in Dateien
@@ -435,7 +439,7 @@ Die **Chips** über den Ergebnissen sind ein echter Filter:
 - **ohne** zeigt Items, denen noch keine Klassifizierung zugeordnet ist.
 - Gestrichelte Chips sind Werte, die an Items stehen, aber nicht (mehr) in der Liste.
 
-Unter **Einstellungen → PLM** steht bei jeder Klassifizierung, wie viele Items sie
+Unter **Einstellungen → Klassifizierungen** steht bei jeder Klassifizierung, wie viele Items sie
 tragen. Umbenennen überträgt den neuen Namen beim Speichern auf alle Items und auf
 die Standard-Klassifizierung. Beim Entfernen eines benutzten Eintrags fragt PLM, ob
 die Items ihn behalten oder verlieren. Werte, die an Items stehen, aber in der Liste
@@ -520,7 +524,7 @@ bleiben unberührt. Pro Produktionsauftrag wird nur einmal abgebucht.
 | Assemblies (.asm) | gleicher Pfad |
 | Drafts (.dft) | gleicher Pfad |
 
-Checkout-Pfad: **Einstellungen → Daten → Checkout-Verzeichnis** — pro PC, steht in
+Checkout-Pfad: **Einstellungen → CAD & Checkout** — pro PC, steht in
 `plm.config` als `checkout_dir=` (leer: `[Datenverzeichnis]/checkout`). Früher stand er in
 der Datenbank; gibt es den Ordner auf dem PC, übernimmt PLM ihn beim Start einmalig.
 
@@ -641,7 +645,7 @@ Einstellung `prefix_supplier` (Vorgabe LF).
 
 **Sprache der Belege:** Gedruckte Belege (Rechnung, Angebot, Lieferschein, Bestellung,
 Datenblatt, Stückliste, Prüfprotokoll, Etiketten, Belege des Thermodruckers) haben eine eigene
-Sprache unter **Einstellungen → Firma**, unabhängig von der Oberfläche. Installationen, die schon
+Sprache unter **Einstellungen → Belege & Preise**, unabhängig von der Oberfläche. Installationen, die schon
 Daten hatten, bleiben auf Deutsch. Im Code übersetzt `_d('…')` in die Sprache der Belege,
 `_k('…')` markiert nur einen Schlüssel für Tabellen, die Oberfläche und Belege teilen (wie
 `N_()` bei gettext). Fusszeilen und Zahlungsbedingungen stehen so auf den Belegen, wie sie in
@@ -704,9 +708,9 @@ Geräte herankommen, entscheidet die Firewall des PCs.
   (es steht in `plm.config`). Übernehmen der Datensperre geht ebenfalls nur am PC selbst.
 - Paketlücken prüfen: `cd backend && npm audit --omit=dev`
 
-Die Benutzer (Einstellungen → Benutzer) dienen der Nachvollziehbarkeit, nicht als Schutz:
+Die Benutzer (Einstellungen → Personen) dienen der Nachvollziehbarkeit, nicht als Schutz:
 gewählt wird ohne Passwort; jede Person kann ihre Kachel mit einer PIN schützen. Bedienung siehe
-[HANDBUCH.md](HANDBUCH.md), Kapitel Einstellungen → Benutzer.
+[HANDBUCH.md](HANDBUCH.md), Kapitel Einstellungen → Personen.
 
 ---
 
@@ -763,7 +767,7 @@ Neue Einstellungen (Freigabe-Workflow, Standard-Klassifizierung) starten auf den
 bisherigen Werten — es ändert sich nichts, bis du sie umstellst.
 
 Nach einem Update, das die Farbpalette betrifft, einmal
-**Einstellungen → Daten → Design zurücksetzen** drücken: die Farben der
+**Einstellungen → Klassifizierungen → Standardfarben** drücken: die Farben der
 Klassifizierungen liegen in der Datenbank und ziehen sonst nicht mit. Namen und
 Reihenfolge bleiben dabei erhalten.
 
@@ -771,7 +775,7 @@ Reihenfolge bleiben dabei erhalten.
 
 ## Datensicherung
 
-Alles unter **Einstellungen → Daten → Datensicherung**, im laufenden Betrieb — ein
+Alles unter **Einstellungen → Sicherung & Export**, im laufenden Betrieb — ein
 Neustart ist nicht nötig. Die Sicherungen liegen in `backups/` im Datenverzeichnis
 (`backend/data/`, ausser `data_dir` in `plm.config` sagt etwas anderes); die
 Einstellungen zeigen den vollen Pfad unter der Liste. Mit „⬇ Herunterladen“ bei einer
@@ -801,7 +805,7 @@ Dateien gleich mit eingespielt; vorhandene Dateien bleiben unberührt.
 Normteil-Datei, gelöschtes Item) landen in `data/papierkorb/` und werden nach 30 Tagen
 beim Serverstart endgültig entfernt.
 
-**Export:** **Einstellungen → Daten → Gesamtexport** lädt `plm.db` + `files/` als ZIP;
+**Export:** **Einstellungen → Sicherung & Export → Gesamtexport** lädt `plm.db` + `files/` als ZIP;
 „Export mit Klarnamen“ legt die Dateien nach Projekt/Item/Revision ab (zum Lesen,
 nicht zum Wiederherstellen der Dateien).
 

@@ -280,7 +280,7 @@ function _lockDialogHtml(l) {
     text = (l.reason === 'takeover' ? _t('Die Daten wurden {ago} von {who} übernommen.', { ago: _agoTxt(h?.since || l.at), who: byWho })
         : _t('plm.db wurde von einem anderen PC oder Programm geändert, z.B. von einem Sync-Programm.'))
       + ' ' + _t('Hier wird nichts mehr gespeichert, der angezeigte Stand ist nicht mehr aktuell.')
-      + (l.saved_as ? '<br><br>' + _t('Was hier noch nicht gespeichert war, liegt als Sicherung {file} vor (Einstellungen → Daten → Datensicherung).', { file: code(l.saved_as) }) : '')
+      + (l.saved_as ? '<br><br>' + _t('Was hier noch nicht gespeichert war, liegt als Sicherung {file} vor (Einstellungen → Sicherung & Export).', { file: code(l.saved_as) }) : '')
       + (l.local_checkouts ? '<br><br>' + _t(l.local_checkouts === 1 ? 'Auf diesem PC ist noch 1 Teil ausgecheckt. Zum Einchecken hier weiterarbeiten.'
           : 'Auf diesem PC sind noch {n} Teile ausgecheckt. Zum Einchecken hier weiterarbeiten.', { n: l.local_checkouts }) : '')
       + '<br><br>' + _t(l.reason === 'takeover' ? '{button} lädt den aktuellen Stand — das andere PLM speichert danach nichts mehr.' : '{button} lädt den aktuellen Stand.',

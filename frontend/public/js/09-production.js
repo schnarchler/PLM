@@ -107,7 +107,7 @@ async function openDeliveryDetail(id) {
         <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${id})">${_t('&#128196; Lieferschein')}</button>
         ${d.status === 'DRAFT'
           ? `<button class="btn btn-red btn-sm" onclick="delDelivery(${id})">${_t('🗑 Löschen')}</button>`
-          : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">${_t('🔒 Löschen nur unter Einstellungen → Admin')}</span>`}
+          : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">${_t('🔒 Löschen nur unter Einstellungen → Datensätze löschen')}</span>`}
       </div>
     </div>`;
   _markActiveRow(id);

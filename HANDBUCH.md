@@ -163,17 +163,17 @@ Funktionen. Details stehen jeweils im verlinkten Kapitel.
 ### 3.1 Einmalig einrichten
 
 1. **Firma eintragen:** Einstellungen → **Firma** → Name, Adresse, UID, Bankverbindung, optional
-   **Logo hochladen…** → **💾 Speichern**. Diese Angaben stehen auf Angeboten, Rechnungen,
+   **Logo hochladen…** → **Speichern**. Diese Angaben stehen auf Angeboten, Rechnungen,
    Lieferscheinen und Bestellungen.
-2. **Kalkulation:** Einstellungen → **Kalkulation** → Stundenansatz (CHF/h), MwSt.,
+2. **Belege & Preise:** Einstellungen → **Belege & Preise** → Stundenansatz (CHF/h), MwSt.,
    Zahlungsbedingungen, Angebotsgültigkeit.
 3. **3D-Druck** (falls genutzt): Einstellungen → **3D-Druck** → **+ Drucker hinzufügen**
    (mit CHF/h), **+ Düse hinzufügen**.
-4. **Personen:** Einstellungen → **Benutzer** → eigenen Namen eintragen. Arbeiten mehrere Personen
-   mit PLM, jede Person anlegen und eine Rolle geben (siehe 20, Benutzer).
-5. **Checkout-Verzeichnis** (falls mit CAD gearbeitet wird): Einstellungen → **Daten** →
-   **Checkout-Verzeichnis** → **Pfad speichern** (siehe 9). Gilt nur für diesen PC.
-6. **Freigabe-Workflow wählen:** Einstellungen → **PLM** → **Mit Freigabe** (Standard) oder
+4. **Personen:** Einstellungen → **Personen** → eigenen Namen eintragen. Arbeiten mehrere Personen
+   mit PLM, jede Person anlegen und eine Rolle geben (siehe 20, Personen).
+5. **Checkout-Verzeichnis** (falls mit CAD gearbeitet wird): Einstellungen → **CAD & Checkout** →
+   **Pfad speichern** (siehe 9). Gilt nur für diesen PC.
+6. **Freigabe-Workflow wählen:** Einstellungen → **Freigabe** → **Mit Freigabe** (Standard) oder
    **Ohne Freigabe** (siehe 8).
 
 ### 3.2 Erstes Projekt und erstes Part
@@ -257,7 +257,7 @@ Damit ist der Ablauf einmal komplett durchlaufen.
 |---|---|
 | 💬 | Fehler melden oder Idee einreichen (ab zwei Personen, siehe 20) |
 | Name | Wer gerade arbeitet; Klick wechselt die Person (ab zwei Personen) |
-| **🖥 CAD** | Startet das CAD-Programm (siehe 20, Daten) |
+| **🖥 CAD** | Startet das CAD-Programm (siehe 20, CAD & Checkout) |
 | **⬆ Checkouts** | Übersicht aller ausgecheckten Items (siehe 9) |
 | **■ Beenden** | Server beenden |
 
@@ -308,7 +308,7 @@ Beschreibung. **Ändern:** Projekt öffnen → **Bearbeiten**.
 - **Dokumente** — Projektdokumente
 - **Log** — Historie des Projekts
 
-**Löschen:** Ein leeres Projekt über **Löschen**. Projekte mit Inhalt nur unter **Einstellungen → Admin**.
+**Löschen:** Ein leeres Projekt über **Löschen**. Projekte mit Inhalt nur unter **Einstellungen → Datensätze löschen**.
 
 **Alle Teile:** Navigation → **Teile** listet alle Parts, Baugruppen und Dokumente aus allen
 Projekten, nach Nummer sortiert, mit Kurzcode, Projekt und Status. Das Feld oben filtert nach
@@ -332,7 +332,7 @@ Revision im Status DFT und einen Kurzcode (siehe 6.8).
 **Ändern:** Item öffnen → **✏ Bearbeiten** (Name, Beschreibung, Quelle, Klassifizierung, Eigenschaften).
 Die **Beschreibung** gehört zur Revision: Sie gilt für die gewählte Revision, die anderen behalten ihren Text. Eine neue Revision übernimmt den Text der vorherigen. Mit **✏** neben der Beschreibung im Datenblatt lässt sie sich in jeder Revision ändern, auch wenn diese freigegeben ist. Die Änderung steht in der Historie.
 **Verschieben:** **↪** im Titel → **Zielprojekt** wählen → **Verschieben**. Die Nummer passt sich dem neuen Projekt an.
-**Löschen:** Tab **Revisionen** → **🗑 Item löschen**. Freigegebene oder gelieferte Items nur unter **Einstellungen → Admin**.
+**Löschen:** Tab **Revisionen** → **🗑 Item löschen**. Freigegebene oder gelieferte Items nur unter **Einstellungen → Datensätze löschen**.
 
 ### 6.3 Nummernschema
 
@@ -508,7 +508,7 @@ Items, die in mehreren Ausführungen existieren (z.B. `Halterung M3`, `Halterung
 |---------|--------|
 | **Datenblatt** | Item-Metadaten, Vorschaubild, aktive Revision, Klassifizierung mit Eigenschaften, Gewicht, Verkaufspreis, Hinweise |
 | **Stückliste** | BOM der aktiven Revision mit Menge und Einheit |
-| **Prüfprotokoll** | Formular mit Prüfpunkten, Unterschriftsfeldern und Datum — Prüfpunkte unter Einstellungen → PLM → Prüfprotokoll |
+| **Prüfprotokoll** | Formular mit Prüfpunkten, Unterschriftsfeldern und Datum — Prüfpunkte unter Einstellungen → Prüfprotokoll |
 
 Klick auf eine Vorlage öffnet ein Druckfenster im Browser → **Drucken** oder **Als PDF speichern**.
 
@@ -536,7 +536,7 @@ Revisionen-Tab → **⇄ Revisionen vergleichen** (erscheint ab zwei Revisionen)
 
 Farbige Chips im Projektbaum und in der Detailansicht, z. B. Eigenteil, Kaufteil. Gesetzt unter
 **✏ Bearbeiten** am Item. Neue Items werden anhand der Quelle automatisch als Eigen- oder Kaufteil
-eingestuft (Vorgabe unter Einstellungen → PLM). Je Klassifizierung lassen sich **Eigenschaften**
+eingestuft (Vorgabe unter Einstellungen → Klassifizierungen). Je Klassifizierung lassen sich **Eigenschaften**
 festlegen (Werkstoff, Oberfläche …), die dann am Item ausgefüllt werden. Konfiguration siehe 20,
 Filter in der Suche siehe 18.
 
@@ -584,7 +584,7 @@ einen Lagerartikel an (siehe 16.6).
 
 ## 8. Freigabe-Workflow
 
-Unter **Einstellungen → PLM → Freigabe-Workflow** gibt es zwei Betriebsarten:
+Unter **Einstellungen → Freigabe** gibt es zwei Betriebsarten:
 
 | Betriebsart | Für wen | Ablauf |
 |---|---|---|
@@ -621,15 +621,15 @@ Wird die neue DFT-Revision stattdessen gelöscht, kehrt das ECO automatisch auf 
 
 ### Vier-Augen-Prinzip
 
-Einstellungen → PLM → **Vier-Augen-Prinzip: Freigabe durch eine zweite Person** (wirkt ab zwei Personen): Eine Revision geht zuerst mit **→ In Review** auf REV. Freigeben darf dann nur eine andere Person mit Freigaberecht (Superuser/Admin) als die, die sie in Review gesetzt hat; wer das war, steht in den Revisionsdetails. **Admins** sind ausgenommen: sie geben auch eigene Revisionen frei, direkt aus dem Entwurf oder nach dem Review.
+Einstellungen → Freigabe → **Vier-Augen-Prinzip: Freigabe durch eine zweite Person** (wirkt ab zwei Personen): Eine Revision geht zuerst mit **→ In Review** auf REV. Freigeben darf dann nur eine andere Person mit Freigaberecht (Superuser/Admin) als die, die sie in Review gesetzt hat; wer das war, steht in den Revisionsdetails. **Admins** sind ausgenommen: sie geben auch eigene Revisionen frei, direkt aus dem Entwurf oder nach dem Review.
 
 **In Review ist gesperrt:** Dateien, Stückliste und Druckparameter lassen sich nicht ändern — geprüft wird, was eingereicht wurde. Für Änderungen **← Zurück zu Entwurf**. Werden geänderte Dateien eingecheckt oder aus dem Checkout angehängt, geht die Revision automatisch zurück auf Entwurf (steht in der Historie).
 
 ### Prüfung vor der Freigabe
 
-Unter **Einstellungen → PLM → Prüfung vor der Freigabe** wählbar, was eine Revision mitbringen muss: mindestens eine Datei (bei Baugruppen genügen stattdessen Positionen in der Stückliste), CAD-Datei, Zeichnung als PDF, Beschreibung, Klassifizierung, Gewicht (Parts). Standard: eine Datei und das Gewicht. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Fehlt etwas, steht im Datenblatt und in der Revision „Für die Freigabe fehlt noch: …“, und **✓ Freigeben** ist gesperrt.
+Unter **Einstellungen → Freigabe → Prüfung vor der Freigabe** wählbar, was eine Revision mitbringen muss: mindestens eine Datei (bei Baugruppen genügen stattdessen Positionen in der Stückliste), CAD-Datei, Zeichnung als PDF, Beschreibung, Klassifizierung, Gewicht (Parts). Standard: eine Datei und das Gewicht. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Fehlt etwas, steht im Datenblatt und in der Revision „Für die Freigabe fehlt noch: …“, und **✓ Freigeben** ist gesperrt.
 
-Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Admin**.
+Freigegebene oder gelieferte Items löschen nur über **Einstellungen → Datensätze löschen**.
 
 ### Änderungsanträge (ECR)
 
@@ -650,7 +650,7 @@ bearbeiten kann. Check-in holt die Änderungen zurück ins PLM.
 
 ### Einmalig einrichten
 
-1. **Einstellungen → Daten → Checkout-Verzeichnis** → Ordner eintragen → **Pfad speichern**
+1. **Einstellungen → CAD & Checkout** → Ordner eintragen → **Pfad speichern**
    (nur am PLM-PC möglich). Der Pfad steht in `plm.config` (`checkout_dir=…`) und gilt nur für
    diesen PC — liegen die Daten auf einem Netzlaufwerk, hat jeder PC seinen eigenen lokalen
    Ordner (siehe 2). Leer heisst `[Datenverzeichnis]/checkout`.
@@ -697,7 +697,7 @@ auf diesem PC von Hand gelöscht wurden, trägt PLM beim nächsten Öffnen der �
 
 Ein Angebot ist die erste **Phase eines Auftrags** — kein eigener Datensatz. Navigation → Aufträge → **+ Angebot** (oder **+ Auftrag** mit Status **Angebot**).
 
-Felder: Bezeichnung (Pflicht), Kunde, Angebotsdatum, **Gültig bis**, Gesamtrabatt (%), Zahlungsbedingungen, MwSt. (%), geschätzte Stunden, Notizen. Vorgaben kommen aus Einstellungen → Kalkulation — bei einem neuen Angebot auch das Datum „Gültig bis“ (heute + „Angebot gültig (Tage)“).
+Felder: Bezeichnung (Pflicht), Kunde, Angebotsdatum, **Gültig bis**, Gesamtrabatt (%), Zahlungsbedingungen, MwSt. (%), geschätzte Stunden, Notizen. Vorgaben kommen aus Einstellungen → Belege & Preise — bei einem neuen Angebot auch das Datum „Gültig bis“ (heute + „Angebot gültig (Tage)“).
 
 Phasen: `Angebot → Bestätigt → Geliefert → Fakturiert` (oder `Angebot → Abgelehnt`)
 
@@ -746,7 +746,7 @@ Status: `Angebot → Bestätigt → Geliefert → Fakturiert`, ohne vorheriges A
 | **🔧 Produktionsauftrag anlegen** | Produktionsauftrag zum Auftrag anlegen; bearbeitet wird er im Tab **Produktion** (mehrere für Teillieferungen möglich) |
 | **📦** an einer Position | Bestand im Lager abbuchen (nur wenn genügend Bestand) |
 | **⧉ Duplizieren** | Kopie des Auftrags mit allen Positionen anlegen |
-| **🗑 Löschen** | nur im Status Entwurf; andere nur über **Einstellungen → Admin** |
+| **🗑 Löschen** | nur im Status Entwurf; andere nur über **Einstellungen → Datensätze löschen** |
 
 **Der Status läuft mit:**
 - Produktionsauftrag anlegen → der Auftrag wird **Bestätigt**
@@ -818,7 +818,7 @@ sonst aus den Druckparametern des Items, sonst aus dem Teilgewicht.
 ### 12.5 Thermodrucker (Pipsta)
 
 Pro Position: **🖶** Kurzbeleg oder **🖶≡** Vollbeleg mit Druckparametern. Einstellungen unter
-Einstellungen → **Kassabon**. Einrichtung unter Windows: siehe `README.de.md`, Abschnitt
+Einstellungen → **Bon & Etiketten**. Einrichtung unter Windows: siehe `README.de.md`, Abschnitt
 „Pipsta Classic – Einrichtung“. Probleme: siehe [24. Häufige Fragen](#24-häufige-fragen).
 
 ### 12.6 Rückverfolgung
@@ -867,7 +867,7 @@ Aktive Lots erscheinen zuerst, leere danach (ausgegraut). In der Übersicht link
 **Pro Lot:**
 - **+ Nr.** vergibt eine Artikelnummer (auch über die Suche auffindbar)
 - **🖶** druckt ein Etikett für die Spule auf dem Thermodrucker — mit QR-Code, wenn unter
-  Einstellungen → Kassabon → Rohmaterial-Etikett eingeschaltet
+  Einstellungen → Bon & Etiketten → Rohmaterial-Etikett eingeschaltet
 
 ### Ausbuchen
 
@@ -1043,7 +1043,7 @@ Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktion
 
 - Klick auf einen Chip zeigt nur Items dieser Klassifizierung — auch ohne Suchwort als ganze Liste. Zweiter Klick (oder **✕ Filter aufheben**) hebt ihn auf.
 - **ohne** zeigt Items ohne Klassifizierung.
-- Gestrichelte Chips: Werte, die an Items stehen, aber nicht in der Liste unter Einstellungen → PLM.
+- Gestrichelte Chips: Werte, die an Items stehen, aber nicht in der Liste unter Einstellungen → Klassifizierungen.
 
 ---
 
@@ -1053,7 +1053,7 @@ Durchsucht gleichzeitig: Projekte, PLM-Items, Aufträge und Angebote, Produktion
 
 Navigation → **Historie** (Tab **PLM**) — vollständiges Protokoll aller Änderungen im PLM, nach Tag gruppiert. Klick auf die Nummer öffnet das betroffene Item, Projekt, den Auftrag oder Produktionsauftrag. **↺ Aktualisieren** lädt neu.
 
-Sind Personen angelegt (Einstellungen → **Benutzer**), steht neben jedem Eintrag, wer ihn gemacht hat — auch in der Historie eines Items oder Projekts und unter „Letzte Änderung“ im Datenblatt. Ältere Einträge haben keinen Namen.
+Sind Personen angelegt (Einstellungen → **Personen**), steht neben jedem Eintrag, wer ihn gemacht hat — auch in der Historie eines Items oder Projekts und unter „Letzte Änderung“ im Datenblatt. Ältere Einträge haben keinen Namen.
 
 **⬇ CSV** exportiert die Einträge, mit der Person als eigener Spalte.
 
@@ -1067,58 +1067,36 @@ Person im Tab **Verlauf** dort.
 
 ## 20. Einstellungen
 
-Navigation → Einstellungen (Zahnrad-Symbol). Änderungen mit **💾 Speichern** bzw. dem Speichern-Knopf des Abschnitts übernehmen.
+Navigation → Einstellungen (Zahnrad-Symbol). Links stehen die Bereiche nach Thema, rechts die
+gewählte Seite. Seiten mit Eingabefeldern haben unten einen eigenen **Speichern**-Knopf, der nur
+diese Seite speichert. Listen wie Drucker, Personen oder Sicherungen ändern sich sofort. Beim
+nächsten Öffnen erscheint die zuletzt gewählte Seite.
 
 > Arbeiten mehrere Personen mit PLM, sehen **User** und **Superuser** hier nur ihre persönlichen
-> Einstellungen: Darstellung, Person wechseln und eigene PIN. Alle übrigen Tabs verwaltet ein Admin.
+> Einstellungen: Darstellung, Person wechseln und eigene PIN. Alle übrigen Seiten verwaltet ein Admin.
 
-### Daten
-- **Darstellung** — Schriftgrösse (Klein bis Sehr gross) und Farbdesign (**Standard** oder **Helleres Design**); wird serverseitig gespeichert
-- **Design zurücksetzen** — setzt die Farben der Klassifizierungen auf die aktuelle Palette; Namen und Reihenfolge bleiben
-- **Datenpfad** — Datenbank und Dateispeicher. Ändert nur, wo PLM sucht — vorhandene Daten bleiben am alten Ort
-- **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
-- **CAD-Programm** — zeigt, ob das Programm für den 🖥 CAD-Button gefunden wird (**↻ Neu prüfen**). Der Pfad steht in `plm.config` (`cad_path=…`), nicht in der Oberfläche: Die Einstellungen sind ohne Anmeldung im ganzen Netz erreichbar
-- **Checkout-Verzeichnis** — Zielordner für Checkouts; gilt nur für diesen PC (steht in `plm.config`) und ist nur dort änderbar. War früher ein Ordner eingetragen, den es auf diesem PC nicht gibt, steht er darunter als Hinweis
-- **Datensicherung** — Sicherungen anlegen, wiederherstellen und löschen (siehe 21)
-- **Export** — ZIP-Export aller Daten
-- **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte, auch **Als CSV**
+| Gruppe | Seite | Inhalt |
+|---|---|---|
+| Allgemein | **Darstellung** | Sprache, Schriftgrösse, Farbdesign |
+| | **Personen** | wer mit PLM arbeitet, Rollen, PIN |
+| Daten | **Sicherung & Export** | Sicherungen, Export, Datei-Index (siehe 21) |
+| | **Speicherort** | Speicherbelegung, Datenpfad, Daten verschieben |
+| Firma & Belege | **Firma** | Briefkopf, Logo, Bankangaben |
+| | **Belege & Preise** | MwSt., Angebotsgültigkeit, Zahlungsbedingungen, Stundensatz, Sprache der Belege, Fusszeilen |
+| | **Bon & Etiketten** | Kassabon und Rohmaterial-Etikett (Thermodrucker) |
+| | **Nummern** | Präfixe und Stellen der Nummern, Revisionsformat |
+| PLM | **Klassifizierungen** | Liste, Eigenschaften, Standard für neue Teile |
+| | **Freigabe** | Freigabe-Workflow, Vier-Augen-Prinzip, Prüfung vor der Freigabe |
+| | **Prüfprotokoll** | Vorlage für das Prüfprotokoll |
+| Werkstatt | **3D-Druck** | Slicer, Drucker, Düsen, Material-Vorlagen |
+| | **CAD & Checkout** | CAD-Programm und Checkout-Verzeichnis dieses PCs |
+| Admin | **Datensätze löschen** | was sonst gesperrt ist |
 
-### Firma
-Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen, Angeboten, Lieferscheinen und Bestellungs-PDFs.
-**Logo hochladen…** (PNG, JPG, WebP, SVG) setzt das Logo auf diese Belege; ohne Logo steht der Firmenname.
+### Darstellung
+Sprache der Oberfläche, Schriftgrösse (Klein bis Sehr gross) und Farbdesign (**Standard** oder
+**Helleres Design**). Wird auf dem Server gespeichert und gilt für alle.
 
-### Kalkulation
-- Stundenansatz (CHF/h) — für Arbeitszeitkalkulation in Angeboten
-- Maschinenkosten — Standardwerte
-- Steuersatz, Zahlungskonditionen, Angebotsgültigkeit
-
-### Kassabon
-Einstellungen für den Pipsta-Thermodrucker (Zeilenbreite) und das **Rohmaterial-Etikett**
-(z. B. **QR-Code auf Etikett drucken**).
-
-### 3D-Druck
-Slicer, Drucker (mit CHF/h), Düsen und Materialprofile (**+ Drucker hinzufügen**, **+ Düse hinzufügen**, **+ Vorlage hinzufügen**).
-
-**Slicer** — PrusaSlicer, Bambu Studio oder Creality Print für „Im Slicer öffnen“ (Datenblatt und Dateien einer Revision). Das Programm wird an den üblichen Orten gesucht (**↻ Neu suchen**); ist keiner installiert, bleibt der Knopf grau. Liegt es woanders: in `plm.config` `prusaslicer=…`, `bambustudio=…` bzw. `crealityprint=…` eintragen. Die Arbeitskopie landet als `<Kurzcode>_<Name>.stl` im Unterordner `Slicer` des Checkout-Verzeichnisses; eine im Slicer gespeicherte Kopie wird nicht überschrieben.
-
-> Druckparameter einer Revision kommen aus der hochgeladenen 3MF-Datei (PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio); in der Produktion lassen sie sich pro Position erfassen. Materialtemperaturen werden direkt im Rohmaterial hinterlegt.
-
-### PLM
-Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren, **+ Hinzufügen**.
-
-- Neben jedem Eintrag steht, wie viele Items ihn tragen.
-- **Umbenennen** überträgt den neuen Namen beim Speichern auf alle Items (und auf die Standard-Klassifizierung).
-- **Entfernen** eines benutzten Eintrags fragt, ob die Items ihn behalten oder verlieren.
-- Werte, die an Items stehen, aber in der Liste fehlen, erscheinen darunter — **＋ übernehmen** holt sie zurück.
-- **Eigenschaften** je Klassifizierung — Felder wie Werkstoff, Oberfläche oder Hersteller (**+ Feld**), optional als **Pflicht** für die Freigabe. Die Werte trägt man unter **✏ Bearbeiten** am Item ein; sie stehen im Datenblatt (auch als PDF) und sind durchsuchbar. Ein entferntes Feld löscht beim Speichern auch seine Werte an den Items.
-
-Dazu:
-- **Standard-Klassifizierung** für neue Items, getrennt für Items mit und ohne Quelle (Eigen- / Kaufteil)
-- **Freigabe-Workflow** und **Vier-Augen-Prinzip** (siehe 8)
-- **Prüfung vor der Freigabe** (siehe 8)
-- **Prüfprotokoll** — Prüfpunkte der Vorlage mit Soll-Wert, Reihenfolge; **Vorschau** zeigt das Ergebnis, **Standard einsetzen** stellt die Vorgabe wieder her
-
-### Benutzer
+### Personen
 Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Passwort.
 
 - **Allein:** Namen eintragen („Dein Name“). PLM fragt nie, wer dran ist; der Name steht in der Historie und bei Freigaben.
@@ -1132,24 +1110,77 @@ Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Pas
   | **Admin** | alles: Einstellungen, Personen, Stammdaten löschen, Sicherungen zurückspielen, ERP-Verlauf |
 
 - **PIN:** Jede Person kann unter Einstellungen eine eigene PIN setzen, ändern oder entfernen (mit der bisherigen PIN). Sie wird beim Wechsel zu dieser Person abgefragt, nicht beim Weitermachen nach einer Pause. Admins können PINs aller Personen setzen oder entfernen, z. B. wenn jemand seine vergessen hat.
-- **Farbe:** Jede Person bekommt automatisch eine eigene Farbe. Sie erscheint auf der Kachel bei **Wer ist dran?** (Streifen oben, Kreis mit den Initialen) und oben beim Namen — so findet man sich schneller. Ändern: unter Einstellungen → Benutzer auf den farbigen Kreis klicken (nur Admins).
+- **Farbe:** Jede Person bekommt automatisch eine eigene Farbe. Sie erscheint auf der Kachel bei **Wer ist dran?** (Streifen oben, Kreis mit den Initialen) und oben beim Namen — so findet man sich schneller. Ändern: unter Einstellungen → Personen auf den farbigen Kreis klicken (nur Admins).
 - **Deaktivieren** statt löschen: Die Person bleibt in der Historie, steht aber nicht mehr zur Auswahl. Es braucht immer mindestens einen aktiven Admin.
 - **Rückmeldung (ab zwei Personen):** Das Sprechblasen-Symbol oben rechts meldet einen **Fehler** oder reicht eine **Idee** ein. Mitgeschickt werden Name, aktuelle Ansicht, geöffnetes Item, Version, Browser und die letzten Fehlermeldungen. Admins sehen offene Rückmeldungen oben auf dem **Dashboard**; ein Klick zeigt die Details, dort **✓ Erledigt** oder **Löschen**. **Liste →** zeigt alle, auch die erledigten — sind alle erledigt, steht dafür eine Zeile „Rückmeldungen: alle … erledigt · Liste →“ auf dem Dashboard.
 
 > Die Benutzerverwaltung schützt nicht vor Absicht: Wer im Netz Zugriff auf PLM hat, kann ohne
 > PIN jede Kachel wählen. Sie dient der Nachvollziehbarkeit.
 
-### Admin
-**Vorsicht — Änderungen können Daten dauerhaft beschädigen.**
+### Speicherort
+- Oben die Speicherbelegung (Datenbank, Dateien, Papierkorb) und die Pfade von Datenbank, Dateien und Konfigdatei.
+- **Anderen Ordner verwenden** — ändert nur, wo PLM beim nächsten Start sucht; vorhandene Daten bleiben am alten Ort.
+- **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort.
 
-- Löschen in den Tabs **Projekte**, **Items**, **Aufträge**, **Produktion**: freigegebene oder gelieferte Items, Projekte mit Inhalt, abgeschlossene Aufträge, Produktionsaufträge
-- Nummerierungsstruktur: Präfixe, Stellen, Revisionsformat (auch für Einkauf EK und Lieferanten LF) → **⚠ Admin-Einstellungen speichern**
+### Firma
+Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen, Angeboten, Lieferscheinen und Bestellungs-PDFs.
+**Logo hochladen…** (PNG, JPG, WebP, SVG) setzt das Logo auf diese Belege; ohne Logo steht der Firmenname.
+
+### Belege & Preise
+- Standard-MwSt., Angebotsgültigkeit (Tage), Zahlungsbedingungen, Stundensatz (CHF/h) für die Arbeitszeit in Angeboten
+- **Sprache der Belege** — für alle Belege und Etiketten, unabhängig von der Sprache der Oberfläche
+- **Fusszeilen** für Rechnung und Angebot
+
+### Bon & Etiketten
+Einstellungen für den Pipsta-Thermodrucker: Fusszeile und Aufbau des **Kassabons** (Zeilenbreite,
+Datum, Kunde, Item-Nummer, Notizen) und das **Rohmaterial-Etikett** (z. B. **QR-Code auf Etikett drucken**).
+
+### Nummern
+Präfixe und Stellen für Aufträge, Produktion, Kunden und Projekte, Jahreszahl in der Nummer,
+Aufbau der Item-Nummern (Kürzel, Stellen, Trennzeichen) und Revisionsformat (1, 2, 3 oder A, B, C).
+Die **Vorschau** zeigt, wie neue Nummern aussehen. Gilt nur für neu angelegte Datensätze;
+**Speichern** fragt zur Sicherheit nach.
+
+### Klassifizierungen
+Klassifizierungsliste — Namen und Farben bearbeiten, per Drag&Drop sortieren, **+ Hinzufügen**.
+
+- Neben jedem Eintrag steht, wie viele Items ihn tragen.
+- **Umbenennen** überträgt den neuen Namen beim Speichern auf alle Items (und auf die Standard-Klassifizierung).
+- **Entfernen** eines benutzten Eintrags fragt, ob die Items ihn behalten oder verlieren.
+- Werte, die an Items stehen, aber in der Liste fehlen, erscheinen darunter — **＋ übernehmen** holt sie zurück.
+- **Eigenschaften** je Klassifizierung — Felder wie Werkstoff, Oberfläche oder Hersteller (**+ Feld**), optional als **Pflicht** für die Freigabe. Die Werte trägt man unter **✏ Bearbeiten** am Item ein; sie stehen im Datenblatt (auch als PDF) und sind durchsuchbar. Ein entferntes Feld löscht beim Speichern auch seine Werte an den Items.
+- **Standardfarben** setzt die Farben auf die aktuelle Palette; Namen und Reihenfolge bleiben.
+- **Standard für neue Teile** — Klassifizierung für neue Items, getrennt für Items mit und ohne Quelle (Eigen- / Kaufteil).
+
+### Freigabe
+- **Freigabe-Workflow** und **Vier-Augen-Prinzip** (siehe 8)
+- **Prüfung vor der Freigabe** (siehe 8)
+
+### Prüfprotokoll
+Prüfpunkte der Vorlage mit Soll-Wert, Reihenfolge; **Vorschau** zeigt das Ergebnis, **Standard einsetzen** stellt die Vorgabe wieder her.
+
+### 3D-Druck
+Slicer, Drucker (mit CHF/h), Düsen und Materialprofile (**+ Drucker hinzufügen**, **+ Düse hinzufügen**, **+ Vorlage hinzufügen**).
+
+**Slicer** — PrusaSlicer, Bambu Studio oder Creality Print für „Im Slicer öffnen“ (Datenblatt und Dateien einer Revision). Das Programm wird an den üblichen Orten gesucht (**↻ Neu suchen**); ist keiner installiert, bleibt der Knopf grau. Liegt es woanders: in `plm.config` `prusaslicer=…`, `bambustudio=…` bzw. `crealityprint=…` eintragen. Die Arbeitskopie landet als `<Kurzcode>_<Name>.stl` im Unterordner `Slicer` des Checkout-Verzeichnisses; eine im Slicer gespeicherte Kopie wird nicht überschrieben.
+
+> Druckparameter einer Revision kommen aus der hochgeladenen 3MF-Datei (PrusaSlicer, SuperSlicer, OrcaSlicer, BambuStudio); in der Produktion lassen sie sich pro Position erfassen. Materialtemperaturen werden direkt im Rohmaterial hinterlegt.
+
+### CAD & Checkout
+Gilt nur für diesen PC (steht in `plm.config`) und ist nur dort änderbar.
+- **CAD-Programm** — zeigt, ob das Programm für den 🖥 CAD-Button gefunden wird (**↻ Neu prüfen**). Der Pfad steht in `plm.config` (`cad_path=…`), nicht in der Oberfläche: Die Einstellungen sind ohne Anmeldung im ganzen Netz erreichbar
+- **Checkout-Verzeichnis** — Zielordner für Checkouts. War früher ein Ordner eingetragen, den es auf diesem PC nicht gibt, steht er darunter als Hinweis
+
+### Datensätze löschen
+**Vorsicht — Löschen ist endgültig.** Vorher unter **Sicherung & Export** sichern.
+
+In den Tabs **Items**, **Projekte**, **Aufträge**, **Produktion**: freigegebene oder gelieferte Items, Projekte mit Inhalt, abgeschlossene Aufträge, Produktionsaufträge.
 
 ---
 
 ## 21. Datensicherung
 
-**Einstellungen → Daten → Datensicherung**
+**Einstellungen → Sicherung & Export**
 
 - PLM sichert die Datenbank einmal pro Tag (beim Start und, solange es läuft, stündlich geprüft). Es bleiben die Tagessicherungen der letzten 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate. Die erste Sicherung jedes Jahres bleibt, bis du sie von Hand löschst.
 - Die Sicherungen liegen im Ordner `backups/` im Datenverzeichnis; der volle Pfad steht unter der Liste. **⬇ Herunterladen** bei einer Sicherung speichert die Datei direkt über den Browser.
@@ -1159,7 +1190,7 @@ Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Pas
 - Gelöschte Dateien bleiben 30 Tage im **Papierkorb**; eine wiederhergestellte Sicherung holt sie von dort zurück. Fehlt eine Datei, nennt der Abschlussdialog sie.
 - **nicht gespeichert:** Hat ein anderes PLM die Daten übernommen oder wurde `plm.db` von aussen geändert, bevor alles gespeichert war, legt PLM den Stand von hier als Sicherung ab, statt die Datei zu überschreiben (siehe 2, Daten auf einem Netzlaufwerk). Sie enthält die Änderungen von hier, aber nicht die des anderen — zum Nachschauen, nicht zum blinden Wiederherstellen.
 
-**Gesamtexport:** Einstellungen → Daten → Export → ZIP mit `plm.db` + `files/`, lässt sich über „Aus Datei wiederherstellen“ komplett zurückspielen.
+**Gesamtexport:** Einstellungen → Sicherung & Export → Export → ZIP mit `plm.db` + `files/`, lässt sich über „Aus Datei wiederherstellen“ komplett zurückspielen.
 
 > Die Sicherungen liegen im Datenordner, also auf demselben Datenträger wie die Daten. Gegen einen
 > Festplattenschaden hilft nur eine Kopie auf einem anderen Datenträger — dafür regelmässig den
@@ -1186,7 +1217,7 @@ Steht bei der Version „geändert“, wurde PLM mit eigenen Änderungen am Prog
 geht „Jetzt installieren“ nicht. Weitere Wege (von Hand, ZIP ohne Git): siehe `README.de.md`,
 Abschnitt „Update einspielen“.
 
-Nach einem Update, das die Farbpalette betrifft: einmal **Einstellungen → Daten → Design zurücksetzen**.
+Nach einem Update, das die Farbpalette betrifft: einmal **Einstellungen → Klassifizierungen → Standardfarben**.
 
 ---
 
@@ -1215,7 +1246,7 @@ in Review → **← Zurück zu Entwurf**; geliefert → **＋ Neue Revision**.
 
 **Ein Item, Projekt oder Auftrag lässt sich nicht löschen.**
 Freigegebene oder gelieferte Items, Projekte mit Inhalt und abgeschlossene Aufträge löscht nur ein
-Admin unter **Einstellungen → Admin**. Das schützt vor versehentlichem Datenverlust.
+Admin unter **Einstellungen → Datensätze löschen**. Das schützt vor versehentlichem Datenverlust.
 
 **Die Preiskalkulation zeigt eine Warnung.**
 Item und Rohmaterial brauchen beide ein Gewicht: am Item im **Datenblatt** unter **Allgemein**, am
@@ -1225,7 +1256,7 @@ Rohmaterial **Gewicht / Stück**.
 Die neuste Revision hat weder STL noch STEP noch eine 3MF mit Bild noch ein Bild. Eine solche Datei hochladen.
 
 **„Im Slicer öffnen“ oder „🖥 CAD“ ist grau.**
-Das Programm wurde nicht gefunden. Pfad in `plm.config` eintragen (siehe 20, 3D-Druck bzw. Daten).
+Das Programm wurde nicht gefunden. Pfad in `plm.config` eintragen (siehe 20, 3D-Druck bzw. CAD & Checkout).
 Beides funktioniert nur am PLM-PC.
 
 **Beim Einchecken kommt eine Rückfrage.**
@@ -1234,7 +1265,7 @@ Revision hochladen“ jeweils bewirkt.
 
 **Etwas falsch gemacht — wie zurück?**
 Einzelne Änderungen stehen in der Historie, werden dort aber nicht rückgängig gemacht. Grössere
-Fehler: **Einstellungen → Daten → Datensicherung → Wiederherstellen** mit einer Sicherung von vorher
+Fehler: **Einstellungen → Sicherung & Export → Wiederherstellen** mit einer Sicherung von vorher
 (siehe 21). Der jetzige Stand wird vorher gesichert.
 
 **Der Browser öffnet sich nach dem Start nicht.**
@@ -1266,10 +1297,10 @@ danach warnt `START-PLM.bat` nicht mehr.
 
 **„Wer ist dran?“ erscheint jedes Mal.**
 Das ist so gewollt, sobald zwei oder mehr Personen angelegt sind. Allein arbeiten: die übrigen
-Personen unter Einstellungen → Benutzer deaktivieren.
+Personen unter Einstellungen → Personen deaktivieren.
 
 **Die Farben der Klassifizierungen passen nach einem Update nicht.**
-**Einstellungen → Daten → Design zurücksetzen.**
+**Einstellungen → Klassifizierungen → Standardfarben.**
 
 **Thermodrucker (Pipsta) druckt nicht.**
 
@@ -1331,7 +1362,7 @@ Kunden:        KD-0001
 Lieferanten:   LF-0001
 ```
 
-Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Admin** konfigurierbar.
+Präfixe, Stellen und Revisionsformat sind unter **Einstellungen → Nummern** konfigurierbar.
 
 ---
 

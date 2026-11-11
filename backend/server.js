@@ -3353,13 +3353,13 @@ app.delete('/api/items/:id', (req, res) => {
   const item = get('SELECT * FROM items WHERE id=?', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Nicht gefunden' });
   const revs = all('SELECT id FROM revisions WHERE item_id=?', [item.id]);
-  // Gelieferte Items nur über Einstellungen → Admin (force=1) — sonst
+  // Gelieferte Items nur über Einstellungen → Datensätze löschen (force=1) — sonst
   // verschwindet der Nachweis, welcher Stand beim Kunden ist.
   if (req.query.force !== '1') {
     const delivered = revs.flatMap(r => deliveriesOfRevision(r.id));
     if (delivered.length) {
       const nums = [...new Set(delivered.map(d => d.number))].slice(0, 3).join(', ');
-      return res.status(409).json({ error: `Item wurde geliefert (${nums}) — Löschen nur unter Einstellungen → Admin.` });
+      return res.status(409).json({ error: `Item wurde geliefert (${nums}) — Löschen nur unter Einstellungen → Datensätze löschen.` });
     }
   }
   log('project', item.project_id, 'Item gelöscht', item.item_type + ' ' + item.item_number + ' – ' + item.name);
@@ -5814,7 +5814,7 @@ app.get('/api/erp-log', (req, res) => {
 app.get('/api/items-released', (req, res) => {
   try {
     // Normal nicht löschbar: freigegeben (auch im ECO) oder geliefert —
-    // diese Liste bietet sie unter Einstellungen → Admin an
+    // diese Liste bietet sie unter Einstellungen → Datensätze löschen an
     const delivered = `SELECT di.item_id FROM delivery_items di JOIN deliveries d ON d.id=di.delivery_id
         WHERE d.status='DELIVERED' AND di.item_id IS NOT NULL
       UNION SELECT ds.item_id FROM delivery_structure ds JOIN delivery_items di ON di.id=ds.delivery_item_id

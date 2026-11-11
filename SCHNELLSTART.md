@@ -53,7 +53,7 @@ legt eine neue Revision an und übernimmt Dateien, Stückliste und Druckparamete
 
 ## 4. Die wichtigsten Daten
 
-**Nummern** (Präfixe unter Einstellungen → Admin änderbar)
+**Nummern** (Präfixe unter Einstellungen → Nummern änderbar)
 
 | Was | Beispiel | | Was | Beispiel |
 |---|---|---|---|---|
@@ -94,7 +94,7 @@ Beschreibung. Eine neue Revision übernimmt sie von der vorherigen.
 - **Auschecken / Einchecken** am Item: Dateien zum Bearbeiten im CAD. Beim Einchecken werden nur
   geänderte Dateien übernommen.
 - **Historie** am Item: wer wann was geändert hat, mit altem und neuem Wert.
-- **Sichern:** Einstellungen → **Daten → 💾 Jetzt sichern**, oder **Gesamtexport** als ZIP.
+- **Sichern:** Einstellungen → **Sicherung & Export → 💾 Jetzt sichern**, oder **Gesamtexport** als ZIP.
 
 ---
 

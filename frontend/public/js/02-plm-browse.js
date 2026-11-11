@@ -1061,7 +1061,7 @@ function renderItemSheet(item, activeRevId) {
         <span style="font-family:var(--mono);color:var(--blue)">${esc(e.number)}</span>${esc(e.title)} ${ecrBadge(e.status)}</span>`).join('')}
     </div>` : '';
 
-  // Eigenschaften der Klassifizierung (Einstellungen → PLM)
+  // Eigenschaften der Klassifizierung (Einstellungen → Klassifizierungen)
   const fields = classFieldsOf(item.classification);
   const attrs = item.attributes || {};
   // Im selben Block-Stil wie Allgemein und Druckparameter; der Block trägt den Namen der Klassifizierung
@@ -1632,7 +1632,7 @@ function renderRevDetail(rev, item) {
         <div style="color:var(--t3);margin-top:4px">${_t('Dateien, Stückliste und Druckparameter bleiben so, wie sie geliefert wurden. Änderungen gehen in eine neue Revision.')}</div>
       </div>
     </div>` : '';
-  // Im einfachen Workflow (Einstellungen → PLM) gibt es keine Freigabe:
+  // Im einfachen Workflow (Einstellungen → Klassifizierungen) gibt es keine Freigabe:
   // statt REV/REL legt man direkt die naechste Revision an.
   const simple = typeof simpleWorkflow === 'function' && simpleWorkflow();
   const wfMap = simple ? {
@@ -1727,7 +1727,7 @@ function renderRevDetail(rev, item) {
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       ${itemIsEditable(item) && !item.delivered
         ? `<button class="btn btn-red btn-sm" onclick="deleteItem(${item.id})">${_t('🗑 Item löschen')}</button>`
-        : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 ${_t('Item löschen nur unter Einstellungen → Admin')}${item.delivered ? ' ' + _t('(geliefert)') : ''}</span>`}
+        : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 ${_t('Item löschen nur unter Einstellungen → Datensätze löschen')}${item.delivered ? ' ' + _t('(geliefert)') : ''}</span>`}
       ${rev.status === 'DFT' && !delivered.length
         ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red)" onclick="deleteRevision(${rev.id},${item.id})">${_t('Revision löschen')}</button>`
         : ''}

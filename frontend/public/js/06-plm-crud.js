@@ -79,15 +79,10 @@ async function _forceDeleteProject(id, name) {
 }
 
 function _admDelTab(name) {
-  document.querySelectorAll('.adm-del-tab').forEach(b => {
-    const active = b.dataset.deltab === name;
-    b.style.color = active ? 'var(--red)' : 'var(--t3)';
-    b.style.borderBottomColor = active ? 'var(--red)' : 'transparent';
-    b.style.fontWeight = active ? '600' : '400';
-  });
-  ['teile','projekte','auftraege'].forEach(t => {
+  document.querySelectorAll('.adm-del-tab').forEach(b => b.classList.toggle('active', b.dataset.deltab === name));
+  ['teile','projekte','auftraege','produktion'].forEach(t => {
     const el = document.getElementById('adm-del-' + t);
-    if (el) el.style.display = t === name ? '' : 'none';
+    if (el) el.hidden = t !== name;
   });
 }
 
@@ -121,7 +116,7 @@ function _admPreview() {
 
 async function saveAdminSettings() {
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title" style="color:var(--red)">${_t('⚠ Admin-Einstellungen speichern')}</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Nummern speichern')}</div></div>
     <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2)">
       ${_t('Änderungen an Präfixen und Nummernformat gelten nur für <b>neu angelegte</b> Datensätze.')}<br><br>
       ${_t('Geänderte Zählerstände können bei falscher Eingabe zu <b>doppelten Nummern</b> führen.')}<br><br>
@@ -129,7 +124,7 @@ async function saveAdminSettings() {
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
-      <button class="btn btn-red" onclick="_doSaveAdminSettings()">${_t('Ja, speichern')}</button>
+      <button class="btn btn-primary" onclick="_doSaveAdminSettings()">${_t('Ja, speichern')}</button>
     </div>
   </div>`);
 }
@@ -158,7 +153,7 @@ async function _doSaveAdminSettings() {
   };
   await api('/api/settings', 'PUT', settings);
   state.settings = await api('/api/settings');
-  toast(_t('Admin-Einstellungen gespeichert'), 'ok');
+  toast(_t('Nummern gespeichert'), 'ok');
 }
 
 const DEFAULT_CLASSIFICATIONS = [
@@ -298,8 +293,6 @@ const RELEASE_CHECKS = [
 
 async function _savePlmPrefs() {
   await api('/api/settings', 'PUT', {
-    default_class_own:    document.getElementById('st-class-own')?.value || '',
-    default_class_bought: document.getElementById('st-class-bought')?.value || '',
     workflow_mode:        window._wfPick || 'full',
     release_four_eyes:    document.getElementById('st-four-eyes')?.checked ? '1' : '0',
     release_checks: [...document.querySelectorAll('#st-release-checks [data-check]:checked')].map(c => c.dataset.check).join(','),
@@ -510,7 +503,7 @@ function _confirmRemoveClass(idx, clear) {
 async function _saveClassifications() {
   const list = _getCurrentClassList();
   const lower = list.map(c => c.name.toLowerCase());
-  if (lower.some((n, i) => lower.indexOf(n) !== i)) { toast(_t('Ein Name kommt doppelt vor'), 'err'); return; }
+  if (lower.some((n, i) => lower.indexOf(n) !== i)) { toast(_t('Ein Name kommt doppelt vor'), 'err'); return false; }
   // Umbenannte Einträge und „an den Items entfernen" gehen an die Items
   const renames = [
     ...list.filter(c => c.orig && c.orig !== c.name).map(c => ({ from: c.orig, to: c.name })),
@@ -519,7 +512,7 @@ async function _saveClassifications() {
   let moved = 0;
   if (renames.length) {
     try { moved = (await api('/api/classifications/rename', 'POST', { renames })).renamed || 0; }
-    catch { return; }
+    catch { return false; }
   }
   await api('/api/settings', 'PUT', { item_classifications: JSON.stringify(list.map(({ name, color, fields }) => ({ name, color, fields }))) });
   state.settings = await api('/api/settings');
@@ -527,7 +520,22 @@ async function _saveClassifications() {
   const text = moved ? _t('Gespeichert') + ' · ' + _t(moved === 1 ? '1 Item angepasst' : '{n} Items angepasst', { n: moved }) : _t('Gespeichert');
   if (msg) { msg.textContent = text; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 3000); }
   toast(_t('Klassifizierungen gespeichert') + (moved ? ' · ' + _t(moved === 1 ? '1 Item angepasst' : '{n} Items angepasst', { n: moved }) : ''), 'ok');
-  _loadPlmTab();
+  await _loadPlmTab();
+  return true;
+}
+
+// Seite „Klassifizierungen“: Liste und Standard für neue Teile zusammen.
+// Die Auswahl vorher lesen — das Speichern der Liste zeichnet sie neu.
+async function _saveClassPage() {
+  // Die Auswahl nennt die Namen wie beim Laden: umbenannte nachführen,
+  // entfernte leeren
+  const renamed = new Map(_getCurrentClassList().map(c => [c.orig || c.name, c.name]));
+  const keep = id => renamed.get(document.getElementById(id)?.value || '') || '';
+  const own = keep('st-class-own'), bought = keep('st-class-bought');
+  if (!await _saveClassifications()) return;
+  await api('/api/settings', 'PUT', { default_class_own: own, default_class_bought: bought });
+  state.settings = await api('/api/settings');
+  _loadPlmPrefs();
 }
 
 // ── DESIGN ZURUECKSETZEN ──────────────────────────────────────
@@ -597,15 +605,9 @@ async function _doResetDesignColors() {
   toast(_t('Design-Farben zurückgesetzt'), 'ok');
 }
 
-async function _loadDelTab() {
-  const [projects, orders, deliveries, settings] = await Promise.all([
-    api('/api/projects').catch(()=>[]),
-    api('/api/orders').catch(()=>[]),
-    api('/api/deliveries').catch(()=>[]),
-    api('/api/settings').catch(()=>({}))
-  ]);
-
-  // Fill admin settings fields
+// Einstellungen → Nummern: Felder füllen, Vorschau verbinden
+async function _loadNumberSettings() {
+  const settings = await api('/api/settings').catch(() => ({}));
   const fv = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
   fv('adm-prefix-order',    settings.prefix_order    || 'AUF');
   fv('adm-prefix-delivery', settings.prefix_delivery || 'LS');
@@ -638,7 +640,15 @@ async function _loadDelTab() {
     }
   });
   _admPreview();
-  _admDelTab('teile');
+}
+
+async function _loadDelTab() {
+  const [projects, orders, deliveries] = await Promise.all([
+    api('/api/projects').catch(()=>[]),
+    api('/api/orders').catch(()=>[]),
+    api('/api/deliveries').catch(()=>[]),
+  ]);
+  _admDelTab(document.querySelector('.adm-del-tab.active')?.dataset.deltab || 'teile');
 
   // Released items
   const itemsEl = document.getElementById('st-del-items');
@@ -1120,7 +1130,7 @@ const statusHints = {
 };
 
 async function openStatusModal(revId, targetStatus) {
-  // Was für die Freigabe Pflicht ist, prüft der Server (Einstellungen → PLM);
+  // Was für die Freigabe Pflicht ist, prüft der Server (Einstellungen → Klassifizierungen);
   // fehlt etwas, ist „Freigeben“ schon gesperrt
   set('sm-rev-id', revId); set('sm-target-status', targetStatus);
   set('sm-desc',''); set('sm-eco','');

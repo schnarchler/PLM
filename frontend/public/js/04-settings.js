@@ -2,9 +2,32 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── SETTINGS ──────────────────────────────────────────────────
+// Links eine Navigation nach Themen, rechts je Thema eine Seite aus Karten.
+// Alle Seiten stehen gleichzeitig im DOM (nur versteckt) — die Speichern-
+// Funktionen lesen ihre Felder per ID, auch die von anderen Seiten.
+const ST_PAGE_KEY = 'plm.settingsPage';
+const ST_NAV = () => [
+  [_t('Allgemein'), [['darstellung', _t('Darstellung')], ['benutzer', _t('Personen')]]],
+  [_t('Daten'), [['sicherung', _t('Sicherung & Export')], ['speicherort', _t('Speicherort')]]],
+  [_t('Firma & Belege'), [['firma', _t('Firma')], ['belege', _t('Belege & Preise')], ['bon', _t('Bon & Etiketten')], ['nummern', _t('Nummern')]]],
+  ['PLM', [['klass', _t('Klassifizierungen')], ['freigabe', _t('Freigabe')], ['pruef', _t('Prüfprotokoll')]]],
+  [_t('Werkstatt'), [['druck3d', _t('3D-Druck')], ['pc', _t('CAD & Checkout')]]],
+  ['Admin', [['loeschen', _t('Datensätze löschen')]]],
+];
+// Beim Anzeigen neu laden: Listen, die sich anderswo ändern
+const ST_ON_SHOW = {
+  benutzer: () => _renderUsersSettings(),
+  sicherung: () => loadBackupList(),
+  loeschen: () => _loadDelTab(),
+};
+
 function _stTab(name) {
-  document.querySelectorAll('.st-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  document.querySelectorAll('.st-tab-pane').forEach(p => p.hidden = p.dataset.tab !== name);
+  if (!document.querySelector(`.st-page[data-page="${name}"]`)) name = 'darstellung';
+  document.querySelectorAll('.st-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === name));
+  document.querySelectorAll('.st-page').forEach(p => { p.hidden = p.dataset.page !== name; });
+  try { localStorage.setItem(ST_PAGE_KEY, name); } catch {}
+  ST_ON_SHOW[name]?.();
+  document.getElementById('left-body')?.scrollTo?.(0, 0);
 }
 
 function _fmtBytes(b) {
@@ -15,28 +38,26 @@ function _fmtBytes(b) {
   return (b/1024/1024/1024).toFixed(2) + ' GB';
 }
 
-// Schriftgrösse und Design — darf jede Person ändern
+// Bausteine der Seiten
+const _stPage = (id, title, sub, body) => `<section class="st-page" data-page="${id}" hidden>
+    <div class="st-page-head"><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div>${body}</section>`;
+const _stCard = (title, hint, body, cls = '') => `<div class="st-card${cls ? ' ' + cls : ''}">
+    ${title ? `<div class="st-card-title">${title}</div>` : ''}${hint ? `<div class="st-card-hint">${hint}</div>` : ''}${body}</div>`;
+// Zeile: Bezeichnung links, Bedienelement rechts
+const _stRow = (label, control, hint = '') => `<div class="st-row">
+    <div class="st-row-label">${label}${hint ? `<span>${hint}</span>` : ''}</div><div class="st-row-ctl">${control}</div></div>`;
+const _stSave = (onclick, msgId = '', label = _t('Speichern')) => `<div class="st-save">
+    <button class="btn btn-primary" onclick="${onclick}">${label}</button>${msgId ? `<span id="${msgId}" class="st-msg"></span>` : ''}</div>`;
+const _stCode = t => `<code class="st-code">${esc(t)}</code>`;
+
+// Sprache, Schriftgrösse und Design — darf jede Person ändern
 function _appearanceHtml(s) {
-  return `
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Sprache der Benutzeroberfläche.')}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
-          ${Object.entries(LANGS).map(([code, name]) =>
-            `<button class="btn btn-sm ${code === LANG ? 'btn-primary' : 'btn-ghost'}" onclick="setLang('${code}')">${name}</button>`).join('')}
-        </div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Schriftgrösse der Benutzeroberfläche anpassen.')}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[['0.8',_t('Klein')],['0.9',_t('Mittel-klein')],['1',_t('Normal')],['1.1',_t('Mittel-gross')],['1.2',_t('Gross')],['1.35',_t('Sehr gross')]].map(([sc,l]) => {
-            const active = (s.font_scale || '1') === sc ? ' btn-primary' : ' btn-ghost';
-            return `<button class="btn btn-sm fs-preset-btn${active}" data-scale="${sc}" onclick="setFontScale('${sc}')">${l}</button>`;
-          }).join('')}
-        </div>
-        <div style="font-size:13px;color:var(--t3);margin:18px 0 10px">${_t('Farbdesign der Benutzeroberfläche.')}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[['',_t('Standard')],['angepasst',_t('Helleres Design')]].map(([th,l]) => {
-            const active = (s.theme || '') === th ? ' btn-primary' : ' btn-ghost';
-            return `<button class="btn btn-sm theme-preset-btn${active}" data-theme="${th}" onclick="setTheme('${th}')">${l}</button>`;
-          }).join('')}
-        </div>`;
+  const pick = (cls, items, cur, fn, attr) => `<div class="st-btns">${items.map(([v, l]) =>
+    `<button class="btn btn-sm ${cls} ${cur === v ? 'btn-primary' : 'btn-ghost'}" ${attr}="${v}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`;
+  return _stRow(_t('Sprache'), pick('', Object.entries(LANGS), LANG, 'setLang', 'data-lang'))
+    + _stRow(_t('Schriftgrösse'), pick('fs-preset-btn', [['0.8',_t('Klein')],['0.9',_t('Mittel-klein')],['1',_t('Normal')],['1.1',_t('Mittel-gross')],['1.2',_t('Gross')],['1.35',_t('Sehr gross')]],
+      s.font_scale || '1', 'setFontScale', 'data-scale'))
+    + _stRow(_t('Farbdesign'), pick('theme-preset-btn', [['',_t('Standard')],['angepasst',_t('Helleres Design')]], s.theme || '', 'setTheme', 'data-theme'));
 }
 
 // User und Superuser im Team: nur, was sie selbst ändern können. Firma,
@@ -45,80 +66,108 @@ function _renderPersonalSettings() {
   const u = state.session.user;
   setLeftHeader(_t('Einstellungen'), '');
   setLeftBody(`
-    <div style="max-width:720px">
+    <div class="st-single">
       <div class="st-notice">${_t('Gewählt ist {name} ({role}).', { name: esc(u?.name || _t('niemand')), role: esc(ROLE_LABEL[u?.role] || '—') })}
         ${_t('Firmen-, Druck-, PLM- und Dateneinstellungen verwaltet ein Admin.')}</div>
-      <div class="sep-label" style="margin-top:0">${_t('Darstellung')}</div>
-      ${_appearanceHtml(state.settings)}
-      <div class="sep-label" style="margin-top:28px">${_t('Person')}</div>
-      <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Arbeitet jemand anderes an diesem Gerät, hier oder oben über den Namen wechseln.')}</div>
-      <button class="btn btn-ghost btn-sm" onclick="askWhoIsThere('switch')">${_t('Person wechseln')}</button>
-      <div class="sep-label" style="margin-top:28px">${_t('PIN')}</div>
-      <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">${u?.has_pin
-        ? _t('Deine Kachel ist mit einer PIN geschützt. Wer zu dir wechseln will, muss sie eingeben.')
-        : _t('Ohne PIN kann jede Person deine Kachel wählen und unter deinem Namen arbeiten. Mit einer PIN geht das nur, wenn man sie kennt.')}</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="openOwnPinModal()">${u?.has_pin ? _t('PIN ändern') : _t('PIN setzen')}</button>
-        ${u?.has_pin ? '<button class="btn btn-ghost btn-sm" onclick="openOwnPinModal(true)">' + _t('PIN entfernen') + '</button>' : ''}
-      </div>
+      ${_stCard(_t('Darstellung'), '', _appearanceHtml(state.settings))}
+      ${_stCard(_t('Person'), _t('Arbeitet jemand anderes an diesem Gerät, hier oder oben über den Namen wechseln.'),
+        `<button class="btn btn-ghost btn-sm" onclick="askWhoIsThere('switch')">${_t('Person wechseln')}</button>`)}
+      ${_stCard(_t('PIN'), u?.has_pin
+          ? _t('Deine Kachel ist mit einer PIN geschützt. Wer zu dir wechseln will, muss sie eingeben.')
+          : _t('Ohne PIN kann jede Person deine Kachel wählen und unter deinem Namen arbeiten. Mit einer PIN geht das nur, wenn man sie kennt.'),
+        `<div class="st-btns">
+          <button class="btn btn-ghost btn-sm" onclick="openOwnPinModal()">${u?.has_pin ? _t('PIN ändern') : _t('PIN setzen')}</button>
+          ${u?.has_pin ? '<button class="btn btn-ghost btn-sm" onclick="openOwnPinModal(true)">' + _t('PIN entfernen') + '</button>' : ''}
+        </div>`)}
     </div>`);
 }
 
-async function renderSettings() {
+async function renderSettings(page) {
   closeDetail();
   if (!state.session) await loadSession();
   if (state.session?.mode === 'team' && !isAdmin()) return _renderPersonalSettings();
-  setLeftHeader(_t('Einstellungen'), `<button class="btn btn-primary btn-sm" onclick="saveSettings()">${_t('💾 Speichern')}</button>`);
+  setLeftHeader(_t('Einstellungen'), '');
   const s = state.settings;
   const fi = (id, label, val, ph='', type='text') =>
     `<div class="fg"><label class="fl">${label}</label><input class="fi" id="st-${id}" type="${type}" value="${esc(val||'')}" placeholder="${ph}"></div>`;
   const ft = (id, label, val, ph='') =>
     `<div class="fg"><label class="fl">${label}</label><textarea class="ft" id="st-${id}" rows="2" placeholder="${ph}">${esc(val||'')}</textarea></div>`;
   const fck = (id, label, val) =>
-    `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)"><input type="checkbox" id="st-${id}" ${val !== '0' ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">${label}</label>`;
+    `<label class="st-check"><input type="checkbox" id="st-${id}" ${val !== '0' ? 'checked' : ''}>${label}</label>`;
+  const inp = (id, ph, attrs = '') => `<input class="fi" id="${id}" placeholder="${ph}" ${attrs}>`;
 
   const stor = await api('/api/storage').catch(() => null);
-  const fmtBytes = _fmtBytes;
-  const storHtml = stor ? `
-    <div style="display:flex;gap:16px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;margin-bottom:18px;font-size:12px;color:var(--t3)">
-      <span style="color:var(--t2);font-weight:600;font-size:13px">${_t('Speicher')}</span>
-      <span>${_t('Datenbank:')} <strong style="color:var(--t1)">${fmtBytes(stor.db_bytes)}</strong></span>
-      <span>${_t('Dateien:')} <strong style="color:var(--t1)">${fmtBytes(stor.files_bytes)}</strong></span>
-      ${stor.trash_bytes ? `<span title="${_t('Gelöschte Dateien, die eine wiederhergestellte Sicherung noch braucht')}">${_t('Papierkorb:')} <strong style="color:var(--t1)">${fmtBytes(stor.trash_bytes)}</strong></span>` : ''}
-      <span style="margin-left:auto">${_t('Gesamt:')} <strong style="color:var(--blue)">${fmtBytes(stor.total_bytes)}</strong></span>
+  const storHtml = stor ? `<div class="st-stats">
+      <div><span>${_t('Datenbank')}</span><b>${_fmtBytes(stor.db_bytes)}</b></div>
+      <div><span>${_t('Dateien')}</span><b>${_fmtBytes(stor.files_bytes)}</b></div>
+      ${stor.trash_bytes ? `<div title="${_t('Gelöschte Dateien, die eine wiederhergestellte Sicherung noch braucht')}"><span>${_t('Papierkorb')}</span><b>${_fmtBytes(stor.trash_bytes)}</b></div>` : ''}
+      <div><span>${_t('Gesamt')}</span><b style="color:var(--blue)">${_fmtBytes(stor.total_bytes)}</b></div>
     </div>` : '';
 
-  setLeftBody(`
-    <div style="max-width:720px">
-      ${storHtml}
-      <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px">
-        <button class="st-tab-btn active" data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Daten')}</button>
-        <button class="st-tab-btn"        data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Firma')}</button>
-        <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Kalkulation')}</button>
-        <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Kassabon')}</button>
-        <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('3D-Druck')}</button>
-        <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
-        <button class="st-tab-btn"        data-tab="benutzer" onclick="_stTab('benutzer')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Benutzer')}</button>
-        <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
-      </div>
+  const nav = ST_NAV().map(([group, items]) => `<div class="st-nav-group">${group}</div>`
+    + items.map(([id, label]) => `<button class="st-nav-btn${id === 'loeschen' ? ' danger' : ''}" data-page="${id}" onclick="_stTab('${id}')">${label}</button>`).join('')).join('');
 
-      <!-- TAB: Benutzer -->
-      <div class="st-tab-pane" data-tab="benutzer" hidden>
-        <div class="sep-label" style="margin-top:0">${_t('Wer arbeitet mit PLM?')}</div>
-        <div id="st-users-box" style="font-size:13px;color:var(--t3)">${_t('Lädt…')}</div>
-      </div>
+  const pages = [
+    // ── Allgemein
+    _stPage('darstellung', _t('Darstellung'), _t('Gilt für alle, die mit diesem PLM arbeiten.'),
+      _stCard('', '', _appearanceHtml(s))),
 
-      <!-- TAB: Firma -->
-      <div class="st-tab-pane" data-tab="firma" hidden>
-        <div class="sep-label" style="margin-top:0">${_t('Firma / Briefkopf')}</div>
+    _stPage('benutzer', _t('Personen'), _t('Wer mit PLM arbeitet und was die Person darf.'),
+      _stCard('', '', `<div id="st-users-box" class="st-muted">${_t('Lädt…')}</div>`)),
+
+    // ── Daten
+    _stPage('sicherung', _t('Sicherung & Export'), '',
+      _stCard(_t('Sicherungen'),
+        _t('PLM sichert täglich automatisch: 7 Tage lang jede Sicherung, danach eine pro Monat (6 Monate) und eine pro Jahr (bis du sie löschst).'),
+        `<div class="st-btns">
+          <button class="btn btn-ghost" onclick="createBackupNow()">${_t('💾 Jetzt sichern')}</button>
+          <label class="btn btn-ghost" style="cursor:pointer" title="${_t('Eine Sicherung (.db) oder einen Gesamtexport (.zip) wiederherstellen')}">
+            ${_t('⬆ Aus Datei wiederherstellen…')}
+            <input type="file" accept=".db,.zip" style="display:none" onchange="restoreBackupFromFile(this)">
+          </label>
+          <span id="st-backup-msg" class="st-msg"></span>
+        </div>
+        <div id="st-backup-list" class="st-muted" style="margin-top:12px">${_t('Lädt Sicherungen…')}</div>
+        <div id="st-backup-dir" class="st-note"></div>
+        <div class="st-note">${_t('Vor jedem Wiederherstellen sichert PLM den jetzigen Stand. Gelöschte Dateien bleiben 30 Tage im Papierkorb, damit eine ältere Sicherung sie wiederfindet.')}</div>`)
+      + _stCard(_t('Export'), _t('Alle Daten als ZIP. Ein Gesamtexport lässt sich oben über „Aus Datei wiederherstellen“ komplett zurückspielen.'),
+        `<div class="st-btns">
+          <a class="btn btn-ghost" href="/api/export" download>${_t('&#x1F4E6; Gesamtexport (Rohdaten)')}</a>
+          <a class="btn btn-ghost" href="/api/export-named" download title="${_t('Dateien werden wie beim Checkout mit korrekten Namen und Ordnerstruktur exportiert')}">${_t('&#x1F4C1; Export mit Klarnamen')}</a>
+        </div>`)
+      + _stCard(_t('Datei-Index'), _t('Alle Dateien mit ihrem Namen auf der Festplatte — für den Notfall.'),
+        `<button class="btn btn-ghost" onclick="gotoView('fileindex')">${_t('&#x1F4C2; Datei-Index öffnen')}</button>`)),
+
+    _stPage('speicherort', _t('Speicherort'), '',
+      _stCard(_t('Aktueller Ort'), '', `${storHtml}<div id="st-datapath-info" class="st-kv">${_t('Lädt aktuelle Pfade…')}</div>`)
+      + _stCard(_t('Anderen Ordner verwenden'), _t('Ändert nur, wo PLM beim nächsten Start sucht. Die vorhandenen Daten bleiben am alten Ort.'),
+        `<div class="st-inline">
+          ${inp('st-data-dir', _t('/absoluter/pfad/zum/datenverzeichnis'))}
+          <button class="btn btn-ghost" onclick="saveDataPath()">${_t('Pfad speichern')}</button>
+        </div>
+        <span id="st-datapath-msg" class="st-msg"></span>`)
+      + _stCard(_t('Daten verschieben'), _t('Kopiert alles (Datenbank, Dateien, Sicherungen) in einen leeren Ordner, prüft die Kopie und schaltet sofort um. Der alte Ordner wird erst danach gelöscht.'),
+        `<div class="st-inline">
+          ${inp('st-move-dir', _t('/absoluter/pfad/zum/neuen/ordner'))}
+          <button class="btn btn-ghost" id="st-move-btn" onclick="moveDataDir()">${_t('&#x1F4E6; Daten verschieben')}</button>
+        </div>
+        <label class="st-check" style="margin-top:8px"><input type="checkbox" id="st-move-keep">${_t('Daten am alten Ort behalten (kopieren statt verschieben)')}</label>
+        <span id="st-move-msg" class="st-msg"></span>
+        <div id="st-move-progress" style="display:none;margin-top:10px;max-width:420px">
+          <div style="height:6px;background:var(--bg2);border:1px solid var(--line);border-radius:4px;overflow:hidden">
+            <div id="st-move-bar" style="height:100%;width:0;background:var(--blue);transition:width .3s"></div>
+          </div>
+          <div id="st-move-detail" style="font-size:12px;color:var(--t4);margin-top:5px"></div>
+        </div>`)),
+
+    // ── Firma & Belege
+    _stPage('firma', _t('Firma'), _t('Steht im Briefkopf von Angeboten, Rechnungen und Lieferscheinen.'),
+      _stCard(_t('Briefkopf'), '', `
         <div class="form-row cols2">
           ${fi('company_name',_t('Firmenname *'),s.company_name,_t('Muster GmbH'))}
           ${fi('company_uid',_t('UID / MwSt-Nr.'),s.company_uid,'CHE-123.456.789 MWST')}
         </div>
-        <div class="form-row">${_logoBlock(s)}</div>
-        <div class="form-row">
-          ${fi('company_street',_t('Strasse + Hausnummer'),s.company_street,_t('Industriestrasse 42'))}
-        </div>
+        <div class="form-row">${fi('company_street',_t('Strasse + Hausnummer'),s.company_street,_t('Industriestrasse 42'))}</div>
         <div class="form-row cols3">
           ${fi('company_postal_code',_t('PLZ'),s.company_postal_code,'8000')}
           ${fi('company_city',_t('Ort'),s.company_city,_t('Zürich'))}
@@ -129,104 +178,121 @@ async function renderSettings() {
           ${fi('company_email','E-Mail',s.company_email,'info@firma.ch','email')}
           ${fi('company_website',_t('Website'),s.company_website,'www.firma.ch')}
         </div>
-        <div class="sep-label">${_t('Bankangaben')}</div>
-        <div class="form-row cols3">
+        <div class="form-row" style="margin-bottom:0">${_logoBlock(s)}</div>`)
+      + _stCard(_t('Bankangaben'), '', `<div class="form-row cols3" style="margin-bottom:0">
           ${fi('bank_name',_t('Bank'),s.bank_name,_t('Zürcher Kantonalbank'))}
           ${fi('bank_iban','IBAN',s.bank_iban,'CH00 0000 0000 0000 0000 0')}
           ${fi('bank_bic',_t('BIC / SWIFT'),s.bank_bic,'ZKBKCHZZ80A')}
-        </div>
-        <div style="margin-top:16px">
-          <button class="btn btn-primary" onclick="saveSettings()">${_t('💾 Speichern')}</button>
-        </div>
-      </div>
+        </div>`)
+      + _stSave('saveSettings()')),
 
-      <!-- TAB: Kalkulation -->
-      <div class="st-tab-pane" data-tab="kalk" hidden>
-        <div class="sep-label" style="margin-top:0">${_t('Standardwerte')}</div>
-        <div class="form-row cols3">
+    _stPage('belege', _t('Belege & Preise'), _t('Vorgaben für neue Angebote und Rechnungen.'),
+      _stCard(_t('Standardwerte'), '', `<div class="form-row cols2" style="margin-bottom:0">
           ${fi('default_tax_rate',_t('Standard MwSt. (%)'),s.default_tax_rate,'','number')}
           ${fi('quote_validity_days',_t('Angebot gültig (Tage)'),s.quote_validity_days,'','number')}
           ${fi('default_payment_terms',_t('Zahlungsbedingungen'),s.default_payment_terms,_t('30 Tage netto'))}
-        </div>
-        <div class="form-row cols3">
           ${fi('hourly_rate',_t('Stundensatz (CHF/h)'),s.hourly_rate,'z.B. 120','number')}
-        </div>
-        <div class="sep-label">${_t('Sprache der Belege')}</div>
-        <div class="form-row cols3">
-          <div class="fg"><select class="fs" id="st-doc_lang">${Object.entries(LANGS).map(([code, name]) =>
-            `<option value="${code}"${_docLang() === code ? ' selected' : ''}>${name}</option>`).join('')}</select></div>
-        </div>
-        <div style="font-size:12px;color:var(--t3);margin:-4px 0 12px;line-height:1.5">${_t('Gilt für Rechnung, Angebot, Lieferschein, Bestellung, Datenblatt, Stückliste, Prüfprotokoll, Etiketten und die Belege des Thermodruckers — unabhängig von der Sprache der Oberfläche. Fusszeilen und Zahlungsbedingungen stehen so auf den Belegen, wie sie hier eingetragen sind.')}</div>
-        <div class="sep-label">${_t('Dokument-Fussnoten')}</div>
-        <div class="form-row">
-          ${ft('invoice_footer',_t('Fusszeile Rechnung'),s.invoice_footer,_t('Zahlungshinweis, Bankverbindung …'))}
-        </div>
-        <div class="form-row">
-          ${ft('quote_footer',_t('Fusszeile Angebot'),s.quote_footer,_t('Hinweis Gültigkeit, Lieferbedingungen …'))}
-        </div>
-        <div style="margin-top:16px">
-          <button class="btn btn-primary" onclick="saveSettings()">${_t('💾 Speichern')}</button>
-        </div>
-      </div>
+        </div>`)
+      + _stCard(_t('Sprache der Belege'), _t('Für alle Belege und Etiketten, unabhängig von der Sprache der Oberfläche.'),
+        `<select class="fs" id="st-doc_lang" style="max-width:240px">${Object.entries(LANGS).map(([code, name]) =>
+          `<option value="${code}"${_docLang() === code ? ' selected' : ''}>${name}</option>`).join('')}</select>`)
+      + _stCard(_t('Fusszeilen'), _t('Stehen so auf den Belegen, wie sie hier eingetragen sind.'), `
+        <div class="form-row">${ft('invoice_footer',_t('Fusszeile Rechnung'),s.invoice_footer,_t('Zahlungshinweis, Bankverbindung …'))}</div>
+        <div class="form-row" style="margin-bottom:0">${ft('quote_footer',_t('Fusszeile Angebot'),s.quote_footer,_t('Hinweis Gültigkeit, Lieferbedingungen …'))}</div>`)
+      + _stSave('saveSettings()')),
 
-      <!-- TAB: Kassabon -->
-      <div class="st-tab-pane" data-tab="bon" hidden>
-        <div class="sep-label" style="margin-top:0">${_t('Fusszeile')}</div>
-        <div class="form-row">
-          ${ft('receipt_footer',_t('Fusszeile Kassabon'),s.receipt_footer,_t('z.B. Vielen Dank für Ihren Auftrag!'))}
-        </div>
-        <div class="sep-label">${_t('Bon-Aufbau')}</div>
-        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">
-          <div class="form-row cols2" style="margin-bottom:8px">
-            ${fi('receipt_line_width',_t('Zeilenbreite (Zeichen)'),s.receipt_line_width,'32','number')}
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
-            ${fck('receipt_show_datetime',_t('Datum &amp; Uhrzeit anzeigen'),s.receipt_show_datetime)}
-            ${fck('receipt_show_customer',_t('Kundenname anzeigen'),s.receipt_show_customer)}
-            ${fck('receipt_show_item_number',_t('Item-Nummer anzeigen'),s.receipt_show_item_number)}
-            ${fck('receipt_show_notes',_t('Notizen anzeigen'),s.receipt_show_notes)}
-          </div>
-        </div>
-        <div class="sep-label">${_t('Rohmaterial-Etikett')}</div>
-        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">
-            ${fck('label_show_qr',_t('QR-Code auf Etikett drucken'),s.label_show_qr ?? '1')}
-          </div>
-        </div>
-        <div style="margin-top:16px">
-          <button class="btn btn-primary" onclick="saveSettings()">${_t('💾 Speichern')}</button>
-        </div>
-      </div>
+    _stPage('bon', _t('Bon & Etiketten'), _t('Ausdrucke auf dem Thermodrucker.'),
+      _stCard(_t('Kassabon'), '', `
+        <div class="form-row">${ft('receipt_footer',_t('Fusszeile Kassabon'),s.receipt_footer,_t('z.B. Vielen Dank für Ihren Auftrag!'))}</div>
+        <div class="form-row cols3">${fi('receipt_line_width',_t('Zeilenbreite (Zeichen)'),s.receipt_line_width,'32','number')}</div>
+        <div class="st-checks">
+          ${fck('receipt_show_datetime',_t('Datum &amp; Uhrzeit anzeigen'),s.receipt_show_datetime)}
+          ${fck('receipt_show_customer',_t('Kundenname anzeigen'),s.receipt_show_customer)}
+          ${fck('receipt_show_item_number',_t('Item-Nummer anzeigen'),s.receipt_show_item_number)}
+          ${fck('receipt_show_notes',_t('Notizen anzeigen'),s.receipt_show_notes)}
+        </div>`)
+      + _stCard(_t('Rohmaterial-Etikett'), '', fck('label_show_qr',_t('QR-Code auf Etikett drucken'),s.label_show_qr ?? '1'))
+      + _stSave('saveSettings()')),
 
-      <!-- TAB: 3D-Druck -->
-      <div class="st-tab-pane" data-tab="druck3d" hidden>
-        <div class="sep-label" style="margin-top:0">${_t('Slicer')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">${_t('Für „Im Slicer öffnen“ im Datenblatt und bei den Dateien einer Revision. Das Programm wird an den üblichen Installationsorten gesucht.')}</div>
-        <div id="st-slicer-box" style="font-size:13px;color:var(--t3)">${_t('Sucht installierte Slicer…')}</div>
+    _stPage('nummern', _t('Nummern'), _t('Gilt nur für neu angelegte Datensätze — bestehende Nummern bleiben, wie sie sind.'),
+      _stCard(_t('Geschäftsnummern'), '', `
+        <div class="st-grid3">
+          <span></span><span class="fl">${_t('Präfix')}</span><span class="fl">${_t('Stellen')}</span>
+          <span>${_t('Aufträge')}</span>${inp('adm-prefix-order', 'AUF')}${inp('adm-pad-order', '3', 'type="number" min="1" max="8"')}
+          <span>${_t('Produktion')}</span>${inp('adm-prefix-delivery', 'LS')}${inp('adm-pad-delivery', '3', 'type="number" min="1" max="8"')}
+          <span>${_t('Kunden')}</span>${inp('adm-prefix-customer', 'KD')}${inp('adm-pad-customer', '3', 'type="number" min="1" max="8"')}
+          <span>${_t('Projekte')}</span><span class="st-muted">—</span>${inp('adm-pad-project', '3', 'type="number" min="1" max="8"')}
+        </div>
+        <label class="st-check" style="margin-top:12px"><input type="checkbox" id="adm-num-yearly">${_t('Jahreszahl in Nummer')}</label>`)
+      + _stCard(_t('Item-Nummern'), '', `
+        <div class="st-grid3">
+          <span></span><span class="fl">${_t('Kürzel')}</span><span class="fl">${_t('Stellen')}</span>
+          <span>${_t('Baugruppe')}</span>${inp('adm-seg-asm', 'asm', 'maxlength="10"')}${inp('adm-pad-asm', '3', 'type="number" min="1" max="6"')}
+          <span>Part</span>${inp('adm-seg-prt', 'prt', 'maxlength="10"')}${inp('adm-pad-prt', '3', 'type="number" min="1" max="6"')}
+          <span>${_t('Dokument')}</span>${inp('adm-seg-doc', 'doc', 'maxlength="10"')}${inp('adm-pad-doc', '3', 'type="number" min="1" max="6"')}
+          <span>${_t('Trennzeichen')}</span>${inp('adm-num-sep', '-', 'maxlength="3"')}<span></span>
+        </div>`)
+      + _stCard(_t('Revisionen'), '', `<select class="fs" id="adm-rev-format" style="max-width:240px">
+          <option value="num">${_t('Numerisch (1, 2, 3 …)')}</option>
+          <option value="letter">${_t('Buchstaben (A, B, C …)')}</option>
+        </select>`)
+      + _stCard(_t('Vorschau'), '', '<div class="st-preview" id="adm-preview"></div>')
+      + _stSave('saveAdminSettings()')),
 
-        <div class="sep-label" style="margin-top:20px">${_t('@heading:Drucker')}</div>
+    // ── PLM
+    _stPage('klass', _t('Klassifizierungen'), _t('Einteilung der Bauteile, Baugruppen und Dokumente — in der Suche als Filter.'),
+      _stCard(_t('Liste'), _t('Reihenfolge per Drag &amp; Drop. Umbenennen ändert den Eintrag beim Speichern an allen Items.'), `
+        <div id="st-class-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div id="st-class-orphans" style="margin-bottom:12px"></div>
+        <div class="st-inline">
+          <input class="fi" id="st-class-new" placeholder="${_t('Neue Klassifizierung…')}" style="max-width:240px" onkeydown="if(event.key==='Enter')_addClass()">
+          <button class="btn btn-ghost btn-sm" onclick="_addClass()">${_t('+ Hinzufügen')}</button>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="resetDesignColors()" title="${_t('Setzt die Farben auf die aktuelle Palette — für Datenbanken mit den Farben der alten Palette.')}">${_t('Standardfarben')}</button>
+          <span id="st-design-msg" class="st-msg"></span>
+        </div>`)
+      + _stCard(_t('Standard für neue Teile'), _t('„—“ lässt das Feld leer.'), `<div class="form-row cols2" style="margin-bottom:0">
+          <div class="fg"><label class="fl">${_t('Ohne Quelle (Eigenteil)')}</label><select class="fs" id="st-class-own"></select></div>
+          <div class="fg"><label class="fl">${_t('Mit Quelle (Kaufteil)')}</label><select class="fs" id="st-class-bought"></select></div>
+        </div>`)
+      + _stSave('_saveClassPage()', 'st-class-msg')),
+
+    _stPage('freigabe', _t('Freigabe'), _t('Welche Schritte eine Revision durchläuft.'),
+      _stCard(_t('Ablauf'), '', `
+        <div id="st-wf-options" style="display:flex;flex-direction:column;gap:6px"></div>
+        <label class="st-check" style="margin-top:12px;align-items:baseline">
+          <input type="checkbox" id="st-four-eyes" style="position:relative;top:2px">
+          <span>${_t('Vier-Augen-Prinzip: Freigabe durch eine zweite Person')}</span></label>
+        <div id="st-four-eyes-hint" class="st-note" style="margin-left:22px"></div>`)
+      + _stCard(_t('Prüfung vor der Freigabe'), _t('Was eine Revision mitbringen muss, bevor sie freigegeben werden kann. Dazu kommen die Pflicht-Eigenschaften der Klassifizierung.'),
+        '<div id="st-release-checks" style="display:flex;flex-direction:column;gap:7px"></div>')
+      + _stSave('_savePlmPrefs()', 'st-plmprefs-msg')),
+
+    _stPage('pruef', _t('Prüfprotokoll'), _t('Vorlage für „Dokument erstellen → Prüfprotokoll“.'),
+      _stCard('', '', '<div id="st-pruef-box"></div>')),
+
+    // ── Werkstatt
+    _stPage('druck3d', _t('3D-Druck'), '',
+      _stCard(_t('Slicer'), _t('Für „Im Slicer öffnen“ im Datenblatt und bei den Dateien einer Revision.'),
+        `<div id="st-slicer-box" class="st-muted">${_t('Sucht installierte Slicer…')}</div>`)
+      + _stCard(_t('@heading:Drucker'), '', `
         <div id="st-printers-list" style="margin-bottom:8px"></div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <div class="st-inline">
           <input class="fi" id="st-pr-name" style="width:200px" placeholder="${_t('Druckername')}">
-          <input class="fi" id="st-pr-cost" type="number" step="0.01" style="width:110px" placeholder="${_t('CHF/h (z.B. 1.50)')}">
+          <input class="fi" id="st-pr-cost" type="number" step="0.01" style="width:140px" placeholder="${_t('CHF/h (z.B. 1.50)')}">
           <button class="btn btn-ghost btn-sm" onclick="addPrinter()">${_t('+ Drucker hinzufügen')}</button>
-        </div>
-
-        <div class="sep-label" style="margin-top:20px">${_t('Düsen')}</div>
+        </div>`)
+      + _stCard(_t('Düsen'), '', `
         <div id="st-nozzles-list" style="margin-bottom:8px"></div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input class="fi" id="st-nz-size" style="width:120px" placeholder="${_t('Grösse (z.B. 0.4)')}">
+        <div class="st-inline">
+          <input class="fi" id="st-nz-size" style="width:140px" placeholder="${_t('Grösse (z.B. 0.4)')}">
           <button class="btn btn-ghost btn-sm" onclick="addNozzle()">${_t('+ Düse hinzufügen')}</button>
-        </div>
-
-        <div class="sep-label" style="margin-top:20px">${_t('Material-Vorlagen')}</div>
-        <div id="st-mats-list" style="margin-bottom:8px"></div>
-        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-top:4px">
+        </div>`)
+      + _stCard(_t('Material-Vorlagen'), '', `
+        <div id="st-mats-list" style="margin-bottom:10px"></div>
+        <div class="st-sub">
           <div class="form-row cols3">
             <div class="fg"><label class="fl">${_t('Name *')}</label><input class="fi" id="st-mat-name" placeholder="${_t('z.B. PLA')}"></div>
-            <div class="fg"><label class="fl">${_t('Düse')}</label>
-              <select class="fs" id="st-mat-nozzle"><option value="">—</option></select>
-            </div>
+            <div class="fg"><label class="fl">${_t('Düse')}</label><select class="fs" id="st-mat-nozzle"><option value="">—</option></select></div>
             <div class="fg"><label class="fl">${_t('Filamentpreis (CHF/kg)')}</label><input class="fi" id="st-mat-price" type="number" step="0.01" placeholder="22.00"></div>
           </div>
           <div class="form-row cols3">
@@ -236,292 +302,67 @@ async function renderSettings() {
           </div>
           <input type="hidden" id="st-mat-id" value="">
           <button class="btn btn-ghost btn-sm" id="st-mat-add-btn" onclick="addMaterialPreset()">${_t('+ Vorlage hinzufügen')}</button>
-        </div>
-      </div>
+        </div>`)),
 
-      <!-- TAB: PLM -->
-      <div class="st-tab-pane" data-tab="plm" hidden>
-        <div class="sep-label" style="margin-top:0">${_t('Klassifizierungen')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:12px;line-height:1.55">${_t('Verfügbare Klassifizierungen für Bauteile, Baugruppen und Dokumente. Reihenfolge per Drag &amp; Drop ändern. Ein umbenannter Eintrag wird beim Speichern an allen Items übernommen. In der Suche filtern die Chips nach diesen Einträgen.')}</div>
-        <div id="st-class-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
-        <div id="st-class-orphans" style="margin-bottom:12px"></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input class="fi" id="st-class-new" placeholder="${_t('Neue Klassifizierung…')}" style="max-width:240px" onkeydown="if(event.key==='Enter')_addClass()">
-          <button class="btn btn-ghost btn-sm" onclick="_addClass()">${_t('+ Hinzufügen')}</button>
+    _stPage('pc', _t('CAD & Checkout'), _t('Gilt nur für diesen PC — steht in {file}.', { file: _stCode('plm.config') }),
+      _stCard(_t('CAD-Programm'), _t('Startet über den CAD-Knopf oben.'),
+        `<div id="st-cad-box" class="st-muted">${_t('Prüft das CAD-Programm…')}</div>`)
+      + _stCard(_t('Checkout-Verzeichnis'), _t('Hierhin kopiert PLM ausgecheckte CAD-Dateien. Leer lassen für {default}.', { default: _stCode(_t('[Datenverzeichnis]/checkout')) }), `
+        <div class="st-inline">
+          <input class="fi" id="st-checkout-dir" placeholder="${_t('wird geladen…')}" disabled aria-label="${_t('Checkout-Pfad')}">
+          <button class="btn btn-ghost" id="st-checkout-save" onclick="saveCheckoutDir()" disabled>${_t('Pfad speichern')}</button>
         </div>
-        <div style="margin-top:16px">
-          <button class="btn btn-primary btn-sm" onclick="_saveClassifications()">${_t('Speichern')}</button>
-          <span id="st-class-msg" style="font-size:13px;color:var(--t3);margin-left:8px"></span>
-        </div>
+        <span id="st-checkout-msg" class="st-msg"></span>
+        <div id="st-checkout-note" class="st-note"></div>`)),
 
-        <div class="sep-label" style="margin-top:28px">${_t('Standard-Klassifizierung')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">
-          ${_t('Neue Teile bekommen die Klassifizierung automatisch — abhängig davon, ob eine Quelle bzw. ein Download-Link hinterlegt ist. „—“ lässt das Feld leer.')}
-        </div>
-        <div class="form-row cols2">
-          <div class="fg">
-            <label class="fl">${_t('Ohne Quelle (Eigenteil)')}</label>
-            <select class="fs" id="st-class-own"></select>
-          </div>
-          <div class="fg">
-            <label class="fl">${_t('Mit Quelle (Kaufteil)')}</label>
-            <select class="fs" id="st-class-bought"></select>
-          </div>
-        </div>
-
-        <div class="sep-label" style="margin-top:28px">${_t('Freigabe-Workflow')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">
-          ${_t('Bestimmt, welche Schritte eine Revision durchläuft.')}
-        </div>
-        <div id="st-wf-options" style="display:flex;flex-direction:column;gap:6px;max-width:560px"></div>
-        <label style="display:flex;align-items:baseline;gap:7px;cursor:pointer;font-size:13px;color:var(--t2);margin-top:12px">
-          <input type="checkbox" id="st-four-eyes" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue);position:relative;top:2px">
-          <span>${_t('Vier-Augen-Prinzip: Freigabe durch eine zweite Person')}</span></label>
-        <div id="st-four-eyes-hint" style="font-size:12.5px;color:var(--t3);margin:3px 0 0 22px;max-width:540px;line-height:1.5"></div>
-
-        <div class="sep-label" style="margin-top:28px">${_t('Prüfung vor der Freigabe')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
-          ${_t('Was eine Revision mitbringen muss, bevor sie freigegeben werden kann. Fehlt etwas, nennt PLM es im Datenblatt und sperrt „Freigeben“. Dazu kommen die als Pflicht markierten Eigenschaften der Klassifizierung. Gilt nur mit Freigabe-Workflow. Standard: eine Datei und das Gewicht.')}
-        </div>
-        <div id="st-release-checks" style="display:flex;flex-direction:column;gap:7px"></div>
-
-        <div style="margin-top:16px">
-          <button class="btn btn-primary btn-sm" onclick="_savePlmPrefs()">${_t('Speichern')}</button>
-          <span id="st-plmprefs-msg" style="font-size:13px;color:var(--t3);margin-left:8px"></span>
-        </div>
-
-        <div class="sep-label" style="margin-top:28px">${_t('Prüfprotokoll')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
-          ${_t('Vorlage für „Dokument erstellen → Prüfprotokoll“. Die Prüfpunkte erscheinen in dieser Reihenfolge, ein Soll-Wert wird ins Protokoll vorgedruckt. „Vorschau“ zeigt die Vorlage, wie sie gerade hier steht.')}
-        </div>
-        <div id="st-pruef-box"></div>
-      </div>
-
-      <!-- TAB: Daten -->
-      <div class="st-tab-pane" data-tab="daten">
-        <div class="sep-label" style="margin-top:0">${_t('Darstellung')}</div>
-        ${_appearanceHtml(s)}
-
-        <div style="font-size:13px;color:var(--t3);margin:18px 0 8px">
-          ${_t('Setzt die Farben der Klassifizierungen auf die Standardwerte der aktuellen Palette zurück. Nötig für Datenbanken, die noch die Farben der alten Palette gespeichert haben. Namen, Reihenfolge und Schriftgrösse bleiben erhalten.')}
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-ghost btn-sm" onclick="resetDesignColors()">${_t('Design zurücksetzen')}</button>
-          <span id="st-design-msg" style="font-size:13px;color:var(--t3)"></span>
-        </div>
-
-        <div class="sep-label" style="margin-top:24px">${_t('Datenpfad')}</div>
-        <div id="st-datapath-info" style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Lädt aktuelle Pfade…')}</div>
-        <div class="form-row">
-          <div class="fg">
-            <label class="fl">${_t('Datenverzeichnis (Datenbank + Dateien)')}</label>
-            <input class="fi" id="st-data-dir" placeholder="${_t('/absoluter/pfad/zum/datenverzeichnis')}">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" onclick="saveDataPath()">${_t('Pfad speichern')}</button>
-          <span id="st-datapath-msg" style="font-size:13px;color:var(--t3)"></span>
-        </div>
-        <div style="font-size:11px;color:var(--t4);margin-top:6px">
-          ${_t('Achtung: „Pfad speichern“ ändert nur, wo PLM beim nächsten Start sucht — vorhandene Daten bleiben am alten Ort. Zum Umziehen der bestehenden Daten den Bereich „Daten verschieben“ verwenden.')}
-        </div>
-
-        <div class="sep-label" style="margin-top:24px">${_t('Daten verschieben')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">
-          ${_t('Kopiert das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort, prüft die Kopie und schaltet PLM sofort darauf um — ein Neustart ist nicht nötig. Erst nach erfolgreicher Prüfung wird der alte Ordner gelöscht.')}
-        </div>
-        <div class="form-row">
-          <div class="fg">
-            <label class="fl">${_t('Neues Datenverzeichnis (leerer oder neuer Ordner)')}</label>
-            <input class="fi" id="st-move-dir" placeholder="${_t('/absoluter/pfad/zum/neuen/ordner')}">
-          </div>
-        </div>
-        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2);margin-top:4px">
-          <input type="checkbox" id="st-move-keep" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
-          ${_t('Daten am alten Ort behalten (kopieren statt verschieben)')}
-        </label>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-          <button class="btn btn-ghost btn-sm" id="st-move-btn" onclick="moveDataDir()">${_t('&#x1F4E6; Daten verschieben')}</button>
-          <span id="st-move-msg" style="font-size:13px;color:var(--t3)"></span>
-        </div>
-        <div id="st-move-progress" style="display:none;margin-top:10px;max-width:420px">
-          <div style="height:6px;background:var(--bg2);border:1px solid var(--line);border-radius:4px;overflow:hidden">
-            <div id="st-move-bar" style="height:100%;width:0;background:var(--blue);transition:width .3s"></div>
-          </div>
-          <div id="st-move-detail" style="font-size:12px;color:var(--t4);margin-top:5px"></div>
-        </div>
-
-        <div class="sep-label" style="margin-top:20px">${_t('CAD-Programm')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:8px">${_t('Wird über den CAD-Knopf oben gestartet.')}</div>
-        <div id="st-cad-box" style="font-size:13px;color:var(--t3)">${_t('Prüft das CAD-Programm…')}</div>
-
-        <div class="sep-label" style="margin-top:20px">${_t('Checkout-Verzeichnis')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:8px;line-height:1.55">${_t('Ordner, in den ausgecheckte CAD-Dateien kopiert werden. Gilt nur für diesen PC (steht in {file}) — liegen die Daten auf einem Netzlaufwerk, hat jeder PC seinen eigenen lokalen Ordner. Leer lassen für Standard: {default}', { file: '<code style="font-family:var(--mono)">plm.config</code>', default: `<code style="font-family:var(--mono)">${_t('[Datenverzeichnis]/checkout')}</code>` })}</div>
-        <div class="form-row">
-          <div class="fg">
-            <label class="fl">${_t('Checkout-Pfad')}</label>
-            <input class="fi" id="st-checkout-dir" placeholder="${_t('wird geladen…')}" disabled>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" id="st-checkout-save" onclick="saveCheckoutDir()" disabled>${_t('Pfad speichern')}</button>
-          <span id="st-checkout-msg" style="font-size:13px;color:var(--t3)"></span>
-        </div>
-        <div id="st-checkout-note" style="font-size:12px;color:var(--t4);margin-top:6px;line-height:1.5"></div>
-
-        <div class="sep-label" style="margin-top:24px">${_t('Datensicherung')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
-          ${_t('PLM sichert die Datenbank einmal pro Tag und behält die Tagessicherungen der letzten 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate und die erste jedes Jahres, bis du sie löschst. Gelöschte Dateien bleiben 30 Tage im Papierkorb, damit eine wiederhergestellte Sicherung sie wiederfindet. Vor jedem Wiederherstellen wird der jetzige Stand automatisch gesichert.')}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-ghost" onclick="createBackupNow()">${_t('💾 Jetzt sichern')}</button>
-          <label class="btn btn-ghost" style="cursor:pointer" title="${_t('Eine Sicherung (.db) oder einen Gesamtexport (.zip) wiederherstellen')}">
-            ${_t('⬆ Aus Datei wiederherstellen…')}
-            <input type="file" accept=".db,.zip" style="display:none" onchange="restoreBackupFromFile(this)">
-          </label>
-          <span id="st-backup-msg" style="font-size:13px;color:var(--t3)"></span>
-        </div>
-        <div id="st-backup-list" style="margin-top:10px;font-size:13px;color:var(--t3)">${_t('Lädt Sicherungen…')}</div>
-        <div id="st-backup-dir" style="font-size:12px;color:var(--t4);margin-top:6px;line-height:1.5"></div>
-
-        <div class="sep-label" style="margin-top:24px">${_t('Export')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Lädt alle PLM-Daten als ZIP-Archiv herunter. Der Gesamtexport lässt sich oben über „Aus Datei wiederherstellen" komplett zurückspielen, inklusive Dateien.')}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn btn-ghost" href="/api/export" download>${_t('&#x1F4E6; Gesamtexport (Rohdaten)')}</a>
-          <a class="btn btn-ghost" href="/api/export-named" download title="${_t('Dateien werden wie beim Checkout mit korrekten Namen und Ordnerstruktur exportiert')}">${_t('&#x1F4C1; Export mit Klarnamen')}</a>
-        </div>
-        <div style="font-size:11px;color:var(--t4);margin-top:6px">
-          ${_t('Klarnamen-Export: Dateien werden nach Projekt/Item/Revision sortiert und mit Original-Dateinamen abgelegt — wie beim Checkout.')}
-        </div>
-
-        <div class="sep-label" style="margin-top:24px">${_t('Datei-Index')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Übersicht aller gespeicherten Dateien mit angezeigtem Namen und tatsächlichem Dateinamen auf der Festplatte (Notfall-Referenz).')}</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost" onclick="gotoView('fileindex')">${_t('&#x1F4C2; Datei-Index öffnen')}</button>
-        </div>
-      </div>
-
-      <!-- TAB: Admin -->
-      <div class="st-tab-pane" data-tab="loeschen" hidden>
-        <div style="background:var(--red-soft);border:1px solid var(--red-line);border-radius:var(--r);padding:10px 14px;margin-bottom:20px;font-size:13px;color:var(--red)">
-          ${_t('⚠ Änderungen hier können bestehende Daten und Nummernkreise dauerhaft beschädigen. Nur vornehmen wenn du weisst was du tust.')}
-        </div>
-
-        <div class="sep-label" style="margin-top:0;color:var(--red)">${_t('Datensätze löschen')}</div>
-        <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px">
-          <button class="adm-del-tab active" data-deltab="teile"    onclick="_admDelTab('teile')"    style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-1px;font-weight:600">Items</button>
-          <button class="adm-del-tab"        data-deltab="projekte" onclick="_admDelTab('projekte')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Projekte')}</button>
-          <button class="adm-del-tab"        data-deltab="auftraege"  onclick="_admDelTab('auftraege')"  style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Aufträge')}</button>
-          <button class="adm-del-tab"        data-deltab="produktion" onclick="_admDelTab('produktion')" style="background:none;border:none;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Produktion')}</button>
+    // ── Admin
+    _stPage('loeschen', _t('Datensätze löschen'), '',
+      `<div class="st-danger">${_t('⚠ Löschen ist endgültig. Vorher unter „Sicherung & Export“ sichern.')}</div>`
+      + _stCard('', _t('Hier lässt sich löschen, was sonst gesperrt ist: freigegebene oder gelieferte Items, Projekte mit Inhalt und abgeschlossene Aufträge.'), `
+        <div class="st-subtabs">
+          <button class="adm-del-tab active" data-deltab="teile" onclick="_admDelTab('teile')">Items</button>
+          <button class="adm-del-tab" data-deltab="projekte" onclick="_admDelTab('projekte')">${_t('Projekte')}</button>
+          <button class="adm-del-tab" data-deltab="auftraege" onclick="_admDelTab('auftraege')">${_t('Aufträge')}</button>
+          <button class="adm-del-tab" data-deltab="produktion" onclick="_admDelTab('produktion')">${_t('Produktion')}</button>
         </div>
         <div id="adm-del-teile">
-          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">${_t('Freigegebene (REL/OBS/ECO) oder gelieferte Items — Bauteile, Baugruppen und Dokumente')}</div>
+          <div class="st-card-hint">${_t('Freigegebene (REL/OBS/ECO) oder gelieferte Items — Bauteile, Baugruppen und Dokumente')}</div>
           <div id="st-del-items" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
-        <div id="adm-del-projekte" style="display:none">
-          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">${_t('Projekte mit Inhalten (Items, Dateien)')}</div>
+        <div id="adm-del-projekte" hidden>
+          <div class="st-card-hint">${_t('Projekte mit Inhalten (Items, Dateien)')}</div>
           <div id="st-del-projects" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
-        <div id="adm-del-auftraege" style="display:none">
-          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">${_t('Aufträge (nicht Entwurf)')}</div>
+        <div id="adm-del-auftraege" hidden>
+          <div class="st-card-hint">${_t('Aufträge (nicht Entwurf)')}</div>
           <div id="st-del-orders" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
-        <div id="adm-del-produktion" style="display:none">
-          <div style="font-size:13px;color:var(--t3);margin-bottom:6px">${_t('Produktionsaufträge (nicht Entwurf)')}</div>
+        <div id="adm-del-produktion" hidden>
+          <div class="st-card-hint">${_t('Produktionsaufträge (nicht Entwurf)')}</div>
           <div id="st-del-deliveries" style="display:flex;flex-direction:column;gap:4px"></div>
-        </div>
+        </div>`)),
+  ];
 
-        <div class="sep-label" style="margin-top:28px">${_t('Nummernpräfixe')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:12px">${_t('Präfixe für neu angelegte Datensätze. Bestehende Nummern werden <b>nicht</b> geändert.')}</div>
-        <div class="form-row cols2">
-          <div class="fg"><label class="fl">${_t('Aufträge')}</label><input class="fi" id="adm-prefix-order" placeholder="AUF"></div>
-          <div class="fg"><label class="fl">${_t('Produktion')}</label><input class="fi" id="adm-prefix-delivery" placeholder="LS"></div>
-          <div class="fg"><label class="fl">${_t('Kunden')}</label><input class="fi" id="adm-prefix-customer" placeholder="KD"></div>
-        </div>
+  setLeftBody(`<div class="st-layout"><nav class="st-nav">${nav}</nav><div class="st-main">${pages.join('')}</div></div>`);
 
-        <div class="sep-label" style="margin-top:20px">${_t('Stellen Geschäftsnummern')}</div>
-        <div class="form-row cols2">
-          <div class="fg"><label class="fl">${_t('Aufträge')}</label><input class="fi" id="adm-pad-order" type="number" min="1" max="8" placeholder="3"></div>
-          <div class="fg"><label class="fl">${_t('Produktion')}</label><input class="fi" id="adm-pad-delivery" type="number" min="1" max="8" placeholder="3"></div>
-          <div class="fg"><label class="fl">${_t('Kunden')}</label><input class="fi" id="adm-pad-customer" type="number" min="1" max="8" placeholder="3"></div>
-          <div class="fg"><label class="fl">${_t('Projekte')}</label><input class="fi" id="adm-pad-project" type="number" min="1" max="8" placeholder="3"></div>
-          <div class="fg" style="display:flex;align-items:center;gap:10px;padding-top:20px">
-            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--t2)">
-              <input type="checkbox" id="adm-num-yearly" style="width:15px;height:15px;cursor:pointer;accent-color:var(--blue)">
-              ${_t('Jahreszahl in Nummer')}
-            </label>
-          </div>
-        </div>
-
-        <div class="sep-label" style="margin-top:20px">${_t('Struktur Item-Nummern')}</div>
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Gilt nur für <b>neu angelegte</b> Items. Bestehende Nummern werden nicht geändert.')}</div>
-        <div class="form-row cols2">
-          <div class="fg"><label class="fl">${_t('Trennzeichen')}</label><input class="fi" id="adm-num-sep" placeholder="-" maxlength="3"></div>
-          <div class="fg"><label class="fl">${_t('Stellen Baugruppe')}</label><input class="fi" id="adm-pad-asm" type="number" min="1" max="6" placeholder="3"></div>
-          <div class="fg"><label class="fl">${_t('Stellen Part')}</label><input class="fi" id="adm-pad-prt" type="number" min="1" max="6" placeholder="3"></div>
-          <div class="fg"><label class="fl">${_t('Stellen Dokument')}</label><input class="fi" id="adm-pad-doc" type="number" min="1" max="6" placeholder="3"></div>
-          <div class="fg"><label class="fl">${_t('Baugruppen-Kürzel')}</label><input class="fi" id="adm-seg-asm" placeholder="asm" maxlength="10"></div>
-          <div class="fg"><label class="fl">${_t('Part-Kürzel')}</label><input class="fi" id="adm-seg-prt" placeholder="prt" maxlength="10"></div>
-          <div class="fg"><label class="fl">${_t('Dokument-Kürzel')}</label><input class="fi" id="adm-seg-doc" placeholder="doc" maxlength="10"></div>
-        </div>
-
-        <div class="sep-label" style="margin-top:20px">${_t('Revisionen')}</div>
-        <div class="form-row">
-          <div class="fg"><label class="fl">${_t('Format')}</label>
-            <select class="fs" id="adm-rev-format">
-              <option value="num">${_t('Numerisch (1, 2, 3 …)')}</option>
-              <option value="letter">${_t('Buchstaben (A, B, C …)')}</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="font-size:13px;color:var(--t3);margin-top:14px;font-family:var(--mono);line-height:2;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px" id="adm-preview"></div>
-
-        <div style="margin-top:16px">
-          <button class="btn btn-red" onclick="saveAdminSettings()">${_t('⚠ Admin-Einstellungen speichern')}</button>
-        </div>
-      </div>
-
-    </div>`);
-
-  // active tab styling
-  document.querySelectorAll('.st-tab-btn').forEach(b => {
-    b.addEventListener('mouseenter', () => { if (!b.classList.contains('active')) b.style.color = 'var(--t1)'; });
-    b.addEventListener('mouseleave', () => { if (!b.classList.contains('active')) b.style.color = 'var(--t2)'; });
-  });
-  const styleActiveTabs = () => document.querySelectorAll('.st-tab-btn').forEach(b => {
-    const isLoeschen = b.dataset.tab === 'loeschen';
-    const activeColor = isLoeschen ? 'var(--red)' : 'var(--blue)';
-    const inactiveColor = isLoeschen ? 'var(--red)' : 'var(--t2)';
-    b.style.color = b.classList.contains('active') ? activeColor : inactiveColor;
-    b.style.borderBottomColor = b.classList.contains('active') ? activeColor : 'transparent';
-    b.style.fontWeight = b.classList.contains('active') ? '600' : '400';
-  });
-  styleActiveTabs();
-  document.querySelectorAll('.st-tab-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      styleActiveTabs();
-      if (b.dataset.tab === 'loeschen') _loadDelTab();
-      if (b.dataset.tab === 'benutzer') _renderUsersSettings();
-      // Prüfprotokoll nicht in _loadPlmTab: das läuft auch nach dem Speichern
-      // der Klassifizierungen und würfe ungespeicherte Änderungen hier weg
-      if (b.dataset.tab === 'plm') { _loadPlmTab(); _renderPruefSettings(); }
-      if (b.dataset.tab === 'daten') loadBackupList();
-    });
-  });
-
+  // Einmal laden; Seiten mit Listen von anderswo laden beim Anzeigen neu
   loadAndRenderPrinterConfig();
   _renderSlicerSettings();
   _renderCadSettings();
+  _loadPlmTab();
+  _renderPruefSettings();
+  _loadNumberSettings();
   api('/api/data-path').then(d => {
-    document.getElementById('st-datapath-info').innerHTML =
-      `DB: <code style="user-select:all">${d.db_path}</code><br>${_t('Dateien:')} <code style="user-select:all">${d.files_dir}</code>`
-      + (d.config_file ? `<br><span style="color:var(--t4);font-size:12px">${_t('Konfigdatei:')} <code style="user-select:all">${d.config_file}</code></span>` : '');
+    const row = (label, val, cls = '') => `<span${cls}>${label}</span><code>${esc(val)}</code>`;
+    document.getElementById('st-datapath-info').innerHTML = row(_t('Datenbank'), d.db_path) + row(_t('Dateien'), d.files_dir)
+      + (d.config_file ? row(_t('Konfigdatei'), d.config_file) : '');
     document.getElementById('st-data-dir').value = d.data_dir;
     if (!d.configured) _showFirstRunModal(d.data_dir, d.config_file);
   });
   _loadCheckoutDir();
-  loadBackupList();   // „Daten“ ist der erste Reiter
+  let last = page;
+  if (!last) try { last = localStorage.getItem(ST_PAGE_KEY); } catch {}
+  _stTab(last || 'darstellung');
 }
 
 // Checkout-Verzeichnis: steht in plm.config, gilt also nur für diesen PC.
@@ -562,7 +403,7 @@ async function loadBackupList() {
   try { _backupData = await api('/api/backups'); }
   catch { el.innerHTML = '<span style="color:var(--red)">' + _t('Sicherungen konnten nicht geladen werden.') + '</span>'; return; }
   const dirEl = document.getElementById('st-backup-dir');
-  if (dirEl && _backupData.dir) dirEl.innerHTML = _t('Ordner: {dir}', { dir: `<code style="font-family:var(--mono);color:var(--t2);user-select:all">${esc(_backupData.dir)}</code>` });
+  if (dirEl && _backupData.dir) dirEl.innerHTML = _t('Ordner: {dir}', { dir: `<code class="st-code" style="user-select:all">${esc(_backupData.dir)}</code>` });
   const list = _backupData.backups || [];
   if (!list.length) { el.innerHTML = _t('Noch keine Sicherungen vorhanden.'); return; }
   el.innerHTML = `<div style="display:flex;flex-direction:column;gap:5px">${list.map((b, i) => {
@@ -823,7 +664,7 @@ function _showFirstRunModal(suggestedPath, configFile) {
     <div style="background:var(--bg2);border-radius:var(--r);padding:32px;max-width:520px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.4)">
       <div style="font-size:18px;font-weight:600;margin-bottom:8px">${_t('Willkommen bei PLM')}</div>
       <div style="font-size:14px;color:var(--t2);margin-bottom:20px">
-        ${_t('Bitte wähle, wo die Daten (Datenbank und Dateien) gespeichert werden sollen. Der Pfad wird dauerhaft in {file} gespeichert und kann später unter Einstellungen → Daten geändert werden.', { file: `<code style="font-family:var(--mono);font-size:12px">${esc(configFile || 'plm.config')}</code>` })}
+        ${_t('Bitte wähle, wo die Daten (Datenbank und Dateien) gespeichert werden sollen. Der Pfad wird dauerhaft in {file} gespeichert und kann später unter Einstellungen → Speicherort geändert werden.', { file: `<code style="font-family:var(--mono);font-size:12px">${esc(configFile || 'plm.config')}</code>` })}
       </div>
       <div style="margin-bottom:16px">
         <label style="font-size:13px;color:var(--t3);display:block;margin-bottom:4px">${_t('Datenverzeichnis')}</label>

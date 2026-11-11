@@ -56,8 +56,8 @@ Runs locally on Linux and Windows: no internet connection, no cloud, no account.
 
 > **🚀 [Quick start](QUICKSTART.md)** — the essentials on one page
 >
-> **Language:** the user interface is available in **English and German** (Settings → Data →
-> Appearance), printed documents have their own language (Settings → Company). The
+> **Language:** the user interface is available in **English and German** (Settings →
+> Appearance), printed documents have their own language (Settings → Documents & prices). The
 > step-by-step [manual](HANDBUCH.md) is currently only available in German.
 
 ---
@@ -105,7 +105,7 @@ In `plm.config` on each PC:
 
 ```
 data_dir=Z:\PLM-Data               ← the shared data folder, as it is named on this PC
-checkout_dir=C:\CAD\Checkout       ← this PC only (also under Settings → Data)
+checkout_dir=C:\CAD\Checkout       ← this PC only (also under Settings → CAD & checkout)
 ```
 
 Only one PLM works with the data at a time: each one keeps the database in memory and
@@ -146,7 +146,7 @@ Suppliers:             LF-0001
 ```
 
 Prefixes, digit counts and the revision format can be configured under
-**Settings → Admin**.
+**Settings → Numbers**.
 
 ---
 
@@ -160,7 +160,7 @@ DFT ──────────► REL ──► ECO ──► (new revision 
 ```
 
 Working alone or without two-person approval, you release directly from draft. With
-two-person approval (Settings → PLM, from two people on), a revision first goes into review
+two-person approval (Settings → Release, from two people on), a revision first goes into review
 (REV) and is locked there; only a person other than the one who submitted it may then
 release it. Admins may also release their own submissions.
 
@@ -177,12 +177,12 @@ the new DFT revision, just like with "＋ New revision".
 If the DFT revision is deleted, the ECO automatically returns to REL.  
 When the new revision is released, the previous one (REL or ECO) becomes OBS.
 
-**Checks before release** (Settings → PLM): selectable mandatory items: at least one file,
+**Checks before release** (Settings → Release): selectable mandatory items: at least one file,
 CAD file, drawing (PDF), description, classification, weight (default: file and weight),
 plus the properties marked as mandatory for the classification. If something is missing,
 PLM names it and disables "Release".
 
-**Working without release:** under **Settings → PLM → Release workflow** you can switch to
+**Working without release:** under **Settings → Release** you can switch to
 simple mode. All revisions then stay in DFT and editable; instead of "Release" there is
 **"＋ New revision"**, which carries over the files, print parameters and BOM of the
 previous revision. Meant for working alone, without a review step. Existing released
@@ -212,7 +212,7 @@ Implement (creates the revision to work in for each part) → Done.
 - Automatic file type detection (STL/3MF/STEP → CAD, .gcode → G-code …)
 - Weight per part (editable inline), development time tracking; assemblies without their
   own weight sum up the parts and standard parts in their BOM
-- **Classification**: coloured chips, configurable under Settings → PLM
+- **Classification**: coloured chips, configurable under Settings → Classifications
 - **Properties per classification**, e.g. material, surface finish, manufacturer; shown on
   the data sheet, on the PDF and in search, optionally mandatory for release
 - **Thumbnails**: hovering a row in the project tree, BOM or search shows the STL or STEP
@@ -231,13 +231,13 @@ Implement (creates the revision to work in for each part) → Done.
   assemblies the whole structure; delivered revisions are locked (see below)
 - **Compare revisions**: put two revisions of an item side by side: header data, print
   parameters, BOM, standard parts and files (see below)
-- **Release workflow can be switched off**: under Settings → PLM, choose between the
+- **Release workflow can be switched off**: under Settings → Release, choose between the
   release process (DFT → REL → ECO, optionally with review REV) and simple mode without
   release
 - **Print parameters from 3MF**: uploading a `.3mf` to a revision automatically takes
   over layer height, infill, infill pattern, temperatures, material and printer
 - **Automatic classification**: new items are classified as in-house or purchased parts
-  based on their source (defaults under Settings → PLM)
+  based on their source (defaults under Settings → Classifications)
 - **Free notes** per item, for everything that does not belong in the description
 - **Where-used**: shows all revisions of the assemblies an item is built into, including
   the revision each usage is pinned to
@@ -327,15 +327,19 @@ When adding a line, the following costs can be calculated automatically:
 - **Browser back button**: navigates within the app
 - **Recently opened**: recently opened items and documents in the sidebar
 
-### Settings / Admin
-- **Data** (opens first): interface language, font size, **reset design**, data path, checkout
-  folder, CAD program, **create and restore backups**, export
-- **Company**: name, address, bank details, logo, document language
-- **Calculation**: hourly rate, machine costs, defaults
-- **3D printing**: slicer (PrusaSlicer / Bambu Studio), printers, nozzles, material profiles
-- **PLM**: classification list (name + colour, drag & drop; renaming carries over to the items)
-- **Users**: who works with PLM (user, superuser, admin); names in history and release
-- **Admin**: numbering structure, deleting records
+### Settings
+Sections by topic on the left, the page on the right; every page with inputs has its own Save
+button. Settings reopen on the page used last.
+- **General**: **Appearance** (language, font size, design), **People** (user, superuser, admin;
+  names in history and release)
+- **Data**: **Backup & export** (create, download and restore backups; export, file index),
+  **Storage location** (data path, moving the data)
+- **Company & documents**: **Company** (letterhead, logo, bank), **Documents & prices** (VAT, hourly
+  rate, document language, footers), **Receipts & labels**, **Numbers** (prefixes, digits, revision format)
+- **PLM**: **Classifications** (name + colour, drag & drop; renaming carries over to the items),
+  **Release** (workflow, two-person approval, checks before release), **Inspection report**
+- **Workshop**: **3D printing** (slicer, printers, nozzles, material profiles), **CAD & checkout** (per PC)
+- **Admin**: **Delete records**
 
 ---
 
@@ -379,7 +383,7 @@ what is actually at the customer:
 | Part | the revision of the line is pinned (`🔒 rev2`) |
 | Assembly | additionally the **complete structure**: every sub-part with its revision at the time |
 | Delivered revision | locked: no changes to files, BOM or print parameters, no deletion |
-| Item with a delivered revision | can only be deleted under **Settings → Admin** |
+| Item with a delivered revision | can only be deleted under **Settings → Delete records** |
 
 Further work happens in a **new revision**: the Revisions tab shows "＋ New revision" for
 this, also in the workflow with release. If a check-in changes files of a delivered
@@ -460,7 +464,7 @@ The **chips** above the results are a real filter:
 - **none** shows items that have no classification yet.
 - Dashed chips are values that are set on items but are not (or no longer) in the list.
 
-Under **Settings → PLM**, each classification shows how many items carry it. Renaming
+Under **Settings → Classifications**, each classification shows how many items carry it. Renaming
 carries the new name over to all items and to the default classification on save. When
 removing a classification that is in use, PLM asks whether the items keep or lose it.
 Values that are set on items but missing from the list can be brought back with
@@ -541,7 +545,7 @@ Each production order is booked out only once.
 | Assemblies (.asm) | same path |
 | Drafts (.dft) | same path |
 
-Checkout path: **Settings → Data → Checkout directory**, per PC, stored in `plm.config` as
+Checkout path: **Settings → CAD & checkout**, per PC, stored in `plm.config` as
 `checkout_dir=` (empty: `[data directory]/checkout`). It used to be stored in the database;
 if that folder exists on the PC, PLM takes it over once at start-up.
 
@@ -647,7 +651,7 @@ the reference for the English translation of the interface.
 
 Number prefixes: existing databases keep their prefixes (AUF, LS, EK, KD, LF). New
 installations with the English interface start with English defaults (ORD, PRD, PO, CUS, SUP).
-Prefixes remain configurable under Settings → Admin.
+Prefixes remain configurable under Settings → Numbers.
 
 ---
 
@@ -681,7 +685,7 @@ and quote footers, classifications (In-house part, Purchased part, …) and numb
 
 **Document language:** printed documents (invoice, quote, delivery note, purchase order, data
 sheet, BOM, inspection report, labels, thermal printer receipts) have their own language under
-**Settings → Company**, independent of the interface. Installations that already had data keep
+**Settings → Documents & prices**, independent of the interface. Installations that already had data keep
 German. In code, `_d('…')` translates into the document language, `_k('…')` only marks a key
 for tables shared by interface and documents (like gettext's `N_()`). Footers and payment terms
 are printed exactly as entered in the settings.
@@ -747,9 +751,9 @@ devices can reach it is decided by the PC's firewall.
   works on the PC itself.
 - Check for package vulnerabilities: `cd backend && npm audit --omit=dev`
 
-Users (Settings → Users) are for traceability, not for protection: they are selected
+Users (Settings → People) are for traceability, not for protection: they are selected
 without a password; each person can protect their tile with a PIN. Usage: see
-[HANDBUCH.md](HANDBUCH.md), chapter Settings → Users.
+[HANDBUCH.md](HANDBUCH.md), chapter Settings → People.
 
 ---
 
@@ -807,14 +811,14 @@ New settings (release workflow, default classification) start with the previous 
 nothing changes until you switch them.
 
 After an update that affects the colour palette, press
-**Settings → Data → Reset design** once: the classification colours are stored in the
+**Settings → Classifications → Default colours** once: the classification colours are stored in the
 database and would not follow otherwise. Names and order are kept.
 
 ---
 
 ## Backups
 
-Everything is under **Settings → Data → Backup**, while running; no restart needed.
+Everything is under **Settings → Backup & export**, while running; no restart needed.
 The backups live in `backups/` inside the data directory (`backend/data/` unless
 `data_dir` in `plm.config` says otherwise); the settings page shows the full path below the list. "⬇ Download" next to a backup
 saves the file through the browser, so you don't have to find the folder.
@@ -843,7 +847,7 @@ files are left untouched.
 deleted item) end up in `data/papierkorb/` and are permanently removed at server start
 after 30 days.
 
-**Export:** **Settings → Data → Full export** downloads `plm.db` + `files/` as a ZIP;
+**Export:** **Settings → Backup & export → Full export** downloads `plm.db` + `files/` as a ZIP;
 "Export with readable names" arranges the files by project/item/revision (for reading,
 not for restoring the files).
 
