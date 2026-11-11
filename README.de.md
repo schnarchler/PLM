@@ -571,6 +571,22 @@ Schweizer Hochdeutsch (ss statt ß).
 
 ---
 
+## Sprache der Oberfläche
+
+Gewählt unter **Einstellungen → Darstellung** (steht auf dem Server, wie das Design). Ohne
+Wahl richtet sich PLM nach der Sprache des Browsers; Installationen, die schon vor der
+Übersetzung Daten hatten, bleiben auf Deutsch.
+
+Der deutsche Text ist der Schlüssel: Im Code steht `t('Speichern')`,
+[`frontend/public/lang/en.js`](frontend/public/lang/en.js) ordnet ihm `'Save'` zu.
+Platzhalter in geschweiften Klammern: `t('… und {n} weitere', { n: 3 })`. Fehlt ein Eintrag,
+erscheint der deutsche Text — so lässt sich Datei für Datei übersetzen. Statischer Text in
+`index.html` (Text, `title`, `placeholder`) wird beim Laden einmal übersetzt, ohne
+zusätzliche Attribute; `data-no-i18n` nimmt ein Element aus. `npm test` prüft, dass jedes
+`t('…')` einen Eintrag hat. Englische Begriffe: Glossar im englischen README (Terminology).
+
+---
+
 ## Dateistruktur
 
 ```
@@ -588,7 +604,9 @@ PLM/
 ├── frontend/
 │   └── public/
 │       ├── index.html     ← HTML-Grundstruktur
+│       ├── lang/en.js     ← englische Übersetzung (deutscher Text → Englisch)
 │       ├── js/            ← Single-Page-App, aufgeteilt nach Domänen
+│       │   ├── 00-i18n.js    ← Sprache der Oberfläche: t(), Sprachwahl
 │       │   ├── 01-core.js …  13-normteile-einkauf.js
 │       │   ├── 14-qr.js      ← QR-Encoder (eigenständig, keine externe Bibliothek)
 │       │   ├── 15-mindmap.js ← Abhängigkeitsgraph (SVG, Pan/Zoom)
@@ -734,6 +752,7 @@ Die wichtigsten Testdateien:
 | `test/workflow.test.js` | Projektfarben, Klassifizierungs-Ableitung, 3MF-Druckparameter, Revisionsfixierung, einfacher Workflow, Normteil-Einkauf, Materialabzug, Angebotsphase, Kundenlöschung |
 | `test/revisionen.test.js` | gelieferter Stand (Fixieren, Sperre, Lösen, Korrektur, Check-in), Revisionsvergleich, ECO-Übernahme, Suche mit Klassifizierung, Umbenennen von Klassifizierungen |
 | `test/backup.test.js` | Sicherung anlegen, wiederherstellen (Liste, `.db`, ZIP), Papierkorb, Schema-Update älterer Sicherungen |
+| `test/i18n.test.js` | Übersetzung: jeder `t('…')`-Text hat einen englischen Eintrag, keine verwaisten Einträge, Platzhalter stimmen, Sprache für neue und bestehende Installationen |
 | `test/frontend.test.js` | QR-Encoder (gegen die ISO-Referenzwerte), URL-Absicherung, Datenblatt, Stücklisten-Revisionsanzeige, Mindmap-Layout, Workflow-Umschaltung, Revisionskennzeichen in der Produktion, Revisionsvergleich |
 
 Die Server-Tests starten jeweils einen eigenen Server (eigener Port) mit einer leeren

@@ -18,16 +18,21 @@ function _fmtBytes(b) {
 // Schriftgrösse und Design — darf jede Person ändern
 function _appearanceHtml(s) {
   return `
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Schriftgrösse der Benutzeroberfläche anpassen.</div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${t('Sprache der Benutzeroberfläche.')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
+          ${Object.entries(LANGS).map(([code, name]) =>
+            `<button class="btn btn-sm ${code === LANG ? 'btn-primary' : 'btn-ghost'}" onclick="setLang('${code}')">${name}</button>`).join('')}
+        </div>
+        <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${t('Schriftgrösse der Benutzeroberfläche anpassen.')}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[['0.8','Klein'],['0.9','Mittel-klein'],['1','Normal'],['1.1','Mittel-gross'],['1.2','Gross'],['1.35','Sehr gross']].map(([sc,l]) => {
+          ${[['0.8',t('Klein')],['0.9',t('Mittel-klein')],['1',t('Normal')],['1.1',t('Mittel-gross')],['1.2',t('Gross')],['1.35',t('Sehr gross')]].map(([sc,l]) => {
             const active = (s.font_scale || '1') === sc ? ' btn-primary' : ' btn-ghost';
             return `<button class="btn btn-sm fs-preset-btn${active}" data-scale="${sc}" onclick="setFontScale('${sc}')">${l}</button>`;
           }).join('')}
         </div>
-        <div style="font-size:13px;color:var(--t3);margin:18px 0 10px">Farbdesign der Benutzeroberfläche.</div>
+        <div style="font-size:13px;color:var(--t3);margin:18px 0 10px">${t('Farbdesign der Benutzeroberfläche.')}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[['','Standard'],['angepasst','Helleres Design']].map(([th,l]) => {
+          ${[['',t('Standard')],['angepasst',t('Helleres Design')]].map(([th,l]) => {
             const active = (s.theme || '') === th ? ' btn-primary' : ' btn-ghost';
             return `<button class="btn btn-sm theme-preset-btn${active}" data-theme="${th}" onclick="setTheme('${th}')">${l}</button>`;
           }).join('')}
@@ -43,7 +48,7 @@ function _renderPersonalSettings() {
     <div style="max-width:720px">
       <div class="st-notice">Gewählt ist ${esc(u?.name || 'niemand')} (${esc(ROLE_LABEL[u?.role] || '—')}).
         Firmen-, Druck-, PLM- und Dateneinstellungen verwaltet ein Admin.</div>
-      <div class="sep-label" style="margin-top:0">Darstellung</div>
+      <div class="sep-label" style="margin-top:0">${t('Darstellung')}</div>
       ${_appearanceHtml(state.settings)}
       <div class="sep-label" style="margin-top:28px">Person</div>
       <div style="font-size:13px;color:var(--t3);margin-bottom:10px">Arbeitet jemand anderes an diesem Gerät, hier oder oben über den Namen wechseln.</div>
@@ -294,7 +299,7 @@ async function renderSettings() {
 
       <!-- TAB: Daten -->
       <div class="st-tab-pane" data-tab="daten" hidden>
-        <div class="sep-label" style="margin-top:0">Darstellung</div>
+        <div class="sep-label" style="margin-top:0">${t('Darstellung')}</div>
         ${_appearanceHtml(s)}
 
         <div style="font-size:13px;color:var(--t3);margin:18px 0 8px">

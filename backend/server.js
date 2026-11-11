@@ -1367,6 +1367,12 @@ function applySchema() {
   migrateOnce('release-checks-default-v1', () => {
     db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('release_checks','file,weight')");
   });
+  // Sprache der Oberfläche: Ohne Einstellung richtet sie sich nach dem Browser.
+  // Wer schon mit PLM arbeitet, behält Deutsch — auch mit englischem Browser.
+  migrateOnce('ui-lang-existing-v1', () => {
+    if (['projects', 'items', 'customers', 'orders'].some(t => get(`SELECT 1 AS y FROM ${t} LIMIT 1`)))
+      db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('ui_lang','de')");
+  });
 
   saveDb();
   console.log('Datenbank bereit: ' + DB_PATH);
@@ -2375,7 +2381,7 @@ const NO_CHANGE = [/^(POST|DELETE) \/api\/session$/, /^POST \/api\/shutdown$/, /
   /^POST \/api\/print-(receipt|receipt-delivery|label)$/, /^POST \/api\/launch-cad$/, /^POST \/api\/checkout\/open$/,
   /^POST \/api\/datasets\/\d+\/open-in-slicer$/];
 // Einstellungen, die jede Person für sich ändern darf
-const PERSONAL_SETTINGS = ['font_scale', 'theme', 'sort_projects', 'sort_items', 'sort_parts', 'project_view',
+const PERSONAL_SETTINGS = ['font_scale', 'theme', 'ui_lang', 'sort_projects', 'sort_items', 'sort_parts', 'project_view',
   'customer_view', 'supplier_view', 'purchasing_tab'];
 const ADMIN_ONLY = [
   /^PUT \/api\/settings$/,

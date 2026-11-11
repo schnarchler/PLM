@@ -41,6 +41,8 @@ function installGlobals() {
   global._classFields = {};   // Eigenschaften je Klassifizierung, pro Test gesetzt
   global.classFieldsOf = name => global._classFields[name] || [];
   global.TextEncoder = require('node:util').TextEncoder;
+  // Übersetzung: ohne Browser immer Deutsch, t() gibt den Schlüssel zurück
+  Object.assign(global, (0, eval)(read('js/00-i18n.js') + '; ({ t, LANG, LOCALE, LANGS })'));
 }
 installGlobals();
 global.API = '';

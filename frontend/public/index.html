@@ -30,7 +30,7 @@
     <button id="tb-user" class="tb-user" onclick="onUserChip()" style="display:none"></button>
     <button id="tb-cad-btn" class="btn btn-ghost btn-sm" onclick="launchCad()" title="CAD-Programm starten" style="font-size:11px">🖥 CAD</button>
     <button id="tb-checkout-btn" class="btn btn-ghost btn-sm" onclick="showCheckoutList()" title="Aktive Checkouts anzeigen" style="font-size:11px">⬆ Checkouts</button>
-    <button class="btn btn-red btn-sm" onclick="shutdownServer()" title="Server beenden">&#9632; Beenden</button>
+    <button class="btn btn-red btn-sm" onclick="shutdownServer()" title="Server beenden">■ Beenden</button>
   </div>
 </div>
 
@@ -696,7 +696,7 @@
       </div>
       <div class="form-row">
         <div class="fg"><label class="fl">Klassifizierung</label>
-          <select class="fs" id="eim-classification" onchange="_renderEditAttrs()">
+          <select class="fs" id="eim-classification" onchange="_renderEditAttrs()" data-no-i18n>
             <option value="">— keine —</option>
             <option value="Eigenteil">Eigenteil</option>
             <option value="Kaufteil">Kaufteil</option>
@@ -862,6 +862,8 @@
 
 <!-- Aufgeteilte app.js: klassische Scripts mit gemeinsamem globalem Scope.
      Die Reihenfolge entspricht der ursprünglichen app.js und muss erhalten bleiben. -->
+<script src="lang/en.js"></script>
+<script src="js/00-i18n.js"></script>
 <script src="js/01-core.js"></script>
 <script src="js/02-plm-browse.js"></script>
 <script src="js/03-dashboard.js"></script>
