@@ -371,7 +371,7 @@ async function renderSettings() {
 
         <div class="sep-label" style="margin-top:24px">${_t('Datensicherung')}</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
-          ${_t('PLM sichert die Datenbank bei jedem Start einmal pro Tag und behält die letzten 14 Tage. Gelöschte Dateien bleiben 30 Tage im Papierkorb, damit eine wiederhergestellte Sicherung sie wiederfindet. Vor jedem Wiederherstellen wird der jetzige Stand automatisch gesichert.')}
+          ${_t('PLM sichert die Datenbank einmal pro Tag und behält die Tagessicherungen der letzten 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate. Gelöschte Dateien bleiben 30 Tage im Papierkorb, damit eine wiederhergestellte Sicherung sie wiederfindet. Vor jedem Wiederherstellen wird der jetzige Stand automatisch gesichert.')}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-ghost" onclick="createBackupNow()">${_t('💾 Jetzt sichern')}</button>
@@ -382,6 +382,7 @@ async function renderSettings() {
           <span id="st-backup-msg" style="font-size:13px;color:var(--t3)"></span>
         </div>
         <div id="st-backup-list" style="margin-top:10px;font-size:13px;color:var(--t3)">${_t('Lädt Sicherungen…')}</div>
+        <div id="st-backup-dir" style="font-size:12px;color:var(--t4);margin-top:6px;line-height:1.5"></div>
 
         <div class="sep-label" style="margin-top:24px">${_t('Export')}</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px">${_t('Lädt alle PLM-Daten als ZIP-Archiv herunter. Der Gesamtexport lässt sich oben über „Aus Datei wiederherstellen" komplett zurückspielen, inklusive Dateien.')}</div>
@@ -549,7 +550,7 @@ function _loadCheckoutDir() {
 // Liste aus backups/ im Datenverzeichnis. Wiederherstellen tauscht die
 // Datenbank im laufenden Betrieb; danach lädt die Oberfläche neu, damit nichts
 // Veraltetes stehen bleibt.
-const BACKUP_KIND_LABEL = { auto: _t('täglich'), manuell: _t('von Hand'), 'vor-wiederherstellung': _t('vor Wiederherstellung'),
+const BACKUP_KIND_LABEL = { auto: _t('täglich'), monatlich: _t('monatlich'), manuell: _t('von Hand'), 'vor-wiederherstellung': _t('vor Wiederherstellung'),
   'nicht-gespeichert': _t('nicht gespeichert'), sonstige: _t('Datei') };
 const BACKUP_STAT_LABEL = [['projects', _t('Projekte')], ['items', 'Items'], ['revisions', _t('Revisionen')], ['datasets', _t('Dateien')],
   ['orders', _t('Aufträge')], ['deliveries', _t('Produktionsaufträge')], ['customers', _t('Kunden')]];
@@ -560,6 +561,8 @@ async function loadBackupList() {
   if (!el) return;
   try { _backupData = await api('/api/backups'); }
   catch { el.innerHTML = '<span style="color:var(--red)">' + _t('Sicherungen konnten nicht geladen werden.') + '</span>'; return; }
+  const dirEl = document.getElementById('st-backup-dir');
+  if (dirEl && _backupData.dir) dirEl.innerHTML = _t('Ordner: {dir}', { dir: `<code style="font-family:var(--mono);color:var(--t2);user-select:all">${esc(_backupData.dir)}</code>` });
   const list = _backupData.backups || [];
   if (!list.length) { el.innerHTML = _t('Noch keine Sicherungen vorhanden.'); return; }
   el.innerHTML = `<div style="display:flex;flex-direction:column;gap:5px">${list.map((b, i) => {
@@ -572,6 +575,7 @@ async function loadBackupList() {
         <div style="font-family:var(--mono);font-size:12.5px;color:var(--t1)">${esc(b.name)}</div>
         <div style="font-size:12px;color:var(--t3);margin-top:1px">${fmtDate(b.modified_at)} · ${_fmtBytes(b.size)}${facts ? ' · ' + facts : ''}${ok ? '' : ' · <span style="color:var(--red)">' + _t('beschädigt') + '</span>'}</div>
       </div>
+      <a class="btn btn-ghost btn-sm" href="/api/backups/${encodeURIComponent(b.name)}/download" download="${esc(b.name)}" title="${_t('Sicherung als Datei herunterladen')}">${_t('⬇ Herunterladen')}</a>
       ${ok ? `<button class="btn btn-ghost btn-sm" onclick="confirmRestoreBackup(${i})">${_t('Wiederherstellen')}</button>` : ''}
       <button class="btn btn-ghost btn-icon btn-sm" title="${_t('Sicherung löschen')}" onclick="deleteBackup(${i})">✕</button>
     </div>`;

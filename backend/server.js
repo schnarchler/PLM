@@ -465,24 +465,49 @@ function purgeTrash() {
 }
 
 // -- INIT DB ----------------------------------------------------
-// Automatisches Backup beim Start: eine Kopie pro Tag, die letzten 14 behalten.
+// Automatisches Backup: eine Kopie pro Tag, beim Start und stündlich geprüft,
+// solange der Server läuft. Aufbewahrung: jede Tagessicherung der letzten
+// 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate.
 // Von Hand erstellte Sicherungen und die Sicherung vor einer Wiederherstellung
 // haben einen Zusatz im Namen und fallen nicht unter diese Rotation.
-const BACKUP_KEEP = 14;
+const BACKUP_KEEP_DAYS = 7;
+const BACKUP_KEEP_MONTHS = 6;
+const AUTO_BACKUP_RE = /^plm-(\d{4}-\d{2}-\d{2})\.db$/;
+// Welche Tagessicherungen wegkommen (Namen), gemessen an `today` (JJJJ-MM-TT)
+function expiredAutoBackups(names, today) {
+  const shift = (fn) => { const d = new Date(today + 'T00:00:00Z'); fn(d); return d.toISOString().slice(0, 10); };
+  const dailyFrom = shift(d => d.setUTCDate(d.getUTCDate() - (BACKUP_KEEP_DAYS - 1)));
+  const monthlyFrom = shift(d => d.setUTCMonth(d.getUTCMonth() - BACKUP_KEEP_MONTHS));
+  const dates = names.map(n => n.match(AUTO_BACKUP_RE)?.[1]).filter(Boolean).sort();
+  const firstOfMonth = new Set();
+  const seen = new Set();
+  for (const d of dates) if (!seen.has(d.slice(0, 7))) { seen.add(d.slice(0, 7)); firstOfMonth.add(d); }
+  return dates.filter(d => d < dailyFrom && !(firstOfMonth.has(d) && d >= monthlyFrom)).map(d => `plm-${d}.db`);
+}
 function autoBackupDb() {
-  if (!fs.existsSync(DB_PATH)) return;
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const today = new Date().toISOString().slice(0, 10);
-  const dest = path.join(BACKUP_DIR, `plm-${today}.db`);
-  if (!fs.existsSync(dest)) {
-    fs.copyFileSync(DB_PATH, dest);
-    console.log('  DB-Backup erstellt: ' + dest);
+  if (fs.existsSync(DB_PATH)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const dest = path.join(BACKUP_DIR, `plm-${today}.db`);
+    if (!fs.existsSync(dest)) {
+      fs.copyFileSync(DB_PATH, dest);
+      console.log('  DB-Backup erstellt: ' + dest);
+    }
   }
-  const old = fs.readdirSync(BACKUP_DIR)
-    .filter(f => /^plm-\d{4}-\d{2}-\d{2}\.db$/.test(f))
-    .sort()
-    .slice(0, -BACKUP_KEEP);
-  old.forEach(f => { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} });
+  let names;
+  try { names = fs.readdirSync(BACKUP_DIR); } catch { return; }
+  for (const f of expiredAutoBackups(names, today)) {
+    try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {}
+  }
+}
+// Läuft der Server über Mitternacht, kommt die Tagessicherung trotzdem —
+// nur wenn die Daten diesem PLM gehören und nicht gerade umziehen
+function startAutoBackupTimer() {
+  setInterval(() => {
+    if (lockState.mode !== 'own' || dataMove.running) return;
+    try { flushDb(); autoBackupDb(); }
+    catch (err) { console.error('DB-Backup fehlgeschlagen:', err.message); }
+  }, 60 * 60 * 1000).unref();
 }
 
 let SQL;
@@ -2524,7 +2549,7 @@ const ADMIN_ONLY = [
   /^DELETE \/api\/(projects|items|customers|suppliers)\/\d+$/,
 ];
 // Lesen nur für Admins: ganze Datenbank, Sicherungen, Dateiablage auf der Platte
-const ADMIN_READ = [/^GET \/api\/(export|export-named|backups|file-index|feedback)$/];
+const ADMIN_READ = [/^GET \/api\/(export|export-named|backups|file-index|feedback)$/, /^GET \/api\/backups\/[^/]+\/download$/];
 function requiredRole(req) {
   const key = req.method + ' ' + req.path;
   if (ADMIN_READ.some(r => r.test(key))) return 'admin';
@@ -7580,7 +7605,11 @@ app.get('/api/export', (req, res) => {
 // Gesamtexport (.zip, dann kommen fehlende Dateien gleich mit).
 const BACKUP_NAME_RE = /^plm-[\w.-]+\.db$/;
 function backupKind(name) {
-  if (/^plm-\d{4}-\d{2}-\d{2}\.db$/.test(name)) return 'auto';
+  const auto = name.match(AUTO_BACKUP_RE);
+  if (auto) {
+    const d = new Date(); d.setUTCDate(d.getUTCDate() - (BACKUP_KEEP_DAYS - 1));
+    return auto[1] < d.toISOString().slice(0, 10) ? 'monatlich' : 'auto';
+  }
   if (name.includes('-vor-wiederherstellung')) return 'vor-wiederherstellung';
   if (name.includes('-manuell')) return 'manuell';
   if (name.includes('-nicht-gespeichert')) return 'nicht-gespeichert';
@@ -7690,7 +7719,7 @@ app.get('/api/backups', (req, res) => {
     }
     return { name, kind: backupKind(name), size: st.size, modified_at: st.mtime.toISOString(), stats };
   }).sort((a, b) => b.modified_at.localeCompare(a.modified_at));
-  res.json({ backups, current: currentStats(), dir: BACKUP_DIR, keep_auto: BACKUP_KEEP, trash_days: TRASH_KEEP_DAYS });
+  res.json({ backups, current: currentStats(), dir: BACKUP_DIR, keep_days: BACKUP_KEEP_DAYS, keep_months: BACKUP_KEEP_MONTHS, trash_days: TRASH_KEEP_DAYS });
 });
 
 app.post('/api/backups', (req, res) => {
@@ -7707,6 +7736,15 @@ app.delete('/api/backups/:name', (req, res) => {
   try { fs.unlinkSync(path.join(BACKUP_DIR, name)); }
   catch { return res.status(404).json({ error: 'Sicherung nicht gefunden' }); }
   res.json({ success: true });
+});
+
+// Sicherung als Datei herunterladen, ohne den Ordner suchen zu müssen
+app.get('/api/backups/:name/download', (req, res) => {
+  const name = path.basename(req.params.name);
+  if (!BACKUP_NAME_RE.test(name)) return res.status(400).json({ error: 'Ungültiger Name' });
+  const file = path.join(BACKUP_DIR, name);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Sicherung nicht gefunden' });
+  res.download(file, name);
 });
 
 app.post('/api/backups/:name/restore', (req, res) => {
@@ -8576,6 +8614,7 @@ async function choosePort() {
 // startet der Server trotzdem: Im Browser lässt sich entscheiden.
 choosePort().then(p => { PORT = p; }).then(() => openData()).then(() => {
   startLockBeat();
+  startAutoBackupTimer();
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log('  PLM & ERP ' + APP_VERSION.version + (APP_VERSION.commit ? ' (' + APP_VERSION.commit

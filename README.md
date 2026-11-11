@@ -815,10 +815,13 @@ database and would not follow otherwise. Names and order are kept.
 ## Backups
 
 Everything is under **Settings → Data → Backup**, while running; no restart needed.
+The backups live in `backups/` inside the data directory (`backend/data/` unless
+`data_dir` in `plm.config` says otherwise); the settings page shows the full path below the list. "⬇ Download" next to a backup
+saves the file through the browser, so you don't have to find the folder.
 
 | Kind | Name in `data/backups/` | Kept |
 |---|---|---|
-| daily, at server start | `plm-YYYY-MM-DD.db` | the last 14 |
+| daily, at server start and checked hourly while running | `plm-YYYY-MM-DD.db` | every day for the last 7 days, then the first of each month for 6 months |
 | "💾 Back up now" | `plm-YYYY-MM-DD_HHMMSS-manuell.db` | until you delete it |
 | before every restore | `plm-YYYY-MM-DD_HHMMSS-vor-wiederherstellung.db` | until you delete it |
 | another PLM took over, or `plm.db` was changed from outside, before everything was saved | `plm-YYYY-MM-DD_HHMMSS-nicht-gespeichert.db` | until you delete it |

@@ -772,11 +772,14 @@ Reihenfolge bleiben dabei erhalten.
 ## Datensicherung
 
 Alles unter **Einstellungen → Daten → Datensicherung**, im laufenden Betrieb — ein
-Neustart ist nicht nötig.
+Neustart ist nicht nötig. Die Sicherungen liegen in `backups/` im Datenverzeichnis
+(`backend/data/`, ausser `data_dir` in `plm.config` sagt etwas anderes); die
+Einstellungen zeigen den vollen Pfad unter der Liste. Mit „⬇ Herunterladen“ bei einer
+Sicherung holst du die Datei direkt über den Browser, ohne den Ordner zu suchen.
 
 | Art | Name in `data/backups/` | Aufbewahrung |
 |---|---|---|
-| täglich, beim Serverstart | `plm-JJJJ-MM-TT.db` | die letzten 14 |
+| täglich, beim Serverstart und stündlich geprüft, solange PLM läuft | `plm-JJJJ-MM-TT.db` | jeden Tag der letzten 7 Tage, danach die erste jedes Monats für 6 Monate |
 | „💾 Jetzt sichern“ | `plm-JJJJ-MM-TT_HHMMSS-manuell.db` | bis du sie löschst |
 | vor jedem Wiederherstellen | `plm-JJJJ-MM-TT_HHMMSS-vor-wiederherstellung.db` | bis du sie löschst |
 | anderes PLM hat übernommen oder `plm.db` von aussen geändert, bevor alles gespeichert war | `plm-JJJJ-MM-TT_HHMMSS-nicht-gespeichert.db` | bis du sie löschst |

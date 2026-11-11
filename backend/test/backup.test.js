@@ -47,6 +47,13 @@ after(() => {
   try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch {}
 });
 
+test('Liste nennt den Ordner und die Aufbewahrung', async () => {
+  const list = await api('/api/backups');
+  assert.strictEqual(list.dir, path.join(fs.realpathSync(dataDir), 'backups'));
+  assert.strictEqual(list.keep_days, 7);
+  assert.strictEqual(list.keep_months, 6);
+});
+
 const projectNames = async () => (await api('/api/projects')).map(p => p.name);
 
 test('Sicherung anlegen, wiederherstellen und gelöschte Datei zurückholen', async () => {
@@ -184,4 +191,16 @@ test('Sicherung löschen', async () => {
   assert.ok(!(await api('/api/backups')).backups.some(b => b.name === name));
   const r = await fetch(`${BASE}/api/backups/${encodeURIComponent('../plm.db')}`, { method: 'DELETE' });
   assert.notStrictEqual(r.status, 200, 'Pfade ausserhalb des Sicherungsordners sind tabu');
+});
+
+test('Sicherung herunterladen', async () => {
+  const { name } = await api('/api/backups', 'POST');
+  const r = await fetch(`${BASE}/api/backups/${encodeURIComponent(name)}/download`);
+  assert.strictEqual(r.status, 200);
+  assert.ok((r.headers.get('content-disposition') || '').includes(name), 'Dateiname bleibt');
+  const buf = Buffer.from(await r.arrayBuffer());
+  assert.ok(buf.equals(fs.readFileSync(path.join(dataDir, 'backups', name))), 'Inhalt wie im Ordner');
+  assert.strictEqual((await fetch(`${BASE}/api/backups/nicht-da.db/download`)).status, 400);
+  assert.strictEqual((await fetch(`${BASE}/api/backups/plm-fehlt.db/download`)).status, 404);
+  assert.notStrictEqual((await fetch(`${BASE}/api/backups/${encodeURIComponent('../plm.db')}/download`)).status, 200);
 });

@@ -151,6 +151,10 @@ test('Rollen: User ändert, Superuser gibt frei, Admin verwaltet', async () => {
     assert.strictEqual((await req(url, { cookie: cleo })).status, 403, url);
     assert.strictEqual((await req(url, { cookie: anna })).status, 200, url);
   }
+  const bak = (await ok('/api/backups', { method: 'POST', cookie: anna })).body.name;
+  const dl = `/api/backups/${encodeURIComponent(bak)}/download`;
+  assert.strictEqual((await req(dl, { cookie: cleo })).status, 403, 'Sicherung herunterladen nur Admins');
+  assert.strictEqual((await req(dl, { cookie: anna })).status, 200);
   assert.strictEqual((await req('/api/erp-log')).status, 403, 'ohne Auswahl auch nicht');
   assert.strictEqual((await ok(`/api/orders/${order.id}`, { cookie: anna })).body.changelog[0].user_name, 'Ben');
   assert.ok((await ok('/api/erp-log', { cookie: anna })).body.some(e => e.entity_id === order.id && e.action === 'Erstellt'));
