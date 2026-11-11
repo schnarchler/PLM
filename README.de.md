@@ -260,12 +260,12 @@ Beim Hinzufügen einer Position können folgende Kosten automatisch berechnet we
 - **Zuletzt geöffnet** – zuletzt geöffnete Items und Belege in der Seitenleiste
 
 ### Einstellungen / Admin
-- **Firma** – Name, Adresse, Bankverbindung, Logo
+- **Daten** (öffnet zuerst) – Sprache der Oberfläche, Schriftgrösse, **Design zurücksetzen**,
+  Datenpfad, Checkout-Ordner, CAD-Programm, **Sicherungen anlegen und wiederherstellen**, Export
+- **Firma** – Name, Adresse, Bankverbindung, Logo, Sprache der Belege
 - **Kalkulation** – Stundenansatz, Maschinenkosten, Standardwerte
 - **3D-Druck** – Slicer (PrusaSlicer / Bambu Studio), Drucker, Düsen, Materialprofile
 - **PLM** – Klassifizierungsliste (Name + Farbe, Drag&Drop, Umbenennen überträgt sich auf die Items)
-- **Daten** – Schriftgrösse, **Design zurücksetzen**, Checkout-Ordner, CAD-Programm,
-  **Sicherungen anlegen und wiederherstellen**, Export
 - **Benutzer** – wer mit PLM arbeitet (User, Superuser, Admin); Namen in Historie und Freigabe
 - **Admin** – Nummerierungsstruktur, Datensätze löschen
 

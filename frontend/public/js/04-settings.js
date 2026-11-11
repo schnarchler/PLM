@@ -92,12 +92,12 @@ async function renderSettings() {
     <div style="max-width:720px">
       ${storHtml}
       <div style="display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px">
-        <button class="st-tab-btn active" data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Firma')}</button>
+        <button class="st-tab-btn active" data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Daten')}</button>
+        <button class="st-tab-btn"        data-tab="firma"   onclick="_stTab('firma')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Firma')}</button>
         <button class="st-tab-btn"        data-tab="kalk"    onclick="_stTab('kalk')"    style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Kalkulation')}</button>
         <button class="st-tab-btn"        data-tab="bon"     onclick="_stTab('bon')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Kassabon')}</button>
         <button class="st-tab-btn"        data-tab="druck3d" onclick="_stTab('druck3d')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('3D-Druck')}</button>
         <button class="st-tab-btn"        data-tab="plm"     onclick="_stTab('plm')"     style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">PLM</button>
-        <button class="st-tab-btn"        data-tab="daten"   onclick="_stTab('daten')"   style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Daten')}</button>
         <button class="st-tab-btn"        data-tab="benutzer" onclick="_stTab('benutzer')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px">${_t('Benutzer')}</button>
         <button class="st-tab-btn"        data-tab="loeschen" onclick="_stTab('loeschen')" style="background:none;border:none;padding:8px 16px;cursor:pointer;font-size:13px;color:var(--red);border-bottom:2px solid transparent;margin-bottom:-1px">Admin</button>
       </div>
@@ -109,7 +109,7 @@ async function renderSettings() {
       </div>
 
       <!-- TAB: Firma -->
-      <div class="st-tab-pane" data-tab="firma">
+      <div class="st-tab-pane" data-tab="firma" hidden>
         <div class="sep-label" style="margin-top:0">${_t('Firma / Briefkopf')}</div>
         <div class="form-row cols2">
           ${fi('company_name',_t('Firmenname *'),s.company_name,_t('Muster GmbH'))}
@@ -298,7 +298,7 @@ async function renderSettings() {
       </div>
 
       <!-- TAB: Daten -->
-      <div class="st-tab-pane" data-tab="daten" hidden>
+      <div class="st-tab-pane" data-tab="daten">
         <div class="sep-label" style="margin-top:0">${_t('Darstellung')}</div>
         ${_appearanceHtml(s)}
 
@@ -520,6 +520,7 @@ async function renderSettings() {
     if (!d.configured) _showFirstRunModal(d.data_dir, d.config_file);
   });
   _loadCheckoutDir();
+  loadBackupList();   // „Daten“ ist der erste Reiter
 }
 
 // Checkout-Verzeichnis: steht in plm.config, gilt also nur für diesen PC.

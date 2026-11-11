@@ -286,12 +286,12 @@ When adding a line, the following costs can be calculated automatically:
 - **Recently opened**: recently opened items and documents in the sidebar
 
 ### Settings / Admin
-- **Company**: name, address, bank details, logo
+- **Data** (opens first): interface language, font size, **reset design**, data path, checkout
+  folder, CAD program, **create and restore backups**, export
+- **Company**: name, address, bank details, logo, document language
 - **Calculation**: hourly rate, machine costs, defaults
 - **3D printing**: slicer (PrusaSlicer / Bambu Studio), printers, nozzles, material profiles
 - **PLM**: classification list (name + colour, drag & drop; renaming carries over to the items)
-- **Data**: font size, **reset design**, checkout folder, CAD program,
-  **create and restore backups**, export
 - **Users**: who works with PLM (user, superuser, admin); names in history and release
 - **Admin**: numbering structure, deleting records
 

@@ -6067,20 +6067,26 @@ app.delete('/api/settings/logo', (req, res) => {
 // (/api/checkout-dir — es steht in plm.config, pro PC) und der Datenstand
 const SETTINGS_ELSEWHERE = [...LOGO_KEYS, 'checkout_dir', 'data_stand'];
 
-// Neue, noch leere Installation: Beim ersten Festlegen der Sprache bekommen die
-// Vorgaben (Fusszeilen, Zahlungsbedingungen, Klassifizierungen, Nummernpräfixe)
-// diese Sprache. Nur einmal und nur, solange sie noch den deutschen Vorgaben
-// entsprechen — bestehende Installationen und eigene Texte bleiben unberührt.
+// Neue, noch leere Installation: Die Vorgaben (Fusszeilen, Zahlungsbedingungen,
+// Klassifizierungen, Nummernpräfixe) folgen der Sprache, solange es keine Daten
+// gibt — auch beim Zurückwechseln. Ein Wert wird nur ersetzt, wenn er noch der
+// Vorgabe einer Sprache entspricht; eigene Texte bleiben. Mit Daten ändert eine
+// Sprachwahl nichts mehr an den Vorgaben.
 const FRESH_DEFAULTS = {
+  de: {
+    default_payment_terms: '30 Tage netto',
+    invoice_footer: 'Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen. Vielen Dank!',
+    quote_footer: 'Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.',
+    prefix_order: '', prefix_delivery: '', prefix_customer: '', prefix_po: '', prefix_supplier: '',   // leer = AUF, LS, KD, EK, LF
+    item_classifications: '',                                                                         // leer = Standardliste im Code
+  },
   en: {
-    settings: {
-      default_payment_terms: ['30 Tage netto', '30 days net'],
-      invoice_footer: ['Bitte begleichen Sie den Betrag gemäss Zahlungsbedingungen. Vielen Dank!', 'Please pay the amount in accordance with the payment terms. Thank you!'],
-      quote_footer: ['Dieses Angebot ist freibleibend. Preise exkl. MwSt., sofern nicht anders angegeben.', 'This quote is non-binding. Prices excl. VAT unless stated otherwise.'],
-    },
-    prefixes: { prefix_order: 'ORD', prefix_delivery: 'PRD', prefix_customer: 'CUS', prefix_po: 'PO', prefix_supplier: 'SUP' },
-    classifications: [['In-house part', '#9db4ff'], ['Purchased part', '#79dde3'], ['Standard part', '#f5c061'],
-      ['Semi-finished product', '#c4a2ff'], ['Raw material', '#9aa3b2']],
+    default_payment_terms: '30 days net',
+    invoice_footer: 'Please pay the amount in accordance with the payment terms. Thank you!',
+    quote_footer: 'This quote is non-binding. Prices excl. VAT unless stated otherwise.',
+    prefix_order: 'ORD', prefix_delivery: 'PRD', prefix_customer: 'CUS', prefix_po: 'PO', prefix_supplier: 'SUP',
+    item_classifications: JSON.stringify([['In-house part', '#9db4ff'], ['Purchased part', '#79dde3'], ['Standard part', '#f5c061'],
+      ['Semi-finished product', '#c4a2ff'], ['Raw material', '#9aa3b2']].map(([name, color]) => ({ name, color }))),
   },
 };
 function isFreshInstall() {
@@ -6088,13 +6094,14 @@ function isFreshInstall() {
     'raw_materials', 'standard_parts'].some(t => get(`SELECT 1 AS y FROM ${t} LIMIT 1`));
 }
 function applyFreshDefaults(lang) {
-  const d = FRESH_DEFAULTS[lang];
-  if (!d || getSetting('fresh_defaults_lang', '') || !isFreshInstall()) return;
-  const set = (k, v) => db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, v]);
-  for (const [k, [de, other]] of Object.entries(d.settings)) if (getSetting(k, de) === de) set(k, other);
-  for (const [k, v] of Object.entries(d.prefixes)) if (!getSetting(k, '')) set(k, v);
-  if (!getSetting('item_classifications', '')) set('item_classifications', JSON.stringify(d.classifications.map(([name, color]) => ({ name, color }))));
-  set('fresh_defaults_lang', lang);
+  const target = FRESH_DEFAULTS[lang];
+  if (!target || !isFreshInstall()) return;
+  for (const [k, v] of Object.entries(target)) {
+    const cur = getSetting(k, '');
+    if (!Object.values(FRESH_DEFAULTS).some(d => d[k] === cur)) continue;   // eigener Text
+    if (v) db.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [k, v]);
+    else db.run('DELETE FROM settings WHERE key=?', [k]);
+  }
 }
 
 app.put('/api/settings', (req, res) => {

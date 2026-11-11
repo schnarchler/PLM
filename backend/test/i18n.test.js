@@ -183,6 +183,14 @@ test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deuts
     assert.match(st.invoice_footer, /^Please pay/);
     assert.deepStrictEqual([st.prefix_order, st.prefix_delivery, st.prefix_customer, st.prefix_po, st.prefix_supplier], ['ORD', 'PRD', 'CUS', 'PO', 'SUP']);
     assert.deepStrictEqual(JSON.parse(st.item_classifications).map(c => c.name)[0], 'In-house part');
+    // Noch leer: zurück auf Deutsch stellt die deutschen Vorgaben wieder her, eigene Texte bleiben
+    const put = body => fetch(`http://127.0.0.1:${PORT}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) }).then(r => r.json());
+    await put({ quote_footer: 'Eigener Text' });
+    const de = await put({ ui_lang: 'de' });
+    assert.deepStrictEqual([de.default_payment_terms, de.prefix_order, de.item_classifications, de.quote_footer],
+      ['30 Tage netto', undefined, undefined, 'Eigener Text']);
+    assert.strictEqual((await put({ ui_lang: 'en' })).prefix_order, 'ORD', 'und wieder Englisch');
     const sup = await fetch(`http://127.0.0.1:${PORT}/api/suppliers`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Supplier Ltd' }) }).then(r => r.json());
     assert.match(sup.number, /^SUP-/);
@@ -195,7 +203,6 @@ test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deuts
     db.run("DELETE FROM applied_migrations WHERE key='doc-lang-existing-v1'");
     db.run("INSERT INTO customers (number, name) VALUES ('KD-0001', 'Muster AG')");
     db.run("UPDATE settings SET value='30 Tage netto' WHERE key='default_payment_terms'");
-    db.run("DELETE FROM settings WHERE key='fresh_defaults_lang'");
     fs.writeFileSync(path.join(dir, 'plm.db'), Buffer.from(db.export()));
     proc = await startServer(dir);
     assert.strictEqual((await settings()).ui_lang, 'de');

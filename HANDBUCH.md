@@ -1072,6 +1072,17 @@ Navigation → Einstellungen (Zahnrad-Symbol). Änderungen mit **💾 Speichern*
 > Arbeiten mehrere Personen mit PLM, sehen **User** und **Superuser** hier nur ihre persönlichen
 > Einstellungen: Darstellung, Person wechseln und eigene PIN. Alle übrigen Tabs verwaltet ein Admin.
 
+### Daten
+- **Darstellung** — Schriftgrösse (Klein bis Sehr gross) und Farbdesign (**Standard** oder **Helleres Design**); wird serverseitig gespeichert
+- **Design zurücksetzen** — setzt die Farben der Klassifizierungen auf die aktuelle Palette; Namen und Reihenfolge bleiben
+- **Datenpfad** — Datenbank und Dateispeicher. Ändert nur, wo PLM sucht — vorhandene Daten bleiben am alten Ort
+- **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
+- **CAD-Programm** — zeigt, ob das Programm für den 🖥 CAD-Button gefunden wird (**↻ Neu prüfen**). Der Pfad steht in `plm.config` (`cad_path=…`), nicht in der Oberfläche: Die Einstellungen sind ohne Anmeldung im ganzen Netz erreichbar
+- **Checkout-Verzeichnis** — Zielordner für Checkouts; gilt nur für diesen PC (steht in `plm.config`) und ist nur dort änderbar. War früher ein Ordner eingetragen, den es auf diesem PC nicht gibt, steht er darunter als Hinweis
+- **Datensicherung** — Sicherungen anlegen, wiederherstellen und löschen (siehe 21)
+- **Export** — ZIP-Export aller Daten
+- **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte, auch **Als CSV**
+
 ### Firma
 Name, Adresse, UID, Bankverbindung — erscheinen auf Rechnungen, Angeboten, Lieferscheinen und Bestellungs-PDFs.
 **Logo hochladen…** (PNG, JPG, WebP, SVG) setzt das Logo auf diese Belege; ohne Logo steht der Firmenname.
@@ -1106,17 +1117,6 @@ Dazu:
 - **Freigabe-Workflow** und **Vier-Augen-Prinzip** (siehe 8)
 - **Prüfung vor der Freigabe** (siehe 8)
 - **Prüfprotokoll** — Prüfpunkte der Vorlage mit Soll-Wert, Reihenfolge; **Vorschau** zeigt das Ergebnis, **Standard einsetzen** stellt die Vorgabe wieder her
-
-### Daten
-- **Darstellung** — Schriftgrösse (Klein bis Sehr gross) und Farbdesign (**Standard** oder **Helleres Design**); wird serverseitig gespeichert
-- **Design zurücksetzen** — setzt die Farben der Klassifizierungen auf die aktuelle Palette; Namen und Reihenfolge bleiben
-- **Datenpfad** — Datenbank und Dateispeicher. Ändert nur, wo PLM sucht — vorhandene Daten bleiben am alten Ort
-- **Daten verschieben** — zieht das komplette Datenverzeichnis (Datenbank, alle Dateien, Sicherungen, Papierkorb) an einen neuen Ort um: kopieren → prüfen → sofort umschalten (kein Neustart nötig) → alten Ordner löschen. Das Ziel muss ein leerer oder neuer Ordner sein; optional lassen sich die Daten am alten Ort behalten (kopieren statt verschieben). Während des Vorgangs sind Schreibzugriffe gesperrt; schlägt die Prüfung fehl, bleibt alles am alten Ort
-- **CAD-Programm** — zeigt, ob das Programm für den 🖥 CAD-Button gefunden wird (**↻ Neu prüfen**). Der Pfad steht in `plm.config` (`cad_path=…`), nicht in der Oberfläche: Die Einstellungen sind ohne Anmeldung im ganzen Netz erreichbar
-- **Checkout-Verzeichnis** — Zielordner für Checkouts; gilt nur für diesen PC (steht in `plm.config`) und ist nur dort änderbar. War früher ein Ordner eingetragen, den es auf diesem PC nicht gibt, steht er darunter als Hinweis
-- **Datensicherung** — Sicherungen anlegen, wiederherstellen und löschen (siehe 21)
-- **Export** — ZIP-Export aller Daten
-- **Datei-Index** — Zuordnung angezeigter Name ↔ Dateiname auf Festplatte, auch **Als CSV**
 
 ### Benutzer
 Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Passwort.
