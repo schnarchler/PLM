@@ -371,7 +371,7 @@ async function renderSettings() {
 
         <div class="sep-label" style="margin-top:24px">${_t('Datensicherung')}</div>
         <div style="font-size:13px;color:var(--t3);margin-bottom:10px;line-height:1.55">
-          ${_t('PLM sichert die Datenbank einmal pro Tag und behält die Tagessicherungen der letzten 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate. Gelöschte Dateien bleiben 30 Tage im Papierkorb, damit eine wiederhergestellte Sicherung sie wiederfindet. Vor jedem Wiederherstellen wird der jetzige Stand automatisch gesichert.')}
+          ${_t('PLM sichert die Datenbank einmal pro Tag und behält die Tagessicherungen der letzten 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate und die erste jedes Jahres, bis du sie löschst. Gelöschte Dateien bleiben 30 Tage im Papierkorb, damit eine wiederhergestellte Sicherung sie wiederfindet. Vor jedem Wiederherstellen wird der jetzige Stand automatisch gesichert.')}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-ghost" onclick="createBackupNow()">${_t('💾 Jetzt sichern')}</button>
@@ -550,7 +550,7 @@ function _loadCheckoutDir() {
 // Liste aus backups/ im Datenverzeichnis. Wiederherstellen tauscht die
 // Datenbank im laufenden Betrieb; danach lädt die Oberfläche neu, damit nichts
 // Veraltetes stehen bleibt.
-const BACKUP_KIND_LABEL = { auto: _t('täglich'), monatlich: _t('monatlich'), manuell: _t('von Hand'), 'vor-wiederherstellung': _t('vor Wiederherstellung'),
+const BACKUP_KIND_LABEL = { auto: _t('täglich'), monatlich: _t('monatlich'), jaehrlich: _t('jährlich'), manuell: _t('von Hand'), 'vor-wiederherstellung': _t('vor Wiederherstellung'),
   'nicht-gespeichert': _t('nicht gespeichert'), sonstige: _t('Datei') };
 const BACKUP_STAT_LABEL = [['projects', _t('Projekte')], ['items', 'Items'], ['revisions', _t('Revisionen')], ['datasets', _t('Dateien')],
   ['orders', _t('Aufträge')], ['deliveries', _t('Produktionsaufträge')], ['customers', _t('Kunden')]];

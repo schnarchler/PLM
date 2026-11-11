@@ -779,7 +779,7 @@ Sicherung holst du die Datei direkt über den Browser, ohne den Ordner zu suchen
 
 | Art | Name in `data/backups/` | Aufbewahrung |
 |---|---|---|
-| täglich, beim Serverstart und stündlich geprüft, solange PLM läuft | `plm-JJJJ-MM-TT.db` | jeden Tag der letzten 7 Tage, danach die erste jedes Monats für 6 Monate |
+| täglich, beim Serverstart und stündlich geprüft, solange PLM läuft | `plm-JJJJ-MM-TT.db` | jeden Tag der letzten 7 Tage, danach die erste jedes Monats für 6 Monate; die erste jedes Jahres, bis du sie löschst |
 | „💾 Jetzt sichern“ | `plm-JJJJ-MM-TT_HHMMSS-manuell.db` | bis du sie löschst |
 | vor jedem Wiederherstellen | `plm-JJJJ-MM-TT_HHMMSS-vor-wiederherstellung.db` | bis du sie löschst |
 | anderes PLM hat übernommen oder `plm.db` von aussen geändert, bevor alles gespeichert war | `plm-JJJJ-MM-TT_HHMMSS-nicht-gespeichert.db` | bis du sie löschst |

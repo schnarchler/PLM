@@ -1151,7 +1151,7 @@ Wer was gemacht hat — für die Nachvollziehbarkeit, nicht als Schutz. Ohne Pas
 
 **Einstellungen → Daten → Datensicherung**
 
-- PLM sichert die Datenbank einmal pro Tag (beim Start und, solange es läuft, stündlich geprüft). Es bleiben die Tagessicherungen der letzten 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate.
+- PLM sichert die Datenbank einmal pro Tag (beim Start und, solange es läuft, stündlich geprüft). Es bleiben die Tagessicherungen der letzten 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate. Die erste Sicherung jedes Jahres bleibt, bis du sie von Hand löschst.
 - Die Sicherungen liegen im Ordner `backups/` im Datenverzeichnis; der volle Pfad steht unter der Liste. **⬇ Herunterladen** bei einer Sicherung speichert die Datei direkt über den Browser.
 - **💾 Jetzt sichern** legt eine zusätzliche Sicherung an — z. B. vor grösseren Änderungen.
 - **Wiederherstellen** bei einer Sicherung: der Dialog zeigt, was sich ändert (Projekte, Items, Aufträge … jetzt gegen Sicherung). Vorher sichert PLM den jetzigen Stand als „vor Wiederherstellung“ — du kannst also zurück. Danach lädt die Oberfläche neu.

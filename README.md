@@ -821,7 +821,7 @@ saves the file through the browser, so you don't have to find the folder.
 
 | Kind | Name in `data/backups/` | Kept |
 |---|---|---|
-| daily, at server start and checked hourly while running | `plm-YYYY-MM-DD.db` | every day for the last 7 days, then the first of each month for 6 months |
+| daily, at server start and checked hourly while running | `plm-YYYY-MM-DD.db` | every day for the last 7 days, then the first of each month for 6 months; the first of each year until you delete it |
 | "💾 Back up now" | `plm-YYYY-MM-DD_HHMMSS-manuell.db` | until you delete it |
 | before every restore | `plm-YYYY-MM-DD_HHMMSS-vor-wiederherstellung.db` | until you delete it |
 | another PLM took over, or `plm.db` was changed from outside, before everything was saved | `plm-YYYY-MM-DD_HHMMSS-nicht-gespeichert.db` | until you delete it |

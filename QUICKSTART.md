@@ -90,7 +90,7 @@ revision takes them over from the previous one.
 |---|---|
 | `plm.db` | database |
 | `files/` | all uploaded files |
-| `backups/` | one backup per day (kept 7 days), then one per month (kept 6 months), plus manual ones |
+| `backups/` | one backup per day (kept 7 days), then one per month (kept 6 months) and one per year (kept until you delete it), plus manual ones |
 | `papierkorb/` | deleted files (trash), kept for 30 days |
 | `checkout/` | checked-out files (if no separate directory is set) |
 | `plm.lock` | which PLM currently holds the data — do not delete by hand while PLM is running |

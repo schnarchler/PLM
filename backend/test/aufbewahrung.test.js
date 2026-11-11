@@ -1,5 +1,5 @@
 // Aufbewahrung der täglichen Sicherungen: jede der letzten 7 Tage, danach die
-// erste jedes Monats für 6 Monate. Die Funktion wird aus server.js gelesen,
+// erste jedes Monats für 6 Monate und die erste jedes Jahres für immer. Die Funktion wird aus server.js gelesen,
 // damit kein Server starten muss.
 //
 // Ausführen:  npm test   (im backend/-Ordner)
@@ -13,7 +13,8 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 const from = src.indexOf('const BACKUP_KEEP_DAYS');
 const to = src.indexOf('function autoBackupDb');
 assert.ok(from > 0 && to > from, 'Aufbewahrung in server.js');
-const expired = new Function(src.slice(from, to) + '; return expiredAutoBackups;')();
+const fns = new Function(src.slice(from, to) + '; return { expired: expiredAutoBackups, roles: autoBackupRoles };')();
+const { expired, roles } = fns;
 
 // Jeden Tag eine Sicherung von `start` bis `end` (JJJJ-MM-TT)
 function everyDay(start, end) {
@@ -24,9 +25,10 @@ function everyDay(start, end) {
 }
 const kept = (names, today) => { const gone = new Set(expired(names, today)); return names.filter(n => !gone.has(n)); };
 
-test('Aufbewahrung: 7 Tage täglich, dann der Monatserste für 6 Monate', () => {
-  const names = everyDay('2025-12-20', '2026-11-11');
+test('Aufbewahrung: 7 Tage täglich, dann der Monatserste für 6 Monate, der Jahreserste immer', () => {
+  const names = everyDay('2024-03-10', '2026-11-11');
   assert.deepStrictEqual(kept(names, '2026-11-11'), [
+    'plm-2024-03-10.db', 'plm-2025-01-01.db', 'plm-2026-01-01.db',
     'plm-2026-06-01.db', 'plm-2026-07-01.db', 'plm-2026-08-01.db', 'plm-2026-09-01.db', 'plm-2026-10-01.db',
     'plm-2026-11-01.db',
     ...everyDay('2026-11-05', '2026-11-11'),
@@ -42,6 +44,15 @@ test('Aufbewahrung: Monatssicherung ist die erste vorhandene, auch wenn nicht am
 });
 
 test('Aufbewahrung: andere Sicherungen bleiben unberührt', () => {
-  const names = ['plm-2020-01-01_120000-manuell.db', 'plm-2020-01-02_120000-vor-wiederherstellung.db', 'notiz.txt', 'plm-2020-01-01.db'];
-  assert.deepStrictEqual(expired(names, '2026-11-11'), ['plm-2020-01-01.db']);
+  const names = ['plm-2020-01-01_120000-manuell.db', 'plm-2020-01-02_120000-vor-wiederherstellung.db', 'notiz.txt',
+    'plm-2020-01-01.db', 'plm-2020-01-02.db'];
+  assert.deepStrictEqual(expired(names, '2026-11-11'), ['plm-2020-01-02.db']);
+});
+
+test('Aufbewahrung: Rolle für die Anzeige', () => {
+  const names = ['plm-2025-06-03.db', 'plm-2025-07-01.db', 'plm-2026-01-01.db', 'plm-2026-10-01.db', 'plm-2026-11-10.db'];
+  assert.deepStrictEqual(Object.fromEntries(roles(names, '2026-11-11')), {
+    'plm-2025-06-03.db': 'jaehrlich', 'plm-2025-07-01.db': null, 'plm-2026-01-01.db': 'jaehrlich',
+    'plm-2026-10-01.db': 'monatlich', 'plm-2026-11-10.db': 'auto',
+  });
 });

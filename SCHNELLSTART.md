@@ -82,7 +82,7 @@ Beschreibung. Eine neue Revision übernimmt sie von der vorherigen.
 |---|---|
 | `plm.db` | Datenbank |
 | `files/` | alle hochgeladenen Dateien |
-| `backups/` | eine Sicherung pro Tag (7 Tage behalten), danach eine pro Monat (6 Monate), dazu manuelle |
+| `backups/` | eine Sicherung pro Tag (7 Tage behalten), danach eine pro Monat (6 Monate) und eine pro Jahr (bis du sie löschst), dazu manuelle |
 | `papierkorb/` | gelöschte Dateien, 30 Tage lang |
 | `checkout/` | ausgecheckte Dateien (wenn kein eigenes Verzeichnis eingestellt ist) |
 | `plm.lock` | welches PLM die Daten gerade hat — nicht von Hand löschen, solange PLM läuft |

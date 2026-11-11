@@ -467,22 +467,31 @@ function purgeTrash() {
 // -- INIT DB ----------------------------------------------------
 // Automatisches Backup: eine Kopie pro Tag, beim Start und stündlich geprüft,
 // solange der Server läuft. Aufbewahrung: jede Tagessicherung der letzten
-// 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate.
+// 7 Tage, danach die erste Sicherung jedes Monats für 6 Monate, und die erste
+// jedes Jahres, bis sie jemand von Hand löscht.
 // Von Hand erstellte Sicherungen und die Sicherung vor einer Wiederherstellung
 // haben einen Zusatz im Namen und fallen nicht unter diese Rotation.
 const BACKUP_KEEP_DAYS = 7;
 const BACKUP_KEEP_MONTHS = 6;
 const AUTO_BACKUP_RE = /^plm-(\d{4}-\d{2}-\d{2})\.db$/;
-// Welche Tagessicherungen wegkommen (Namen), gemessen an `today` (JJJJ-MM-TT)
-function expiredAutoBackups(names, today) {
+// Rolle jeder Tagessicherung, gemessen an `today` (JJJJ-MM-TT): 'auto'
+// (letzte 7 Tage), 'jaehrlich', 'monatlich' oder null (kommt weg)
+function autoBackupRoles(names, today = new Date().toISOString().slice(0, 10)) {
   const shift = (fn) => { const d = new Date(today + 'T00:00:00Z'); fn(d); return d.toISOString().slice(0, 10); };
   const dailyFrom = shift(d => d.setUTCDate(d.getUTCDate() - (BACKUP_KEEP_DAYS - 1)));
   const monthlyFrom = shift(d => d.setUTCMonth(d.getUTCMonth() - BACKUP_KEEP_MONTHS));
   const dates = names.map(n => n.match(AUTO_BACKUP_RE)?.[1]).filter(Boolean).sort();
-  const firstOfMonth = new Set();
-  const seen = new Set();
-  for (const d of dates) if (!seen.has(d.slice(0, 7))) { seen.add(d.slice(0, 7)); firstOfMonth.add(d); }
-  return dates.filter(d => d < dailyFrom && !(firstOfMonth.has(d) && d >= monthlyFrom)).map(d => `plm-${d}.db`);
+  // Erste vorhandene Sicherung je Monat (JJJJ-MM) bzw. Jahr (JJJJ)
+  const first = len => { const seen = new Set(); return new Set(dates.filter(d => !seen.has(d.slice(0, len)) && seen.add(d.slice(0, len)))); };
+  const firstOfMonth = first(7), firstOfYear = first(4);
+  const roles = new Map();
+  for (const d of dates) roles.set(`plm-${d}.db`, d >= dailyFrom ? 'auto' : firstOfYear.has(d) ? 'jaehrlich'
+    : firstOfMonth.has(d) && d >= monthlyFrom ? 'monatlich' : null);
+  return roles;
+}
+// Welche Tagessicherungen wegkommen (Namen)
+function expiredAutoBackups(names, today) {
+  return [...autoBackupRoles(names, today)].filter(([, role]) => !role).map(([name]) => name);
 }
 function autoBackupDb() {
   const today = new Date().toISOString().slice(0, 10);
@@ -7604,12 +7613,9 @@ app.get('/api/export', (req, res) => {
 // geht aus dieser Liste, aus einer hochgeladenen .db oder aus einem
 // Gesamtexport (.zip, dann kommen fehlende Dateien gleich mit).
 const BACKUP_NAME_RE = /^plm-[\w.-]+\.db$/;
-function backupKind(name) {
-  const auto = name.match(AUTO_BACKUP_RE);
-  if (auto) {
-    const d = new Date(); d.setUTCDate(d.getUTCDate() - (BACKUP_KEEP_DAYS - 1));
-    return auto[1] < d.toISOString().slice(0, 10) ? 'monatlich' : 'auto';
-  }
+// roles: autoBackupRoles() über alle Sicherungen im Ordner
+function backupKind(name, roles) {
+  if (AUTO_BACKUP_RE.test(name)) return roles?.get(name) || 'auto';
   if (name.includes('-vor-wiederherstellung')) return 'vor-wiederherstellung';
   if (name.includes('-manuell')) return 'manuell';
   if (name.includes('-nicht-gespeichert')) return 'nicht-gespeichert';
@@ -7708,6 +7714,7 @@ const _backupStatsCache = new Map();
 app.get('/api/backups', (req, res) => {
   let names = [];
   try { names = fs.readdirSync(BACKUP_DIR).filter(f => BACKUP_NAME_RE.test(f)); } catch {}
+  const roles = autoBackupRoles(names);
   const backups = names.map(name => {
     const st = fs.statSync(path.join(BACKUP_DIR, name));
     const key = `${name}:${st.size}:${st.mtimeMs}`;
@@ -7717,7 +7724,7 @@ app.get('/api/backups', (req, res) => {
       catch (e) { stats = { ok: false }; }
       _backupStatsCache.set(key, stats);
     }
-    return { name, kind: backupKind(name), size: st.size, modified_at: st.mtime.toISOString(), stats };
+    return { name, kind: backupKind(name, roles), size: st.size, modified_at: st.mtime.toISOString(), stats };
   }).sort((a, b) => b.modified_at.localeCompare(a.modified_at));
   res.json({ backups, current: currentStats(), dir: BACKUP_DIR, keep_days: BACKUP_KEEP_DAYS, keep_months: BACKUP_KEEP_MONTHS, trash_days: TRASH_KEEP_DAYS });
 });
