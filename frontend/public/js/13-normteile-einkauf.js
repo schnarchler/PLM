@@ -3,24 +3,24 @@
 // Ladereihenfolge siehe index.html.
 // ── NORMTEILE ─────────────────────────────────────────────────
 async function renderNormteile() {
-  setLeftHeader('Normteile', `
-    <button class="btn btn-ghost btn-sm" onclick="checkoutNormteile()" title="Alle Normteil-Dateien in Checkout-Ordner kopieren">⬇ Auschecken</button>
-    <button class="btn btn-ghost btn-sm" onclick="exportNormteile()" title="Alle Normteile als normteile.json exportieren">↓ Export</button>
-    <label class="btn btn-ghost btn-sm" title="normteile.json importieren" style="cursor:pointer">↑ Import<input type="file" accept=".json" style="display:none" onchange="importNormteileFile(this)"></label>
-    <button class="btn btn-primary btn-sm" onclick="openNormteilModal()">+ Normteil</button>`);
+  setLeftHeader(_t('Normteile'), `
+    <button class="btn btn-ghost btn-sm" onclick="checkoutNormteile()" title="${_t('Alle Normteil-Dateien in Checkout-Ordner kopieren')}">${_t('⬇ Auschecken')}</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportNormteile()" title="${_t('Alle Normteile als normteile.json exportieren')}">${_t('↓ Export')}</button>
+    <label class="btn btn-ghost btn-sm" title="${_t('normteile.json importieren')}" style="cursor:pointer">${_t('↑ Import')}<input type="file" accept=".json" style="display:none" onchange="importNormteileFile(this)"></label>
+    <button class="btn btn-primary btn-sm" onclick="openNormteilModal()">${_t('+ Normteil')}</button>`);
   closeDetail();
-  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
+  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">${_t('Lade…')}</div></div>`);
   const parts = await api('/api/standard-parts');
   const badge = document.getElementById('badge-normteile');
   if (badge) badge.textContent = parts.length || '—';
   if (!parts.length) {
-    setLeftBody(`<div class="empty"><div class="empty-icon">⚙</div><div class="empty-text">Noch keine Normteile erfasst</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openNormteilModal()">Erstes Normteil anlegen</button></div></div>`);
+    setLeftBody(`<div class="empty"><div class="empty-icon">⚙</div><div class="empty-text">${_t('Noch keine Normteile erfasst')}</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openNormteilModal()">${_t('Erstes Normteil anlegen')}</button></div></div>`);
     return;
   }
   // Group by standard + std_number
   const groups = {};
   for (const p of parts) {
-    const key = [p.standard, p.std_number].filter(Boolean).join(' ') || 'Sonstige';
+    const key = [p.standard, p.std_number].filter(Boolean).join(' ') || _t('Sonstige');
     if (!groups[key]) groups[key] = [];
     groups[key].push(p);
   }
@@ -50,20 +50,20 @@ async function openNormteilDetail(id) {
   document.getElementById('dp-title').innerHTML =
     `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc([p.standard,p.std_number].filter(Boolean).join(' '))}</span>${esc(p.designation)}`;
   document.getElementById('dp-tabs').innerHTML =
-    `<button class="tab active" onclick="switchTab(this,'nt-info')">Details</button>
-     <button class="tab" onclick="switchTab(this,'nt-files')">Dateien <span style="font-size:11px">${files.length||''}</span></button>`;
+    `<button class="tab active" onclick="switchTab(this,'nt-info')">${_t('Details')}</button>
+     <button class="tab" onclick="switchTab(this,'nt-files')">${_t('Dateien')} <span style="font-size:11px">${files.length||''}</span></button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="nt-info">
       <div style="display:flex;gap:6px;margin-bottom:14px">
-        <button class="btn btn-ghost btn-sm" onclick="openNormteilModal(${id})">✎ Bearbeiten</button>
-        <button class="btn btn-ghost btn-sm" onclick="cloneNormteil(${id})">⧉ Duplizieren</button>
+        <button class="btn btn-ghost btn-sm" onclick="openNormteilModal(${id})">${_t('✎ Bearbeiten')}</button>
+        <button class="btn btn-ghost btn-sm" onclick="cloneNormteil(${id})">${_t('⧉ Duplizieren')}</button>
         <button class="btn btn-red btn-sm" onclick="delNormteil(${id})">🗑</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-        ${p.size     ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Grösse</div><span style="font-family:var(--mono)">${esc(p.size)}</span></div>` : ''}
-        ${p.material ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Material</div>${esc(p.material)}</div>` : ''}
-        ${p.unit_price!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Stückpreis</div><span style="font-family:var(--mono)">${fmtChf(p.unit_price)}</span></div>` : ''}
-        ${p.weight_g!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">Gewicht</div><span style="font-family:var(--mono)">${fmtN(p.weight_g, 2)} g</span></div>` : ''}
+        ${p.size     ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">${_t('Grösse')}</div><span style="font-family:var(--mono)">${esc(p.size)}</span></div>` : ''}
+        ${p.material ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">${_t('Material')}</div>${esc(p.material)}</div>` : ''}
+        ${p.unit_price!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">${_t('Stückpreis')}</div><span style="font-family:var(--mono)">${fmtChf(p.unit_price)}</span></div>` : ''}
+        ${p.weight_g!=null ? `<div style="background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 10px;font-size:13px"><div style="color:var(--t4);font-size:11px">${_t('Gewicht')}</div><span style="font-family:var(--mono)">${fmtN(p.weight_g, 2)} g</span></div>` : ''}
       </div>
       ${p.name  ? `<div style="font-size:13px;color:var(--t3);margin-bottom:6px">${esc(p.name)}</div>` : ''}
       ${p.notes ? `<div style="font-size:13px;color:var(--t3)">${esc(p.notes)}</div>` : ''}
@@ -71,7 +71,7 @@ async function openNormteilDetail(id) {
     <div id="nt-files" style="display:none">
       <div style="margin-bottom:12px">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-          📎 Datei hochladen
+          ${_t('📎 Datei hochladen')}
           <input type="file" style="display:none" multiple onchange="uploadNtFiles(${id}, this)">
         </label>
       </div>
@@ -81,10 +81,10 @@ async function openNormteilDetail(id) {
             <span style="font-size:15px">${dsIcon(f.ds_type)}</span>
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.original_name)}</span>
             <span style="font-size:11px;color:var(--t4);font-family:var(--mono)">${fmtSize(f.file_size||0)}</span>
-            <a class="btn btn-ghost btn-sm btn-icon" href="/api/standard-part-files/${f.id}/download" title="Herunterladen">⬇</a>
+            <a class="btn btn-ghost btn-sm btn-icon" href="/api/standard-part-files/${f.id}/download" title="${_t('Herunterladen')}">⬇</a>
             <button class="btn btn-red btn-sm btn-icon" onclick="delNtFile(${f.id},${id})">✕</button>
           </div>`).join('')}
-      </div>` : `<div style="color:var(--t3);font-size:13px">Noch keine Dateien</div>`}
+      </div>` : `<div style="color:var(--t3);font-size:13px">${_t('Noch keine Dateien')}</div>`}
     </div>`;
   showDetail();
 }
@@ -98,23 +98,23 @@ async function uploadNtFiles(stdPartId, input) {
       await apiForm(`/api/standard-parts/${stdPartId}/files`, fd);
     }
   } catch { return; }   // apiForm meldet den Fehler
-  toast(`${files.length} Datei${files.length>1?'en':''} hochgeladen`, 'ok');
+  toast(_t(files.length === 1 ? '1 Datei hochgeladen' : '{n} Dateien hochgeladen', { n: files.length }), 'ok');
   openNormteilDetail(stdPartId);
 }
 
 async function delNtFile(fileId, stdPartId) {
   await api(`/api/standard-part-files/${fileId}`, 'DELETE');
-  toast('Datei gelöscht', 'ok');
+  toast(_t('Datei gelöscht'), 'ok');
   openNormteilDetail(stdPartId);
 }
 
 function openNormteilModal(id) {
   _showDynModal(`<div class="modal" style="max-width:560px">
-    <div class="modal-head"><div class="modal-title">${id ? 'Normteil bearbeiten' : 'Neues Normteil'}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
-    <div class="modal-body" id="nt-modal-body"><div style="color:var(--t3);font-size:13px">Lädt…</div></div>
+    <div class="modal-head"><div class="modal-title">${id ? _t('Normteil bearbeiten') : _t('Neues Normteil')}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" id="nt-modal-body"><div style="color:var(--t3);font-size:13px">${_t('Lädt…')}</div></div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveNormteil(${id||''})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveNormteil(${id||''})">${_t('Speichern')}</button>
     </div>
   </div>`);
   _loadNormteilForm(id);
@@ -127,41 +127,41 @@ async function _loadNormteilForm(id) {
     `<option ${(p.standard||'')=== s?'selected':''}>${s}</option>`).join('');
   document.getElementById('nt-modal-body').innerHTML = `
     <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
-      Felder ausfüllen → Bezeichnung wird automatisch generiert (oder manuell überschreiben).
+      ${_t('Felder ausfüllen → Bezeichnung wird automatisch generiert (oder manuell überschreiben).')}
     </div>
     <div class="form-row cols3">
-      <div class="fg"><label class="fl">Norm</label>
+      <div class="fg"><label class="fl">${_t('Norm')}</label>
         <select class="fs" id="nt-std" onchange="_ntAutoDesig()">${stdOpts}</select>
       </div>
-      <div class="fg"><label class="fl">Norm-Nr.</label>
+      <div class="fg"><label class="fl">${_t('Norm-Nr.')}</label>
         <input class="fi" id="nt-num" value="${esc(p.std_number||'')}" placeholder="z.B. 912" oninput="_ntAutoDesig()">
       </div>
-      <div class="fg"><label class="fl">Grösse / Mass</label>
+      <div class="fg"><label class="fl">${_t('Grösse / Mass')}</label>
         <input class="fi" id="nt-size" value="${esc(p.size||'')}" placeholder="z.B. M4x12" oninput="_ntAutoDesig()">
       </div>
     </div>
     <div class="form-row cols2">
-      <div class="fg"><label class="fl">Kurzbezeichnung</label>
-        <input class="fi" id="nt-name" value="${esc(p.name||'')}" placeholder="z.B. Zylinderschraube" oninput="_ntAutoDesig()">
+      <div class="fg"><label class="fl">${_t('Kurzbezeichnung')}</label>
+        <input class="fi" id="nt-name" value="${esc(p.name||'')}" placeholder="${_t('z.B. Zylinderschraube')}" oninput="_ntAutoDesig()">
       </div>
-      <div class="fg"><label class="fl">Material / Güte</label>
+      <div class="fg"><label class="fl">${_t('Material / Güte')}</label>
         <input class="fi" id="nt-mat" value="${esc(p.material||'')}" placeholder="z.B. A2-70, 8.8" oninput="_ntAutoDesig()">
       </div>
     </div>
     <div class="form-row">
-      <div class="fg"><label class="fl">Bezeichnung (auto-generiert, editierbar)</label>
-        <input class="fi" id="nt-desig" value="${esc(p.designation||'')}" placeholder="z.B. DIN 912 Zylinderschraube M4x12 A2-70">
+      <div class="fg"><label class="fl">${_t('Bezeichnung (auto-generiert, editierbar)')}</label>
+        <input class="fi" id="nt-desig" value="${esc(p.designation||'')}" placeholder="${_t('z.B. DIN 912 Zylinderschraube M4x12 A2-70')}">
       </div>
     </div>
     <div class="form-row cols3">
-      <div class="fg"><label class="fl">Stückpreis (CHF)</label>
+      <div class="fg"><label class="fl">${_t('Stückpreis (CHF)')}</label>
         <input class="fi" type="number" id="nt-price" value="${p.unit_price??''}" placeholder="0.00" min="0" step="0.01">
       </div>
-      <div class="fg"><label class="fl">Gewicht pro Stück (g)</label>
+      <div class="fg"><label class="fl">${_t('Gewicht pro Stück (g)')}</label>
         <input class="fi" type="number" id="nt-weight" value="${p.weight_g??''}" placeholder="—" min="0" step="0.01"
-          title="Zählt in das Gewicht jeder Baugruppe, die dieses Normteil verwendet">
+          title="${_t('Zählt in das Gewicht jeder Baugruppe, die dieses Normteil verwendet')}">
       </div>
-      <div class="fg"><label class="fl">Notizen</label>
+      <div class="fg"><label class="fl">${_t('Notizen')}</label>
         <input class="fi" id="nt-notes" value="${esc(p.notes||'')}">
       </div>
     </div>`;
@@ -181,7 +181,7 @@ function _ntAutoDesig() {
 
 async function saveNormteil(id) {
   const designation = document.getElementById('nt-desig')?.value.trim();
-  if (!designation) { toast('Bezeichnung erforderlich', 'err'); return; }
+  if (!designation) { toast(_t('Bezeichnung erforderlich'), 'err'); return; }
   const body = {
     designation,
     standard:   document.getElementById('nt-std')?.value.trim(),
@@ -196,7 +196,7 @@ async function saveNormteil(id) {
   if (id) await api(`/api/standard-parts/${id}`, 'PUT', body);
   else await api('/api/standard-parts', 'POST', body);
   _hideDynModal();
-  toast('Gespeichert', 'ok');
+  toast(_t('Gespeichert'), 'ok');
   await renderNormteile();
 }
 
@@ -213,10 +213,10 @@ async function importNormteileFile(input) {
     const parts = data.parts || (Array.isArray(data) ? data : null);
     if (!parts) { toast('Ungültiges Format — erwartet { parts: [...] }', 'err'); return; }
     const r = await api('/api/standard-parts/import', 'POST', { parts });
-    toast(`${r.added} importiert, ${r.skipped} bereits vorhanden`, 'ok');
+    toast(_t('{n} importiert, {skipped} bereits vorhanden', { n: r.added, skipped: r.skipped }), 'ok');
     await renderNormteile();
   } catch(e) {
-    toast('Import fehlgeschlagen: ' + (e.message||''), 'err');
+    toast(_t('Import fehlgeschlagen:') + ' ' + (e.message||''), 'err');
   }
   input.value = '';
 }
@@ -224,7 +224,7 @@ async function importNormteileFile(input) {
 async function checkoutNormteile() {
   const r = await api('/api/checkout/normteile', 'POST', {});
   if (!r.copied.length && !r.message) {
-    toast('Keine Dateien bei Normteilen hinterlegt', 'err'); return;
+    toast(_t('Keine Dateien bei Normteilen hinterlegt'), 'err'); return;
   }
   // Group by designation for display
   const byDesig = {};
@@ -234,14 +234,13 @@ async function checkoutNormteile() {
   }
   _showDynModal(`<div class="modal" style="max-width:560px">
     <div class="modal-head">
-      <div class="modal-title">✓ Normteile ausgecheckt</div>
+      <div class="modal-title">${_t('✓ Normteile ausgecheckt')}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button>
     </div>
     <div class="modal-body">
       <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
-        ${r.copied.length} Datei${r.copied.length!==1?'en':''} nach
-        <span style="font-family:var(--mono);color:var(--t2)">${esc(r.dir)}/</span> kopiert.
-        Der Ordner heisst immer <span style="font-family:var(--mono);color:var(--blue)">normteile</span> — Solid Edge findet die Dateien über den konfigurierten Suchpfad.
+        ${_t(r.copied.length === 1 ? '1 Datei nach {dir} kopiert.' : '{n} Dateien nach {dir} kopiert.', { n: r.copied.length, dir: `<span style="font-family:var(--mono);color:var(--t2)">${esc(r.dir)}/</span>` })}
+        ${_t('Der Ordner heisst immer {name} — Solid Edge findet die Dateien über den konfigurierten Suchpfad.', { name: '<span style="font-family:var(--mono);color:var(--blue)">normteile</span>' })}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto">
         ${Object.entries(byDesig).map(([desig, names]) => `
@@ -250,11 +249,11 @@ async function checkoutNormteile() {
             <div style="font-family:var(--mono);font-size:11px;color:var(--t4)">${names.map(n=>esc(n)).join(' · ')}</div>
           </div>`).join('')}
         ${r.errors.length ? `<div style="font-size:13px;color:var(--red);padding:7px 10px;background:var(--red-soft);border:1px solid var(--red-line);border-radius:var(--r-sm)">
-          ⚠ Fehler bei: ${r.errors.map(e=>esc(e)).join(', ')}</div>` : ''}
+          ⚠ ${_t('Fehler bei:')} ${r.errors.map(e=>esc(e)).join(', ')}</div>` : ''}
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-primary" onclick="_hideDynModal()">OK</button>
+      <button class="btn btn-primary" onclick="_hideDynModal()">${_t('OK')}</button>
     </div>
   </div>`);
 }
@@ -267,14 +266,14 @@ async function cloneNormteil(id) {
 }
 
 async function delNormteil(id) {
-  if (!confirm('Normteil löschen? Es wird auch aus allen BOMs entfernt.')) return;
+  if (!confirm(_t('Normteil löschen? Es wird auch aus allen BOMs entfernt.'))) return;
   await api(`/api/standard-parts/${id}`, 'DELETE');
   closeDetail();
   renderNormteile();
 }
 
 async function delRawMat(id) {
-  if (!confirm('Material und alle Buchungen löschen?')) return;
+  if (!confirm(_t('Material und alle Buchungen löschen?'))) return;
   await api(`/api/raw-materials/${id}`, 'DELETE');
   _refreshRawMaterials();
   closeDetail();
@@ -380,7 +379,7 @@ async function generatePoDoc(id) {
 }
 
 // ── EINKAUF / BESTELLWESEN ────────────────────────────────────
-const PO_ST = { DRAFT:'Entwurf', ORDERED:'Bestellt', RECEIVED:'Erhalten', CANCELLED:'Storniert' };
+const PO_ST = { DRAFT:_t('Entwurf'), ORDERED:_t('Bestellt'), RECEIVED:_t('Erhalten'), CANCELLED:_t('Storniert') };
 const PO_ST_CLS = { DRAFT:'st-DFT', ORDERED:'st-REV', RECEIVED:'st-REL', CANCELLED:'st-OBS' };
 
 // Einkauf hat zwei Reiter: Bestellungen und Lieferanten. Der letzte bleibt gewählt.
@@ -392,13 +391,13 @@ function _setPurchasingTab(tab, render = true) {
 function _purchasingTitle() {
   const seg = (key, label) =>
     `<button class="${_purchasingTab() === key ? 'active' : ''}" onclick="_setPurchasingTab('${key}')">${label}</button>`;
-  return `<strong>Einkauf</strong><div class="partner-seg" style="margin-left:6px">${seg('orders', 'Bestellungen')}${seg('suppliers', 'Lieferanten')}</div>`;
+  return `<strong>${_t('Einkauf')}</strong><div class="partner-seg" style="margin-left:6px">${seg('orders', _t('Bestellungen'))}${seg('suppliers', _t('Lieferanten'))}</div>`;
 }
 function _purchasingActions() {
   return _purchasingTab() === 'suppliers'
     ? `<div style="display:flex;gap:8px;align-items:center">${_partnerViewToggle('supplier')}
-        <button class="btn btn-primary btn-sm" onclick="openSupplierModal()">+ Lieferant</button></div>`
-    : `<button class="btn btn-primary btn-sm" onclick="openPoModal()">+ Bestellung</button>`;
+        <button class="btn btn-primary btn-sm" onclick="openSupplierModal()">${_t('+ Lieferant')}</button></div>`
+    : `<button class="btn btn-primary btn-sm" onclick="openPoModal()">${_t('+ Bestellung')}</button>`;
 }
 
 async function renderPurchasing() {
@@ -415,7 +414,7 @@ async function renderPurchasing() {
         <span class="status ${PO_ST_CLS[po.status]||'st-DFT'}" style="font-size:11px;flex-shrink:0">${PO_ST[po.status]||po.status}</span>
         <span style="font-family:var(--mono);font-size:13px;color:var(--blue);flex-shrink:0">${esc(po.number)}</span>
         <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.supplier_name||'—')}</span>
-        <span style="font-size:12px;color:var(--t4)">${po.item_count} Pos.</span>
+        <span style="font-size:12px;color:var(--t4)">${_t('{n} Pos.', { n: po.item_count })}</span>
         ${total}
         <span style="font-size:12px;color:var(--t4)">${fmtD(po.order_date,'')}</span>
       </div>
@@ -425,7 +424,7 @@ async function renderPurchasing() {
 
   setLeftBody(`
     <div style="display:flex;flex-direction:column;gap:4px;max-width:860px">
-      ${poRows || '<div style="color:var(--t3);font-size:13px">Noch keine Bestellungen</div>'}
+      ${poRows || '<div style="color:var(--t3);font-size:13px">' + _t('Noch keine Bestellungen') + '</div>'}
     </div>`);
 }
 
@@ -454,46 +453,46 @@ async function openPoDetail(id) {
   document.getElementById('dp-title').innerHTML =
     `<span class="status ${PO_ST_CLS[po.status]||'st-DFT'}" style="font-size:11px">${PO_ST[po.status]||po.status}</span>`
     + `<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${esc(po.number)}</span>`
-    + `<strong>${esc(po.supplier_name||'Kein Lieferant')}</strong>`;
+    + `<strong>${esc(po.supplier_name||_t('Kein Lieferant'))}</strong>`;
 
   document.getElementById('dp-tabs').innerHTML = `
-    <button class="tab active" onclick="switchTab(this,'po-main')">Bestellung</button>
-    ${po.changelog ? `<button class="tab" onclick="switchTab(this,'po-log')">Verlauf</button>` : ''}`;
+    <button class="tab active" onclick="switchTab(this,'po-main')">${_t('Bestellung')}</button>
+    ${po.changelog ? `<button class="tab" onclick="switchTab(this,'po-log')">${_t('Verlauf')}</button>` : ''}`;
   document.getElementById('dp-body').innerHTML = `
     <div id="po-log" style="display:none">${renderChangelogList(po.changelog)}</div>
     <div id="po-main">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoModal(${po.id})">✏ Bearbeiten</button>` : ''}
-      ${canOrder ? `<button class="btn btn-primary btn-sm" onclick="setPoStatus(${po.id},'ORDERED')">Bestellen →</button>` : ''}
-      ${canReceive ? `<button class="btn btn-green btn-sm" onclick="setPoStatus(${po.id},'RECEIVED')">✓ Als erhalten markieren</button>` : ''}
-      ${po.status !== 'CANCELLED' && po.status !== 'RECEIVED' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="setPoStatus(${po.id},'CANCELLED')">Stornieren</button>` : ''}
+      ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoModal(${po.id})">${_t('✏ Bearbeiten')}</button>` : ''}
+      ${canOrder ? `<button class="btn btn-primary btn-sm" onclick="setPoStatus(${po.id},'ORDERED')">${_t('Bestellen →')}</button>` : ''}
+      ${canReceive ? `<button class="btn btn-green btn-sm" onclick="setPoStatus(${po.id},'RECEIVED')">${_t('✓ Als erhalten markieren')}</button>` : ''}
+      ${po.status !== 'CANCELLED' && po.status !== 'RECEIVED' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="setPoStatus(${po.id},'CANCELLED')">${_t('Stornieren')}</button>` : ''}
       <button class="btn btn-ghost btn-sm" onclick="generatePoDoc(${po.id})" title="PDF">&#128196; PDF</button>
-      <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto" onclick="deletePo(${po.id})">Löschen</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--red);margin-left:auto" onclick="deletePo(${po.id})">${_t('Löschen')}</button>
     </div>
     <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--t3);margin-bottom:14px">
-      ${po.order_date ? `<span>Bestellt: <strong style="color:var(--t1)">${fmtD(po.order_date)}</strong></span>` : ''}
-      ${po.expected_date ? `<span>Erwartet: <strong style="color:var(--t1)">${po.expected_date}</strong></span>` : ''}
+      ${po.order_date ? `<span>${_t('Bestellt:')} <strong style="color:var(--t1)">${fmtD(po.order_date)}</strong></span>` : ''}
+      ${po.expected_date ? `<span>${_t('Erwartet:')} <strong style="color:var(--t1)">${po.expected_date}</strong></span>` : ''}
       ${po.supplier_email ? `<span>${esc(po.supplier_email)}</span>` : ''}
       ${po.supplier_phone ? `<span>${esc(po.supplier_phone)}</span>` : ''}
     </div>
     ${po.notes ? `<div style="font-size:13px;color:var(--t3);margin-bottom:14px;padding:8px 10px;background:var(--bg2);border-radius:var(--r-sm)">${esc(po.notes)}</div>` : ''}
     <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
       <thead><tr>
-        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">Bezeichnung</th>
-        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">Menge</th>
-        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">EP</th>
-        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">Total</th>
-        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">Verknüpfung</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">${_t('Bezeichnung')}</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">${_t('Menge')}</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">${_t('EP')}</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:right;color:var(--t3)">${_t('Total')}</th>
+        <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px;text-align:left;color:var(--t3)">${_t('Verknüpfung')}</th>
         <th style="padding:5px 8px;background:var(--bg2);border:1px solid var(--line);font-size:11px"></th>
       </tr></thead>
       <tbody>${itemRows}</tbody>
       ${total > 0 ? `<tfoot><tr>
-        <td colspan="3" style="padding:5px 8px;border:1px solid var(--line);text-align:right;font-size:13px;font-weight:600;color:var(--t3)">Total</td>
+        <td colspan="3" style="padding:5px 8px;border:1px solid var(--line);text-align:right;font-size:13px;font-weight:600;color:var(--t3)">${_t('Total')}</td>
         <td style="padding:5px 8px;border:1px solid var(--line);font-family:var(--mono);font-weight:700;text-align:right">${fmtCHF(total)}</td>
         <td colspan="2" style="border:1px solid var(--line)"></td>
       </tr></tfoot>` : ''}
     </table>
-    ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoItemModal(${po.id})">+ Position</button>` : ''}
+    ${editable ? `<button class="btn btn-ghost btn-sm" onclick="openPoItemModal(${po.id})">${_t('+ Position')}</button>` : ''}
     </div>`;
 
   showDetail();
@@ -502,12 +501,12 @@ async function openPoDetail(id) {
 // preset: { supplierId } — "+ Bestellung" direkt beim Lieferanten
 async function openPoModal(id, preset = {}) {
   const suppliers = state._poSuppliers || await api('/api/suppliers');
-  document.getElementById('po-supplier-id').innerHTML = '<option value="">— Freie Eingabe —</option>' +
+  document.getElementById('po-supplier-id').innerHTML = '<option value="">' + _t('— Freie Eingabe —') + '</option>' +
     suppliers.map(s => `<option value="${s.id}">${esc(s.number)} ${esc(s.name)}</option>`).join('');
 
   if (id) {
     const po = await api('/api/purchase-orders/' + id);
-    document.getElementById('po-modal-title').textContent = 'Bestellung bearbeiten';
+    document.getElementById('po-modal-title').textContent = _t('Bestellung bearbeiten');
     document.getElementById('po-edit-id').value = id;
     document.getElementById('po-supplier-id').value = po.supplier_id || '';
     document.getElementById('po-supplier-name').value = po.supplier_name_free || '';
@@ -516,7 +515,7 @@ async function openPoModal(id, preset = {}) {
     document.getElementById('po-notes').value = po.notes || '';
     document.getElementById('po-supplier-free').style.display = po.supplier_id ? 'none' : 'block';
   } else {
-    document.getElementById('po-modal-title').textContent = 'Bestellung erstellen';
+    document.getElementById('po-modal-title').textContent = _t('Bestellung erstellen');
     document.getElementById('po-edit-id').value = '';
     document.getElementById('po-supplier-id').value = preset.supplierId || '';
     document.getElementById('po-supplier-name').value = '';
@@ -538,7 +537,7 @@ async function savePo() {
     notes: document.getElementById('po-notes').value,
   };
   const po = id ? await api(`/api/purchase-orders/${id}`, 'PUT', body) : await api('/api/purchase-orders', 'POST', body);
-  toast(id ? 'Gespeichert' : 'Bestellung angelegt', 'ok');
+  toast(id ? _t('Gespeichert') : _t('Bestellung angelegt'), 'ok');
   closeModal('poModal');
   _setPurchasingTab('orders', false);
   await renderPurchasing();
@@ -562,7 +561,7 @@ async function openPoItemModal(poId) {
   // dort gefuehrt — sie doppelt anzubieten wuerde nur verwirren.
   const linkedStd = new Set(invItems.map(i => i.std_part_id).filter(Boolean));
   const freeStd = stdParts.filter(sp => !linkedStd.has(sp.id));
-  document.getElementById('poi-link-id').innerHTML = '<option value="">— kein —</option>' +
+  document.getElementById('poi-link-id').innerHTML = '<option value="">' + _t('— kein —') + '</option>' +
     (invItems.length ? `<optgroup label="Lagerartikel">${invItems.map(i => `<option value="inv:${i.id}">${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join('')}</optgroup>` : '') +
     (rawMats.length ? `<optgroup label="Rohmaterial">${rawMats.map(r => `<option value="rm:${r.id}">${esc(r.name)}${r.material_type?' · '+esc(r.material_type):''}${r.color?' · '+esc(r.color):''}</option>`).join('')}</optgroup>` : '') +
     (freeStd.length ? `<optgroup label="Normteile">${freeStd.map(sp => `<option value="std:${sp.id}" data-desig="${esc(sp.designation||'')}" data-price="${sp.unit_price ?? ''}">${esc(sp.designation || sp.name)}</option>`).join('')}</optgroup>` : '');
@@ -583,7 +582,7 @@ function onPoLinkChange(sel) {
 async function savePoItem() {
   const poId = document.getElementById('poi-po-id').value;
   const desc = document.getElementById('poi-desc').value.trim();
-  if (!desc) return toast('Bezeichnung eingeben', 'err');
+  if (!desc) return toast(_t('Bezeichnung eingeben'), 'err');
   const link = document.getElementById('poi-link-id').value;
   const invId = link.startsWith('inv:') ? link.slice(4) : null;
   const rmId  = link.startsWith('rm:')  ? link.slice(3) : null;
@@ -598,7 +597,7 @@ async function savePoItem() {
     std_part_id: stdId,
     notes: document.getElementById('poi-notes').value,
   });
-  toast('Position hinzugefügt', 'ok');
+  toast(_t('Position hinzugefügt'), 'ok');
   closeModal('poItemModal');
   openPoDetail(parseInt(poId));
 }
@@ -627,7 +626,7 @@ async function savePoItemEdit() {
   const poId = document.getElementById('poie-po-id').value;
   const itemId = document.getElementById('poie-item-id').value;
   const desc = document.getElementById('poie-desc').value.trim();
-  if (!desc) return toast('Bezeichnung eingeben', 'err');
+  if (!desc) return toast(_t('Bezeichnung eingeben'), 'err');
   await api(`/api/purchase-orders/${poId}/items/${itemId}`, 'PUT', {
     description: desc,
     quantity: document.getElementById('poie-qty').value,
@@ -635,7 +634,7 @@ async function savePoItemEdit() {
     unit_price: document.getElementById('poie-price').value || null,
     notes: document.getElementById('poie-notes').value,
   });
-  toast('Gespeichert', 'ok');
+  toast(_t('Gespeichert'), 'ok');
   closeModal('poItemEditModal');
   openPoDetail(parseInt(poId));
 }
@@ -653,12 +652,12 @@ async function setPoStatus(poId, status) {
       _setLotMode(rmItems.length > 1 ? 'same' : 'individual');
       const invLinked = (po.items||[]).filter(i => i.inventory_item_id).length;
       document.getElementById('po-receive-inv-hint').textContent = invLinked
-        ? `${invLinked} Lagerartikel werden ohne Lot-Nr. eingebucht.` : '';
+        ? _t('{n} Lagerartikel werden ohne Lot-Nr. eingebucht.', { n: invLinked }) : '';
       openModal('poReceiveModal');
       return;
     }
     const invLinked = (po.items||[]).filter(i => i.inventory_item_id).length;
-    if (invLinked && !confirm(`${invLinked} Lagerartikel werden eingebucht. Fortfahren?`)) return;
+    if (invLinked && !confirm(_t('{n} Lagerartikel werden eingebucht. Fortfahren?', { n: invLinked }))) return;
   }
   await api(`/api/purchase-orders/${poId}/status`, 'PUT', { status });
   toast(PO_ST[status] || status, 'ok');
@@ -682,11 +681,11 @@ function _renderIndividualLotRows() {
   document.getElementById('po-receive-rows').innerHTML = rmItems.map(i => {
     const units = Math.max(1, Math.round(i.quantity));
     const unitInputs = units === 1
-      ? `<input class="fi" id="lot-${i.id}-0" placeholder="Lot-Nr. (optional)" style="font-family:var(--mono);font-size:13px">`
+      ? `<input class="fi" id="lot-${i.id}-0" placeholder="${_t('Lot-Nr. (optional)')}" style="font-family:var(--mono);font-size:13px">`
       : Array.from({length: units}, (_, u) =>
           `<div style="display:flex;align-items:center;gap:8px;margin-top:4px">
             <span style="font-size:12px;color:var(--t4);width:56px;flex-shrink:0">Nr. ${u+1}</span>
-            <input class="fi" id="lot-${i.id}-${u}" placeholder="Lot-Nr. (optional)" style="font-family:var(--mono);font-size:13px">
+            <input class="fi" id="lot-${i.id}-${u}" placeholder="${_t('Lot-Nr. (optional)')}" style="font-family:var(--mono);font-size:13px">
           </div>`).join('');
     return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
       <div style="font-size:13px;font-weight:600;margin-bottom:2px">🧵 ${esc(i.rm_name)}</div>
@@ -715,16 +714,16 @@ async function confirmPoReceive() {
   }
   closeModal('poReceiveModal');
   await api(`/api/purchase-orders/${poId}/status`, 'PUT', { status: 'RECEIVED', lot_numbers });
-  toast('Erhalten', 'ok');
+  toast(_t('Erhalten'), 'ok');
   await renderPurchasing();
   openPoDetail(poId);
   loadStats();
 }
 
 async function deletePo(id) {
-  if (!confirm('Bestellung löschen?')) return;
+  if (!confirm(_t('Bestellung löschen?'))) return;
   await api(`/api/purchase-orders/${id}`, 'DELETE');
-  toast('Gelöscht', 'ok');
+  toast(_t('Gelöscht'), 'ok');
   closeDetail();
   renderPurchasing();
   loadStats();
@@ -733,50 +732,50 @@ async function deletePo(id) {
 // ── LIEFERANTEN ───────────────────────────────────────────────
 // Gleiche Darstellung wie Kunden (siehe GESCHÄFTSPARTNER in 05-erp-views.js)
 const _PO_GROUPS = [
-  ['Entwurf', ['DRAFT']],
-  ['Bestellt', ['ORDERED']],
-  ['Erhalten', ['RECEIVED']],
-  ['Storniert', ['CANCELLED']],
+  [_t('Entwurf'), ['DRAFT']],
+  [_t('Bestellt'), ['ORDERED']],
+  [_t('Erhalten'), ['RECEIVED']],
+  [_t('Storniert'), ['CANCELLED']],
 ];
 const _PO_OPEN_STATUSES = ['DRAFT', 'ORDERED'];
 
 _registerPartnerKind('supplier', {
   prefsKey: 'supplier_view',
-  noun: ['Lieferant', 'Lieferanten'],
+  noun: [_t('Lieferant'), _t('Lieferanten')],
   rows: () => state.suppliers || [],
   detailId: () => state.supplierDetailId,
   openFn: 'openSupplierDetail',
   render: () => renderPurchasing(),
   header: () => setLeftHeader(_purchasingTitle(), _purchasingActions()),
-  searchHint: 'Suchen nach Name, Kontaktperson, Ort, E-Mail…',
+  searchHint: _t('Suchen nach Name, Kontaktperson, Ort, E-Mail…'),
   searchFields: s => [s.name, s.number, s.contact_person, s.email, s.phone, s.street, s.postal_code, s.city, s.country, s.address, s.notes],
-  filters: [['', 'Alle Lieferanten'], ['open', 'Mit offenen Bestellungen'], ['none', 'Ohne Bestellungen']],
+  filters: [['', _t('Alle Lieferanten')], ['open', _t('Mit offenen Bestellungen')], ['none', _t('Ohne Bestellungen')]],
   show: { open: s => s.open_po_count > 0, none: s => !s.po_count },
-  sorts: [['name', 'Name A–Z'], ['recent', 'Zuletzt aktiv'], ['value', 'Bestellvolumen'], ['number', 'Nummer']],
+  sorts: [['name', _t('Name A–Z')], ['recent', _t('Zuletzt aktiv')], ['value', _t('Bestellvolumen')], ['number', _t('Nummer')]],
   value: s => s.volume,
-  valueLabel: 'Volumen',
-  valueTitle: 'Bestellvolumen aus bestellten und erhaltenen Bestellungen',
+  valueLabel: _t('Volumen'),
+  valueTitle: _t('Bestellvolumen aus bestellten und erhaltenen Bestellungen'),
   card: (s, short) => {
     const open = s.open_po_count || 0, inv = s.inventory_count || 0;
     return {
-      contact: [s.contact_person && `<span title="Kontaktperson">👤 ${esc(s.contact_person)}</span>`,
+      contact: [s.contact_person && `<span title="${_t('Kontaktperson')}">👤 ${esc(s.contact_person)}</span>`,
         s.email && _mailLink(s.email), s.phone && _telLink(s.phone)].filter(Boolean),
-      pills: (open ? _pill('amber', short ? open : `${open} ${open === 1 ? 'offene Bestellung' : 'offene Bestellungen'}`,
-                'Entwurf oder bestellt, noch nicht erhalten') : '')
-           + (inv && !short ? _pill('', `${inv} Lagerartikel`, 'Lagerartikel mit diesem Lieferanten') : ''),
+      pills: (open ? _pill('amber', short ? open : _t(open === 1 ? '1 offene Bestellung' : '{n} offene Bestellungen', { n: open }),
+                _t('Entwurf oder bestellt, noch nicht erhalten')) : '')
+           + (inv && !short ? _pill('', _t('{n} Lagerartikel', { n: inv }), _t('Lagerartikel mit diesem Lieferanten')) : ''),
       meta: s.po_count
-        ? `${s.po_count} Bestellung${s.po_count === 1 ? '' : 'en'}${s.last_activity ? ' · zuletzt ' + fmtD(s.last_activity) : ''}`
-        : 'Noch keine Bestellungen',
+        ? _t(s.po_count === 1 ? '1 Bestellung' : '{n} Bestellungen', { n: s.po_count }) + (s.last_activity ? ' · ' + _t('zuletzt {date}', { date: fmtD(s.last_activity) }) : '')
+        : _t('Noch keine Bestellungen'),
       value: s.volume,
-      quick: { label: '+ Bestellung', title: 'Neue Bestellung bei diesem Lieferanten', onclick: `openPoModal(null,{supplierId:${s.id}})` },
+      quick: { label: _t('+ Bestellung'), title: _t('Neue Bestellung bei diesem Lieferanten'), onclick: `openPoModal(null,{supplierId:${s.id}})` },
     };
   },
 });
 
 function _renderSupplierTab() {
   if (!(state.suppliers || []).length) {
-    setLeftBody(`<div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Noch keine Lieferanten</div>
-      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="openSupplierModal()">+ Ersten Lieferanten anlegen</button></div>`);
+    setLeftBody(`<div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">${_t('Noch keine Lieferanten')}</div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="openSupplierModal()">${_t('+ Ersten Lieferanten anlegen')}</button></div>`);
     return;
   }
   setLeftBody(_partnerBody('supplier'));
@@ -801,7 +800,7 @@ function _poRowForSupplier(po) {
 function _invRowForSupplier(i) {
   const low = i.min_qty != null && i.stock_qty <= i.min_qty;
   return `<div class="partner-row" onclick="gotoView('inventory').then(()=>openInventoryDetail(${i.id}))">
-    <span class="status ${low ? 'st-OBS' : 'st-REL'}">${low ? 'KNAPP' : 'LAGER'}</span>
+    <span class="status ${low ? 'st-OBS' : 'st-REL'}">${low ? _t('KNAPP') : _t('LAGER')}</span>
     <div style="min-width:0">
       <div class="partner-row-title">${esc(i.name)}</div>
       <div class="partner-row-meta">${[i.sku ? esc(i.sku) : '', i.category ? esc(i.category) : ''].filter(Boolean).join(' · ') || '—'}</div>
@@ -815,7 +814,7 @@ function _invRowForSupplier(i) {
 
 async function _copySupplierAddress(id) {
   const s = (state.suppliers || []).find(x => x.id === id) || await api('/api/suppliers/' + id);
-  copyText(_partnerAddressText(s), 'Adresse kopiert');
+  copyText(_partnerAddressText(s), _t('Adresse kopiert'));
 }
 
 async function openSupplierDetail(id) {
@@ -827,40 +826,40 @@ async function openSupplierDetail(id) {
 
   document.getElementById('dp-title').innerHTML = _partnerTitle(s);
   document.getElementById('dp-tabs').innerHTML = `
-    <button class="tab active" onclick="switchTab(this,'sd-overview')">Übersicht</button>
-    <button class="tab" onclick="switchTab(this,'sd-orders')">Bestellungen${_partnerTabCount(pos.length)}</button>
-    <button class="tab" onclick="switchTab(this,'sd-inventory')">Lagerartikel${_partnerTabCount(inv.length)}</button>
-    ${s.changelog ? `<button class="tab" onclick="switchTab(this,'sd-log')">Verlauf</button>` : ''}`;
+    <button class="tab active" onclick="switchTab(this,'sd-overview')">${_t('Übersicht')}</button>
+    <button class="tab" onclick="switchTab(this,'sd-orders')">${_t('Bestellungen')}${_partnerTabCount(pos.length)}</button>
+    <button class="tab" onclick="switchTab(this,'sd-inventory')">${_t('Lagerartikel')}${_partnerTabCount(inv.length)}</button>
+    ${s.changelog ? `<button class="tab" onclick="switchTab(this,'sd-log')">${_t('Verlauf')}</button>` : ''}`;
 
   document.getElementById('dp-body').innerHTML = `
     <div id="sd-log" style="display:none">${renderChangelogList(s.changelog)}</div>
     <div id="sd-overview">
       <div class="partner-actions">
-        <button class="btn btn-primary btn-sm" onclick="openPoModal(null,{supplierId:${s.id}})">+ Bestellung</button>
+        <button class="btn btn-primary btn-sm" onclick="openPoModal(null,{supplierId:${s.id}})">${_t('+ Bestellung')}</button>
         <span style="flex:1"></span>
-        <button class="btn btn-ghost btn-sm" onclick="openSupplierModal(${s.id})">✏️ Bearbeiten</button>
-        <button class="btn btn-red btn-sm" onclick="deleteSupplier(${s.id})">🗑 Löschen</button>
+        <button class="btn btn-ghost btn-sm" onclick="openSupplierModal(${s.id})">${_t('✏️ Bearbeiten')}</button>
+        <button class="btn btn-red btn-sm" onclick="deleteSupplier(${s.id})">${_t('🗑 Löschen')}</button>
       </div>
       ${_partnerKpis([
-        ['Bestellvolumen', s.volume > 0 ? fmtCHF(s.volume) : '—', 'bestellt und erhalten', s.volume > 0 ? 'var(--green)' : ''],
-        ['Offene Bestellungen', open.length, '', open.length ? 'var(--amber)' : ''],
-        ['Lagerartikel', inv.length, '', ''],
-        ['Letzte Bestellung', lastDate ? fmtD(lastDate) : '—', s.created_at ? 'Lieferant seit ' + fmtD(s.created_at) : ''],
+        [_t('Bestellvolumen'), s.volume > 0 ? fmtCHF(s.volume) : '—', _t('bestellt und erhalten'), s.volume > 0 ? 'var(--green)' : ''],
+        [_t('Offene Bestellungen'), open.length, '', open.length ? 'var(--amber)' : ''],
+        [_t('Lagerartikel'), inv.length, '', ''],
+        [_t('Letzte Bestellung'), lastDate ? fmtD(lastDate) : '—', s.created_at ? _t('Lieferant seit {date}', { date: fmtD(s.created_at) }) : ''],
       ])}
       ${_partnerInfo(s, `_copySupplierAddress(${s.id})`,
-        [['Kontaktperson', s.contact_person ? esc(s.contact_person) : '<span class="partner-muted">—</span>']])}
-      <div class="sep-label">Offene Bestellungen</div>
+        [[_t('Kontaktperson'), s.contact_person ? esc(s.contact_person) : '<span class="partner-muted">—</span>']])}
+      <div class="sep-label">${_t('Offene Bestellungen')}</div>
       ${open.length ? _partnerList(open.map(_poRowForSupplier))
-        : _partnerEmpty(pos.length ? 'Nichts offen — alle Bestellungen sind erhalten oder storniert.' : 'Noch keine Bestellungen bei diesem Lieferanten.')}
+        : _partnerEmpty(pos.length ? _t('Nichts offen — alle Bestellungen sind erhalten oder storniert.') : _t('Noch keine Bestellungen bei diesem Lieferanten.'))}
     </div>
     <div id="sd-orders" style="display:none">
-      ${pos.length ? `<div class="partner-sum"><span>${pos.length} Bestellung${pos.length === 1 ? '' : 'en'}</span>
-        <span>Volumen <b style="font-family:var(--mono);color:var(--t1)">${fmtCHF(s.volume || 0)}</b></span></div>
+      ${pos.length ? `<div class="partner-sum"><span>${_t(pos.length === 1 ? '1 Bestellung' : '{n} Bestellungen', { n: pos.length })}</span>
+        <span>${_t('Volumen')} <b style="font-family:var(--mono);color:var(--t1)">${fmtCHF(s.volume || 0)}</b></span></div>
         ${_partnerGroups(_PO_GROUPS, pos, _poRowForSupplier)}`
-        : _partnerEmpty('Noch keine Bestellungen bei diesem Lieferanten.')}
+        : _partnerEmpty(_t('Noch keine Bestellungen bei diesem Lieferanten.'))}
     </div>
     <div id="sd-inventory" style="display:none">
-      ${inv.length ? _partnerList(inv.map(_invRowForSupplier)) : _partnerEmpty('Keine Lagerartikel mit diesem Lieferanten.')}
+      ${inv.length ? _partnerList(inv.map(_invRowForSupplier)) : _partnerEmpty(_t('Keine Lagerartikel mit diesem Lieferanten.'))}
     </div>`;
 
   _markActiveRow(s.id);
@@ -871,11 +870,11 @@ async function openSupplierModal(id) {
   const f = k => document.getElementById('sup-' + k);
   f('edit-id').value = id || '';
   const s = id ? await api('/api/suppliers/' + id) : {};
-  f('modal-title').textContent = id ? 'Lieferant bearbeiten' : 'Neuer Lieferant';
+  f('modal-title').textContent = id ? _t('Lieferant bearbeiten') : _t('Neuer Lieferant');
   for (const [k, v] of [['name', s.name], ['contact', s.contact_person], ['phone', s.phone], ['email', s.email],
     ['street', s.street], ['plz', s.postal_code], ['city', s.city], ['notes', s.notes]]) f(k).value = v || '';
   // Land nur bei neuen Lieferanten vorbelegen — bei bestehenden gilt, was gespeichert ist
-  f('country').value = id ? (s.country || '') : 'Schweiz';
+  f('country').value = id ? (s.country || '') : _t('Schweiz');
   // Frühere Freitext-Adresse anzeigen, solange sie nicht übernommen ist
   const legacy = id && s.address && !(s.street || s.postal_code || s.city);
   f('legacy').style.display = legacy ? '' : 'none';
@@ -890,11 +889,11 @@ async function saveSupplier() {
     name: v('name'), contact_person: v('contact'), phone: v('phone'), email: v('email'),
     street: v('street'), postal_code: v('plz'), city: v('city'), country: v('country'), notes: v('notes'),
   };
-  if (!body.name) return toast('Name eingeben', 'err');
+  if (!body.name) return toast(_t('Name eingeben'), 'err');
   const s = id
     ? await api('/api/suppliers/' + id, 'PUT', body)
     : await api('/api/suppliers', 'POST', body);
-  toast(id ? 'Gespeichert' : 'Lieferant angelegt', 'ok');
+  toast(id ? _t('Gespeichert') : _t('Lieferant angelegt'), 'ok');
   closeModal('supplierModal');
   _setPurchasingTab('suppliers', false);
   await renderPurchasing();
@@ -903,9 +902,9 @@ async function saveSupplier() {
 
 async function deleteSupplier(id) {
   const s = (state.suppliers || []).find(x => x.id === id);
-  if (!confirm(`Lieferant ${s ? s.number + ' ' + s.name : ''} löschen?\nBestehende Bestellungen behalten den Namen.`)) return;
+  if (!confirm(_t('Lieferant {name} löschen?', { name: s ? s.number + ' ' + s.name : '' }) + '\n' + _t('Bestehende Bestellungen behalten den Namen.'))) return;
   await api('/api/suppliers/' + id, 'DELETE');
-  toast('Gelöscht', 'ok');
+  toast(_t('Gelöscht'), 'ok');
   closeDetail();
   state.supplierDetailId = null;
   renderPurchasing();

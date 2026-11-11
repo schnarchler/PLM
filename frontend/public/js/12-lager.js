@@ -5,6 +5,11 @@
 // 'Normteile' vergibt der Server beim ersten Wareneingang eines Normteils — muss
 // hier stehen, sonst setzt das Bearbeiten-Formular stillschweigend '3D Druck'
 const INV_CATS = ['3D Druck','Filament','Hardware','Elektronik','Komponenten','Normteile','Werkzeug','Verbrauchsmaterial','Sonstiges'];
+// Gespeichert bleibt der deutsche Wert aus INV_CATS, angezeigt die Übersetzung
+const INV_CAT_LABEL = { '3D Druck': _t('3D Druck'), Filament: _t('Filament'), Hardware: _t('Hardware'),
+  Elektronik: _t('Elektronik'), Komponenten: _t('Komponenten'), Normteile: _t('Normteile'), Werkzeug: _t('Werkzeug'),
+  Verbrauchsmaterial: _t('Verbrauchsmaterial'), Sonstiges: _t('Sonstiges') };
+const _invCat = c => INV_CAT_LABEL[c] || c || '';
 
 let _invSort = { col: 'name', dir: 1 };
 
@@ -16,13 +21,13 @@ function _invStockState(i) {
 }
 
 async function renderInventory() {
-  setLeftHeader('Lager', `<button class="btn btn-primary btn-sm" onclick="openInventoryModal()">+ Artikel</button>`);
+  setLeftHeader(_t('Lager'), `<button class="btn btn-primary btn-sm" onclick="openInventoryModal()">${_t('+ Artikel')}</button>`);
   setLeftTabs('inventory', 'inventory');
   const items = await api('/api/inventory');
   const badgeInv = document.getElementById('badge-inventory');
   if (badgeInv) badgeInv.textContent = items.length || '—';
   if (!items.length) {
-    setLeftBody(`<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Noch keine Lagerartikel</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openInventoryModal()">Ersten Artikel anlegen</button></div></div>`);
+    setLeftBody(`<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">${_t('Noch keine Lagerartikel')}</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openInventoryModal()">${_t('Ersten Artikel anlegen')}</button></div></div>`);
     return;
   }
   _invRenderTable(items);
@@ -49,8 +54,8 @@ function _invRenderTable(items) {
   const critical = items.filter(i => _invStockState(i) === 'critical').length;
   const warn = items.filter(i => _invStockState(i) === 'warn').length;
   const banner = (critical || warn) ? `<div style="background:rgba(255,142,142,.10);border:1px solid rgba(255,142,142,.30);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;font-size:13px;display:flex;gap:12px">
-    ${critical?`<span style="color:var(--red)">● ${critical} unter Mindestbestand</span>`:''}
-    ${warn?`<span style="color:var(--amber)">● ${warn} auf Mindestbestand</span>`:''}
+    ${critical?`<span style="color:var(--red)">● ${_t('{n} unter Mindestbestand', { n: critical })}</span>`:''}
+    ${warn?`<span style="color:var(--amber)">● ${_t('{n} auf Mindestbestand', { n: warn })}</span>`:''}
   </div>` : '';
 
   const th = (c, label) => {
@@ -105,12 +110,12 @@ function _invRenderTable(items) {
       }).join('');
     }).join('');
 
-    return `<tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${cat}</td></tr>
+    return `<tr style="background:var(--bg0)"><td colspan="6" style="font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--t3);padding:6px 10px">${esc(_invCat(cat))}</td></tr>
     ${itemRows}`;
   }).join('');
 
   setLeftBody(banner + `<div class="tbl-wrap"><table>
-    <thead><tr>${th('name','Artikel')}${th('color','Farbe')}${th('material','Material')}${th('stock_qty','Bestand')}${th('planned_qty','Geplant')}${th('min_qty','Minimum')}<th></th></tr></thead>
+    <thead><tr>${th('name',_t('Artikel'))}${th('color',_t('Farbe'))}${th('material',_t('Material'))}${th('stock_qty',_t('Bestand'))}${th('planned_qty',_t('Geplant'))}${th('min_qty',_t('Minimum'))}<th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`);
 }
@@ -127,38 +132,38 @@ async function openInventoryDetail(id) {
   const stockColor = state==='critical'?'var(--red)':state==='warn'?'var(--amber)':'var(--green)';
   const stockIcon = state==='critical'?' ⚠':'';
   document.getElementById('dp-title').innerHTML = esc(item.name);
-  document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'inv-info')">Details</button>`;
+  document.getElementById('dp-tabs').innerHTML = `<button class="tab active" onclick="switchTab(this,'inv-info')">${_t('Details')}</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="inv-info">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
-        <div><div class="ps-label">Kategorie</div>${item.category}</div>
-        ${item.color?`<div><div class="ps-label">Farbe</div>${esc(item.color)}</div>`:''}
-        ${item.material?`<div><div class="ps-label">Material</div>${esc(item.material)}</div>`:''}
-        <div><div class="ps-label">Bestand</div><span style="font-family:var(--mono);font-weight:600;color:${stockColor}">${fmtN(item.stock_qty,2)} ${_unit(item.unit)}${stockIcon}</span></div>
-        <div><div class="ps-label">Mindestbestand</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+_unit(item.unit):'—'}</div>
-        ${item.price_per_unit!=null?`<div><div class="ps-label">Preis / Einheit</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
-        ${item.linked_item_number?`<div style="grid-column:span 2"><div class="ps-label">PLM-Teil</div>
+        <div><div class="ps-label">${_t('Kategorie')}</div>${esc(_invCat(item.category))}</div>
+        ${item.color?`<div><div class="ps-label">${_t('Farbe')}</div>${esc(item.color)}</div>`:''}
+        ${item.material?`<div><div class="ps-label">${_t('Material')}</div>${esc(item.material)}</div>`:''}
+        <div><div class="ps-label">${_t('Bestand')}</div><span style="font-family:var(--mono);font-weight:600;color:${stockColor}">${fmtN(item.stock_qty,2)} ${_unit(item.unit)}${stockIcon}</span></div>
+        <div><div class="ps-label">${_t('Mindestbestand')}</div>${item.min_qty>0?fmtN(item.min_qty,2)+' '+_unit(item.unit):'—'}</div>
+        ${item.price_per_unit!=null?`<div><div class="ps-label">${_t('Preis / Einheit')}</div><span style="font-family:var(--mono)">${fmtCHF(item.price_per_unit)}</span></div>`:''}
+        ${item.linked_item_number?`<div style="grid-column:span 2"><div class="ps-label">${_t('PLM-Teil')}</div>
           <span style="font-family:var(--mono);font-size:13px;color:var(--blue);cursor:pointer" onclick="gotoPlmItem(${item.item_id})">${esc(item.linked_item_number)} – ${esc(item.linked_item_name||'')}</span>
         </div>`:''}
-        ${item.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(item.notes)}</span></div>`:''}
+        ${item.notes?`<div style="grid-column:span 2"><div class="ps-label">${_t('Notizen')}</div><span style="color:var(--t2)">${esc(item.notes)}</span></div>`:''}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
-        <button class="btn btn-primary btn-sm" onclick="openMovementModal(${id},'in')">+ Zugang</button>
-        <button class="btn btn-amber btn-sm" onclick="openMovementModal(${id},'out')">− Abgang</button>
-        <button class="btn btn-ghost btn-sm" onclick="openInventoryModal(${id})">✏️ Bearbeiten</button>
-        <button class="btn btn-red btn-sm" onclick="delInventoryItem(${id})">🗑 Löschen</button>
+        <button class="btn btn-primary btn-sm" onclick="openMovementModal(${id},'in')">${_t('+ Zugang')}</button>
+        <button class="btn btn-amber btn-sm" onclick="openMovementModal(${id},'out')">${_t('− Abgang')}</button>
+        <button class="btn btn-ghost btn-sm" onclick="openInventoryModal(${id})">${_t('✏️ Bearbeiten')}</button>
+        <button class="btn btn-red btn-sm" onclick="delInventoryItem(${id})">${_t('🗑 Löschen')}</button>
       </div>
-      <div class="sep-label">Letzte Bewegungen</div>
+      <div class="sep-label">${_t('Letzte Bewegungen')}</div>
       ${item.movements?.length ? `<div class="tbl-wrap"><table>
-        <thead><tr><th>Datum</th><th>Typ</th><th>Menge</th><th>Referenz</th><th>Notiz</th></tr></thead>
+        <thead><tr><th>${_t('Datum')}</th><th>${_t('Typ')}</th><th>${_t('Menge')}</th><th>${_t('Referenz')}</th><th>${_t('Notiz')}</th></tr></thead>
         <tbody>${item.movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtDT(m.created_at,'')}</td>
-          <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(110,222,156,.15)':'rgba(255,142,142,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.type==='adjust'?'Korrektur':m.qty>0?'Zugang':'Abgang'}</span></td>
+          <td><span style="font-size:13px;padding:1px 6px;border-radius:10px;background:${m.qty>0?'rgba(110,222,156,.15)':'rgba(255,142,142,.15)'};color:${m.qty>0?'var(--green)':'var(--red)'}">${m.type==='adjust'?_t('Korrektur'):m.qty>0?_t('Zugang'):_t('Abgang')}</span></td>
           <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:${m.qty>0?'var(--green)':'var(--red)'}">${m.qty>0?'+':''}${fmtN(m.qty,2)} ${_unit(item.unit)}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.reference||'—')}</td>
           <td style="color:var(--t3);font-size:13px">${esc(m.notes||'')}</td>
         </tr>`).join('')}</tbody>
-      </table></div>` : '<div style="color:var(--t3);font-size:13px">Noch keine Bewegungen</div>'}
+      </table></div>` : '<div style="color:var(--t3);font-size:13px">' + _t('Noch keine Bewegungen') + '</div>'}
     </div>`;
   showDetail();
 }
@@ -166,39 +171,39 @@ async function openInventoryDetail(id) {
 async function openInventoryModal(id) {
   const item = id ? await api(`/api/inventory/${id}`) : null;
   _showDynModal(`<div class="modal" style="max-width:480px">
-    <div class="modal-head"><div class="modal-title">${item ? 'Artikel bearbeiten' : 'Neuer Lagerartikel'}</div>
+    <div class="modal-head"><div class="modal-title">${item ? _t('Artikel bearbeiten') : _t('Neuer Lagerartikel')}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <div class="fg"><label class="fl">Verknüpftes PLM-Teil</label>
+      <div class="fg"><label class="fl">${_t('Verknüpftes PLM-Teil')}</label>
         <div style="position:relative">
-          <input id="inv-plm-search" class="fi" placeholder="Teil suchen…" autocomplete="off"
+          <input id="inv-plm-search" class="fi" placeholder="${_t('Teil suchen…')}" autocomplete="off"
             oninput="searchInvPlmItem(this.value)"
             value="${item?.linked_item_number ? item.linked_item_number+' – '+esc(item.linked_item_name||'') : ''}">
           <input type="hidden" id="inv-item-id" value="${item?.item_id||''}">
           <div id="inv-plm-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);z-index:200;max-height:160px;overflow-y:auto"></div>
         </div>
       </div>
-      <div class="fg"><label class="fl">Name *</label><input id="inv-name" class="fi" value="${esc(item?.name||'')}"></div>
+      <div class="fg"><label class="fl">${_t('Name *')}</label><input id="inv-name" class="fi" value="${esc(item?.name||'')}"></div>
       <div class="cols2">
-        <div class="fg"><label class="fl">Kategorie</label>
-          <select id="inv-cat" class="fi">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'Sonstiges')===c?' selected':''}>${c}</option>`).join('')}</select></div>
-        <div class="fg"><label class="fl">SKU / Artikelnr.</label><input id="inv-sku" class="fi" value="${esc(item?.sku||'')}"></div>
+        <div class="fg"><label class="fl">${_t('Kategorie')}</label>
+          <select id="inv-cat" class="fi">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'Sonstiges')===c?' selected':''}>${_invCat(c)}</option>`).join('')}</select></div>
+        <div class="fg"><label class="fl">${_t('SKU / Artikelnr.')}</label><input id="inv-sku" class="fi" value="${esc(item?.sku||'')}"></div>
       </div>
       <div class="cols2">
-        <div class="fg"><label class="fl">Farbe</label><input id="inv-color" class="fi" placeholder="z.B. Schwarz" value="${esc(item?.color||'')}"></div>
-        <div class="fg"><label class="fl">Material</label><input id="inv-material" class="fi" placeholder="z.B. PLA" value="${esc(item?.material||'')}"></div>
+        <div class="fg"><label class="fl">${_t('Farbe')}</label><input id="inv-color" class="fi" placeholder="${_t('z.B. Schwarz')}" value="${esc(item?.color||'')}"></div>
+        <div class="fg"><label class="fl">${_t('Material')}</label><input id="inv-material" class="fi" placeholder="${_t('z.B. PLA')}" value="${esc(item?.material||'')}"></div>
       </div>
       <div class="cols2">
-        <div class="fg"><label class="fl">Einheit</label><input id="inv-unit" class="fi" value="${esc(_unit(item?.unit))}"></div>
-        <div class="fg"><label class="fl">Mindestbestand</label><input id="inv-min" type="number" min="0" step="0.01" class="fi" value="${item?.min_qty||0}"></div>
+        <div class="fg"><label class="fl">${_t('Einheit')}</label><input id="inv-unit" class="fi" value="${esc(_unit(item?.unit))}"></div>
+        <div class="fg"><label class="fl">${_t('Mindestbestand')}</label><input id="inv-min" type="number" min="0" step="0.01" class="fi" value="${item?.min_qty||0}"></div>
       </div>
-      <div class="fg"><label class="fl">Preis / Einheit</label><input id="inv-price" type="number" min="0" step="0.01" class="fi" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
-      ${!id ? `<div class="fg"><label class="fl">Anfangsbestand</label><input id="inv-stock" type="number" min="0" step="0.01" class="fi" value="0"></div>` : ''}
-      <div class="fg"><label class="fl">Notizen</label><textarea id="inv-notes" class="fs" rows="2" style="resize:vertical">${esc(item?.notes||'')}</textarea></div>
+      <div class="fg"><label class="fl">${_t('Preis / Einheit')}</label><input id="inv-price" type="number" min="0" step="0.01" class="fi" placeholder="—" value="${item?.price_per_unit!=null?item.price_per_unit:''}"></div>
+      ${!id ? `<div class="fg"><label class="fl">${_t('Anfangsbestand')}</label><input id="inv-stock" type="number" min="0" step="0.01" class="fi" value="0"></div>` : ''}
+      <div class="fg"><label class="fl">${_t('Notizen')}</label><textarea id="inv-notes" class="fs" rows="2" style="resize:vertical">${esc(item?.notes||'')}</textarea></div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveInventoryItem(${id||'null'})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveInventoryItem(${id||'null'})">${_t('Speichern')}</button>
     </div>
   </div>`);
 }
@@ -210,7 +215,7 @@ function searchInvPlmItem(q) {
   if (!q || q.length < 1) { res.style.display='none'; return; }
   _invPlmTimer = setTimeout(async () => {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
-    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">' + _t('Keine Treffer') + '</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const icon = _itemChip(i.item_type, 18);
       const mc = i.manufacturing_cost;
@@ -257,7 +262,7 @@ async function saveInventoryItem(id) {
     item_id: document.getElementById('inv-item-id').value || null,
     notes: document.getElementById('inv-notes').value.trim()
   };
-  if (!body.name) { toast('Name erforderlich', 'err'); return; }
+  if (!body.name) { toast(_t('Name erforderlich'), 'err'); return; }
   if (id) {
     await api(`/api/inventory/${id}`, 'PUT', body);
   } else {
@@ -265,7 +270,7 @@ async function saveInventoryItem(id) {
     body.stock_qty = stockEl ? parseFloat(stockEl.value)||0 : 0;
     const item = await api('/api/inventory', 'POST', body);
     if (body.stock_qty > 0) {
-      await api(`/api/inventory/${item.id}/movement`, 'POST', { type: 'in', qty: body.stock_qty, notes: 'Anfangsbestand' });
+      await api(`/api/inventory/${item.id}/movement`, 'POST', { type: 'in', qty: body.stock_qty, notes: _t('Anfangsbestand') });
     }
     _hideDynModal();
     await renderInventory();
@@ -286,23 +291,23 @@ async function _orderRefDatalist(listId) {
 async function openMovementModal(itemId, defaultType) {
   const refList = await _orderRefDatalist('mov-ref-orders');
   _showDynModal(`<div class="modal" style="max-width:360px">
-    <div class="modal-head"><div class="modal-title">Lagerbewegung</div>
+    <div class="modal-head"><div class="modal-title">${_t('Lagerbewegung')}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      <div class="fg"><label class="fl">Typ</label>
+      <div class="fg"><label class="fl">${_t('Typ')}</label>
         <select id="mov-type" class="fi" onchange="document.getElementById('mov-qty-label').textContent=this.value==='adjust'?'Neuer Bestand':'Menge'">
-          <option value="in"${defaultType==='in'?' selected':''}>Zugang (+)</option>
-          <option value="out"${defaultType==='out'?' selected':''}>Abgang (−)</option>
-          <option value="adjust">Korrektur (=)</option>
+          <option value="in"${defaultType==='in'?' selected':''}>${_t('Zugang (+)')}</option>
+          <option value="out"${defaultType==='out'?' selected':''}>${_t('Abgang (−)')}</option>
+          <option value="adjust">${_t('Korrektur (=)')}</option>
         </select></div>
-      <div class="fg"><label class="fl" id="mov-qty-label">Menge</label><input id="mov-qty" type="number" min="0" step="0.01" class="fi" placeholder="1"></div>
-      <div class="fg"><label class="fl">Referenz</label>
-        <input id="mov-ref" class="fi" list="mov-ref-orders" placeholder="Freitext oder Auftrag wählen">${refList}</div>
-      <div class="fg"><label class="fl">Notiz</label><input id="mov-notes" class="fi" placeholder="optional"></div>
+      <div class="fg"><label class="fl" id="mov-qty-label">${_t('Menge')}</label><input id="mov-qty" type="number" min="0" step="0.01" class="fi" placeholder="1"></div>
+      <div class="fg"><label class="fl">${_t('Referenz')}</label>
+        <input id="mov-ref" class="fi" list="mov-ref-orders" placeholder="${_t('Freitext oder Auftrag wählen')}">${refList}</div>
+      <div class="fg"><label class="fl">${_t('Notiz')}</label><input id="mov-notes" class="fi" placeholder="${_t('optional')}"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveMovement(${itemId})">Buchen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveMovement(${itemId})">${_t('Buchen')}</button>
     </div>
   </div>`);
 }
@@ -313,18 +318,18 @@ async function saveMovement(itemId) {
   const reference = document.getElementById('mov-ref').value.trim();
   const notes = document.getElementById('mov-notes').value.trim();
   // Korrektur darf auf 0 setzen, Zugang und Abgang brauchen eine Menge
-  if (isNaN(qty) || qty < 0 || (qty === 0 && type !== 'adjust')) { toast('Menge erforderlich', 'err'); return; }
+  if (isNaN(qty) || qty < 0 || (qty === 0 && type !== 'adjust')) { toast(_t('Menge erforderlich'), 'err'); return; }
   try {
     await api(`/api/inventory/${itemId}/movement`, 'POST', { type, qty, reference, notes });
   } catch { return; }   // Meldung kommt schon von api()
   _hideDynModal();
-  toast('Buchung gespeichert', 'ok');
+  toast(_t('Buchung gespeichert'), 'ok');
   await renderInventory();
   openInventoryDetail(itemId);
 }
 
 async function delInventoryItem(id) {
-  if (!confirm('Artikel und alle Bewegungen löschen?')) return;
+  if (!confirm(_t('Artikel und alle Bewegungen löschen?'))) return;
   await api(`/api/inventory/${id}`, 'DELETE');
   closeDetail();
   renderInventory();
@@ -332,7 +337,7 @@ async function delInventoryItem(id) {
 
 async function openInventoryDeductModal(orderItemId, plmItemId, qty, orderId) {
   const invItems = await api(`/api/inventory?item_id=${plmItemId}`);
-  if (!invItems.length) { toast('Kein Lagerartikel für dieses Teil verknüpft', 'err'); return; }
+  if (!invItems.length) { toast(_t('Kein Lagerartikel für dieses Teil verknüpft'), 'err'); return; }
   const order = await api('/api/orders/' + orderId).catch(() => null);
   const refDefault = order?.number || ('AUF-' + orderId);
   const refList = await _orderRefDatalist('ded-ref-orders');
@@ -344,21 +349,21 @@ async function openInventoryDeductModal(orderItemId, plmItemId, qty, orderId) {
   }).join('');
 
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">Lager abbuchen</div>
+    <div class="modal-head"><div class="modal-title">${_t('Lager abbuchen')}</div>
       <button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
-      ${invItems.length > 1 ? `<div class="fg"><label class="fl">Lagerartikel</label>
+      ${invItems.length > 1 ? `<div class="fg"><label class="fl">${_t('Lagerartikel')}</label>
         <select id="ded-inv-id" class="fi" onchange="_dedUpdateStock(this,${qty})">${options}</select></div>`
         : `<input type="hidden" id="ded-inv-id" value="${first.id}">`}
       <div id="ded-stock-info">${_dedStockHtmlInline(first, qty)}</div>
-      <div class="fg"><label class="fl">Menge abbuchen</label>
+      <div class="fg"><label class="fl">${_t('Menge abbuchen')}</label>
         <input id="ded-qty" type="number" min="0.01" step="0.01" class="fi" value="${qty}" oninput="_dedCheckQty(this)"></div>
-      <div class="fg"><label class="fl">Referenz</label>
-        <input id="ded-ref" class="fi" list="ded-ref-orders" value="${esc(refDefault)}" placeholder="Freitext oder Auftrag wählen">${refList}</div>
+      <div class="fg"><label class="fl">${_t('Referenz')}</label>
+        <input id="ded-ref" class="fi" list="ded-ref-orders" value="${esc(refDefault)}" placeholder="${_t('Freitext oder Auftrag wählen')}">${refList}</div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-amber" id="ded-save" onclick="deductFromInventory()">Abbuchen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-amber" id="ded-save" onclick="deductFromInventory()">${_t('Abbuchen')}</button>
     </div>
   </div>`);
 
@@ -370,7 +375,7 @@ function _dedUpdateSaveBtn(inv, qty) {
   if (!btn) return;
   const enough = (inv.stock_qty || 0) >= qty;
   btn.disabled = !enough;
-  btn.title = enough ? '' : `Nicht genug Bestand (${fmtN(inv.stock_qty,2)} ${_unit(inv.unit)} vorhanden)`;
+  btn.title = enough ? '' : _t('Nicht genug Bestand ({stock} vorhanden)', { stock: `${fmtN(inv.stock_qty,2)} ${_unit(inv.unit)}` });
 }
 
 function _dedCheckQty(input) {
@@ -392,9 +397,9 @@ function _dedStockHtmlInline(inv, reqQty) {
   const bg = inv.stock_qty <= 0 || !enough ? 'var(--red-soft)' : avail < reqQty ? 'var(--amber-soft)' : 'var(--green-soft)';
   const border = inv.stock_qty <= 0 || !enough ? 'var(--red-line)' : avail < reqQty ? 'var(--amber-line)' : 'var(--green-line)';
   return `<div style="font-size:13px;padding:7px 10px;border-radius:var(--r-sm);background:${bg};border:1px solid ${border};color:${color}">
-    <b>Bestand: ${fmtN(inv.stock_qty,2)} ${_unit(inv.unit)}</b>`
-    + (planned > 0 ? ` · ${fmtN(planned,0)} geplant · <b>Verfügbar: ${fmtN(avail,2)} ${_unit(inv.unit)}</b>` : '')
-    + (!enough ? ` — <b>Zu wenig Bestand!</b>` : '')
+    <b>${_t('Bestand:')} ${fmtN(inv.stock_qty,2)} ${_unit(inv.unit)}</b>`
+    + (planned > 0 ? ` · ${_t('{n} geplant', { n: fmtN(planned,0) })} · <b>${_t('Verfügbar:')} ${fmtN(avail,2)} ${_unit(inv.unit)}</b>` : '')
+    + (!enough ? ` — <b>${_t('Zu wenig Bestand!')}</b>` : '')
     + `</div>`;
 }
 
@@ -411,16 +416,16 @@ async function deductFromInventory() {
   const invId = invIdEl.value;
   const qty = parseFloat(document.getElementById('ded-qty').value);
   const reference = document.getElementById('ded-ref').value.trim();
-  if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
+  if (!qty || qty <= 0) { toast(_t('Menge erforderlich'), 'err'); return; }
   // Final server-side check
   const fresh = await api(`/api/inventory/${invId}`).catch(() => null);
   if (fresh && fresh.stock_qty < qty) {
-    toast(`Nicht genug Bestand — verfügbar: ${fmtN(fresh.stock_qty,2)} ${_unit(fresh.unit)}`, 'err');
+    toast(_t('Nicht genug Bestand — verfügbar: {stock}', { stock: `${fmtN(fresh.stock_qty,2)} ${_unit(fresh.unit)}` }), 'err');
     return;
   }
-  await api(`/api/inventory/${invId}/movement`, 'POST', { type: 'out', qty, reference, notes: 'Auftragsabgang' });
+  await api(`/api/inventory/${invId}/movement`, 'POST', { type: 'out', qty, reference, notes: _t('Auftragsabgang') });
   _hideDynModal();
-  toast('Abgebucht', 'ok');
+  toast(_t('Abgebucht'), 'ok');
   renderInventory();
 }
 
@@ -443,19 +448,19 @@ let _rmShowAll = false;
 let _rmQ = '';
 function _rmSetSearch(v) { _rmQ = v; _renderRawMaterialsTable(); }
 async function renderRawMaterials() {
-  setLeftHeader('Lager', `
+  setLeftHeader(_t('Lager'), `
     <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-      <input class="fi" id="rm-search-input" placeholder="Suchen…" value="${esc(_rmQ)}"
+      <input class="fi" id="rm-search-input" placeholder="${_t('Suchen…')}" value="${esc(_rmQ)}"
         oninput="_rmSetSearch(this.value)" autocomplete="off"
         style="width:140px;height:28px;padding:2px 8px;font-size:13px">
-      <span style="font-size:11px;color:var(--t4)">Sortierung:</span>
-      ${['material','color','price'].map(s => `<button class="btn btn-sm ${_rmSort===s?'btn-primary':'btn-ghost'}" onclick="_rmSetSort('${s}')">${s==='material'?'Material':s==='color'?'Farbe':'Preis'}</button>`).join('')}
-      <button class="btn btn-sm ${_rmShowAll?'btn-primary':'btn-ghost'}" onclick="_rmShowAll=!_rmShowAll;renderRawMaterials()" title="Leere anzeigen/ausblenden" style="margin-left:4px">${_rmShowAll?'Alle':'Aktive'}</button>
-      <button class="btn btn-primary btn-sm" onclick="openRawMatModal()">+ Material</button>
+      <span style="font-size:11px;color:var(--t4)">${_t('Sortierung:')}</span>
+      ${['material','color','price'].map(s => `<button class="btn btn-sm ${_rmSort===s?'btn-primary':'btn-ghost'}" onclick="_rmSetSort('${s}')">${s==='material'?_t('Material'):s==='color'?_t('Farbe'):_t('Preis')}</button>`).join('')}
+      <button class="btn btn-sm ${_rmShowAll?'btn-primary':'btn-ghost'}" onclick="_rmShowAll=!_rmShowAll;renderRawMaterials()" title="${_t('Leere anzeigen/ausblenden')}" style="margin-left:4px">${_rmShowAll?_t('Alle'):_t('Aktive')}</button>
+      <button class="btn btn-primary btn-sm" onclick="openRawMatModal()">${_t('+ Material')}</button>
     </div>`);
   setLeftTabs('inventory', 'rawmaterials');
   closeDetail();
-  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">Lade…</div></div>`);
+  setLeftBody(`<div class="empty"><div class="empty-icon" style="font-size:20px;opacity:.4">⏳</div><div class="empty-text" style="font-size:13px">${_t('Lade…')}</div></div>`);
   const items = await api('/api/raw-materials');
   state.rawMaterials = items;
 
@@ -466,7 +471,7 @@ async function renderRawMaterials() {
   else items.sort((a,b) => (a.material_type||'').localeCompare(b.material_type||'') || (a.color||'').localeCompare(b.color||''));
 
   if (!items.length) {
-    setLeftBody(`<div class="empty"><div class="empty-icon">🧵</div><div class="empty-text">Noch kein Rohmaterial erfasst</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openRawMatModal()">Erstes Material anlegen</button></div></div>`);
+    setLeftBody(`<div class="empty"><div class="empty-icon">🧵</div><div class="empty-text">${_t('Noch kein Rohmaterial erfasst')}</div><div style="margin-top:10px"><button class="btn btn-primary" onclick="openRawMatModal()">${_t('Erstes Material anlegen')}</button></div></div>`);
     return;
   }
 
@@ -519,17 +524,17 @@ function _renderRawMaterialsTable() {
   setLeftBody(`<div class="tbl-wrap"><table>
     <thead><tr>
       <th></th>
-      <th onclick="_rmSetSort('material')" style="cursor:pointer">Material ${_rmSort==='material'?'↑':''}</th>
-      <th onclick="_rmSetSort('color')" style="cursor:pointer">Farbe ${_rmSort==='color'?'↑':''}</th>
-      <th>Marke</th>
+      <th onclick="_rmSetSort('material')" style="cursor:pointer">${_t('Material')} ${_rmSort==='material'?'↑':''}</th>
+      <th onclick="_rmSetSort('color')" style="cursor:pointer">${_t('Farbe')} ${_rmSort==='color'?'↑':''}</th>
+      <th>${_t('Marke')}</th>
       <th>Name</th>
-      <th onclick="_rmSetSort('price')" style="cursor:pointer;text-align:right">Bestand ${_rmSort==='price'?'↑':''}</th>
+      <th onclick="_rmSetSort('price')" style="cursor:pointer;text-align:right">${_t('Bestand')} ${_rmSort==='price'?'↑':''}</th>
       <th></th>
-      <th>Lots</th>
+      <th>${_t('Lots')}</th>
     </tr></thead>
-    <tbody>${noMatch ? `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--t4)">Keine Treffer für „${esc(q)}"</td></tr>` : rows}</tbody>
+    <tbody>${noMatch ? `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--t4)">${_t('Keine Treffer')} ${_t('für „{q}"', { q: esc(q) })}</td></tr>` : rows}</tbody>
   </table></div>
-  ${hiddenCount > 0 ? `<div style="padding:8px 4px;font-size:12px;color:var(--t4);text-align:center">${hiddenCount} leere ausgeblendet — <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="_rmShowAll=true;renderRawMaterials()">alle anzeigen</button></div>` : ''}`);
+  ${hiddenCount > 0 ? `<div style="padding:8px 4px;font-size:12px;color:var(--t4);text-align:center">${_t('{n} leere ausgeblendet', { n: hiddenCount })} — <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="_rmShowAll=true;renderRawMaterials()">${_t('alle anzeigen')}</button></div>` : ''}`);
   // restore focus to search input if it was active
   const si = document.getElementById('rm-search-input');
   if (si && document.activeElement === si) { const v = si.value; si.value = ''; si.value = v; }
@@ -545,19 +550,19 @@ async function openRawMatDetail(id) {
   const isLow = item.min_qty > 0 && item.stock_qty <= item.min_qty;
   const isEmpty = item.stock_qty <= 0;
   const statusColor = isEmpty ? 'var(--red)' : isLow ? 'var(--amber)' : 'var(--green)';
-  const statusLabel = isEmpty ? 'Leer' : isLow ? 'Niedrig' : 'OK';
+  const statusLabel = isEmpty ? _t('Leer') : isLow ? _t('Niedrig') : _t('OK');
 
   document.getElementById('dp-title').innerHTML =
     `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc(item.material_type||'')}</span>${esc(item.name)}`;
   document.getElementById('dp-tabs').innerHTML =
-    `<button class="tab active" onclick="switchTab(this,'rm-info')">Details</button>
-     <button class="tab" onclick="switchTab(this,'rm-moves')">Buchungen</button>
-     <button class="tab" onclick="switchTab(this,'rm-trace');loadRawMaterialTrace(${id})">Verwendet in</button>`;
+    `<button class="tab active" onclick="switchTab(this,'rm-info')">${_t('Details')}</button>
+     <button class="tab" onclick="switchTab(this,'rm-moves')">${_t('Buchungen')}</button>
+     <button class="tab" onclick="switchTab(this,'rm-trace');loadRawMaterialTrace(${id})">${_t('Verwendet in')}</button>`;
   document.getElementById('dp-body').innerHTML = `
     <div id="rm-trace" style="display:none"></div>
     <div id="rm-info">
       <div style="display:flex;gap:6px;margin-bottom:14px">
-        <button class="btn btn-ghost btn-sm" onclick="openRawMatModal(${id})">✎ Bearbeiten</button>
+        <button class="btn btn-ghost btn-sm" onclick="openRawMatModal(${id})">${_t('✎ Bearbeiten')}</button>
         <button class="btn btn-red btn-sm" onclick="delRawMat(${id})">🗑</button>
       </div>
       <div style="display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
@@ -566,17 +571,17 @@ async function openRawMatDetail(id) {
           <div style="font-size:13px;color:var(--t3)">${_unit(item.unit)}</div>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;gap:3px">
-          ${item.color      ? `<div style="font-size:13px"><span style="color:var(--t4)">Farbe:</span> ${esc(item.color)}</div>` : ''}
-          ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">Abmessungen:</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
-          ${item.weight_g != null ? `<div style="font-size:13px"><span style="color:var(--t4)">Gewicht:</span> <span style="font-family:var(--mono)">${fmtN(item.weight_g,1)} g</span></div>` : ''}
-          ${item.print_temp ? `<div style="font-size:13px"><span style="color:var(--t4)">Düsentemperatur:</span> <span style="font-family:var(--mono)">${item.print_temp}°C</span></div>` : ''}
-          ${item.bed_temp   ? `<div style="font-size:13px"><span style="color:var(--t4)">Betttemperatur:</span> <span style="font-family:var(--mono)">${item.bed_temp}°C</span></div>` : ''}
-          ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">Mindestbestand:</span> ${fmtN(item.min_qty,0)} ${_unit(item.unit)}</div>` : ''}
+          ${item.color      ? `<div style="font-size:13px"><span style="color:var(--t4)">${_t('Farbe:')}</span> ${esc(item.color)}</div>` : ''}
+          ${item.dimensions ? `<div style="font-size:13px"><span style="color:var(--t4)">${_t('Abmessungen:')}</span> <span style="font-family:var(--mono)">${esc(item.dimensions)}</span></div>` : ''}
+          ${item.weight_g != null ? `<div style="font-size:13px"><span style="color:var(--t4)">${_t('Gewicht:')}</span> <span style="font-family:var(--mono)">${fmtN(item.weight_g,1)} g</span></div>` : ''}
+          ${item.print_temp ? `<div style="font-size:13px"><span style="color:var(--t4)">${_t('Düsentemperatur:')}</span> <span style="font-family:var(--mono)">${item.print_temp}°C</span></div>` : ''}
+          ${item.bed_temp   ? `<div style="font-size:13px"><span style="color:var(--t4)">${_t('Betttemperatur:')}</span> <span style="font-family:var(--mono)">${item.bed_temp}°C</span></div>` : ''}
+          ${item.min_qty > 0 ? `<div style="font-size:13px"><span style="color:var(--t4)">${_t('Mindestbestand:')}</span> ${fmtN(item.min_qty,0)} ${_unit(item.unit)}</div>` : ''}
           <div style="font-size:13px;color:${statusColor}">● ${statusLabel}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="btn btn-primary btn-sm" onclick="openRawMatAdjust(${id},'in')">+ Einbuchen</button>
-          <button class="btn btn-ghost btn-sm" onclick="openRawMatAdjust(${id},'out')">− Ausbuchen</button>
+          <button class="btn btn-primary btn-sm" onclick="openRawMatAdjust(${id},'in')">${_t('+ Einbuchen')}</button>
+          <button class="btn btn-ghost btn-sm" onclick="openRawMatAdjust(${id},'out')">${_t('− Ausbuchen')}</button>
         </div>
       </div>
       ${item.notes ? `<div style="font-size:13px;color:var(--t3);margin-bottom:10px">${esc(item.notes)}</div>` : ''}
@@ -591,8 +596,8 @@ async function openRawMatDetail(id) {
         });
         const activeCount   = sorted.filter(l => (l.remaining_qty ?? l.qty ?? 0) > 0).length;
         const depletedCount = sorted.length - activeCount;
-        return `<div class="sep-label" style="margin-top:4px">Lots
-          <span style="font-size:11px;color:var(--t4);font-weight:400;margin-left:6px">${activeCount} aktiv${depletedCount?' · '+depletedCount+' leer':''} · ${fmtN(item.stock_qty,0)} ${_unit(item.unit)} gesamt</span>
+        return `<div class="sep-label" style="margin-top:4px">${_t('Lots')}
+          <span style="font-size:11px;color:var(--t4);font-weight:400;margin-left:6px">${_t('{n} aktiv', { n: activeCount })}${depletedCount ? ' · ' + _t('{n} leer', { n: depletedCount }) : ''} · ${_t('{stock} gesamt', { stock: `${fmtN(item.stock_qty,0)} ${_unit(item.unit)}` })}</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:2px">
           ${sorted.map((l, lotIdx) => {
@@ -612,12 +617,12 @@ async function openRawMatDetail(id) {
                 </span>
                 ${artNr
                   ? `<span id="artnr-${lotKey}" style="font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:8px">${esc(artNr)}</span>`
-                  : `<button id="artnr-${lotKey}" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 5px;margin-left:6px;color:var(--t4)" onclick="assignRmArticleNr('${lotKey}')">+ Nr.</button>`}
+                  : `<button id="artnr-${lotKey}" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 5px;margin-left:6px;color:var(--t4)" onclick="assignRmArticleNr('${lotKey}')">${_t('+ Nr.')}</button>`}
               </span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--t3)'};text-align:right">${fmtN(rem,0)} ${_unit(item.unit)}</span>
               <span style="font-family:var(--mono);font-size:13px;${depleted?'color:var(--t4)':'color:var(--teal)'};text-align:right">${l.unit_price!=null?fmtChf(l.unit_price)+'/'+item.unit:'—'}</span>
-              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px" onclick="openRmPrintModal('${lotKey}')" title="Etikett drucken">🖶</button>
-              ${l.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="editLotRow(${l.id},'${esc(l.lot_number||'')}',${l.qty},${l.unit_price??'null'},'${esc(_unit(item.unit))}',${item.id})" title="Bearbeiten">✎</button>` : '<span></span>'}
+              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px" onclick="openRmPrintModal('${lotKey}')" title="${_t('Etikett drucken')}">🖶</button>
+              ${l.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="editLotRow(${l.id},'${esc(l.lot_number||'')}',${l.qty},${l.unit_price??'null'},'${esc(_unit(item.unit))}',${item.id})" title="${_t('Bearbeiten')}">✎</button>` : '<span></span>'}
             </div>`;
           }).join('')}
         </div>`;
@@ -625,10 +630,10 @@ async function openRawMatDetail(id) {
     </div>
     <div id="rm-moves" style="display:none">
       ${movements.length ? `<div class="tbl-wrap"><table>
-        <thead><tr><th>Datum</th><th>Typ</th><th style="text-align:right">Menge</th><th style="text-align:right">Saldo</th><th style="text-align:right">Preis/Stk</th><th>Lot</th><th>Notiz</th></tr></thead>
+        <thead><tr><th>${_t('Datum')}</th><th>${_t('Typ')}</th><th style="text-align:right">${_t('Menge')}</th><th style="text-align:right">${_t('Saldo')}</th><th style="text-align:right">${_t('Preis/Stk')}</th><th>${_t('Lot')}</th><th>${_t('Notiz')}</th></tr></thead>
         <tbody>${movements.map(m => `<tr>
           <td style="font-family:var(--mono);font-size:11px;color:var(--t4);white-space:nowrap">${fmtDT(m.created_at)}</td>
-          <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px;white-space:nowrap">${m.type==='in'?'↑ Eingang':'↓ Ausgang'}</span></td>
+          <td><span style="color:${m.type==='in'?'var(--green)':'var(--amber)'};font-size:13px;white-space:nowrap">${m.type==='in'?_t('↑ Eingang'):_t('↓ Ausgang')}</span></td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right;color:${m.type==='in'?'var(--green)':'var(--amber)'};white-space:nowrap">${m.type==='in'?'+':'−'}${fmtN(m.qty,0)} ${_unit(item.unit)}</td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3);white-space:nowrap">${fmtN(m.balance??0,0)} ${_unit(item.unit)}</td>
           <td style="font-family:var(--mono);font-size:13px;text-align:right;color:var(--t3)">${m.unit_price!=null?fmtChf(m.unit_price):'—'}</td>
@@ -636,19 +641,19 @@ async function openRawMatDetail(id) {
           <td style="font-size:13px;color:var(--t3)">${esc(m.notes||'')}</td>
         </tr>`).join('')}</tbody>
       </table></div>
-      <div style="font-size:11px;color:var(--t4);margin-top:6px">${movements.length} Buchung${movements.length!==1?'en':''} total</div>`
-      : `<div style="color:var(--t3);font-size:13px">Noch keine Buchungen</div>`}
+      <div style="font-size:11px;color:var(--t4);margin-top:6px">${_t(movements.length === 1 ? '1 Buchung total' : '{n} Buchungen total', { n: movements.length })}</div>`
+      : `<div style="color:var(--t3);font-size:13px">${_t('Noch keine Buchungen')}</div>`}
     </div>`;
   showDetail();
 }
 
 function openRawMatModal(id) {
   _showDynModal(`<div class="modal" style="max-width:560px">
-    <div class="modal-head"><div class="modal-title">${id ? 'Material bearbeiten' : 'Neues Material'}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
-    <div class="modal-body" id="rawmat-modal-body"><div style="color:var(--t3);font-size:13px">Lädt…</div></div>
+    <div class="modal-head"><div class="modal-title">${id ? _t('Material bearbeiten') : _t('Neues Material')}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-body" id="rawmat-modal-body"><div style="color:var(--t3);font-size:13px">${_t('Lädt…')}</div></div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveRawMat(${id||''})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveRawMat(${id||''})">${_t('Speichern')}</button>
     </div>
   </div>`);
   _loadRawMatForm(id);
@@ -660,76 +665,76 @@ async function _loadRawMatForm(id) {
   const item = id ? (all.find(x => x.id === id) || {}) : {};
   document.getElementById('rawmat-modal-body').innerHTML = `
     <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
-      Felder ausfüllen → Name wird automatisch vorgeschlagen (oder manuell überschreiben).
+      ${_t('Felder ausfüllen → Name wird automatisch vorgeschlagen (oder manuell überschreiben).')}
     </div>
     <div class="form-row cols2">
-      <div class="fg"><label class="fl">Materialtyp *</label>
-        <input class="fi" id="rm-type" list="rm-type-list" value="${esc(item.material_type||'')}" placeholder="PLA, PETG, ABS, TPU …" oninput="_rmAutoName();_rmAutoFillTemps()">
+      <div class="fg"><label class="fl">${_t('Materialtyp *')}</label>
+        <input class="fi" id="rm-type" list="rm-type-list" value="${esc(item.material_type||'')}" placeholder="${_t('PLA, PETG, ABS, TPU …')}" oninput="_rmAutoName();_rmAutoFillTemps()">
         <datalist id="rm-type-list">
           <option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option>
           <option>TPU</option><option>Nylon</option><option>HIPS</option><option>PC</option>
-          <option>Aluminium</option><option>Stahl</option><option>Holz</option><option>Sonstiges</option>
+          <option>${_t('Aluminium')}</option><option>${_t('Stahl')}</option><option>${_t('Holz')}</option><option>${_t('Sonstiges')}</option>
         </datalist>
       </div>
-      <div class="fg"><label class="fl">Farbe</label><input class="fi" id="rm-col" value="${esc(item.color||'')}" placeholder="z.B. Schwarz, Galaxy Black" oninput="_rmAutoName()"></div>
+      <div class="fg"><label class="fl">${_t('Farbe')}</label><input class="fi" id="rm-col" value="${esc(item.color||'')}" placeholder="${_t('z.B. Schwarz, Galaxy Black')}" oninput="_rmAutoName()"></div>
     </div>
     <div class="form-row cols3">
-      <div class="fg"><label class="fl">Marke / Hersteller</label>
-        <input class="fi" id="rm-brand" value="${esc(item.brand||'')}" placeholder="z.B. Prusament" oninput="_rmAutoName()" list="rm-brand-list">
+      <div class="fg"><label class="fl">${_t('Marke / Hersteller')}</label>
+        <input class="fi" id="rm-brand" value="${esc(item.brand||'')}" placeholder="${_t('z.B. Prusament')}" oninput="_rmAutoName()" list="rm-brand-list">
         <datalist id="rm-brand-list">
           ${[...new Set((state.rawMaterials||[]).map(m=>m.brand).filter(Boolean))].map(b=>`<option value="${esc(b)}">`).join('')}
         </datalist>
       </div>
-      <div class="fg"><label class="fl">Lot-Nr.</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="z.B. LOT-2024-001"></div>
-      <div class="fg"><label class="fl">Einheit</label>
+      <div class="fg"><label class="fl">${_t('Lot-Nr.')}</label><input class="fi" id="rm-lot" value="${esc(item.lot_number||'')}" placeholder="${_t('z.B. LOT-2024-001')}"></div>
+      <div class="fg"><label class="fl">${_t('Einheit')}</label>
         <select class="fs" id="rm-unit">
           ${['pcs','g','kg','m','cm','mm','ml','l'].map(u=>`<option value="${u}" ${(item.unit||'pcs')===u?'selected':''}>${_unit(u)}</option>`).join('')}
         </select>
       </div>
     </div>
     <div class="form-row">
-      <div class="fg"><label class="fl">Abmessungen / Grösse</label>
+      <div class="fg"><label class="fl">${_t('Abmessungen / Grösse')}</label>
         <div style="display:flex;gap:6px;align-items:center">
-          <input class="fi" id="rm-dim" value="${esc(item.dimensions||'')}" placeholder="z.B. 2x20x200mm, 1000g, Ø12mm, 1m" style="flex:1" oninput="_rmAutoName()">
-          <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:15px" title="Durchmesserzeichen einfügen" onclick="const el=document.getElementById('rm-dim');const s=el.selectionStart,e=el.selectionEnd;el.value=el.value.slice(0,s)+'Ø'+el.value.slice(e);el.selectionStart=el.selectionEnd=s+1;el.focus()">Ø</button>
+          <input class="fi" id="rm-dim" value="${esc(item.dimensions||'')}" placeholder="${_t('z.B. 2x20x200mm, 1000g, Ø12mm, 1m')}" style="flex:1" oninput="_rmAutoName()">
+          <button type="button" class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:15px" title="${_t('Durchmesserzeichen einfügen')}" onclick="const el=document.getElementById('rm-dim');const s=el.selectionStart,e=el.selectionEnd;el.value=el.value.slice(0,s)+'Ø'+el.value.slice(e);el.selectionStart=el.selectionEnd=s+1;el.focus()">Ø</button>
         </div>
       </div>
     </div>
     <div class="form-row">
-      <div class="fg"><label class="fl">Name (auto-generiert, editierbar) *</label><input class="fi" id="rm-name" value="${esc(item.name||'')}" placeholder="z.B. PETG Schwarz 1000g Prusament"></div>
+      <div class="fg"><label class="fl">${_t('Name (auto-generiert, editierbar) *')}</label><input class="fi" id="rm-name" value="${esc(item.name||'')}" placeholder="${_t('z.B. PETG Schwarz 1000g Prusament')}"></div>
     </div>
     <div class="form-row cols3">
-      <div class="fg"><label class="fl">Mindestbestand (Warnung)</label>
+      <div class="fg"><label class="fl">${_t('Mindestbestand (Warnung)')}</label>
         <input class="fi" type="number" id="rm-min" value="${item.min_qty||''}" placeholder="0" min="0" step="any">
       </div>
-      <div class="fg"><label class="fl">Gewicht / Stück (g)</label>
+      <div class="fg"><label class="fl">${_t('Gewicht / Stück (g)')}</label>
         <input class="fi" type="number" id="rm-weight" value="${item.weight_g!=null?item.weight_g:''}" placeholder="z.B. 250" min="0" step="0.1">
       </div>
     </div>
-    ${!id ? `<div class="sep-label" style="margin-top:4px">Anfangsbestand einbuchen</div>
+    ${!id ? `<div class="sep-label" style="margin-top:4px">${_t('Anfangsbestand einbuchen')}</div>
     <div class="form-row cols2">
-      <div class="fg"><label class="fl">Menge</label>
+      <div class="fg"><label class="fl">${_t('Menge')}</label>
         <input class="fi" type="number" id="rm-stock" value="" placeholder="0" min="0" step="any">
       </div>
-      <div class="fg"><label class="fl">Einkaufspreis / Einheit (optional)</label>
+      <div class="fg"><label class="fl">${_t('Einkaufspreis / Einheit (optional)')}</label>
         <input class="fi" type="number" id="rm-init-price" placeholder="z.B. 24.90" min="0" step="0.01">
       </div>
     </div>` : ''}
-    <div class="sep-label" style="margin-top:4px">Druckparameter (optional)</div>
+    <div class="sep-label" style="margin-top:4px">${_t('Druckparameter (optional)')}</div>
     <div class="form-row cols2">
-      <div class="fg"><label class="fl">Düsentemperatur (°C)</label>
+      <div class="fg"><label class="fl">${_t('Düsentemperatur (°C)')}</label>
         <input class="fi" type="number" id="rm-print-temp" value="${item.print_temp||''}" placeholder="z.B. 215" min="0" step="1"></div>
-      <div class="fg"><label class="fl">Betttemperatur (°C)</label>
+      <div class="fg"><label class="fl">${_t('Betttemperatur (°C)')}</label>
         <input class="fi" type="number" id="rm-bed-temp" value="${item.bed_temp||''}" placeholder="z.B. 60" min="0" step="1"></div>
     </div>
     <div class="form-row">
-      <div class="fg"><label class="fl">Notizen</label><textarea class="ft" id="rm-notes" rows="2">${esc(item.notes||'')}</textarea></div>
+      <div class="fg"><label class="fl">${_t('Notizen')}</label><textarea class="ft" id="rm-notes" rows="2">${esc(item.notes||'')}</textarea></div>
     </div>`;
 }
 
 async function saveRawMat(id) {
   const name = document.getElementById('rm-name')?.value.trim();
-  if (!name) { toast('Name erforderlich', 'err'); return; }
+  if (!name) { toast(_t('Name erforderlich'), 'err'); return; }
   const body = {
     name,
     material_type: document.getElementById('rm-type')?.value.trim(),
@@ -744,7 +749,7 @@ async function saveRawMat(id) {
     unit: document.getElementById('rm-unit')?.value,
     notes: document.getElementById('rm-notes')?.value.trim(),
   };
-  if (!body.name) { toast('Name erforderlich', 'err'); return; }
+  if (!body.name) { toast(_t('Name erforderlich'), 'err'); return; }
   if (id) {
     await api(`/api/raw-materials/${id}`, 'PUT', body);
   } else {
@@ -756,7 +761,7 @@ async function saveRawMat(id) {
     const created = await api('/api/raw-materials', 'POST', body);
     if (initQty > 0) {
       await api(`/api/raw-materials/${created.id}/adjust`, 'POST',
-        { qty: initQty, type: 'in', notes: 'Anfangsbestand', unit_price: initPrice, lot_number: initLot });
+        { qty: initQty, type: 'in', notes: _t('Anfangsbestand'), unit_price: initPrice, lot_number: initLot });
     }
   }
   _hideDynModal();
@@ -770,7 +775,7 @@ async function saveRawMat(id) {
     if (el) el.innerHTML = newOpts;
   });
   // li-rawmat is search-based — no innerHTML needed
-  toast('Gespeichert', 'ok');
+  toast(_t('Gespeichert'), 'ok');
   await renderRawMaterials();
 }
 
@@ -802,7 +807,7 @@ function _rmAutoFillTemps() {
 // ── Artikel-Nr. vergeben (inline, kein Modal) ──────────────────
 async function assignRmArticleNr(lotKey) {
   const entry = (window._rmLotMap || {})[lotKey];
-  if (!entry) { toast('Lot-Daten nicht gefunden', 'err'); return; }
+  if (!entry) { toast(_t('Lot-Daten nicht gefunden'), 'err'); return; }
   const { rmId, lotNumber } = entry;
   const btn = document.getElementById('artnr-' + lotKey);
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
@@ -825,14 +830,14 @@ async function assignRmArticleNr(lotKey) {
       }
     }
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = '+ Nr.'; }
-    toast('Fehler: ' + (e.message||'?'), 'err');
+    if (btn) { btn.disabled = false; btn.textContent = _t('+ Nr.'); }
+    toast(_t('Fehler:') + ' ' + (e.message||'?'), 'err');
   }
 }
 
 async function openRmPrintModal(lotKey) {
   const entry = (window._rmLotMap || {})[lotKey];
-  if (!entry) { toast('Lot-Daten nicht gefunden', 'err'); return; }
+  if (!entry) { toast(_t('Lot-Daten nicht gefunden'), 'err'); return; }
   const { rmId, lotNumber, artNr } = entry;
 
   // Direkt drucken — kein Modal, genau wie Produktion
@@ -854,7 +859,7 @@ async function openRmPrintModal(lotKey) {
       unit:           rm.unit,
       line_width:     32,
     });
-    toast('Etikett gedruckt ✓', 'ok');
+    toast(_t('Etikett gedruckt ✓'), 'ok');
   } catch(e) {
     showPrinterError(e);
   } finally {
@@ -864,22 +869,22 @@ async function openRmPrintModal(lotKey) {
 
 function editLotRow(movId, lotNr, qty, price, unit, matId) {
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">Lot bearbeiten</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-head"><div class="modal-title">${_t('Lot bearbeiten')}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body">
       <div class="form-row cols2">
-        <div class="fg"><label class="fl">Lot-Nr.</label>
+        <div class="fg"><label class="fl">${_t('Lot-Nr.')}</label>
           <input class="fi" id="el-lot" value="${esc(lotNr)}" placeholder="—"></div>
-        <div class="fg"><label class="fl">Menge (${unit})</label>
+        <div class="fg"><label class="fl">${_t('Menge ({unit})', { unit })}</label>
           <input class="fi" type="number" id="el-qty" value="${qty!=null?qty:''}" min="0" step="any"></div>
       </div>
       <div class="form-row">
-        <div class="fg"><label class="fl">Einkaufspreis / ${unit}</label>
+        <div class="fg"><label class="fl">${_t('Einkaufspreis / {unit}', { unit })}</label>
           <input class="fi" type="number" id="el-price" value="${price!=null?price:''}" min="0" step="0.01" placeholder="—"></div>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveLotRow(${movId},${matId})">Speichern</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveLotRow(${movId},${matId})">${_t('Speichern')}</button>
     </div>
   </div>`);
 }
@@ -889,10 +894,10 @@ async function saveLotRow(movId, matId) {
   const qty         = parseFloat(document.getElementById('el-qty')?.value);
   const priceRaw    = document.getElementById('el-price')?.value.trim();
   const unit_price  = priceRaw !== '' ? parseFloat(priceRaw) : null;
-  if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
+  if (!qty || qty <= 0) { toast(_t('Menge erforderlich'), 'err'); return; }
   await api(`/api/raw-material-movements/${movId}`, 'PUT', { lot_number, qty, unit_price });
   _hideDynModal();
-  toast('Lot gespeichert', 'ok');
+  toast(_t('Lot gespeichert'), 'ok');
   _refreshRawMaterials();
   await renderRawMaterials();
   openRawMatDetail(matId);
@@ -907,14 +912,14 @@ async function openRawMatAdjust(id, type) {
     const lots = (mat?.lots || []).filter(l => l.lot_number);
     if (lots.length) {
       lotsHtml = `<div class="form-row">
-        <div class="fg"><label class="fl">Von Lot abbuchen (optional)</label>
+        <div class="fg"><label class="fl">${_t('Von Lot abbuchen (optional)')}</label>
           <select class="fs" id="adj-lot-sel">
-            <option value="">— ohne Lot-Zuordnung —</option>
+            <option value="">${_t('— ohne Lot-Zuordnung —')}</option>
             ${lots.map(l => {
               const rem = l.remaining_qty ?? l.qty ?? 0;
               const depleted = rem <= 0;
               return `<option value="${esc(l.lot_number)}" ${depleted?'disabled':''} style="${depleted?'text-decoration:line-through;color:var(--t4)':''}">
-                ${esc(l.lot_number)} — ${fmtN(rem,0)} verfügbar${l.unit_price!=null?' · '+fmtChf(l.unit_price):''}
+                ${esc(l.lot_number)} — ${_t('{n} verfügbar', { n: fmtN(rem,0) })}${l.unit_price!=null?' · '+fmtChf(l.unit_price):''}
               </option>`;
             }).join('')}
           </select>
@@ -923,30 +928,30 @@ async function openRawMatAdjust(id, type) {
     }
   }
   _showDynModal(`<div class="modal" style="max-width:420px">
-    <div class="modal-head"><div class="modal-title">${type==='in'?'+ Einbuchen':'− Ausbuchen'}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
+    <div class="modal-head"><div class="modal-title">${type==='in'?_t('+ Einbuchen'):_t('− Ausbuchen')}</div><button class="btn btn-icon btn-ghost" onclick="_hideDynModal()">✕</button></div>
     <div class="modal-body">
       ${lotsHtml}
       <div class="form-row cols2">
-        <div class="fg"><label class="fl">Menge *</label><input class="fi" type="number" id="adj-qty" min="0.001" step="any" placeholder="0"></div>
-        <div class="fg"><label class="fl">Notiz</label><input class="fi" id="adj-notes" placeholder="z.B. neue Spule, Produktion XY"></div>
+        <div class="fg"><label class="fl">${_t('Menge *')}</label><input class="fi" type="number" id="adj-qty" min="0.001" step="any" placeholder="0"></div>
+        <div class="fg"><label class="fl">${_t('Notiz')}</label><input class="fi" id="adj-notes" placeholder="${_t('z.B. neue Spule, Produktion XY')}"></div>
       </div>
       ${type==='in' ? `<div class="form-row cols2">
-        <div class="fg"><label class="fl">Lot-Nr. (optional)</label>
-          <input class="fi" id="adj-lot" placeholder="z.B. LOT-2025-042"></div>
-        <div class="fg"><label class="fl">Einkaufspreis / Einheit (optional)</label>
+        <div class="fg"><label class="fl">${_t('Lot-Nr. (optional)')}</label>
+          <input class="fi" id="adj-lot" placeholder="${_t('z.B. LOT-2025-042')}"></div>
+        <div class="fg"><label class="fl">${_t('Einkaufspreis / Einheit (optional)')}</label>
           <input class="fi" type="number" id="adj-price" min="0" step="0.01" placeholder="z.B. 24.90"></div>
       </div>` : ''}
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveRawMatAdjust(${id},'${type}')">Buchen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+      <button class="btn btn-primary" onclick="saveRawMatAdjust(${id},'${type}')">${_t('Buchen')}</button>
     </div>
   </div>`);
 }
 
 async function saveRawMatAdjust(id, type) {
   const qty = parseFloat(document.getElementById('adj-qty')?.value);
-  if (!qty || qty <= 0) { toast('Menge erforderlich', 'err'); return; }
+  if (!qty || qty <= 0) { toast(_t('Menge erforderlich'), 'err'); return; }
   const notes = document.getElementById('adj-notes')?.value.trim();
   const unit_price = parseFloat(document.getElementById('adj-price')?.value) || null;
   // 'in': lot from text field; 'out': lot from dropdown selector
@@ -955,7 +960,7 @@ async function saveRawMatAdjust(id, type) {
     : (document.getElementById('adj-lot')?.value.trim() || null);
   const r = await api(`/api/raw-materials/${id}/adjust`, 'POST', { qty, type, notes, unit_price, lot_number });
   _hideDynModal();
-  toast(`Gebucht — neuer Bestand: ${fmtN(r.stock_qty,0)}`, 'ok');
+  toast(_t('Gebucht — neuer Bestand: {n}', { n: fmtN(r.stock_qty,0) }), 'ok');
   await renderRawMaterials();
   openRawMatDetail(id);
 }

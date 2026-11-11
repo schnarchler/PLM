@@ -18,26 +18,26 @@ async function openOrderFromProduction(orderId) {
 }
 
 async function renderDeliveries() {
-  setLeftHeader('Produktion', `<button class="btn btn-primary btn-sm" onclick="openDeliveryModal()">+ Produktionsauftrag</button>`);
+  setLeftHeader(_t('Produktion'), `<button class="btn btn-primary btn-sm" onclick="openDeliveryModal()">${_t('+ Produktionsauftrag')}</button>`);
   const rows = await api('/api/deliveries');
   state.deliveries = rows;
-  if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Noch keine Produktionsaufträge</div></div>`); return; }
+  if (!rows.length) { setLeftBody(`<div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">${_t('Noch keine Produktionsaufträge')}</div></div>`); return; }
   // Produktion zu einem Auftrag wird im Auftrag selbst bearbeitet (Tab
   // "Produktion"). Diese Liste zeigt darum standardmaessig nur eigenstaendige
   // Produktionsauftraege — sonst pflegt man dasselbe an zwei Stellen.
   const linked = rows.filter(d => d.order_id).length;
-  setLeftBody(_filterBar(_deliveryFilter,[['DRAFT','Entwurf'],['READY','Bereit'],['DELIVERED','Geliefert']],'_clearDeliveryFilter','_delivery')+
+  setLeftBody(_filterBar(_deliveryFilter,[['DRAFT',_t('Entwurf')],['READY',_t('Bereit')],['DELIVERED',_t('Geliefert')]],'_clearDeliveryFilter','_delivery')+
     `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">
       <button class="btn btn-sm ${_deliveryShowLinked ? 'btn-ghost' : 'btn-primary'}"
-        onclick="_setDeliveryScope(false)">Eigenständig</button>
+        onclick="_setDeliveryScope(false)">${_t('Eigenständig')}</button>
       <button class="btn btn-sm ${_deliveryShowLinked ? 'btn-primary' : 'btn-ghost'}"
-        onclick="_setDeliveryScope(true)">Alle${linked ? ` (${linked} zu Aufträgen)` : ''}</button>
+        onclick="_setDeliveryScope(true)">${_t('Alle')}${linked ? ` (${_t('{n} zu Aufträgen', { n: linked })})` : ''}</button>
       <span style="color:var(--t4);font-size:12.5px">
-        Produktionsaufträge zu einem Auftrag bearbeitest du im Auftrag unter „Produktion“.
+        ${_t('Produktionsaufträge zu einem Auftrag bearbeitest du im Auftrag unter „Produktion“.')}
       </span>
     </div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Nummer</th><th>Bezeichnung</th><th>Kunde</th><th>Auftrag</th><th>Pos.</th><th>Status</th><th>Datum</th><th></th></tr></thead>
+      <thead><tr><th>${_t('Nummer')}</th><th>${_t('Bezeichnung')}</th><th>${_t('Kunde')}</th><th>${_t('Auftrag')}</th><th>${_t('Pos.')}</th><th>Status</th><th>${_t('Datum')}</th><th></th></tr></thead>
       <tbody id="_delivery-tbody"></tbody>
     </table></div>`);
   _render_deliveryRows();
@@ -62,17 +62,17 @@ function _render_deliveryRows() {
     <td>${d.order_id
       ? `<span style="font-family:var(--mono);font-size:12px;color:var(--blue);cursor:pointer"
            onclick="event.stopPropagation();openOrderFromProduction(${d.order_id})"
-           title="Im Auftrag bearbeiten">${esc(d.order_number||'Auftrag')} ↗</span>`
-      : '<span style="color:var(--t4);font-size:12.5px">eigenständig</span>'}</td>
+           title="${_t('Im Auftrag bearbeiten')}">${esc(d.order_number||_t('Auftrag'))} ↗</span>`
+      : '<span style="color:var(--t4);font-size:12.5px">' + _t('eigenständig') + '</span>'}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${d.item_count||0}</td>
     <td>${_stSel('delivery',d.id,d.status)}</td>
     <td style="font-family:var(--mono);font-size:13px;color:var(--t3)">${fmtD(d.delivery_date)}</td>
     <td style="display:flex;gap:4px">
-      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="Lieferschein">&#128196;</button>
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();generateDeliveryDoc(${d.id})" title="${_t('Lieferschein')}">&#128196;</button>
       ${d.status === 'DRAFT' ? `<button class="btn btn-red btn-icon btn-sm" onclick="event.stopPropagation();delDelivery(${d.id})">&#x2715;</button>` : ''}
     </td>
   </tr>`).join('') || `<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">${
-    _deliveryShowLinked ? 'Keine Treffer' : 'Keine eigenständigen Produktionsaufträge — alle hängen an Aufträgen.'}</td></tr>`;
+    _deliveryShowLinked ? _t('Keine Treffer') : _t('Keine eigenständigen Produktionsaufträge — alle hängen an Aufträgen.')}</td></tr>`;
 }
 
 async function openDeliveryDetail(id) {
@@ -81,33 +81,33 @@ async function openDeliveryDetail(id) {
   _pushHistory({ view: 'deliveries', detailType: 'delivery', detailId: d.id });
   document.getElementById('dp-title').innerHTML = `<strong>${d.number}</strong>&nbsp;${esc(d.title)}`;
   document.getElementById('dp-tabs').innerHTML = `
-    <button class="tab active" onclick="switchTab(this,'dd-pos')">Positionen</button>
+    <button class="tab active" onclick="switchTab(this,'dd-pos')">${_t('Positionen')}</button>
     <button class="tab" onclick="switchTab(this,'dd-info')">Details</button>
-    <button class="tab" onclick="switchTab(this,'dd-trace');loadDeliveryTrace(${id})">Rückverfolgung</button>
-    ${d.changelog ? `<button class="tab" onclick="switchTab(this,'dd-log')">Verlauf</button>` : ''}`;
+    <button class="tab" onclick="switchTab(this,'dd-trace');loadDeliveryTrace(${id})">${_t('Rückverfolgung')}</button>
+    ${d.changelog ? `<button class="tab" onclick="switchTab(this,'dd-log')">${_t('Verlauf')}</button>` : ''}`;
   document.getElementById('dp-body').innerHTML = `
     <div id="dd-trace" style="display:none"></div>
     <div id="dd-log" style="display:none">${renderChangelogList(d.changelog)}</div>
     <div id="dd-pos">
       ${renderDeliveryItems(d.items||[], id, d.status === 'DELIVERED')}
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${id})">+ Position</button>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${id})">${_t('+ Position')}</button>
     </div>
     <div id="dd-info" style="display:none">
-      <div class="sep-label">Kopfdaten</div>
+      <div class="sep-label">${_t('Kopfdaten')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
         <div><div class="ps-label">Status</div>${_stSel('delivery',id,d.status)}</div>
-        <div><div class="ps-label">Kunde</div>${d.customer_name||'—'}</div>
-        <div><div class="ps-label">Lieferdatum</div>${fmtD(d.delivery_date)}</div>
-        ${d.manufacture_date?`<div><div class="ps-label">Herstellungsdatum</div>${fmtD(d.manufacture_date)}</div>`:''}
-        ${d.order_number?`<div><div class="ps-label">Auftrag</div>${d.order_number} ${d.order_title?'– '+esc(d.order_title):''}</div>`:''}
-        ${d.notes?`<div style="grid-column:span 2"><div class="ps-label">Notizen</div><span style="color:var(--t2)">${esc(d.notes)}</span></div>`:''}
+        <div><div class="ps-label">${_t('Kunde')}</div>${d.customer_name||'—'}</div>
+        <div><div class="ps-label">${_t('Lieferdatum')}</div>${fmtD(d.delivery_date)}</div>
+        ${d.manufacture_date?`<div><div class="ps-label">${_t('Herstellungsdatum')}</div>${fmtD(d.manufacture_date)}</div>`:''}
+        ${d.order_number?`<div><div class="ps-label">${_t('Auftrag')}</div>${d.order_number} ${d.order_title?'– '+esc(d.order_title):''}</div>`:''}
+        ${d.notes?`<div style="grid-column:span 2"><div class="ps-label">${_t('Notizen')}</div><span style="color:var(--t2)">${esc(d.notes)}</span></div>`:''}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-sm" onclick="openDeliveryModal(${id})">✏️ Bearbeiten</button>
-        <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${id})">&#128196; Lieferschein</button>
+        <button class="btn btn-ghost btn-sm" onclick="openDeliveryModal(${id})">${_t('✏️ Bearbeiten')}</button>
+        <button class="btn btn-ghost btn-sm" onclick="generateDeliveryDoc(${id})">${_t('&#128196; Lieferschein')}</button>
         ${d.status === 'DRAFT'
-          ? `<button class="btn btn-red btn-sm" onclick="delDelivery(${id})">🗑 Löschen</button>`
-          : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">🔒 Löschen nur unter Einstellungen → Admin</span>`}
+          ? `<button class="btn btn-red btn-sm" onclick="delDelivery(${id})">${_t('🗑 Löschen')}</button>`
+          : `<span style="font-size:13px;color:var(--t3);font-family:var(--mono)">${_t('🔒 Löschen nur unter Einstellungen → Admin')}</span>`}
       </div>
     </div>`;
   _markActiveRow(id);
@@ -118,7 +118,7 @@ async function openDeliveryDetail(id) {
 // Eine Position folgt bis zur Lieferung der aktiven Revision (oder einer von
 // Hand gewählten) und wird beim Status „Geliefert" fixiert. Darstellung wie in
 // der Stückliste: Schloss = fest, ↑revN = inzwischen gibt es eine neuere.
-const REV_FIXED_LABEL = { manual: 'von Hand gewählt', delivery: 'beim Liefern fixiert', migration: 'nachträglich aus dem Lieferdatum ermittelt' };
+const REV_FIXED_LABEL = { manual: _t('von Hand gewählt'), delivery: _t('beim Liefern fixiert'), migration: _t('nachträglich aus dem Lieferdatum ermittelt') };
 
 function _deliveryRevBadge(item, deliveryId, delivered) {
   const eff = item.effective_rev;
@@ -127,32 +127,32 @@ function _deliveryRevBadge(item, deliveryId, delivered) {
   const newest = item.active_rev ? 'rev' + item.active_rev.rev : '—';
   const how = REV_FIXED_LABEL[item.rev_fixed] || '';
   const title = delivered
-    ? `Geliefert als rev${eff.rev}${how ? ' (' + how + ')' : ''}${item.rev_outdated ? ' — aktuell ist ' + newest : ''}. Klicken für den gelieferten Stand.`
+    ? _t('Geliefert als rev{rev}', { rev: eff.rev }) + (how ? ' (' + how + ')' : '') + (item.rev_outdated ? ' — ' + _t('aktuell ist {newest}', { newest }) : '') + '. ' + _t('Klicken für den gelieferten Stand.')
     : fixed
-      ? `Fest auf rev${eff.rev}${item.rev_outdated ? ' — aktuell wäre ' + newest : ''}. Klicken zum Ändern.`
-      : `Folgt automatisch der aktiven Revision (${newest}) und wird beim Liefern fixiert. Klicken zum Fixieren.`;
+      ? (item.rev_outdated ? _t('Fest auf rev{rev} — aktuell wäre {newest}. Klicken zum Ändern.', { rev: eff.rev, newest }) : _t('Fest auf rev{rev}. Klicken zum Ändern.', { rev: eff.rev }))
+      : _t('Folgt automatisch der aktiven Revision ({newest}) und wird beim Liefern fixiert. Klicken zum Fixieren.', { newest });
   return `<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;cursor:pointer" title="${esc(title)}"
       onclick="event.stopPropagation();openDeliveryRevPicker(${item.id},${deliveryId})">
       <span class="status st-${eff.status}" style="font-size:11px${fixed ? '' : ';opacity:.7'}">${fixed ? '🔒 ' : ''}rev${esc(eff.rev)}</span>
       ${item.rev_outdated ? `<span style="font-size:10px;font-family:var(--mono);color:var(--amber)">↑${newest}</span>` : ''}
       ${item.rev_fixed === 'migration' ? '<span style="font-size:10px;color:var(--t4)">ermittelt</span>' : ''}
-      ${item.structure?.length ? `<span class="chip" style="font-size:10px">${item.structure.length} Teile</span>` : ''}
+      ${item.structure?.length ? `<span class="chip" style="font-size:10px">${_t('{n} Teile', { n: item.structure.length })}</span>` : ''}
     </span>`;
 }
 
 // Gelieferte Struktur einer Baugruppe: jedes Unterteil mit seiner Revision
 function _deliveredStructureHtml(rows) {
   if (!rows?.length) return '';
-  return `<div class="sep-label">Gelieferte Struktur</div>
+  return `<div class="sep-label">${_t('Gelieferte Struktur')}</div>
     <div style="display:flex;flex-direction:column;gap:3px">
-      ${rows.map(r => `<div onclick="_hideDynModal();gotoPlmItem(${r.item_id})" title="Item öffnen"
+      ${rows.map(r => `<div onclick="_hideDynModal();gotoPlmItem(${r.item_id})" title="${_t('Item öffnen')}"
           style="display:flex;align-items:center;gap:8px;padding:5px 9px 5px ${9 + (r.depth - 1) * 18}px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-xs);cursor:pointer">
           ${_itemChip(r.item_type, 14)}
           <span style="font-family:var(--mono);font-size:12px;color:var(--blue);flex-shrink:0">${esc(r.item_number || '—')}</span>
           <span style="flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name || '')}</span>
           <span style="font-family:var(--mono);font-size:12px;color:var(--t3);flex-shrink:0">${fmtN(r.quantity, 0)}×</span>
           <span class="status st-${r.rev_status || 'DFT'}" style="font-size:11px;flex-shrink:0">🔒 rev${esc(r.rev || '—')}</span>
-          ${r.rev_outdated ? `<span style="font-size:10px;font-family:var(--mono);color:var(--amber);flex-shrink:0" title="Inzwischen gibt es rev${esc(r.active_rev)}">↑rev${esc(r.active_rev)}</span>` : ''}
+          ${r.rev_outdated ? `<span style="font-size:10px;font-family:var(--mono);color:var(--amber);flex-shrink:0" title="${_t('Inzwischen gibt es rev{rev}', { rev: esc(r.active_rev) })}">↑rev${esc(r.active_rev)}</span>` : ''}
         </div>`).join('')}
     </div>`;
 }
@@ -163,7 +163,7 @@ async function openDeliveryRevPicker(deliveryItemId, deliveryId) {
   const pos = (d.items || []).find(x => x.id === deliveryItemId);
   if (!pos?.item_id) return;
   try { item = await api(`/api/items/${pos.item_id}`); }
-  catch { return toast('Item konnte nicht geladen werden', 'err'); }
+  catch { return toast(_t('Item konnte nicht geladen werden'), 'err'); }
   const delivered = d.status === 'DELIVERED';
   const revs = item.revisions || [];
   const chosen = pos.revision_id || null;
@@ -173,26 +173,25 @@ async function openDeliveryRevPicker(deliveryItemId, deliveryId) {
   _showDynModal(`<div class="modal" style="max-width:580px">
     <div class="modal-head">
       <div class="modal-title" style="display:flex;align-items:center;gap:8px;min-width:0">
-        <span>${delivered ? 'Gelieferter Stand' : 'Revision in der Produktion'}</span>
+        <span>${delivered ? _t('Gelieferter Stand') : _t('Revision in der Produktion')}</span>
         <span style="font-family:var(--mono);font-size:13px;color:var(--t3);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.item_number)}</span>
       </div>
     </div>
     <div class="modal-body" style="max-height:66vh;overflow-y:auto">
       <div style="font-size:13px;color:var(--t3);margin-bottom:12px">${esc(item.name)} · ${esc(d.number)}</div>
       ${delivered ? `<div style="font-size:13px;color:var(--t2);padding:9px 11px;background:var(--teal-soft);border:1px solid var(--teal-line);border-radius:var(--r-sm);margin-bottom:12px;line-height:1.55">
-          🚚 Geliefert als <strong>rev${esc(pos.effective_rev?.rev || '—')}</strong>${how ? ' (' + how + ')' : ''}.
-          Wurde die falsche Revision erfasst, hier korrigieren. Zum Lösen den Status
-          des Produktionsauftrags zurücksetzen.
+          🚚 ${_t('Geliefert als {rev}', { rev: `<strong>rev${esc(pos.effective_rev?.rev || '—')}</strong>` })}${how ? ' (' + how + ')' : ''}.
+          ${_t('Wurde die falsche Revision erfasst, hier korrigieren. Zum Lösen den Status des Produktionsauftrags zurücksetzen.')}
         </div>` : ''}
-      ${delivered ? '' : _revPickRow(!chosen, 'Automatisch',
-          `Folgt der aktiven Revision (rev${esc(pos.active_rev?.rev || '—')}) und wird beim Liefern fixiert`,
-          `_setDeliveryRev(${pos.id},null,${deliveryId})`, '<span class="chip" style="flex-shrink:0">Standard</span>')}
-      <div class="sep-label">${delivered ? 'Korrigieren auf' : 'Fest auf Revision'}</div>
+      ${delivered ? '' : _revPickRow(!chosen, _t('Automatisch'),
+          _t('Folgt der aktiven Revision (rev{rev}) und wird beim Liefern fixiert', { rev: esc(pos.active_rev?.rev || '—') }),
+          `_setDeliveryRev(${pos.id},null,${deliveryId})`, '<span class="chip" style="flex-shrink:0">' + _t('Standard') + '</span>')}
+      <div class="sep-label">${delivered ? _t('Korrigieren auf') : _t('Fest auf Revision')}</div>
       ${_revPickList(revs, chosen, activeId, r => `_setDeliveryRev(${pos.id},${r.id},${deliveryId})`)}
       ${delivered ? _deliveredStructureHtml(pos.structure) : ''}
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_hideDynModal()">Schliessen</button>
+      <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Schliessen')}</button>
     </div>
   </div>`);
 }
@@ -201,17 +200,17 @@ async function _setDeliveryRev(deliveryItemId, revId, deliveryId) {
   _hideDynModal();
   try {
     const r = await api(`/api/delivery-items/${deliveryItemId}/revision`, 'PUT', { rev_id: revId });
-    toast(revId ? `Fest auf rev${r.rev}` : 'Folgt wieder automatisch', 'ok');
+    toast(revId ? _t('Fest auf rev{rev}', { rev: r.rev }) : _t('Folgt wieder automatisch'), 'ok');
   } catch { return; }
   if (!refreshOrderProductionIfOpen()) openDeliveryDetail(deliveryId);
 }
 
 function renderDeliveryItems(items, deliveryId, delivered = false) {
-  if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">Noch keine Positionen</div>`;
+  if (!items.length) return `<div style="color:var(--t3);font-size:13px;padding:8px 0">${_t('Noch keine Positionen')}</div>`;
   const allBtn = `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-    ${items.length > 1 ? `<button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">🖶 Alle kurz</button>
-    <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'full')">🖶 Alle mit Parametern</button>` : ''}
-    <button class="btn btn-ghost btn-sm" onclick="printPartLabels(${deliveryId})" title="Etiketten mit Kurzcode und QR-Code für Beutel oder Kiste">🏷 Etiketten</button>
+    ${items.length > 1 ? `<button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'short')">${_t('🖶 Alle kurz')}</button>
+    <button class="btn btn-teal btn-sm" onclick="printReceiptAll(${deliveryId},'full')">${_t('🖶 Alle mit Parametern')}</button>` : ''}
+    <button class="btn btn-ghost btn-sm" onclick="printPartLabels(${deliveryId})" title="${_t('Etiketten mit Kurzcode und QR-Code für Beutel oder Kiste')}">${_t('🏷 Etiketten')}</button>
   </div>`;
   return allBtn + items.map((item,idx) => {
     const isFirst = idx===0, isLast = idx===items.length-1;
@@ -228,14 +227,14 @@ function renderDeliveryItems(items, deliveryId, delivered = false) {
         </div>
         ${item.item_number?`<span style="font-family:var(--mono);font-size:13px;color:var(--blue)">${item.item_number}</span>`:''}
         ${_deliveryRevBadge(item, deliveryId, delivered)}
-        ${item.short_code?`<span class="chip" style="flex-shrink:0" title="Kurzcode auf dem Teil">${esc(item.short_code + (item.effective_rev ? '-' + item.effective_rev.rev : ''))}</span>`:''}
+        ${item.short_code?`<span class="chip" style="flex-shrink:0" title="${_t('Kurzcode auf dem Teil')}">${esc(item.short_code + (item.effective_rev ? '-' + item.effective_rev.rev : ''))}</span>`:''}
         <span style="font-size:13px;font-weight:500;flex:1">${esc(item.description)}</span>
         ${item.rm_name?`<span style="font-size:11px;background:rgba(157,180,255,.12);color:var(--blue);border-radius:3px;padding:1px 6px;font-family:var(--mono);flex-shrink:0">${esc(item.rm_name)}</span>`:''}
         <span style="font-family:var(--mono);font-size:13px;color:var(--t2)">${item.quantity} ${_unit(item.unit)}</span>
         ${item.unit_price!=null?`<span style="font-family:var(--mono);font-size:13px;color:var(--green)">${fmtCHF(parseFloat(item.unit_price))}</span>`:''}
-        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="Kurzbeleg">🖶</button>
-        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'full')" title="Vollbeleg mit Parametern">🖶≡</button>
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="openDeliveryItemModal(${deliveryId},${item.id})" title="Bearbeiten">✏</button>
+        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'short')" title="${_t('Kurzbeleg')}">🖶</button>
+        <button class="btn btn-teal btn-icon btn-sm" onclick="printReceipt(${item.id},'full')" title="${_t('Vollbeleg mit Parametern')}">🖶≡</button>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="openDeliveryItemModal(${deliveryId},${item.id})" title="${_t('Bearbeiten')}">✏</button>
         <button class="btn btn-red btn-icon btn-sm" onclick="delDeliveryItem(${item.id},${deliveryId})">✕</button>
       </div>
       ${item.print_settings ? `<div style="padding:8px 10px">${renderSettingsPreview(item.print_settings)}</div>` : ''}
@@ -245,48 +244,48 @@ function renderDeliveryItems(items, deliveryId, delivered = false) {
 
 // ── 3MF SETTINGS RENDERING ────────────────────────────────────
 const SETTINGS_GROUPS = [
-  { label: 'Profil', color: 'var(--blue)', keys: [
-    ['print_settings_id','Druckprofil'], ['printer_settings_id','Drucker'], ['filament_settings_id','Filamentprofil']
+  { label: _t('Profil'), color: 'var(--blue)', keys: [
+    ['print_settings_id',_t('Druckprofil')], ['printer_settings_id',_t('Drucker')], ['filament_settings_id',_t('Filamentprofil')]
   ]},
-  { label: 'Schichten & Wände', color: 'var(--teal)', keys: [
-    ['layer_height','Schichthöhe (mm)'], ['first_layer_height','1. Schicht (mm)'],
-    ['perimeters','Perimeter'], ['top_solid_layers','Oben (Lagen)'], ['bottom_solid_layers','Unten (Lagen)'],
-    ['spiral_vase','Vase-Modus']
+  { label: _t('Schichten & Wände'), color: 'var(--teal)', keys: [
+    ['layer_height',_t('Schichthöhe (mm)')], ['first_layer_height',_t('1. Schicht (mm)')],
+    ['perimeters',_t('Perimeter')], ['top_solid_layers',_t('Oben (Lagen)')], ['bottom_solid_layers',_t('Unten (Lagen)')],
+    ['spiral_vase',_t('Vase-Modus')]
   ]},
-  { label: 'Füllung', color: 'var(--amber)', keys: [
-    ['fill_density','Füllung (%)'], ['fill_pattern','Muster'],
-    ['top_fill_pattern','Oben-Muster'], ['bottom_fill_pattern','Unten-Muster']
+  { label: _t('Füllung'), color: 'var(--amber)', keys: [
+    ['fill_density',_t('Füllung (%)')], ['fill_pattern',_t('Muster')],
+    ['top_fill_pattern',_t('Oben-Muster')], ['bottom_fill_pattern',_t('Unten-Muster')]
   ]},
-  { label: 'Stützen', color: 'var(--purple)', keys: [
-    ['support_material','Aktiv'], ['support_material_auto','Auto-Support'],
-    ['support_material_threshold','Überhangwinkel (°)'], ['support_material_pattern','Muster'],
-    ['support_material_style','Stil'], ['raft_layers','Raft-Lagen']
+  { label: _t('Stützen'), color: 'var(--purple)', keys: [
+    ['support_material',_t('Aktiv')], ['support_material_auto',_t('Auto-Support')],
+    ['support_material_threshold',_t('Überhangwinkel (°)')], ['support_material_pattern',_t('Muster')],
+    ['support_material_style',_t('Stil')], ['raft_layers',_t('Raft-Lagen')]
   ]},
-  { label: 'Temperatur', color: 'var(--red)', keys: [
-    ['temperature','Düsentemperatur (°C)'], ['first_layer_temperature','Düse 1. Schicht (°C)'],
-    ['bed_temperature','Betttemperatur (°C)'], ['first_layer_bed_temperature','Bett 1. Schicht (°C)'],
-    ['nozzle_temperature','Düsentemperatur (°C)'], ['hot_plate_temp','Betttemperatur (°C)']
+  { label: _t('Temperatur'), color: 'var(--red)', keys: [
+    ['temperature',_t('Düsentemperatur (°C)')], ['first_layer_temperature',_t('Düse 1. Schicht (°C)')],
+    ['bed_temperature',_t('Betttemperatur (°C)')], ['first_layer_bed_temperature',_t('Bett 1. Schicht (°C)')],
+    ['nozzle_temperature',_t('Düsentemperatur (°C)')], ['hot_plate_temp',_t('Betttemperatur (°C)')]
   ]},
-  { label: 'Geschwindigkeit', color: 'var(--green)', keys: [
-    ['perimeter_speed','Perimeter (mm/s)'], ['infill_speed','Füllung (mm/s)'],
-    ['travel_speed','Travel (mm/s)'], ['first_layer_speed','1. Schicht (mm/s)'],
-    ['bridge_speed','Brücken (mm/s)']
+  { label: _t('Geschwindigkeit'), color: 'var(--green)', keys: [
+    ['perimeter_speed',_t('Perimeter (mm/s)')], ['infill_speed',_t('Füllung (mm/s)')],
+    ['travel_speed',_t('Travel (mm/s)')], ['first_layer_speed',_t('1. Schicht (mm/s)')],
+    ['bridge_speed',_t('Brücken (mm/s)')]
   ]},
-  { label: 'Kühlung', color: 'var(--teal)', keys: [
-    ['fan_always_on','Lüfter immer an'], ['min_fan_speed','Min-Lüfter (%)'],
-    ['max_fan_speed','Max-Lüfter (%)'], ['bridge_fan_speed','Brücken-Lüfter (%)'],
-    ['disable_fan_first_layers','Lüfter aus (erste Lagen)']
+  { label: _t('Kühlung'), color: 'var(--teal)', keys: [
+    ['fan_always_on',_t('Lüfter immer an')], ['min_fan_speed',_t('Min-Lüfter (%)')],
+    ['max_fan_speed',_t('Max-Lüfter (%)')], ['bridge_fan_speed',_t('Brücken-Lüfter (%)')],
+    ['disable_fan_first_layers',_t('Lüfter aus (erste Lagen)')]
   ]},
-  { label: 'Filament', color: 'var(--amber)', keys: [
-    ['filament_type','Typ'], ['filament_diameter','Durchmesser (mm)'],
-    ['filament_density','Dichte (g/cm³)'], ['filament_cost','Preis (CHF/kg)']
+  { label: _t('Filament'), color: 'var(--amber)', keys: [
+    ['filament_type',_t('Typ')], ['filament_diameter',_t('Durchmesser (mm)')],
+    ['filament_density',_t('Dichte (g/cm³)')], ['filament_cost',_t('Preis (CHF/kg)')]
   ]},
-  { label: 'Diverses', color: 'var(--t2)', keys: [
-    ['seam_position','Nahtposition'], ['brim_width','Brim (mm)'],
-    ['skirts','Skirt-Linien'], ['wipe_tower','Wipe-Tower'],
-    ['avoid_crossing_perimeters','Kreuzungen vermeiden'], ['ironing','Bügeln'],
-    ['ironing_type','Bügeltyp'], ['nozzle_diameter','Düsendurchmesser (mm)'],
-    ['estimated_printing_time_normal_mode','Druckzeit (geschätzt)']
+  { label: _t('Diverses'), color: 'var(--t2)', keys: [
+    ['seam_position',_t('Nahtposition')], ['brim_width',_t('Brim (mm)')],
+    ['skirts',_t('Skirt-Linien')], ['wipe_tower',_t('Wipe-Tower')],
+    ['avoid_crossing_perimeters',_t('Kreuzungen vermeiden')], ['ironing',_t('Bügeln')],
+    ['ironing_type',_t('Bügeltyp')], ['nozzle_diameter',_t('Düsendurchmesser (mm)')],
+    ['estimated_printing_time_normal_mode',_t('Druckzeit (geschätzt)')]
   ]}
 ];
 
@@ -294,7 +293,7 @@ function getFirstVal(v) {
   if (!v) return null;
   const first = v.split(';')[0].trim();
   if (first === '0' || first === '') return null;
-  if (first === '1') return 'Ja';
+  if (first === '1') return _t('Ja');
   // strip trailing % for cleaner display, keep value
   return first || null;
 }
@@ -340,12 +339,12 @@ function renderSettingsPreview(s) {
         </div>`;
       }).filter(Boolean).join('');
     return extraCells ? `<div style="margin-bottom:8px">
-      <div style="font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">Parameter</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px">${_t('Parameter')}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px">${extraCells}</div>
     </div>` : '';
   })();
 
-  return groups + extras || '<div style="font-size:13px;color:var(--t3)">Keine Settings geladen</div>';
+  return groups + extras || '<div style="font-size:13px;color:var(--t3)">' + _t('Keine Settings geladen') + '</div>';
 }
 
 // ── 3MF UPLOAD HANDLING ───────────────────────────────────────
@@ -353,7 +352,7 @@ async function handle3mfUpload(file) {
   if (!file) return;
   const status = document.getElementById('dim-3mf-status');
   const preview = document.getElementById('dim-3mf-preview');
-  status.textContent = '⏳ Wird analysiert…';
+  status.textContent = _t('⏳ Wird analysiert…');
   status.style.color = 'var(--amber)';
   preview.style.display = 'none';
   set('dim-settings-json', '');
@@ -364,19 +363,19 @@ async function handle3mfUpload(file) {
     const r = await fetch('/api/parse-3mf', { method: 'POST', body: fd });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
-      status.textContent = '✕ ' + (e.error || 'Fehler beim Parsen');
+      status.textContent = '✕ ' + (e.error || _t('Fehler beim Parsen'));
       status.style.color = 'var(--red)';
       return;
     }
     const { settings } = await r.json();
     set('dim-settings-json', JSON.stringify(settings));
     const keyCount = Object.keys(settings).length;
-    status.textContent = `✓ ${keyCount} Parameter geladen · ${file.name}`;
+    status.textContent = '✓ ' + _t('{n} Parameter geladen', { n: keyCount }) + ` · ${file.name}`;
     status.style.color = 'var(--green)';
     preview.style.display = 'block';
     preview.innerHTML = renderSettingsPreview(settings);
   } catch(e) {
-    status.textContent = '✕ Verbindungsfehler';
+    status.textContent = _t('✕ Verbindungsfehler');
     status.style.color = 'var(--red)';
   }
 }
@@ -389,7 +388,7 @@ async function searchItemsForDim(q) {
   if (!q || q.length < 1) { res.style.display='none'; return; }
   _dimSearchTimer = setTimeout(async () => {
     const items = await api('/api/items-all?q='+encodeURIComponent(q));
-    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">Keine Treffer</div>'; res.style.display='block'; return; }
+    if (!items.length) { res.innerHTML='<div style="padding:10px;font-size:13px;color:var(--t3)">' + _t('Keine Treffer') + '</div>'; res.style.display='block'; return; }
     res.innerHTML = items.map(i => {
       const icon = _itemChip(i.item_type, 18);
       return `<div onclick="selectDimLinkedItem(${i.id})"
@@ -417,10 +416,10 @@ async function _showDimStockInfo(itemId) {
     el.style.background = s.stock_qty <= 0 ? 'var(--red-soft)' : avail <= 0 ? 'var(--amber-soft)' : 'var(--green-soft)';
     el.style.borderColor = s.stock_qty <= 0 ? 'var(--red-line)' : avail <= 0 ? 'var(--amber-line)' : 'var(--green-line)';
     el.style.color = color;
-    el.innerHTML = `<b>Lager: ${fmtN(s.stock_qty, 0)} ${_unit(s.unit)}</b>`
-      + (s.planned_qty > 0 ? ` · ${fmtN(s.planned_qty, 0)} geplant (offene Aufträge)` : '')
-      + ` · <b style="color:${color}">Verfügbar: ${fmtN(avail, 0)} ${_unit(s.unit)}</b>`
-      + (s.stock_qty <= 0 ? ' — <b>Kein Bestand!</b>' : '');
+    el.innerHTML = `<b>${_t('Lager:')} ${fmtN(s.stock_qty, 0)} ${_unit(s.unit)}</b>`
+      + (s.planned_qty > 0 ? ' · ' + _t('{n} geplant (offene Aufträge)', { n: fmtN(s.planned_qty, 0) }) : '')
+      + ` · <b style="color:${color}">${_t('Verfügbar:')} ${fmtN(avail, 0)} ${_unit(s.unit)}</b>`
+      + (s.stock_qty <= 0 ? ' — <b>' + _t('Kein Bestand!') + '</b>' : '');
   } catch { el.style.display = 'none'; }
 }
 
@@ -467,43 +466,43 @@ async function openDeliveryModal(id) {
   const orders = await api('/api/orders');
   const cSel = document.getElementById('dm-customer');
   const oSel = document.getElementById('dm-order');
-  cSel.innerHTML = '<option value="">— keiner —</option><option value="__free__">✏ Name eingeben...</option>' + customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
-  oSel.innerHTML = '<option value="">— keiner —</option>' + orders.map(o=>`<option value="${o.id}">${o.number} – ${esc(o.title)}</option>`).join('');
+  cSel.innerHTML = '<option value="">' + _t('— keiner —') + '</option><option value="__free__">' + _t('✏ Name eingeben...') + '</option>' + customers.map(c=>`<option value="${c.id}">${c.number} ${esc(c.name)}</option>`).join('');
+  oSel.innerHTML = '<option value="">' + _t('— keiner —') + '</option>' + orders.map(o=>`<option value="${o.id}">${o.number} – ${esc(o.title)}</option>`).join('');
   if (id) {
     const d = await api(`/api/deliveries/${id}`);
     set('dm-title-f', d.title); setCustFields('dm',d.customer_id,d.customer_name_free); oSel.value = d.order_id||'';
     document.getElementById('dm-status').value = d.status||'DRAFT';
     set('dm-date', d.delivery_date||''); set('dm-manufacture-date', d.manufacture_date||''); set('dm-notes', d.notes||'');
-    document.getElementById('dm-title').textContent = 'Produktionsauftrag bearbeiten';
+    document.getElementById('dm-title').textContent = _t('Produktionsauftrag bearbeiten');
   } else {
     ['dm-title-f','dm-date','dm-manufacture-date','dm-notes'].forEach(f=>set(f,''));
     document.getElementById('dm-status').value = 'DRAFT';
     cSel.value = ''; oSel.value = '';
-    document.getElementById('dm-title').textContent = 'Neuer Produktionsauftrag';
+    document.getElementById('dm-title').textContent = _t('Neuer Produktionsauftrag');
   }
   set('dm-id', id||''); openModal('deliveryModal');
 }
 
 async function saveDelivery() {
-  const title = V('dm-title-f'); if (!title) return toast('Bezeichnung fehlt','err');
+  const title = V('dm-title-f'); if (!title) return toast(_t('Bezeichnung fehlt'),'err');
   const body = { title, ...getCustBody('dm'), order_id: V('dm-order')||null,
     status: document.getElementById('dm-status').value, delivery_date: V('dm-date')||null,
     manufacture_date: V('dm-manufacture-date')||null, notes: V('dm-notes') };
   if (editingDeliveryId) {
     await api(`/api/deliveries/${editingDeliveryId}`,'PUT',body);
-    toast('Gespeichert','ok'); closeModal('deliveryModal');
+    toast(_t('Gespeichert'),'ok'); closeModal('deliveryModal');
     openDeliveryDetail(editingDeliveryId);
   } else {
     const d = await api('/api/deliveries','POST',body);
-    toast('Produktionsauftrag angelegt','ok'); closeModal('deliveryModal');
+    toast(_t('Produktionsauftrag angelegt'),'ok'); closeModal('deliveryModal');
     await renderDeliveries(); openDeliveryDetail(d.id);
   }
   loadStats();
 }
 
 async function delDelivery(id) {
-  if (!confirm('Produktionsauftrag löschen?')) return;
-  await api(`/api/deliveries/${id}`,'DELETE'); toast('Gelöscht','ok'); closeDetail(); renderDeliveries(); loadStats();
+  if (!confirm(_t('Produktionsauftrag löschen?'))) return;
+  await api(`/api/deliveries/${id}`,'DELETE'); toast(_t('Gelöscht'),'ok'); closeDetail(); renderDeliveries(); loadStats();
 }
 
 async function openDeliveryItemModal(deliveryId, itemId) {
@@ -515,8 +514,8 @@ async function openDeliveryItemModal(deliveryId, itemId) {
   set('dim-item-id', itemId||'');
   set('dim-linked-plm-id', '');
   set('dim-settings-json', '');
-  document.getElementById('dim-title').textContent = itemId ? 'Position bearbeiten' : 'Position hinzufügen';
-  document.getElementById('dim-save').textContent = itemId ? 'Speichern' : 'Hinzufügen';
+  document.getElementById('dim-title').textContent = itemId ? _t('Position bearbeiten') : _t('Position hinzufügen');
+  document.getElementById('dim-save').textContent = itemId ? _t('Speichern') : _t('Hinzufügen');
   document.getElementById('dim-plm-results').style.display = 'none';
   document.getElementById('dim-plm-search').value = '';
   document.getElementById('dim-plm-selected').style.display = 'none';
@@ -556,7 +555,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
         const settings = JSON.parse(it.print_settings_json);
         const keyCount = Object.keys(settings).length;
         const st = document.getElementById('dim-3mf-status');
-        st.textContent = `✓ ${keyCount} Parameter gespeichert`;
+        st.textContent = '✓ ' + _t('{n} Parameter gespeichert', { n: keyCount });
         st.style.color = 'var(--green)';
         document.getElementById('dim-3mf-preview').style.display = 'block';
         document.getElementById('dim-3mf-preview').innerHTML = renderSettingsPreview(settings);
@@ -573,7 +572,7 @@ async function openDeliveryItemModal(deliveryId, itemId) {
 async function saveDeliveryItem() {
   const deliveryId = parseInt(V('dim-delivery-id'));
   const itemId = V('dim-item-id');
-  const desc = V('dim-desc'); if (!desc) return toast('Beschreibung fehlt','err');
+  const desc = V('dim-desc'); if (!desc) return toast(_t('Beschreibung fehlt'),'err');
   const priceVal = V('dim-price');
   let settingsJson = V('dim-settings-json') || null;
   if (document.getElementById('dim-tab-manual')?.classList.contains('active')) {
@@ -614,10 +613,10 @@ async function saveDeliveryItem() {
   try {
     if (itemId) {
       const r = await api(`/api/delivery-items/${itemId}`,'PUT',body);
-      toast(r?.price_synced ? 'Gespeichert · Preis im Auftrag übernommen' : 'Gespeichert','ok');
+      toast(r?.price_synced ? _t('Gespeichert · Preis im Auftrag übernommen') : _t('Gespeichert'),'ok');
     } else {
       await api(`/api/deliveries/${deliveryId}/items`,'POST',body);
-      toast('Position hinzugefügt','ok');
+      toast(_t('Position hinzugefügt'),'ok');
     }
     closeModal('deliveryItemModal');
     await renderDeliveries(); openDeliveryDetail(deliveryId);
@@ -628,20 +627,24 @@ async function saveDeliveryItem() {
 
 async function delDeliveryItem(itemId, deliveryId) {
   await api(`/api/delivery-items/${itemId}`,'DELETE');
-  toast('Position entfernt','ok');
+  toast(_t('Position entfernt'),'ok');
   await renderDeliveries(); openDeliveryDetail(deliveryId);
 }
 async function moveDeliveryItem(itemId, deliveryId, direction) {
   await api(`/api/delivery-items/${itemId}/move`,'PUT',{direction});
   const d = await api(`/api/deliveries/${deliveryId}`);
   document.getElementById('dd-pos').innerHTML = renderDeliveryItems(d.items||[], deliveryId, d.status === 'DELIVERED') +
-    `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${deliveryId})">+ Position</button>`;
+    `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openDeliveryItemModal(${deliveryId})">${_t('+ Position')}</button>`;
 }
 
 // ── MATERIALVERBRAUCH BEIM ABSCHLIESSEN ───────────────────────
 // Rohmaterial wird in Spulen gefuehrt, der Verbrauch faellt in Gramm an.
 // Der Dialog zeigt beides und laesst die Menge korrigieren — abgebucht wird
 // nur, was hier bestaetigt wird.
+// Woher das Gewicht pro Stück stammt — der Server liefert den deutschen Namen
+const WEIGHT_SOURCE_LABEL = {
+  Produktionsposition: _t('Produktionsposition'), Druckparameter: _t('Druckparameter'), Teilegewicht: _t('Teilegewicht'),
+};
 async function offerMaterialConsumption(deliveryId) {
   let data;
   try { data = await api(`/api/deliveries/${deliveryId}/material-usage`); }
@@ -656,7 +659,7 @@ async function offerMaterialConsumption(deliveryId) {
 
   const row = (r, i) => {
     const lotOpts = (r.lots || []).map(l =>
-      `<option value="${esc(l.lot_number || '')}">${l.lot_number ? esc(l.lot_number) : '— ohne Lot —'} · Rest ${fmtN(l.remaining_qty, 2)} ${esc(_unit(r.unit))}</option>`).join('');
+      `<option value="${esc(l.lot_number || '')}">${l.lot_number ? esc(l.lot_number) : _t('— ohne Lot —')} · ${_t('Rest')} ${fmtN(l.remaining_qty, 2)} ${esc(_unit(r.unit))}</option>`).join('');
     const short = r.qty_to_deduct > (parseFloat(r.stock_qty) || 0);
     return `<div style="display:flex;flex-direction:column;gap:5px;padding:9px 11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm)">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -664,40 +667,39 @@ async function offerMaterialConsumption(deliveryId) {
         <span class="chip">${fmtN(r.quantity, 0)}×</span>
       </div>
       <div style="font-size:12.5px;color:var(--t3)">
-        ${esc(r.raw_material_name)} · ${fmtN(r.grams_per_piece, 1)} g/Stück × ${fmtN(r.quantity, 0)}
+        ${esc(r.raw_material_name)} · ${fmtN(r.grams_per_piece, 1)} ${_t('g/Stück')} × ${fmtN(r.quantity, 0)}
         = <strong style="color:var(--t2)">${fmtN(r.total_grams, 1)} g</strong>
-        <span style="color:var(--t4)">(Spule ${fmtN(r.spool_weight_g, 0)} g · Quelle: ${esc(r.source)})</span>
+        <span style="color:var(--t4)">(${_t('Spule {g} g', { g: fmtN(r.spool_weight_g, 0) })} · ${_t('Quelle:')} ${esc(WEIGHT_SOURCE_LABEL[r.source] || r.source)})</span>
       </div>
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-        <span style="font-family:var(--mono);font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.6px">Abbuchen</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--t4);text-transform:uppercase;letter-spacing:.6px">${_t('Abbuchen')}</span>
         <input type="number" step="0.0001" min="0" value="${r.qty_to_deduct}" data-idx="${i}"
           class="fi mat-qty" style="width:96px;font-family:var(--mono);font-size:13px;padding:3px 7px">
         <span style="font-size:13px;color:var(--t3)">${esc(_unit(r.unit))}</span>
         ${lotOpts ? `<select class="fs mat-lot" data-idx="${i}" style="max-width:230px;font-size:13px;padding:3px 7px">${lotOpts}</select>` : ''}
         <span style="font-size:12px;color:${short ? 'var(--amber)' : 'var(--t4)'};margin-left:auto">
-          Bestand ${fmtN(r.stock_qty, 2)} ${esc(_unit(r.unit))}${short ? ' ⚠ reicht nicht' : ''}</span>
+          ${_t('Bestand')} ${fmtN(r.stock_qty, 2)} ${esc(_unit(r.unit))}${short ? ' ' + _t('⚠ reicht nicht') : ''}</span>
       </div>
     </div>`;
   };
 
   _showDynModal(`<div class="modal" style="max-width:640px">
-    <div class="modal-head"><div class="modal-title">Material abbuchen · ${esc(data.delivery.number)}</div></div>
+    <div class="modal-head"><div class="modal-title">${_t('Material abbuchen')} · ${esc(data.delivery.number)}</div></div>
     <div class="modal-body" style="max-height:60vh;overflow-y:auto">
       ${usable.length ? `<div style="font-size:13px;color:var(--t3);margin-bottom:12px">
-        Der Produktionsauftrag ist abgeschlossen. Diese Mengen werden vom Rohmaterial abgezogen —
-        Werte lassen sich vorher anpassen.
+        ${_t('Der Produktionsauftrag ist abgeschlossen. Diese Mengen werden vom Rohmaterial abgezogen — Werte lassen sich vorher anpassen.')}
       </div>
       <div style="display:flex;flex-direction:column;gap:7px">${usable.map(row).join('')}</div>` : ''}
-      ${unusable.length ? `<div class="sep-label">Nicht berechenbar</div>
+      ${unusable.length ? `<div class="sep-label">${_t('Nicht berechenbar')}</div>
         <div style="font-size:12.5px;color:var(--t3)">
           ${unusable.map(r => `${esc(r.description)} — ${esc(r.raw_material_name)}:
-            ${r.grams_per_piece == null ? 'kein Gewicht hinterlegt' : 'kein Spulengewicht am Rohmaterial'}`).join('<br>')}
-          <div style="margin-top:5px;color:var(--t4)">Diese Positionen bleiben unberührt und können im Lager von Hand gebucht werden.</div>
+            ${r.grams_per_piece == null ? _t('kein Gewicht hinterlegt') : _t('kein Spulengewicht am Rohmaterial')}`).join('<br>')}
+          <div style="margin-top:5px;color:var(--t4)">${_t('Diese Positionen bleiben unberührt und können im Lager von Hand gebucht werden.')}</div>
         </div>` : ''}
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="_skipMaterialConsumption(${deliveryId})">Nicht abbuchen</button>
-      ${usable.length ? `<button class="btn btn-primary" onclick="_doConsumeMaterial(${deliveryId})">Abbuchen</button>` : ''}
+      <button class="btn btn-ghost" onclick="_skipMaterialConsumption(${deliveryId})">${_t('Nicht abbuchen')}</button>
+      ${usable.length ? `<button class="btn btn-primary" onclick="_doConsumeMaterial(${deliveryId})">${_t('Abbuchen')}</button>` : ''}
     </div>
   </div>`);
 }
@@ -718,9 +720,9 @@ async function _doConsumeMaterial(deliveryId) {
   _hideDynModal();
   try {
     const r = await api(`/api/deliveries/${deliveryId}/consume-material`, 'POST', { consumptions });
-    toast(r.booked.length ? `${r.booked.length} Position(en) abgebucht` : 'Nichts abgebucht', 'ok');
+    toast(r.booked.length ? _t('{n} Position(en) abgebucht', { n: r.booked.length }) : _t('Nichts abgebucht'), 'ok');
     if (typeof renderRawMaterials === 'function' && state.view === 'rawmaterials') renderRawMaterials();
   } catch (e) {
-    toast(e.message || 'Abbuchen fehlgeschlagen', 'err');
+    toast(e.message || _t('Abbuchen fehlgeschlagen'), 'err');
   }
 }
