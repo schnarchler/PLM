@@ -2,13 +2,13 @@
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
 // ── LAGER / BESTAND ───────────────────────────────────────────
-// 'Normteile' vergibt der Server beim ersten Wareneingang eines Normteils — muss
-// hier stehen, sonst setzt das Bearbeiten-Formular stillschweigend '3D Druck'
-const INV_CATS = ['3D Druck','Filament','Hardware','Elektronik','Komponenten','Normteile','Werkzeug','Verbrauchsmaterial','Sonstiges'];
-// Gespeichert bleibt der deutsche Wert aus INV_CATS, angezeigt die Übersetzung
-const INV_CAT_LABEL = { '3D Druck': _t('3D Druck'), Filament: _t('Filament'), Hardware: _t('Hardware'),
-  Elektronik: _t('Elektronik'), Komponenten: _t('Komponenten'), Normteile: _t('Normteile'), Werkzeug: _t('Werkzeug'),
-  Verbrauchsmaterial: _t('Verbrauchsmaterial'), Sonstiges: _t('Sonstiges') };
+// Kategorie als Code in der Datenbank, angezeigt in der Sprache der Oberfläche.
+// 'std_parts' vergibt der Server beim ersten Wareneingang eines Normteils — muss
+// hier stehen, sonst setzt das Bearbeiten-Formular stillschweigend die erste Kategorie.
+const INV_CAT_LABEL = { '3d_print': _t('3D Druck'), filament: _t('Filament'), hardware: _t('Hardware'),
+  electronics: _t('Elektronik'), components: _t('Komponenten'), std_parts: _t('Normteile'), tools: _t('Werkzeug'),
+  consumables: _t('Verbrauchsmaterial'), other: _t('Sonstiges') };
+const INV_CATS = Object.keys(INV_CAT_LABEL);
 const _invCat = c => INV_CAT_LABEL[c] || c || '';
 
 let _invSort = { col: 'name', dir: 1 };
@@ -186,7 +186,7 @@ async function openInventoryModal(id) {
       <div class="fg"><label class="fl">${_t('Name *')}</label><input id="inv-name" class="fi" value="${esc(item?.name||'')}"></div>
       <div class="cols2">
         <div class="fg"><label class="fl">${_t('Kategorie')}</label>
-          <select id="inv-cat" class="fi">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'Sonstiges')===c?' selected':''}>${_invCat(c)}</option>`).join('')}</select></div>
+          <select id="inv-cat" class="fi">${INV_CATS.map(c=>`<option value="${c}"${(item?.category||'other')===c?' selected':''}>${_invCat(c)}</option>`).join('')}</select></div>
         <div class="fg"><label class="fl">${_t('SKU / Artikelnr.')}</label><input id="inv-sku" class="fi" value="${esc(item?.sku||'')}"></div>
       </div>
       <div class="cols2">

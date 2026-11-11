@@ -1,6 +1,8 @@
 // 13-normteile-einkauf.js — Normteile, Bestell-PDF, Einkauf/Bestellwesen
 // Teil der aufgeteilten app.js; klassische Scripts mit gemeinsamem globalem Scope,
 // Ladereihenfolge siehe index.html.
+// Norm als Code: DIN, ISO … sind Eigennamen, nur „Sonstiges“ steht als other
+const _stdName = s => s === 'other' ? _t('Sonstiges') : (s || '');
 // ── NORMTEILE ─────────────────────────────────────────────────
 async function renderNormteile() {
   setLeftHeader(_t('Normteile'), `
@@ -20,7 +22,7 @@ async function renderNormteile() {
   // Group by standard + std_number
   const groups = {};
   for (const p of parts) {
-    const key = [p.standard, p.std_number].filter(Boolean).join(' ') || _t('Sonstige');
+    const key = [_stdName(p.standard), p.std_number].filter(Boolean).join(' ') || _t('Sonstige');
     if (!groups[key]) groups[key] = [];
     groups[key].push(p);
   }
@@ -48,7 +50,7 @@ async function openNormteilDetail(id) {
   const dsIcon = t => ({CAD:'📐',GCODE:'⚙',PDF:'📕',IMG:'🖼',DOC:'📄'}[t]||'📎');
 
   document.getElementById('dp-title').innerHTML =
-    `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc([p.standard,p.std_number].filter(Boolean).join(' '))}</span>${esc(p.designation)}`;
+    `<span style="font-size:11px;color:var(--t4);font-family:var(--mono);display:block">${esc([_stdName(p.standard),p.std_number].filter(Boolean).join(' '))}</span>${esc(p.designation)}`;
   document.getElementById('dp-tabs').innerHTML =
     `<button class="tab active" onclick="switchTab(this,'nt-info')">${_t('Details')}</button>
      <button class="tab" onclick="switchTab(this,'nt-files')">${_t('Dateien')} <span style="font-size:11px">${files.length||''}</span></button>`;
@@ -123,8 +125,8 @@ function openNormteilModal(id) {
 async function _loadNormteilForm(id) {
   let p = {};
   if (id) { const all = await api('/api/standard-parts'); p = all.find(x => x.id === id) || {}; }
-  const stdOpts = ['DIN','ISO','EN','ASME','ÖNORM','SN','Sonstiges'].map(s =>
-    `<option ${(p.standard||'')=== s?'selected':''}>${s}</option>`).join('');
+  const stdOpts = ['DIN','ISO','EN','ASME','ÖNORM','SN','other'].map(s =>
+    `<option value="${s}"${(p.standard||'')=== s?' selected':''}>${esc(_stdName(s))}</option>`).join('');
   document.getElementById('nt-modal-body').innerHTML = `
     <div style="font-size:13px;color:var(--t3);margin-bottom:12px">
       ${_t('Felder ausfüllen → Bezeichnung wird automatisch generiert (oder manuell überschreiben).')}
@@ -169,7 +171,7 @@ async function _loadNormteilForm(id) {
 }
 
 function _ntAutoDesig() {
-  const std  = document.getElementById('nt-std')?.value  || '';
+  const std  = (document.getElementById('nt-std')?.value || '').replace(/^other$/, '');
   const num  = document.getElementById('nt-num')?.value  || '';
   const name = document.getElementById('nt-name')?.value || '';
   const size = document.getElementById('nt-size')?.value || '';
@@ -803,7 +805,7 @@ function _invRowForSupplier(i) {
     <span class="status ${low ? 'st-OBS' : 'st-REL'}">${low ? _t('KNAPP') : _t('LAGER')}</span>
     <div style="min-width:0">
       <div class="partner-row-title">${esc(i.name)}</div>
-      <div class="partner-row-meta">${[i.sku ? esc(i.sku) : '', i.category ? esc(i.category) : ''].filter(Boolean).join(' · ') || '—'}</div>
+      <div class="partner-row-meta">${[i.sku ? esc(i.sku) : '', i.category ? esc(_invCat(i.category)) : ''].filter(Boolean).join(' · ') || '—'}</div>
     </div>
     <div style="text-align:right">
       <div style="font-family:var(--mono);font-size:13px">${fmtN(i.stock_qty || 0, 1)} ${esc(_unit(i.unit))}</div>

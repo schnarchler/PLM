@@ -911,7 +911,7 @@ function applySchema() {
   db.run(`CREATE TABLE IF NOT EXISTS inventory_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    category TEXT DEFAULT 'Sonstiges',
+    category TEXT DEFAULT 'other',
     sku TEXT,
     unit TEXT DEFAULT 'pcs',
     stock_qty REAL DEFAULT 0,
@@ -1377,6 +1377,16 @@ function applySchema() {
       }
     }
   });
+  migrateOnce('category-codes-v1', () => {
+    for (const r of all('SELECT DISTINCT category FROM inventory_items WHERE category IS NOT NULL')) {
+      const code = normInvCategory(r.category);
+      if (code !== r.category) db.run('UPDATE inventory_items SET category=? WHERE category=?', [code, r.category]);
+    }
+    for (const r of all("SELECT DISTINCT standard FROM standard_parts WHERE COALESCE(standard,'')!=''")) {
+      const code = normStandard(r.standard);
+      if (code !== r.standard) db.run('UPDATE standard_parts SET standard=? WHERE standard=?', [code, r.standard]);
+    }
+  });
   // Sprache der Oberfläche: Ohne Einstellung richtet sie sich nach dem Browser.
   // Wer schon mit PLM arbeitet, behält Deutsch — auch mit englischem Browser.
   migrateOnce('ui-lang-existing-v1', () => {
@@ -1447,6 +1457,23 @@ function normUnit(u) {
   const l = s.toLowerCase();
   return Object.keys(UNIT_ALIASES).find(code => UNIT_ALIASES[code].includes(l)) || s;
 }
+// Lagerkategorien und Normen ebenso als Code. Alte deutsche Werte und die
+// englischen Bezeichnungen werden umgesetzt; eigene Werte bleiben.
+const INV_CATEGORY_ALIASES = {
+  '3d_print': ['3d druck', '3d-druck', '3d printing'], filament: ['filament'], hardware: ['hardware'],
+  electronics: ['elektronik', 'electronics'], components: ['komponenten', 'components'],
+  std_parts: ['normteile', 'normteil', 'standard parts', 'standard part'], tools: ['werkzeug', 'tools'],
+  consumables: ['verbrauchsmaterial', 'consumables'], other: ['sonstiges', 'sonstige', 'other'],
+};
+function _byAlias(aliases, v, empty) {
+  const s = String(v ?? '').trim();
+  if (!s) return empty;
+  const l = s.toLowerCase();
+  return Object.keys(aliases).find(code => code === l || aliases[code].includes(l)) || s;
+}
+const normInvCategory = c => _byAlias(INV_CATEGORY_ALIASES, c, 'other');
+const normStandard = s => _byAlias({ other: ['sonstiges', 'sonstige', 'other'] }, s, '');
+
 // Für Texte, die der Server selbst schreibt (Historie)
 const UNIT_LABEL_DE = { pcs: 'Stk', set: 'Set', flat: 'Pauschal' };
 const unitLabel = u => UNIT_LABEL_DE[u] || u || '';
@@ -7779,7 +7806,7 @@ app.put('/api/purchase-orders/:id/status', (req, res) => {
           if (sp) {
             const newId = runGetId(`INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,notes,std_part_id)
               VALUES (?,?,?,?,0,0,?,?,?)`,
-              [sp.designation || sp.name || 'Normteil', 'Normteile', sp.std_number || '',
+              [sp.designation || sp.name || 'Normteil', 'std_parts', sp.std_number || '',
                normUnit(item.unit), sp.unit_price ?? null, 'Automatisch aus Einkauf angelegt', sp.id]);
             inv = get('SELECT * FROM inventory_items WHERE id=?', [newId]);
             log('inventory', newId, 'Erstellt', `Lagerartikel für Normteil ${sp.designation} aus ${poNum}`);
@@ -7904,7 +7931,7 @@ app.post('/api/inventory', (req, res) => {
   const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes, item_id, color, material } = req.body;
   if (!name) return res.status(400).json({ error: 'Name fehlt' });
   const id = runGetId('INSERT INTO inventory_items (name,category,sku,unit,stock_qty,min_qty,price_per_unit,supplier_id,notes,item_id,color,material) VALUES (?,?,?,?,0,?,?,?,?,?,?,?)',
-    [name, category||'Sonstiges', sku||'', normUnit(unit), parseFloat(min_qty)||0,
+    [name, normInvCategory(category), sku||'', normUnit(unit), parseFloat(min_qty)||0,
      price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'',
      item_id||null, color||null, material||null]);
   res.json(get('SELECT * FROM inventory_items WHERE id=?', [id]));
@@ -7924,7 +7951,7 @@ app.get('/api/inventory/:id', (req, res) => {
 app.put('/api/inventory/:id', (req, res) => {
   const { name, category, sku, unit, min_qty, price_per_unit, supplier_id, notes, item_id, color, material } = req.body;
   run(`UPDATE inventory_items SET name=?,category=?,sku=?,unit=?,min_qty=?,price_per_unit=?,supplier_id=?,notes=?,item_id=?,color=?,material=?,updated_at=datetime('now') WHERE id=?`,
-    [name, category||'Sonstiges', sku||'', normUnit(unit), parseFloat(min_qty)||0,
+    [name, normInvCategory(category), sku||'', normUnit(unit), parseFloat(min_qty)||0,
      price_per_unit!=null&&price_per_unit!==''?parseFloat(price_per_unit):null, supplier_id||null, notes||'',
      item_id||null, color||null, material||null, req.params.id]);
   res.json(get('SELECT * FROM inventory_items WHERE id=?', [req.params.id]));
@@ -7983,7 +8010,7 @@ app.post('/api/standard-parts/import', (req, res) => {
     if (!p.designation) continue;
     if (existing.has(p.designation)) { skipped++; continue; }
     runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,weight_g,notes) VALUES (?,?,?,?,?,?,?,?,?)',
-      [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.weight_g||null, p.notes||'']);
+      [p.designation, normStandard(p.standard), p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.weight_g||null, p.notes||'']);
     existing.add(p.designation);
     added++;
   }
@@ -7995,7 +8022,7 @@ app.post('/api/standard-parts', (req, res) => {
   const { designation, standard, std_number, name, size, material, unit_price, weight_g, notes } = req.body;
   if (!designation) return res.status(400).json({ error: 'Bezeichnung fehlt' });
   const id = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,weight_g,notes) VALUES (?,?,?,?,?,?,?,?,?)',
-    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, weight_g||null, notes||'']);
+    [designation, normStandard(standard), std_number||'', name||'', size||'', material||'', unit_price||null, weight_g||null, notes||'']);
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [id]));
 });
 
@@ -8003,7 +8030,7 @@ app.post('/api/standard-parts/:id/clone', (req, res) => {
   const p = get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]);
   if (!p) return res.status(404).json({ error: 'Nicht gefunden' });
   const newId = runGetId('INSERT INTO standard_parts (designation,standard,std_number,name,size,material,unit_price,weight_g,notes) VALUES (?,?,?,?,?,?,?,?,?)',
-    [p.designation, p.standard||'', p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.weight_g||null, p.notes||'']);
+    [p.designation, normStandard(p.standard), p.std_number||'', p.name||'', p.size||'', p.material||'', p.unit_price||null, p.weight_g||null, p.notes||'']);
   saveDb();
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [newId]));
 });
@@ -8012,7 +8039,7 @@ app.put('/api/standard-parts/:id', (req, res) => {
   const { designation, standard, std_number, name, size, material, unit_price, weight_g, notes } = req.body;
   if (!designation) return res.status(400).json({ error: 'Bezeichnung fehlt' });
   run('UPDATE standard_parts SET designation=?,standard=?,std_number=?,name=?,size=?,material=?,unit_price=?,weight_g=?,notes=? WHERE id=?',
-    [designation, standard||'', std_number||'', name||'', size||'', material||'', unit_price||null, weight_g||null, notes||'', req.params.id]);
+    [designation, normStandard(standard), std_number||'', name||'', size||'', material||'', unit_price||null, weight_g||null, notes||'', req.params.id]);
   res.json(get('SELECT * FROM standard_parts WHERE id=?', [req.params.id]));
 });
 

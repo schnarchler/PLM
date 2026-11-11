@@ -475,7 +475,7 @@ test('Normteil bestellen legt beim Wareneingang einen Lagerartikel an', async ()
   let linked = (await api('/api/inventory')).filter(i => i.std_part_id === sp.id);
   assert.strictEqual(linked.length, 1, 'ein Lagerartikel entsteht automatisch');
   assert.strictEqual(linked[0].stock_qty, 250);
-  assert.strictEqual(linked[0].category, 'Normteile');
+  assert.strictEqual(linked[0].category, 'std_parts');
   await receive(100);
   linked = (await api('/api/inventory')).filter(i => i.std_part_id === sp.id);
   assert.strictEqual(linked.length, 1, 'keine Dublette bei der zweiten Lieferung');

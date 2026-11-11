@@ -173,3 +173,36 @@ test('Einheiten: _unit() zeigt Codes übersetzt, Freitext unverändert', () => {
   I.setLangForTest('en');
   assert.deepStrictEqual(['pcs', 'flat', 'kg'].map(I._unit), ['pcs', 'Flat rate', 'kg']);
 });
+
+test('Kategorien und Normen: Codes in der Datenbank, Migration stellt alte Werte um', async () => {
+  const SQL = await require('sql.js')();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-test-'));
+  const post = (url, body) => fetch(`http://127.0.0.1:${PORT}${url}`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: `http://127.0.0.1:${PORT}` }, body: JSON.stringify(body) }).then(r => r.json());
+  const get = url => fetch(`http://127.0.0.1:${PORT}${url}`).then(r => r.json());
+  let proc = await startServer(dir);
+  try {
+    for (const c of ['Verbrauchsmaterial', 'Normteil', '', 'Consumables', 'Eigene Kategorie'])
+      await post('/api/inventory', { name: 'Kat ' + c, category: c });
+    await post('/api/standard-parts', { designation: 'Clip', standard: 'Sonstiges' });
+    await post('/api/standard-parts', { designation: 'Schraube', standard: 'DIN' });
+    const cats = Object.fromEntries((await get('/api/inventory')).map(i => [i.name, i.category]));
+    assert.deepStrictEqual(cats, { 'Kat Verbrauchsmaterial': 'consumables', 'Kat Normteil': 'std_parts', 'Kat ': 'other',
+      'Kat Consumables': 'consumables', 'Kat Eigene Kategorie': 'Eigene Kategorie' });
+    assert.deepStrictEqual((await get('/api/standard-parts')).map(p => p.standard).sort(), ['DIN', 'other']);
+    await stopServer(proc);
+
+    const db = new SQL.Database(fs.readFileSync(path.join(dir, 'plm.db')));
+    db.run("UPDATE inventory_items SET category='3D Druck' WHERE category='other'");
+    db.run("UPDATE standard_parts SET standard='Sonstiges' WHERE standard='other'");
+    db.run("DELETE FROM applied_migrations WHERE key='category-codes-v1'");
+    fs.writeFileSync(path.join(dir, 'plm.db'), Buffer.from(db.export()));
+    proc = await startServer(dir);
+    assert.deepStrictEqual([...new Set((await get('/api/inventory')).map(i => i.category))].sort(),
+      ['3d_print', 'Eigene Kategorie', 'consumables', 'std_parts']);
+    assert.deepStrictEqual((await get('/api/standard-parts')).map(p => p.standard).sort(), ['DIN', 'other']);
+  } finally {
+    await stopServer(proc).catch(() => {});
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+});

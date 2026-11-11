@@ -563,7 +563,7 @@ function generateItemTemplate(type, opts = {}) {
         <thead><tr><th>Bezeichnung</th><th>Norm</th><th>Material</th><th style="text-align:right">Menge</th><th>Einh.</th></tr></thead>
         <tbody>${bomStd.map(b=>`<tr>
           <td>${escHtml(b.designation)}</td>
-          <td style="font-family:monospace;font-size:12px">${escHtml(b.standard||'')} ${escHtml(b.std_number||'')}</td>
+          <td style="font-family:monospace;font-size:12px">${escHtml(b.standard === 'other' ? '' : b.standard||'')} ${escHtml(b.std_number||'')}</td>
           <td>${escHtml(b.material||'')}</td>
           <td style="text-align:right;font-family:monospace">${fmtN(b.quantity,0)}</td>
           <td>${escHtml(_unit(b.unit))}</td>
