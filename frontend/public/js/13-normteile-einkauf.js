@@ -828,7 +828,7 @@ async function openSupplierDetail(id) {
   document.getElementById('dp-tabs').innerHTML = `
     <button class="tab active" onclick="switchTab(this,'sd-overview')">${_t('Übersicht')}</button>
     <button class="tab" onclick="switchTab(this,'sd-orders')">${_t('Bestellungen')}${_partnerTabCount(pos.length)}</button>
-    <button class="tab" onclick="switchTab(this,'sd-inventory')">${_t('Lagerartikel')}${_partnerTabCount(inv.length)}</button>
+    <button class="tab" onclick="switchTab(this,'sd-inventory')">${_t('@tab:Lagerartikel')}${_partnerTabCount(inv.length)}</button>
     ${s.changelog ? `<button class="tab" onclick="switchTab(this,'sd-log')">${_t('Verlauf')}</button>` : ''}`;
 
   document.getElementById('dp-body').innerHTML = `

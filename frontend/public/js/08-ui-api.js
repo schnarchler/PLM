@@ -108,7 +108,7 @@ function switchTab(btn, targetId) {
 // ── UI HELPERS ────────────────────────────────────────────────
 // „?" mit Hilfetext, der beim Überfahren erscheint (oder per Tab-Taste fokussiert)
 function helpTip(text) {
-  return `<span class="help-q" tabindex="0" aria-label="Hilfe">?<span class="help-pop" role="tooltip">${esc(text)}</span></span>`;
+  return `<span class="help-q" tabindex="0" aria-label="${_t('Hilfe')}">?<span class="help-pop" role="tooltip">${esc(text)}</span></span>`;
 }
 
 // Wer hat den Historien-Eintrag gemacht? Ältere Einträge haben keinen Namen.
@@ -124,7 +124,7 @@ function renderChangelogList(entries) {
   return (entries || []).map(cl => `
     <div class="cl-row"><div class="cl-dot"></div>
     <div><div class="cl-action">${cl.rev != null ? `<span class="chip" style="margin-right:6px">rev${esc(cl.rev)}</span>` : ''}${esc(cl.action)}</div><div class="cl-detail">${esc(cl.details||'')}</div></div>
-    ${_clTime(cl)}</div>`).join('') || '<div style="color:var(--t3);font-size:13px">Leer</div>';
+    ${_clTime(cl)}</div>`).join('') || '<div style="color:var(--t3);font-size:13px">' + _t('Leer') + '</div>';
 }
 function setLeftHeader(title, actionsHtml) {
   if (typeof title === 'string' && !title.includes('<')) {
@@ -141,8 +141,8 @@ function setLeftHeader(title, actionsHtml) {
 // tabs: [[view, Bezeichnung], …]; ein Klick wechselt über gotoView.
 const LEFT_TAB_GROUPS = {
   changelog: [['changelog', 'PLM'], ['erplog', 'ERP']],
-  inventory: [['inventory', 'Artikel'], ['rawmaterials', 'Rohmaterial']],
-  orders:    [['orders', 'Aufträge'], ['profit', 'Kalkulation']],
+  inventory: [['inventory', _t('@tab:Artikel')], ['rawmaterials', _t('Rohmaterial')]],
+  orders:    [['orders', _t('Aufträge')], ['profit', _t('Kalkulation')]],
 };
 // Welcher Menüpunkt zu einer Ansicht gehört, die als Tab unter einem anderen steht
 const NAV_OF_VIEW = { erplog: 'changelog', rawmaterials: 'inventory', profit: 'orders' };
@@ -200,7 +200,7 @@ async function api(url, method='GET', body=null, _again=true) {
     if (e.lock) { showLockDialog(e.lock); throw new Error(e.error); }
     if (_again && await _askOnUserError(e)) return api(url, method, body, false);
     globalThis._noteError?.(`${method} ${url} → ${r.status} ${e.error || ''}`);   // für Rückmeldungen
-    if (r.status !== 404) toast(e.error||'Serverfehler', 'err');
+    if (r.status !== 404) toast(e.error||_t('Serverfehler'), 'err');
     throw new Error(e.error||'HTTP '+r.status);
   }
   return r.json();
@@ -213,7 +213,7 @@ async function apiForm(url, fd, _again = true) {
     const e = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
     if (e.lock) { showLockDialog(e.lock); throw new Error(e.error); }
     if (_again && await _askOnUserError(e)) return apiForm(url, fd, false);
-    toast(e.error || 'Hochladen fehlgeschlagen', 'err');
+    toast(e.error || _t('Hochladen fehlgeschlagen'), 'err');
     throw new Error(e.error || 'HTTP ' + r.status);
   }
   return r.json().catch(() => ({}));
@@ -233,70 +233,67 @@ async function _askOnUserError(e) {
 // PLM übernimmt (lädt den aktuellen Stand) oder beendet wird.
 function _agoTxt(iso) {
   const s = (Date.now() - Date.parse(iso)) / 1000;
-  if (!(s >= 90)) return 'gerade eben';   // auch: Uhr des anderen PCs geht vor
-  if (s < 90 * 60) return `vor ${Math.round(s / 60)} Min.`;
-  if (s < 36 * 3600) return `vor ${Math.round(s / 3600)} Std.`;
-  return `vor ${Math.round(s / 86400)} Tagen`;
+  if (!(s >= 90)) return _t('gerade eben');   // auch: Uhr des anderen PCs geht vor
+  if (s < 90 * 60) return _t('vor {n} Min.', { n: Math.round(s / 60) });
+  if (s < 36 * 3600) return _t('vor {n} Std.', { n: Math.round(s / 3600) });
+  return _t('vor {n} Tagen', { n: Math.round(s / 86400) });
 }
 function _lockDialogHtml(l) {
   const h = l.holder;
-  const pc = h && !h.this_pc && `PLM auf <b style="color:var(--t1)">${esc(h.host)}</b>`;
-  const who = pc || (h ? 'ein anderes PLM auf diesem PC' : 'ein anderes PLM');          // wer arbeitet
-  const byWho = pc || (h ? 'einem anderen PLM auf diesem PC' : 'einem anderen PLM');   // von wem übernommen
+  const pc = h && !h.this_pc && _t('PLM auf {host}', { host: `<b style="color:var(--t1)">${esc(h.host)}</b>` });
+  const who = pc || (h ? _t('ein anderes PLM auf diesem PC') : _t('ein anderes PLM'));          // wer arbeitet
+  const byWho = pc || (h ? _t('einem anderen PLM auf diesem PC') : _t('einem anderen PLM'));   // von wem übernommen
   const code = t => `<code style="font-family:var(--mono);user-select:all">${esc(t)}</code>`;
   const pathCode = t => `<code style="font-family:var(--mono);user-select:all;word-break:break-all">${esc(t)}</code>`;
   const strong = t => `<b style="color:var(--t1)">${t}</b>`;
-  const day = d => d ? new Date(d).toLocaleDateString('de-CH') : '?';
+  const day = d => d ? new Date(d).toLocaleDateString(LOCALE) : '?';
   // Knöpfe: [Beschriftung, Aufruf, nur am PC selbst?]
   let title, text, buttons = [];
   if (l.mode === 'waiting' || l.mode === 'loading') {
-    title = h ? 'Die Daten sind in Benutzung' : 'Die Daten sind wieder frei';
-    text = h ? `Gerade arbeitet ${who} damit (zuletzt aktiv ${_agoTxt(h.beat)}). Damit nichts überschrieben wird,
-        arbeitet immer nur ein PLM mit den Daten.`
-        + (l.checkouts?.length ? `<br><br>Dort noch ausgecheckt: ${l.checkouts.map(c => `${code(c.item_number)} ${esc(c.item_name)}`).join(', ')}
-          — am besten dort zuerst einchecken, sonst fehlt hier, was dort bearbeitet wird.` : '')
-        + `<br><br>${strong('Übernehmen')}, wenn dort niemand mehr arbeitet — das andere PLM speichert danach nichts mehr.`
-      : 'Das andere PLM wurde inzwischen beendet.';
-    buttons.push([h ? 'Übernehmen' : 'Starten', '_takeOverData(this)', true]);
+    title = h ? _t('Die Daten sind in Benutzung') : _t('Die Daten sind wieder frei');
+    text = h ? _t('Gerade arbeitet {who} damit (zuletzt aktiv {ago}). Damit nichts überschrieben wird, arbeitet immer nur ein PLM mit den Daten.', { who, ago: _agoTxt(h.beat) })
+        + (l.checkouts?.length ? '<br><br>' + _t('Dort noch ausgecheckt: {list} — am besten dort zuerst einchecken, sonst fehlt hier, was dort bearbeitet wird.',
+          { list: l.checkouts.map(c => `${code(c.item_number)} ${esc(c.item_name)}`).join(', ') }) : '')
+        + '<br><br>' + _t('{button}, wenn dort niemand mehr arbeitet — das andere PLM speichert danach nichts mehr.', { button: strong(_t('@lock:Übernehmen')) })
+      : _t('Das andere PLM wurde inzwischen beendet.');
+    buttons.push([h ? _t('@lock:Übernehmen') : _t('Starten'), '_takeOverData(this)', true]);
   } else if (l.mode === 'missing') {
-    title = l.reason === 'no-dir' ? 'Datenordner nicht gefunden' : 'Keine Datenbank im Datenordner';
-    text = `${l.reason === 'no-dir' ? `Den Datenordner ${pathCode(l.data_dir)} gibt es nicht.`
-      : `Im Datenordner ${pathCode(l.data_dir)} liegt keine Datenbank (${code('plm.db')}).`}
-      Ist das Netzlaufwerk verbunden (NAS, VPN)? Liegt der Ordner in einem Sync-Ordner, ist er vielleicht noch nicht
-      fertig abgeglichen.<br><br>${strong('Erneut versuchen')}, sobald er erreichbar ist. ${strong('Neue Datenbank anlegen')}
-      nur, wenn hier wirklich neu begonnen werden soll — der Pfad steht in ${code('plm.config')} (${code('data_dir=')}).`;
-    buttons.push(['Neue Datenbank anlegen', '_openData(this, { create: true })', true],
-      ['Erneut versuchen', '_openData(this, {})', false]);
+    title = l.reason === 'no-dir' ? _t('Datenordner nicht gefunden') : _t('Keine Datenbank im Datenordner');
+    text = (l.reason === 'no-dir' ? _t('Den Datenordner {path} gibt es nicht.', { path: pathCode(l.data_dir) })
+      : _t('Im Datenordner {path} liegt keine Datenbank ({file}).', { path: pathCode(l.data_dir), file: code('plm.db') }))
+      + ' ' + _t('Ist das Netzlaufwerk verbunden (NAS, VPN)? Liegt der Ordner in einem Sync-Ordner, ist er vielleicht noch nicht fertig abgeglichen.')
+      + '<br><br>' + _t('{retry}, sobald er erreichbar ist. {create} nur, wenn hier wirklich neu begonnen werden soll — der Pfad steht in {config} ({key}).',
+        { retry: strong(_t('Erneut versuchen')), create: strong(_t('Neue Datenbank anlegen')), config: code('plm.config'), key: code('data_dir=') });
+    buttons.push([_t('Neue Datenbank anlegen'), '_openData(this, { create: true })', true],
+      [_t('Erneut versuchen'), '_openData(this, {})', false]);
   } else if (l.mode === 'version') {
-    title = 'Daten von einem neueren PLM';
-    text = `Die Daten wurden zuletzt mit PLM ${esc(l.newer?.version || '?')} vom ${day(l.newer?.date)} geöffnet, hier läuft
-      ${esc(l.stand?.version || '?')} vom ${day(l.stand?.date)}. Ein älterer Stand kennt die Umstellungen des neueren nicht
-      und könnte Daten im alten Format schreiben.<br><br>Zuerst ${strong('aktualisieren')}. ${strong('Trotzdem öffnen')}
-      nur, wenn es nicht anders geht.`;
-    buttons.push(['Trotzdem öffnen', '_openData(this, { older_ok: true })', true],
-      ['Aktualisieren…', '_updateFromLock()', true]);
+    title = _t('Daten von einem neueren PLM');
+    text = _t('Die Daten wurden zuletzt mit PLM {newer} vom {newerDate} geöffnet, hier läuft {stand} vom {standDate}. Ein älterer Stand kennt die Umstellungen des neueren nicht und könnte Daten im alten Format schreiben.',
+        { newer: esc(l.newer?.version || '?'), newerDate: day(l.newer?.date), stand: esc(l.stand?.version || '?'), standDate: day(l.stand?.date) })
+      + '<br><br>' + _t('Zuerst {update}. {open} nur, wenn es nicht anders geht.', { update: strong(_t('aktualisieren')), open: strong(_t('Trotzdem öffnen')) });
+    buttons.push([_t('Trotzdem öffnen'), '_openData(this, { older_ok: true })', true],
+      [_t('Aktualisieren…'), '_updateFromLock()', true]);
   } else {
-    title = l.reason === 'takeover' ? 'PLM arbeitet jetzt woanders' : 'Daten von aussen geändert';
+    title = l.reason === 'takeover' ? _t('PLM arbeitet jetzt woanders') : _t('Daten von aussen geändert');
     // Wann der andere übernommen hat (seine Sperre), nicht wann es hier auffiel
-    text = (l.reason === 'takeover' ? `Die Daten wurden ${_agoTxt(h?.since || l.at)} von ${byWho} übernommen.`
-        : 'plm.db wurde von einem anderen PC oder Programm geändert, z.B. von einem Sync-Programm.')
-      + ' Hier wird nichts mehr gespeichert, der angezeigte Stand ist nicht mehr aktuell.'
-      + (l.saved_as ? `<br><br>Was hier noch nicht gespeichert war, liegt als Sicherung ${code(l.saved_as)} vor
-          (Einstellungen → Daten → Datensicherung).` : '')
-      + (l.local_checkouts ? `<br><br>Auf diesem PC ${l.local_checkouts === 1 ? 'ist noch 1 Teil' : `sind noch ${l.local_checkouts} Teile`}
-          ausgecheckt. Zum Einchecken hier weiterarbeiten.` : '')
-      + `<br><br>${strong('Hier weiterarbeiten')} lädt den aktuellen Stand`
-      + (l.reason === 'takeover' ? ' — das andere PLM speichert danach nichts mehr.' : '.');
-    buttons.push(['Hier weiterarbeiten', '_takeOverData(this)', true]);
+    text = (l.reason === 'takeover' ? _t('Die Daten wurden {ago} von {who} übernommen.', { ago: _agoTxt(h?.since || l.at), who: byWho })
+        : _t('plm.db wurde von einem anderen PC oder Programm geändert, z.B. von einem Sync-Programm.'))
+      + ' ' + _t('Hier wird nichts mehr gespeichert, der angezeigte Stand ist nicht mehr aktuell.')
+      + (l.saved_as ? '<br><br>' + _t('Was hier noch nicht gespeichert war, liegt als Sicherung {file} vor (Einstellungen → Daten → Datensicherung).', { file: code(l.saved_as) }) : '')
+      + (l.local_checkouts ? '<br><br>' + _t(l.local_checkouts === 1 ? 'Auf diesem PC ist noch 1 Teil ausgecheckt. Zum Einchecken hier weiterarbeiten.'
+          : 'Auf diesem PC sind noch {n} Teile ausgecheckt. Zum Einchecken hier weiterarbeiten.', { n: l.local_checkouts }) : '')
+      + '<br><br>' + _t(l.reason === 'takeover' ? '{button} lädt den aktuellen Stand — das andere PLM speichert danach nichts mehr.' : '{button} lädt den aktuellen Stand.',
+        { button: strong(_t('Hier weiterarbeiten')) });
+    buttons.push([_t('Hier weiterarbeiten'), '_takeOverData(this)', true]);
   }
   const shown = buttons.filter(([, , localOnly]) => l.local || !localOnly);
   return `<div class="modal" style="max-width:560px">
     <div class="modal-head"><div class="modal-title" style="color:var(--amber)">${title}</div></div>
     <div class="modal-body" style="padding:14px 16px;font-size:13px;color:var(--t2);line-height:1.6">${text}
-      ${shown.length < buttons.length ? '<div style="margin-top:10px;color:var(--t3)">Entscheiden lässt sich das nur am PC, auf dem dieses PLM läuft.</div>' : ''}
+      ${shown.length < buttons.length ? '<div style="margin-top:10px;color:var(--t3)">' + _t('Entscheiden lässt sich das nur am PC, auf dem dieses PLM läuft.') + '</div>' : ''}
     </div>
     <div class="modal-foot" style="gap:6px;flex-wrap:wrap">
-      <button class="btn btn-ghost" onclick="_doShutdown(false)">PLM hier beenden</button>
+      <button class="btn btn-ghost" onclick="_doShutdown(false)">${_t('PLM hier beenden')}</button>
       ${shown.map(([label, call], i) => `<button class="btn ${i === shown.length - 1 ? 'btn-primary' : 'btn-ghost'}"
         onclick="${call}"${l.mode === 'loading' ? ' disabled' : ''}>${label}</button>`).join('')}
     </div>
@@ -326,12 +323,12 @@ async function _lockAction(btn, url, body, busy) {
   const d = await r?.json().catch(() => null);
   if (r?.ok && d?.mode === 'own') return location.reload();
   btn.disabled = false; btn.textContent = label;
-  if (!r?.ok) return toast(d?.error || 'Das hat nicht geklappt', 'err');
-  if (d?.mode === 'missing') toast('Noch immer nicht gefunden', 'err');
+  if (!r?.ok) return toast(d?.error || _t('Das hat nicht geklappt'), 'err');
+  if (d?.mode === 'missing') toast(_t('Noch immer nicht gefunden'), 'err');
   showLockDialog(d);
 }
-function _takeOverData(btn) { return _lockAction(btn, '/api/lock/takeover', {}, 'Übernimmt…'); }
-function _openData(btn, body) { return _lockAction(btn, '/api/lock/open', body, body.create ? 'Legt an…' : 'Sucht…'); }
+function _takeOverData(btn) { return _lockAction(btn, '/api/lock/takeover', {}, _t('Übernimmt…')); }
+function _openData(btn, body) { return _lockAction(btn, '/api/lock/open', body, body.create ? _t('Legt an…') : _t('Sucht…')); }
 // Neuerer Datenstand: Update-Dialog über den Sperr-Dialog legen
 async function _updateFromLock() {
   document.getElementById('lockModal')?.remove();
@@ -357,7 +354,7 @@ const parseDbDate = d => {
   const s = String(d || '');
   return new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s) ? s.replace(' ', 'T') + 'Z' : s);
 };
-const fmtDate = d => d ? parseDbDate(d).toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+const fmtDate = d => d ? parseDbDate(d).toLocaleDateString(LOCALE,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 // Nur Datum, TT.MM.JJJJ — string-basiert, damit ISO-Datumswerte nicht durch Zeitzonen verschoben werden
 const fmtD = (d, empty='—') => {
   const m = String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -372,9 +369,9 @@ const fmtDT = (d, empty='—') => {
 const fmtSize = b => { if(!b) return '—'; if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; if(b<1073741824) return (b/1048576).toFixed(1)+'MB'; return (b/1073741824).toFixed(2)+'GB'; };
 const fmtChf = v => fmtCHF(parseFloat(v)||0);
 
-async function copyText(text, okMsg = 'Kopiert') {
+async function copyText(text, okMsg = _t('Kopiert')) {
   try { await navigator.clipboard.writeText(text); toast(okMsg, 'ok'); }
-  catch { toast('Kopieren nicht möglich', 'err'); }
+  catch { toast(_t('Kopieren nicht möglich'), 'err'); }
 }
 
 function toast(msg, type='ok') {
@@ -399,21 +396,21 @@ async function shutdownServer() {
   if (checkouts.length > 0) {
     _showDynModal(`<div class="modal" style="max-width:640px;width:95vw">
       <div class="modal-head">
-        <div class="modal-title" style="color:var(--amber)">⚠ Aktive Checkouts</div>
+        <div class="modal-title" style="color:var(--amber)">${_t('⚠ Aktive Checkouts')}</div>
       </div>
       <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:13px;color:var(--t2)">${checkouts.length} Checkout(s) aktiv · ${totalFiles} Dateien</div>
+        <div style="font-size:13px;color:var(--t2)">${_t('{n} Checkout(s) aktiv · {files} Dateien', { n: checkouts.length, files: totalFiles })}</div>
         <div style="display:flex;flex-direction:column;gap:4px">
           ${checkouts.map(c => `<div style="font-size:13px;font-family:var(--mono);color:var(--t3)">
             ${_itemChip(c.item_type,14)} <span style="color:var(--blue)">${esc(c.item_number)}</span> – ${esc(c.item_name)}
           </div>`).join('')}
         </div>
-        <div style="font-size:13px;color:var(--t3);padding-top:4px">Vor dem Beenden einchecken (Checkout-Ordner werden gelöscht)?</div>
+        <div style="font-size:13px;color:var(--t3);padding-top:4px">${_t('Vor dem Beenden einchecken (Checkout-Ordner werden gelöscht)?')}</div>
       </div>
       <div class="modal-foot" style="gap:6px;flex-wrap:wrap">
-        <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-        <button class="btn btn-red" onclick="_doShutdown(false)">Beenden ohne Einchecken</button>
-        <button class="btn btn-primary" onclick="_doShutdown(true)">Einchecken & Beenden</button>
+        <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+        <button class="btn btn-red" onclick="_doShutdown(false)">${_t('Beenden ohne Einchecken')}</button>
+        <button class="btn btn-primary" onclick="_doShutdown(true)">${_t('Einchecken & Beenden')}</button>
       </div>
     </div>`);
   } else if (newCount > 0) {
@@ -423,33 +420,33 @@ async function shutdownServer() {
     ];
     _showDynModal(`<div class="modal" style="max-width:460px">
       <div class="modal-head">
-        <div class="modal-title" style="color:var(--amber)">⚠ Nicht erfasste Dateien</div>
+        <div class="modal-title" style="color:var(--amber)">${_t('⚠ Nicht erfasste Dateien')}</div>
       </div>
       <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:13px;color:var(--t2)">${newCount} Datei(en) im Checkout-Ordner noch nicht im PLM erfasst:</div>
+        <div style="font-size:13px;color:var(--t2)">${_t('{n} Datei(en) im Checkout-Ordner noch nicht im PLM erfasst:', { n: newCount })}</div>
         <div style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto">
           ${allFiles.map(f => `<div style="font-size:13px;color:var(--t3)">${f}</div>`).join('')}
         </div>
-        <div style="font-size:13px;color:var(--t3)">Jetzt erfassen oder später?</div>
+        <div style="font-size:13px;color:var(--t3)">${_t('Jetzt erfassen oder später?')}</div>
       </div>
       <div class="modal-foot" style="gap:6px">
-        <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-        <button class="btn btn-red" onclick="_doShutdown(false)">Trotzdem beenden</button>
-        <button class="btn btn-primary" onclick="_hideDynModal();showCheckoutList()">Jetzt erfassen</button>
+        <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+        <button class="btn btn-red" onclick="_doShutdown(false)">${_t('Trotzdem beenden')}</button>
+        <button class="btn btn-primary" onclick="_hideDynModal();showCheckoutList()">${_t('Jetzt erfassen')}</button>
       </div>
     </div>`);
   } else {
     _showDynModal(`<div class="modal" style="max-width:360px">
       <div class="modal-head">
-        <div class="modal-title">Server beenden</div>
+        <div class="modal-title">${_t('Server beenden')}</div>
       </div>
       <div class="modal-body" style="padding:14px 16px">
-        <div style="font-size:13px;color:var(--t2)">PLM-Server wirklich beenden?</div>
-        <div style="font-size:13px;color:var(--t3);margin-top:6px">Die Weboberfläche ist danach nicht mehr erreichbar.</div>
+        <div style="font-size:13px;color:var(--t2)">${_t('PLM-Server wirklich beenden?')}</div>
+        <div style="font-size:13px;color:var(--t3);margin-top:6px">${_t('Die Weboberfläche ist danach nicht mehr erreichbar.')}</div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-ghost" onclick="_hideDynModal()">Abbrechen</button>
-        <button class="btn btn-red" onclick="_doShutdown(false)">Beenden</button>
+        <button class="btn btn-ghost" onclick="_hideDynModal()">${_t('Abbrechen')}</button>
+        <button class="btn btn-red" onclick="_doShutdown(false)">${_t('Beenden')}</button>
       </div>
     </div>`);
   }
@@ -467,14 +464,12 @@ async function _doShutdown(checkinFirst) {
   // Farben aus den Tokens — das Stylesheet bleibt geladen, nur body wird ersetzt
   document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:var(--bg0);color:var(--t1);font-family:var(--sans);gap:16px;text-align:center;padding:20px">
     <div style="font-size:36px;color:var(--t4)">■</div>
-    <div style="font-size:17px;font-weight:600">PLM & ERP wurde beendet</div>
-    <div style="font-size:13px;color:var(--t3)">Der Server wurde gestoppt.</div>
-    <button id="plm-close-btn" style="background:var(--bg2);border:1px solid var(--line2);color:var(--t1);padding:8px 20px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;font-family:var(--sans)">✕ Tab schliessen</button>
+    <div style="font-size:17px;font-weight:600">${_t('PLM & ERP wurde beendet')}</div>
+    <div style="font-size:13px;color:var(--t3)">${_t('Der Server wurde gestoppt.')}</div>
+    <button id="plm-close-btn" style="background:var(--bg2);border:1px solid var(--line2);color:var(--t1);padding:8px 20px;border-radius:var(--r-sm);cursor:pointer;font-size:13px;font-family:var(--sans)">${_t('✕ Tab schliessen')}</button>
     <div id="plm-close-hint" style="display:none;font-size:13px;color:var(--t3);line-height:1.6;max-width:34em">
-      Dieser Tab lässt sich nicht per Knopf schliessen — das erlaubt der Browser nur
-      für Tabs, die PLM selbst geöffnet hat (über den Starter).<br>
-      Bitte mit <strong style="color:var(--t1);font-family:var(--mono)">Strg + W</strong>
-      schliessen (Mac: <strong style="color:var(--t1);font-family:var(--mono)">⌘ W</strong>).
+      ${_t('Dieser Tab lässt sich nicht per Knopf schliessen — das erlaubt der Browser nur für Tabs, die PLM selbst geöffnet hat (über den Starter).')}<br>
+      ${_t('Bitte mit {keys} schliessen (Mac: {mac}).', { keys: `<strong style="color:var(--t1);font-family:var(--mono)">${_t('Strg + W')}</strong>`, mac: '<strong style="color:var(--t1);font-family:var(--mono)">⌘ W</strong>' })}
     </div>
   </div>`;
 

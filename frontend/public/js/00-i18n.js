@@ -6,6 +6,7 @@
 // selbst zurück, auf Englisch die Übersetzung aus lang/en.js. Fehlt sie, bleibt
 // der deutsche Text stehen — so lässt sich Datei für Datei umstellen.
 // Platzhalter in geschweiften Klammern: _t('{n} neue Commits', { n: 3 }).
+// Kontext für mehrdeutige Wörter: _t('@tab:Artikel') (siehe _t unten).
 // Begriffe: Glossar im README (Abschnitt Terminology).
 //
 // Die Sprache steht auf dem Server (Einstellung ui_lang), wie das Design. Die
@@ -27,8 +28,11 @@ function _detectLang() {
 let LANG = _detectLang();
 const LOCALE = LOCALES[LANG];
 
+// Gleicher deutscher Text, verschiedene Bedeutung: ein Kontext davor trennt die
+// Übersetzungen — _t('@lock:Übernehmen') zeigt auf Deutsch „Übernehmen“.
 function _t(s, vars) {
   let r = (LANG !== 'de' && I18N[LANG]?.[s]) || s;
+  if (r === s && s[0] === '@') r = s.slice(s.indexOf(':') + 1);
   if (vars) r = r.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   return r;
 }

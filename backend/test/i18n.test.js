@@ -68,6 +68,9 @@ test('i18n: _t() setzt Platzhalter ein und fällt auf Deutsch zurück', () => {
   assert.strictEqual(I._t('… und {n} weitere', { n: 3 }), '… and 3 more');
   assert.strictEqual(I._t('Noch nicht übersetzt'), 'Noch nicht übersetzt');
   assert.strictEqual(I._t('{x} bleibt', {}), '{x} bleibt', 'fehlender Wert lässt den Platzhalter stehen');
+  assert.strictEqual(I._t('@lock:Übernehmen'), 'Take over', 'Kontext wählt die Übersetzung');
+  I.setLangForTest('de');
+  assert.strictEqual(I._t('@lock:Übernehmen'), 'Übernehmen', 'auf Deutsch ohne Kontext');
 });
 
 test('i18n: keine Variable heisst _t — sie würde die Übersetzung verdecken', () => {

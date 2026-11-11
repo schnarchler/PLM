@@ -587,10 +587,15 @@ Datenbank (`pcs`, `set`, `flat`; physikalische wie `g`, `m`, `h` unverändert). 
 aus Eingaben wie „Stk“ oder „Stück“ `pcs`, `_unit()` zeigt den Code in der Sprache der Oberfläche. `npm test` prüft, dass jedes
 `_t('…')` einen Eintrag hat. Englische Begriffe: Glossar im englischen README (Terminology).
 
-Stand der englischen Oberfläche: Navigation, Dashboard und der ganze PLM-Bereich (Projekte,
+Stand der englischen Oberfläche: Navigation, Dashboard, der ganze PLM-Bereich (Projekte,
 Items, Datenblatt, Stückliste, Revisionen, Änderungsanträge, Mindmap, Check-out/Check-in,
-Zeiterfassung) sind übersetzt. ERP-Ansichten, Einstellungen, Meldungen des Servers und
-Einträge der Historie folgen Schritt für Schritt.
+Zeiterfassung) und die ERP-Ansichten (Kunden, Aufträge, Produktion, Lager, Rohmaterial,
+Normteile, Einkauf, Rückverfolgung) sind übersetzt. Einstellungen, Belege (Rechnung, Angebot,
+Lieferschein, Bestellung), Meldungen des Servers und Einträge der Historie folgen Schritt
+für Schritt.
+
+Hat dasselbe deutsche Wort zwei Bedeutungen, trennt ein Kontext die Übersetzungen:
+`_t('@lock:Übernehmen')` zeigt auf Deutsch „Übernehmen“, auf Englisch den Eintrag mit `@lock:`.
 
 ---
 

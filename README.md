@@ -624,10 +624,15 @@ Units are stored as language-neutral codes (`pcs`, `set`, `flat`; physical units
 `g`, `m`, `h` as they are). The server turns input like "Stk" or "Stück" into `pcs`, and
 `_unit()` shows the code in the interface language.
 
-Status of the English interface: navigation, dashboard and the whole PLM area (projects,
+Status of the English interface: navigation, dashboard, the whole PLM area (projects,
 items, data sheet, BOM, revisions, change requests, mind map, check-out/check-in, time
-tracking) are done. ERP views, settings, server messages and history entries follow step
-by step. Contributions
+tracking) and the ERP views (customers, orders, production, inventory, raw material,
+standard parts, purchasing, traceability) are done. Settings, printed documents (invoice,
+quote, delivery note, purchase order), server messages and history entries follow step by
+step.
+
+Where the same German word has two meanings, a context prefix separates the translations:
+`_t('@lock:Übernehmen')` shows "Übernehmen" in German and the `@lock:` entry in English. Contributions
 are welcome, please use the terms from the table above.
 
 ---
