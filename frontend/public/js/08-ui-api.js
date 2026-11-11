@@ -192,7 +192,8 @@ async function loadStats() {
 
 // ── API ───────────────────────────────────────────────────────
 async function api(url, method='GET', body=null, _again=true) {
-  const opts = { method, headers: {} };
+  // X-PLM-Lang: Der Server übersetzt Fehlermeldungen in die Sprache der Oberfläche
+  const opts = { method, headers: { 'X-PLM-Lang': LANG } };
   if (body) { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
   const r = await fetch(API+url, opts);
   if (!r.ok) {
@@ -208,7 +209,7 @@ async function api(url, method='GET', body=null, _again=true) {
 
 // Datei-Uploads: wie api(), mit FormData
 async function apiForm(url, fd, _again = true) {
-  const r = await fetch(API + url, { method: 'POST', body: fd });
+  const r = await fetch(API + url, { method: 'POST', body: fd, headers: { 'X-PLM-Lang': LANG } });
   if (!r.ok) {
     const e = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
     if (e.lock) { showLockDialog(e.lock); throw new Error(e.error); }

@@ -130,7 +130,7 @@ function _showWhoOverlay(kind, s, done) {
   };
   // Direkt mit fetch: Ein falscher PIN soll hier stehen, nicht als Meldung unten
   const choose = async (user, pin) => {
-    const r = await fetch(API + '/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetch(API + '/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-PLM-Lang': LANG },
       body: JSON.stringify({ user_id: user.id, pin }) });
     const body = await r.json().catch(() => ({}));
     if (r.ok) { state.session = body; _renderUserChip(); finish(true); _afterUserChange(); return; }
@@ -264,7 +264,7 @@ async function _saveOwnPin(remove) {
   const pin = remove ? null : V('own-pin-new');
   if (!remove && pin !== V('own-pin-rep')) { err.textContent = _t('Die beiden PINs stimmen nicht überein'); return; }
   // Direkt mit fetch: Fehler gehören in den Dialog, nicht als Meldung unten
-  const r = await fetch(API + '/api/session/pin', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+  const r = await fetch(API + '/api/session/pin', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-PLM-Lang': LANG },
     body: JSON.stringify({ pin, current_pin: document.getElementById('own-pin-cur')?.value }) });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) { err.textContent = body.error || _t('Speichern fehlgeschlagen'); return; }

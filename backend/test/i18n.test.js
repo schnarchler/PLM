@@ -19,6 +19,13 @@ const EN = (0, eval)(EN_SRC + '; I18N_EN');
 const unquote = lit => (0, eval)(lit);
 const placeholders = s => [...s.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
 
+// Schlüssel im Abschnitt „// ── Server: …“ von lang/en.js (bis zur nächsten Überschrift)
+function serverSectionKeys() {
+  const start = EN_SRC.indexOf('// ── Server:');
+  const next = EN_SRC.indexOf('// ──', start + 5);
+  const sec = EN_SRC.slice(start, next < 0 ? undefined : next);
+  return [...sec.matchAll(/^\s*('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")\s*:/gm)].map(m => (0, eval)(m[1]));
+}
 // Alle _t('…')-Aufrufe mit festem Text, auch _t(a ? '…' : '…')
 function tKeys(src) {
   src = src.replace(/^\s*\/\/.*$/gm, '');   // Kommentare
@@ -58,8 +65,30 @@ test('i18n: jede Übersetzung wird noch gebraucht', () => {
   const decode = t => t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n));
   for (const m of html.matchAll(/>([^<>]+)</g)) used.add(decode(m[1].trim()));
   for (const m of html.matchAll(/\s(?:title|placeholder)="([^"]+)"/g)) used.add(m[1]);
-  const unused = Object.keys(EN).filter(k => !used.has(k));
+  // Der Server-Abschnitt wird gegen server.js geprüft (eigener Test unten)
+  const serverKeys = new Set(serverSectionKeys());
+  const unused = Object.keys(EN).filter(k => !used.has(k) && !serverKeys.has(k));
   assert.deepStrictEqual(unused, [], 'nicht mehr gebraucht — aus lang/en.js entfernen');
+});
+
+// ── Servermeldungen (server.js übersetzt error/message/warning mit trMsg) ──
+const SERVER_SRC = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+function serverMessages() {
+  const LIT = /(?:\b(?:error|message|warning):\s*|new Error\(\s*)'((?:\\.|[^'\\\n])*)'/g;
+  return [...new Set([...SERVER_SRC.matchAll(LIT)].map(m => (0, eval)(`'${m[1]}'`).trim()).filter(x => /[A-Za-zÄÖÜäöü]{3}/.test(x)))];
+}
+test('i18n: jede feste Servermeldung hat eine englische Übersetzung', () => {
+  const missing = serverMessages().filter(m => !(m in EN));
+  assert.deepStrictEqual(missing, [], 'in lang/en.js im Abschnitt „Server:“ ergänzen');
+});
+test('i18n: Einträge im Server-Abschnitt kommen in server.js vor', () => {
+  const keys = serverSectionKeys();
+  const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const unused = keys.filter(k => {
+    const re = new RegExp(k.split(/\{\w+\}/).map(esc).join('[\\s\\S]{1,80}?'));
+    return !re.test(SERVER_SRC) && !SERVER_SRC.includes(k.replace(/\\/g, '\\\\'));
+  });
+  assert.deepStrictEqual(unused, []);
 });
 
 test('i18n: _t() setzt Platzhalter ein und fällt auf Deutsch zurück', () => {
@@ -116,6 +145,25 @@ async function stopServer(proc) {
   await exited;   // beim Beenden schreibt der Server die Datenbank
 }
 const settings = () => fetch(`http://127.0.0.1:${PORT}/api/settings`).then(r => r.json());
+
+test('i18n: Server übersetzt Fehlermeldungen in die Sprache des Browsers', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plm-test-'));
+  const proc = await startServer(dir);
+  const call = (url, method, body, lang) => fetch(`http://127.0.0.1:${PORT}${url}`, { method,
+    headers: { 'Content-Type': 'application/json', ...(lang ? { 'X-PLM-Lang': lang } : {}) }, body: body && JSON.stringify(body) }).then(r => r.json());
+  try {
+    const p = await call('/api/projects', 'POST', { name: 'Sprache' });
+    assert.strictEqual((await call(`/api/projects/${p.id}/items`, 'POST', {}, 'en')).error, 'Name and type missing');
+    assert.strictEqual((await call(`/api/projects/${p.id}/items`, 'POST', {})).error, 'Name und Typ fehlen', 'ohne Header deutsch');
+    const it = await call(`/api/projects/${p.id}/items`, 'POST', { name: 'Teil', item_type: 'prt' });
+    const rev = (await call(`/api/items/${it.id}`, 'GET')).revisions[0];
+    assert.strictEqual((await call(`/api/revisions/${rev.id}/status`, 'PUT', { status: 'OBS' }, 'en')).error,
+      'Status change from DFT to OBS is not possible', 'Platzhalter');
+  } finally {
+    await stopServer(proc).catch(() => {});
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+});
 
 test('i18n: neue Installation folgt dem Browser, bestehende Daten behalten Deutsch', async () => {
   const SQL = await require('sql.js')();

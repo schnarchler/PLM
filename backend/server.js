@@ -1895,8 +1895,9 @@ function rejectIfLocked(res, revId) {
   if (!revId) return false;
   const st = get('SELECT status FROM revisions WHERE id=?', [revId])?.status;
   if (LOCKED_STATUS[st]) {
-    res.status(409).json({ error: `Diese Revision ist ${LOCKED_STATUS[st]} und gesperrt. `
-      + (st === 'REV' ? 'Für Änderungen zuerst zurück auf Entwurf.' : 'Änderungen bitte in einer neuen Revision.') });
+    res.status(409).json({ error: st === 'REV'
+      ? `Diese Revision ist ${LOCKED_STATUS[st]} und gesperrt. Für Änderungen zuerst zurück auf Entwurf.`
+      : `Diese Revision ist ${LOCKED_STATUS[st]} und gesperrt. Änderungen bitte in einer neuen Revision.` });
     return true;
   }
   return rejectIfDelivered(res, revId);
@@ -2280,6 +2281,62 @@ const storage = multer.diskStorage({
 });
 // defParamCharset utf8: sonst kommen Umlaute in hochgeladenen Dateinamen als Zeichensalat an
 const upload = _keepUser(multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 }, defParamCharset: 'utf8' }));
+
+// ── SPRACHE DER MELDUNGEN ─────────────────────────────────────
+// Fehlermeldungen und Hinweise schreibt der Server deutsch. Beim Antworten
+// werden error, message und warning in die Sprache übersetzt, die der Browser
+// mitschickt (X-PLM-Lang) — mit derselben Sprachdatei wie die Oberfläche
+// (deutscher Text als Schlüssel). Erkannt werden: der ganze Text, Platzhalter
+// ({name} im Schlüssel), ein Präfix vor „: “ und Listen nach dem Präfix.
+// Unbekanntes bleibt deutsch.
+const MSG_DICTS = (() => {
+  try {
+    const src = fs.readFileSync(path.join(FRONTEND_DIR, 'lang', 'en.js'), 'utf8');
+    return { en: require('vm').runInNewContext(src + '; I18N_EN') };
+  } catch (e) { console.error('Sprachdatei nicht lesbar:', e.message); return {}; }
+})();
+const _msgPatterns = {};
+function _patternsOf(lang) {
+  if (!_msgPatterns[lang]) {
+    _msgPatterns[lang] = Object.keys(MSG_DICTS[lang] || {}).filter(k => /\{\w+\}/.test(k)).map(k => {
+      const names = [];
+      const re = new RegExp('^' + k.split(/(\{\w+\})/).map(part => {
+        const m = part.match(/^\{(\w+)\}$/);
+        if (m) { names.push(m[1]); return '(.+?)'; }
+        return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }).join('') + '$', 's');
+      return [re, names, MSG_DICTS[lang][k], k.replace(/\{\w+\}/g, '').length];
+    }).sort((x, y) => y[3] - x[3]);   // das genaueste Muster zuerst
+  }
+  return _msgPatterns[lang];
+}
+function trMsg(lang, s) {
+  const d = MSG_DICTS[lang];
+  if (!d || typeof s !== 'string' || !s) return s;
+  if (d[s]) return d[s];
+  const val = v => d[v] || v;
+  for (const [re, names, en] of _patternsOf(lang)) {
+    const m = s.match(re);
+    if (m) return en.replace(/\{(\w+)\}/g, (x, k) => names.includes(k) ? val(m[names.indexOf(k) + 1]) : x);
+  }
+  const i = s.indexOf(': ');
+  if (i > 0 && d[s.slice(0, i + 1)]) return d[s.slice(0, i + 1)] + ' ' + s.slice(i + 2).split(', ').map(val).join(', ');
+  return s;
+}
+app.use((req, res, next) => {
+  const lang = req.get('X-PLM-Lang');
+  if (lang && MSG_DICTS[lang]) {
+    const json = res.json.bind(res);
+    res.json = body => {
+      if (body && typeof body === 'object' && !Array.isArray(body)) {
+        for (const k of ['error', 'message', 'warning'])
+          if (typeof body[k] === 'string') body = { ...body, [k]: trMsg(lang, body[k]) };
+      }
+      return json(body);
+    };
+  }
+  next();
+});
 
 // Fremde Webseiten abweisen. Ohne Anmeldung könnte sonst jede Seite, die im
 // Browser auf diesem PC offen ist, per JavaScript Daten lesen, ändern oder
@@ -4481,7 +4538,7 @@ app.post('/api/datasets/:id/open-in-slicer', async (req, res) => {
   const sl = SLICERS.find(s => s.id === slicerStatus().active);
   if (!sl) return res.status(400).json({ error: 'Kein Slicer installiert — siehe Einstellungen → 3D-Druck' });
   const found = findSlicer(sl);
-  if (!found || found.error) return res.status(400).json({ error: `${sl.name} nicht gefunden${found?.error ? ' (' + found.error + ')' : ''} — siehe Einstellungen → 3D-Druck` });
+  if (!found || found.error) return res.status(400).json({ error: (found?.error ? `${sl.name} nicht gefunden (${found.error}) — siehe Einstellungen → 3D-Druck` : `${sl.name} nicht gefunden — siehe Einstellungen → 3D-Druck`) });
 
   // Eine vorhandene, abweichende Arbeitskopie bleibt stehen: Ein im Slicer
   // gespeichertes Projekt (Kurzcode gesetzt, Teile angeordnet) ginge sonst verloren.
