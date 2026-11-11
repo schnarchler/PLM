@@ -322,18 +322,18 @@ test('PIN, mindestens ein Admin, Deaktivieren beendet die Auswahl', async () => 
 });
 
 test('Nach einer Pause fragt PLM bei der nächsten Änderung nach — Lesen zählt als Aktivität', async () => {
-  await ok('/api/settings', { method: 'PUT', body: { user_idle_minutes: '0.002' }, cookie: anna });   // 120 ms
+  await ok('/api/settings', { method: 'PUT', body: { user_idle_minutes: '0.01' }, cookie: anna });   // 600 ms — Spielraum, falls der Rechner ausgelastet ist
   const wait = ms => new Promise(r => setTimeout(r, ms));
   try {
-    await wait(250);
+    await wait(900);
     const r = await req('/api/projects', { method: 'POST', body: { name: 'Nach Pause' }, cookie: anna });
     assert.deepStrictEqual([r.status, r.body.confirm_user, r.body.user.name], [428, true, 'Anna Muster']);
     // Dieselbe Person macht weiter: ohne PIN
     anna = (await ok('/api/session', { method: 'POST', body: { user_id: ids.anna }, cookie: anna })).cookie;
     await ok('/api/projects', { method: 'POST', body: { name: 'Nach Pause' }, cookie: anna });
 
-    await wait(80); await ok('/api/projects', { cookie: anna });
-    await wait(80); await ok('/api/projects', { cookie: anna });
+    await wait(300); await ok('/api/projects', { cookie: anna });
+    await wait(300); await ok('/api/projects', { cookie: anna });
     await ok('/api/projects', { method: 'POST', body: { name: 'Beim Lesen' }, cookie: anna });
   } finally {
     await req('/api/settings', { method: 'PUT', body: { user_idle_minutes: '30' }, cookie: anna });
