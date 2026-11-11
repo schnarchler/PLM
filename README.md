@@ -14,6 +14,27 @@ Runs locally on Linux and Windows: no internet connection, no cloud, no account.
 - **3D printing:** print parameters read straight from `.3mf` files (PrusaSlicer, OrcaSlicer,
   Bambu Studio, SuperSlicer), cost calculation from part weight, print time and labour
 
+![Project tree and data sheet with 3D preview, short code and print parameters](docs/images/en/item.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/en/dashboard.png" alt="Dashboard: what is open and due"></td>
+    <td width="50%"><img src="docs/images/en/mindmap.png" alt="Mind map: BOM and where-used as a graph"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Dashboard: what is open and due</sub></td>
+    <td align="center"><sub>Mind map: BOM and where-used as a graph</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/en/order.png" alt="Order with lines and production"></td>
+    <td width="50%"><img src="docs/images/en/invoice.png" alt="Invoice, generated as PDF"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Order with lines and production</sub></td>
+    <td align="center"><sub>Invoice, generated as PDF</sub></td>
+  </tr>
+</table>
+
 > **🚀 [Quick start](QUICKSTART.md)** — the essentials on one page
 >
 > **Language:** the user interface is available in **English and German** (Settings → Data →
@@ -678,6 +699,9 @@ PLM/
 │       │   └── (load order in index.html, shared global scope)
 │       └── styles.css     ← design system (dark theme, high-contrast palette)
 ├── plm.config             ← configuration of this PC: data_dir, checkout_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (created automatically)
+├── docs/
+│   ├── images/            ← README screenshots (en, de)
+│   └── make-screenshots.js ← regenerates them from demo data
 ├── HANDBUCH.md            ← user manual (German)
 ├── QUICKSTART.md          ← quick start (English)
 ├── SCHNELLSTART.md        ← quick start (German)

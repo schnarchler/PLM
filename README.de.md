@@ -5,6 +5,27 @@
 Teamcenter-inspiriertes PLM- und ERP-System.  
 Läuft lokal auf Linux/Windows – kein Internet, kein Cloud-Zwang.
 
+![Projektbaum und Datenblatt mit 3D-Vorschau, Kurzcode und Druckparametern](docs/images/de/item.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/de/dashboard.png" alt="Dashboard: was offen und fällig ist"></td>
+    <td width="50%"><img src="docs/images/de/mindmap.png" alt="Mindmap: Stückliste und Verwendung als Graph"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Dashboard: was offen und fällig ist</sub></td>
+    <td align="center"><sub>Mindmap: Stückliste und Verwendung als Graph</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/de/order.png" alt="Auftrag mit Positionen und Produktion"></td>
+    <td width="50%"><img src="docs/images/de/invoice.png" alt="Rechnung, als PDF erzeugt"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Auftrag mit Positionen und Produktion</sub></td>
+    <td align="center"><sub>Rechnung, als PDF erzeugt</sub></td>
+  </tr>
+</table>
+
 > **🚀 [Schnellstart](SCHNELLSTART.md)** — das Wichtigste auf einer Seite  
 > **📖 [Handbuch](HANDBUCH.md)** — Bedienung Schritt für Schritt
 
@@ -640,6 +661,9 @@ PLM/
 │       │   └── (Ladereihenfolge in index.html, gemeinsamer globaler Scope)
 │       └── styles.css     ← Design-System (Dark Theme, kontraststarke Palette)
 ├── plm.config             ← Konfiguration dieses PCs: data_dir, checkout_dir, port, cad_path, prusaslicer, bambustudio, crealityprint (wird auto-erstellt)
+├── docs/
+│   ├── images/            ← Screenshots fürs README (en, de)
+│   └── make-screenshots.js ← erzeugt sie neu aus Demo-Daten
 ├── HANDBUCH.md            ← Handbuch für die Bedienung (Deutsch)
 ├── START-PLM.bat          ← Starter für Windows
 ├── VERKNUEPFUNG-ERSTELLEN.bat ← legt die Desktop-Verknüpfung mit Logo an (Windows)
