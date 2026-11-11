@@ -77,8 +77,7 @@
   <div class="status"><span class="dot"></span>Server läuft</div>
   <button type="button" id="openbtn" autofocus>PLM &amp; ERP öffnen <span class="kbd">Enter</span></button>
   <button type="button" class="upd-btn" id="updbtn" hidden></button>
-  <p class="hint" id="hint" hidden>Der Browser hat das automatische Öffnen blockiert. Über diesen Knopf geöffnet,
-    lässt sich der Tab am Ende per „Beenden“ wieder schliessen.</p>
+  <p class="hint" id="hint" hidden>Der Browser hat das automatische Öffnen blockiert. Über diesen Knopf geöffnet, lässt sich der Tab am Ende per „Beenden“ wieder schliessen.</p>
   <div class="meta">
     <div class="row"><span>Version</span><b class="ver" id="v-version">…</b></div>
     <div class="row" id="r-update" hidden><span>Update</span><b class="upd" id="v-update"></b></div>
@@ -86,7 +85,11 @@
     <div class="row"><span>Daten</span><b id="v-data">…</b></div>
   </div>
 </main>
+<!-- Sprache wie in der App: übersetzt die Texte oben beim Laden, _t() für die Texte unten -->
+<script src="lang/en.js"></script>
+<script src="js/00-i18n.js"></script>
 <script>
+  document.title = _t('PLM & ERP starten');
   // Ohne Feature-Liste (width/height/left/top) öffnet der Browser einen Tab —
   // sobald auch nur ein Feature gesetzt ist, ein Popup-Fenster.
   function openApp(url) {
@@ -115,13 +118,13 @@
   function loadVersion() {
     fetch('/api/version').then(function (r) { return r.json(); }).then(function (v) {
       text('v-version', v.version);
-      var date = v.date ? new Date(v.date).toLocaleDateString('de-CH') : '';
+      var date = v.date ? new Date(v.date).toLocaleDateString(LOCALE) : '';
       text('v-build', [date, v.commit, v.source === 'zip' ? 'ZIP' : ''].filter(Boolean).join(' · ') || '—', v.date || '');
       if (v.dirty) {
         var w = document.createElement('span');
         w.className = 'warn';
-        w.textContent = ' · geändert';
-        w.title = 'Es laufen Änderungen, die noch nicht committet sind';
+        w.textContent = ' · ' + _t('geändert');
+        w.title = _t('Es laufen Änderungen, die noch nicht committet sind');
         document.getElementById('v-build').appendChild(w);
       }
       // Die letzten zwei Ordner zeigen, ob die richtigen Daten geladen sind
@@ -136,14 +139,14 @@
     // ZIP-Download: erst die Prüfung bei GitHub kennt die Versionsnummer
     if (u.download) loadVersion();
     if (!u.available) return;
-    var n = u.behind === 1 ? '1 neuer Commit' : u.behind + ' neue Commits';
-    text('v-update', 'v' + u.version + ' verfügbar', n + ' auf ' + u.upstream + (u.installable
-      ? ' — „Update installieren“ öffnet PLM mit dem Update-Dialog'
-      : u.download ? ' — zum Aktualisieren beenden, neue ZIP herunterladen, über den PLM-Ordner kopieren, neu starten'
-      : ' — zum Aktualisieren beenden, git pull, neu starten'));
+    var n = _t(u.behind === 1 ? '1 neuer Commit auf {upstream}' : '{n} neue Commits auf {upstream}', { n: u.behind, upstream: u.upstream });
+    text('v-update', _t('v{v} verfügbar', { v: u.version }), n + ' — ' + (u.installable
+      ? _t('„Update installieren“ öffnet PLM mit dem Update-Dialog')
+      : u.download ? _t('zum Aktualisieren beenden, neue ZIP herunterladen, über den PLM-Ordner kopieren, neu starten')
+      : _t('zum Aktualisieren beenden, git pull, neu starten')));
     document.getElementById('r-update').hidden = false;
     var btn = document.getElementById('updbtn');
-    btn.textContent = u.installable ? 'Update auf v' + u.version + ' installieren' : 'Update auf v' + u.version + ' — Anleitung';
+    btn.textContent = u.installable ? _t('Update auf v{v} installieren', { v: u.version }) : _t('Update auf v{v} — Anleitung', { v: u.version });
     btn.hidden = false;
   }).catch(function () {});
 </script>

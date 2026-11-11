@@ -2131,4 +2131,21 @@ const I18N_EN = {
   'PIN für {name} (4 bis 12 Zeichen):': 'PIN for {name} (4 to 12 characters):',
   '{name} angelegt': '{name} created',
   'Nach {input} Minuten ohne Aktivität bei der nächsten Änderung nachfragen (0 = nie)': 'Ask again at the next change after {input} minutes without activity (0 = never)',
+
+  // ── launcher.html: Startbildschirm ────────────────────────────
+  'PLM & ERP starten': 'Start PLM & ERP',
+  'Bauteile, Revisionen, Aufträge und Lager': 'Parts, revisions, orders and inventory',
+  'Server läuft': 'Server running',
+  'PLM & ERP öffnen': 'Open PLM & ERP',
+  'Der Browser hat das automatische Öffnen blockiert. Über diesen Knopf geöffnet, lässt sich der Tab am Ende per „Beenden“ wieder schliessen.': 'The browser blocked opening automatically. Opened via this button, the tab can be closed again at the end with "Quit".',
+  'Stand': 'Build',
+  'Es laufen Änderungen, die noch nicht committet sind': 'Running with changes that are not committed yet',
+  '1 neuer Commit auf {upstream}': '1 new commit on {upstream}',
+  '{n} neue Commits auf {upstream}': '{n} new commits on {upstream}',
+  'v{v} verfügbar': 'v{v} available',
+  '„Update installieren“ öffnet PLM mit dem Update-Dialog': '"Install update" opens PLM with the update dialog',
+  'zum Aktualisieren beenden, neue ZIP herunterladen, über den PLM-Ordner kopieren, neu starten': 'to update: quit, download the new ZIP, copy it over the PLM folder, restart',
+  'zum Aktualisieren beenden, git pull, neu starten': 'to update: quit, git pull, restart',
+  'Update auf v{v} installieren': 'Install update to v{v}',
+  'Update auf v{v} — Anleitung': 'Update to v{v} — instructions',
 };

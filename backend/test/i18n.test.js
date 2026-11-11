@@ -45,14 +45,18 @@ test('i18n: Übersetzungen nicht leer, Platzhalter wie im Deutschen', () => {
 test('i18n: jeder Text mit _t() hat eine englische Übersetzung', () => {
   const missing = [];
   for (const f of JS) for (const k of tKeys(read(f))) if (!(k in EN)) missing.push(`${f}: ${k}`);
+  for (const k of tKeys(read('launcher.html'))) if (!(k in EN)) missing.push(`launcher.html: ${k}`);
   assert.deepStrictEqual([...new Set(missing)], [], 'in lang/en.js ergänzen');
 });
 
 test('i18n: jede Übersetzung wird noch gebraucht', () => {
   const used = new Set(JS.flatMap(f => tKeys(read(f))));
   // index.html: übersetzt werden Textknoten und title/placeholder (translateDom)
-  const html = read('index.html').replace(/<script[\s\S]*?<\/script>/g, '');
-  for (const m of html.matchAll(/>([^<>]+)</g)) used.add(m[1].trim());
+  const html = ['index.html', 'launcher.html'].map(read).join('\n').replace(/<script[\s\S]*?<\/script>/g, '');
+  for (const k of tKeys(read('launcher.html'))) used.add(k);
+  // Wie im Browser: Entitäten aufgelöst (translateDom sieht „&“, nicht „&amp;“)
+  const decode = t => t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n));
+  for (const m of html.matchAll(/>([^<>]+)</g)) used.add(decode(m[1].trim()));
   for (const m of html.matchAll(/\s(?:title|placeholder)="([^"]+)"/g)) used.add(m[1]);
   const unused = Object.keys(EN).filter(k => !used.has(k));
   assert.deepStrictEqual(unused, [], 'nicht mehr gebraucht — aus lang/en.js entfernen');
@@ -78,6 +82,11 @@ test('i18n: keine Variable heisst _t oder _d — sie würde die Übersetzung ver
   const decl = /(?:\b(?:const|let|var|function)\s+_[td]\b(?!\(s, vars\))|\b_[td]\s*=>|\(([^()]*[(,]\s*)?_[td]\s*(=[^,()]*)?(,[^()]*)?\)\s*(=>|\{))/;
   const bad = JS.filter(f => decl.test(read(f).replace(/^function _[td]\(s, vars\)/gm, '')));
   assert.deepStrictEqual(bad, []);
+});
+
+test('i18n: Startseite lädt die Sprache vor ihrem eigenen Script', () => {
+  const order = [...read('launcher.html').matchAll(/<script(?: src="([^"]+)")?>/g)].map(m => m[1] || 'inline');
+  assert.deepStrictEqual(order, ['lang/en.js', 'js/00-i18n.js', 'inline']);
 });
 
 test('i18n: Sprachdatei lädt vor 00-i18n.js, das vor allen anderen Scripts', () => {
