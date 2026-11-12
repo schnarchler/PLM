@@ -133,7 +133,7 @@ async function renderProjectsList() {
     : '';
   // Die Nummer steht im Kästchen — unter dem Namen nur noch der Kunde
   const badge = (p, ml) => `<div style="width:38px;height:38px;border-radius:var(--r-sm);background:${p.color ? esc(p.color)+'1f' : 'rgba(157,180,255,.1)'};border:1px solid ${p.color ? esc(p.color)+'4d' : 'rgba(157,180,255,.2)'};display:grid;place-items:center;flex-shrink:0;margin-left:${ml}" title="${esc(p.number)}">
-        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${p.color ? esc(p.color) : 'var(--blue)'}">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${p.color ? _ink(esc(p.color)) : 'var(--blue)'}">${p.number.replace(/[^0-9]/g,'').slice(-3)||'—'}</span>
       </div>`;
   const title = p => `<div style="font-size:13.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em">${esc(p.name)}</div>
         ${p.customer ? `<div style="font-size:13px;color:var(--t3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.customer)}</div>` : ''}`;
@@ -1390,7 +1390,9 @@ function initSTLViewer(canvasId, url) {
       canvas.width=canvas.clientWidth||400; canvas.height=canvas.clientHeight||220;
       const W=canvas.width, H=canvas.height;
       gl.viewport(0,0,W,H);
-      gl.clearColor(0.11,0.12,0.14,1); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+      if (document.documentElement.dataset.theme === 'hell') gl.clearColor(0.91,0.92,0.94,1);
+      else gl.clearColor(0.11,0.12,0.14,1);
+      gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
       gl.enable(gl.DEPTH_TEST);
       const mod=_stlRotation(rX,rY);
       gl.uniformMatrix4fv(uM,false,_mul4(Or(W/H),_mul4(Tr(0,0,-3.2),mod)));

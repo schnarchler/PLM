@@ -1033,7 +1033,7 @@ function _renderSearchChips(counts) {
     const active = !!_searchClass && _searchClass.toLowerCase() === value.toLowerCase();
     return `<button type="button" data-cls="${esc(value)}" onclick="setSearchClass(this.dataset.cls)" title="${esc(title)}"
       style="font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer;transition:opacity .12s;
-        background:${active ? color : color + '20'};color:${active ? 'var(--bg0)' : color};
+        background:${active ? color : color + '20'};color:${active ? (document.documentElement.dataset.theme === 'hell' ? 'var(--t1)' : 'var(--bg0)') : _ink(color)};
         border:1px ${dashed ? 'dashed' : 'solid'} ${color}66;opacity:${count || active ? 1 : .45}">
       ${esc(label)} <span style="opacity:.75">${count || 0}</span></button>`;
   };

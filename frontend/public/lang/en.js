@@ -304,6 +304,7 @@ const I18N_EN = {
   'Sehr gross': 'Very large',
   'Standard': 'Default',
   'Helleres Design': 'Lighter design',
+  'Helles Design': 'Light design',
 
   // ── 03-dashboard.js: Dashboard und Historie ───────────────────
   'läuft heute ab': 'expires today',

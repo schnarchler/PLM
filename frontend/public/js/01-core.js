@@ -389,11 +389,16 @@ function _classColor(cls) {
   const hex = entry?.color || '#9aa3b2';
   return [hex, hex + '20'];
 }
+// Frei gewählte Farben (Klassifizierung, Projekt) sind für dunkle Flächen gedacht.
+// Als Schrift im hellen Design abdunkeln, sonst ist Pastell auf Weiss kaum lesbar.
+function _ink(color) {
+  return document.documentElement.dataset.theme === 'hell' ? `color-mix(in srgb, ${color} 55%, #000)` : color;
+}
 function _classChip(cls, size) {
   if (!cls) return '';
   const [color, bg] = _classColor(cls);
   const fs = size || 11;
-  return `<span style="font-family:var(--mono);font-size:${fs}px;padding:1px 5px;border-radius:3px;background:${bg};color:${color};flex-shrink:0">${esc(cls)}</span>`;
+  return `<span style="font-family:var(--mono);font-size:${fs}px;padding:1px 5px;border-radius:3px;background:${bg};color:${_ink(color)};flex-shrink:0">${esc(cls)}</span>`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────

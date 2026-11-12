@@ -1012,6 +1012,64 @@ a { color: inherit; text-decoration: none; }
   --sh-pop: 0 14px 40px rgba(48,48,48,.55), 0 2px 8px rgba(0,0,0,.4);
 }
 
+/* ── DESIGN „Helles Design" ──
+   Echtes Light-Theme: weisse Flaechen, dunkle Schrift. Akzent- und Signalfarben
+   sind abgedunkelt, damit sie als Schrift auf Weiss mindestens 4.5:1 erreichen.
+   Text auf --bg1 (#fff): 16.6 / 10.4 / 7.4 / 5.3, auf --bg3 noch >= 4.5:1. */
+:root[data-theme="hell"] {
+  color-scheme: light;
+
+  --bg0: #eef0f3;
+  --bg1: #ffffff;
+  --bg2: #f5f6f8;
+  --bg3: #e7eaef;
+  --bg4: #ffffff;
+
+  --line:  #dde1e7;
+  --line2: #cdd2da;
+  --line3: #b3b9c4;
+
+  --t1: #1a1d23;
+  --t2: #383e49;
+  --t3: #4f5664;
+  --t4: #646b78;
+
+  --grey-soft: rgba(100,110,125,.14);
+
+  --blue:      #3654d1;
+  --blue2:     #2a45b5;
+  --blue-glow: rgba(54,84,209,.10);
+
+  --green:  #19794a;
+  --amber:  #935d00;
+  --red:    #c42b2b;
+  --purple: #6c45c4;
+  --teal:   #0a737a;
+
+  --green-soft:  rgba(25,121,74,.10);
+  --green-line:  rgba(25,121,74,.35);
+  --amber-soft:  rgba(201,138,20,.14);
+  --amber-line:  rgba(147,93,0,.35);
+  --red-soft:    rgba(196,43,43,.09);
+  --red-line:    rgba(196,43,43,.35);
+  --purple-soft: rgba(108,69,196,.10);
+  --purple-line: rgba(108,69,196,.35);
+  --teal-soft:   rgba(10,115,122,.10);
+  --teal-line:   rgba(10,115,122,.35);
+
+  --sh-1:   0 1px 2px rgba(16,24,40,.05);
+  --sh-2:   0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.08);
+  --sh-pop: 0 14px 40px rgba(16,24,40,.16), 0 2px 8px rgba(16,24,40,.08);
+}
+/* Stellen mit fest verdrahteten Dunkel-Farben */
+:root[data-theme="hell"] .btn-primary:hover { background: #000; color: #fff; border-color: #000; }
+:root[data-theme="hell"] .btn-teal:hover   { background: rgba(10,115,122,.18); }
+:root[data-theme="hell"] .btn-amber:hover  { background: rgba(201,138,20,.24); }
+:root[data-theme="hell"] .btn-green:hover  { background: rgba(25,121,74,.18); }
+:root[data-theme="hell"] .btn-red:hover    { background: rgba(196,43,43,.16); }
+:root[data-theme="hell"] .btn-purple:hover { background: rgba(108,69,196,.18); }
+:root[data-theme="hell"] .thumb-pop { background: #fff; box-shadow: var(--sh-pop); }
+
 /* ── RÜCKMELDUNG ── */
 .tb-feedback { color: var(--t3); padding: 5px 7px; }
 .tb-feedback:hover { color: var(--t1); }

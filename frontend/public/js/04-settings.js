@@ -58,7 +58,7 @@ function _appearanceHtml(s) {
   return _stRow(_t('Sprache'), pick('', Object.entries(LANGS), LANG, 'setLang', 'data-lang'))
     + _stRow(_t('Schriftgrösse'), pick('fs-preset-btn', [['0.8',_t('Klein')],['0.9',_t('Mittel-klein')],['1',_t('Normal')],['1.1',_t('Mittel-gross')],['1.2',_t('Gross')],['1.35',_t('Sehr gross')]],
       s.font_scale || '1', 'setFontScale', 'data-scale'))
-    + _stRow(_t('Farbdesign'), pick('theme-preset-btn', [['',_t('Standard')],['angepasst',_t('Helleres Design')]], s.theme || '', 'setTheme', 'data-theme'));
+    + _stRow(_t('Farbdesign'), pick('theme-preset-btn', [['',_t('Standard')],['angepasst',_t('Helleres Design')],['hell',_t('Helles Design')]], s.theme || '', 'setTheme', 'data-theme'));
 }
 
 // User und Superuser im Team: nur, was sie selbst ändern können. Firma,
